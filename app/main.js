@@ -167,12 +167,23 @@ function createWindow() {
    * 'Electron' 을 집어 든다.
    *
    * setAppDetails 는 **이 창**의 속성에 직접 쓴다. 바로가기가 없어도 통한다.
+   *
+   * 아이콘도 같이 줘야 한다. appId 를 창에 박는 순간 윈도우는 아이콘도 그 표를 따라
+   * 다시 찾는데, 줄 것이 없으면 기본 아이콘으로 떨어진다. 실행 파일 안에 아이콘이
+   * 박혀 있으므로 그것을 가리킨다.
+   *
+   * 포장했을 때만 한다. 개발 중에는 실행 파일이 electron.exe 라 저 아이콘을 가리키면
+   * 오히려 Electron 아이콘이 뜬다. 개발판 작업 표시줄 이름은 고칠 이유도 없다.
    */
-  win.setAppDetails({
-    appId: 'com.banteil.mobi-remote',
-    relaunchDisplayName: '모비 커넥터 리모콘',
-    relaunchCommand: '"' + process.execPath + '"',
-  });
+  if (app.isPackaged) {
+    win.setAppDetails({
+      appId: 'com.banteil.mobi-remote',
+      appIconPath: process.execPath,
+      appIconIndex: 0,
+      relaunchDisplayName: '모비 커넥터 리모콘',
+      relaunchCommand: '"' + process.execPath + '"',
+    });
+  }
 
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
