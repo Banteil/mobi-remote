@@ -1,0 +1,879 @@
+/* 모비 커넥터 리모콘 렌더러 스타일 — 다크 / 라이트 두 팔레트
+ *
+ * 색은 전부 여기 변수로 모아 둔다. 규칙에 색을 직접 쓰면 테마를 하나 더 만들 때
+ * 놓치는 곳이 반드시 생기고, 그게 "라이트 모드에서만 글씨가 안 보이는" 버그가 된다.
+ *
+ * 테마는 <html data-theme="light|dark"> 로 갈린다. 붙이는 쪽은 theme.js 가 맡는데,
+ * 첫 페인트 전에 실행돼야 화면이 한 번 깜빡였다가 바뀌는 일이 없다.
+ */
+
+:root,
+:root[data-theme="dark"] {
+  --bg: #14161a;
+  --bg-2: #1a1d23;
+  --bg-3: #21252c;
+  --line: #2c313a;
+  --line-2: #3a414d;
+  --fg: #dfe3ea;
+  --fg-dim: #98a1b0;
+  --fg-mute: #6b7482;
+  --accent: #5aa7ff;
+  --ok: #4ec98a;
+  --warn: #e8b64c;
+  --bad: #f0685f;
+  --gold: #e0c068;
+
+  /* 바깥 테두리(카드·표·패널). 안쪽 구분선(--line)보다 진해야 덩어리가 구분된다. */
+  --edge: #2c313a;
+  --card-shadow: none;
+
+  --hover: #2a2f38;
+  --hover-line: #4a5462;
+  --row-hover: #1e222a;
+  --ok-bg: #16281f;
+  --ok-line: #2d5f45;
+  --bad-bg: #2a1a19;
+  --bad-line: #6b3330;
+  --warn-bg: #3d3418;
+  --warn-line: #6b5a28;
+  --warn-fg: #f0d79a;
+  --warn-hover: #5a471d;
+  --pri-bg: #1f4c80;
+  --pri-line: #2f6ba8;
+  --pri-fg: #dceaff;
+  --pri-hover: #265c99;
+  --scroll: #333944;
+  --scroll-hover: #414957;
+  --overlay: rgba(0, 0, 0, .55);
+  --shadow: rgba(0, 0, 0, .45);
+
+  /* 작업 큐 폭. 알림 위치가 이 값을 따라간다 — 한 곳만 고치면 둘 다 맞는다. */
+  --queue-w: 292px;
+
+  --radius: 8px;
+}
+
+/* 라이트 — 종이처럼 흰 바탕이 아니라 살짝 식힌 회색을 쓴다.
+   표가 화면을 가득 채우는 화면이라 순백은 오래 보기 어렵다.
+   상태색(ok/warn/bad)은 밝은 바탕에서 읽히도록 어둡게 다시 잡았다. */
+:root[data-theme="light"] {
+  --bg: #f1f3f7;
+  --bg-2: #ffffff;
+  --bg-3: #e7eaf0;
+  --line: #c2cbda;
+  --line-2: #a8b2c1;
+  --fg: #1b1f27;
+  --fg-dim: #4a5261;
+  --fg-mute: #79828f;
+  --accent: #1163cf;
+  --ok: #10784a;
+  --warn: #8a5d00;
+  --bad: #c02d23;
+  --gold: #7d6212;
+
+  /* 밝은 바탕에서는 옅은 선이 거의 사라진다. 바깥 테두리를 확실히 진하게 잡고,
+     카드에는 아주 옅은 그림자를 더해 바탕에서 떠 보이게 한다. */
+  --edge: #a8b2c1;
+  --card-shadow: 0 1px 2px rgba(28, 32, 39, .06);
+
+  --hover: #dde2ea;
+  --hover-line: #aab3c1;
+  --row-hover: #eaeef4;
+  --ok-bg: #e2f3ea;
+  --ok-line: #9fd3b8;
+  --bad-bg: #fce8e6;
+  --bad-line: #eeb0aa;
+  --warn-bg: #fdf1d8;
+  --warn-line: #e2c583;
+  --warn-fg: #6a4700;
+  --warn-hover: #f6e5bf;
+  --pri-bg: #1163cf;
+  --pri-line: #0d55b4;
+  --pri-fg: #ffffff;
+  --pri-hover: #0d55b4;
+  --scroll: #c3cad6;
+  --scroll-hover: #aab3c1;
+  --overlay: rgba(28, 32, 39, .35);
+  --shadow: rgba(28, 32, 39, .18);
+
+  --radius: 8px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.55 "Pretendard", "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
+  overflow: hidden;
+  user-select: none;
+}
+
+body { display: flex; flex-direction: column; }
+
+input, select, button, pre { font-family: inherit; font-size: inherit; }
+input, select { user-select: text; }
+pre { user-select: text; }
+
+/* ── 상단바 ─────────────────────────────────────── */
+
+#topbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 14px; height: 52px; flex: none;
+  background: var(--bg-2); border-bottom: 1px solid var(--edge);
+}
+.tb-group { display: flex; align-items: center; gap: 10px; }
+.tb-right { margin-left: auto; }
+.tb-char { font-weight: 600; }
+.tb-sub { color: var(--fg-mute); font-size: 12px; }
+
+.pill {
+  padding: 3px 9px; border-radius: 999px; font-size: 12px;
+  background: var(--bg-3); border: 1px solid var(--line-2);
+}
+.pill-ok   { color: var(--ok);   border-color: var(--ok-line);   background: var(--ok-bg); }
+.pill-bad  { color: var(--bad);  border-color: var(--bad-line);  background: var(--bad-bg); }
+.pill-muted{ color: var(--fg-mute); }
+
+.stat { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; }
+.stat em { font-style: normal; font-size: 10px; color: var(--fg-mute); }
+.stat b { font-size: 13px; font-variant-numeric: tabular-nums; }
+#wings { color: var(--gold); }
+
+/* ── 버튼 ───────────────────────────────────────── */
+
+.btn {
+  padding: 5px 11px; border-radius: 6px; cursor: pointer;
+  background: var(--bg-3); color: var(--fg);
+  border: 1px solid var(--line-2);
+  transition: background .12s, border-color .12s;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) { background: var(--hover); border-color: var(--hover-line); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn-primary { background: var(--pri-bg); border-color: var(--pri-line); color: var(--pri-fg); }
+.btn-primary:hover:not(:disabled) { background: var(--pri-hover); }
+.btn-warn { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn-fg); }
+.btn-warn:hover:not(:disabled) { background: var(--warn-hover); }
+.btn-ghost { background: transparent; border-color: var(--edge); color: var(--fg-dim); }
+.btn-tiny { padding: 2px 8px; font-size: 12px; }
+
+/* ── 탭 ─────────────────────────────────────────── */
+
+#tabs {
+  display: flex; gap: 2px; padding: 0 10px; flex: none;
+  background: var(--bg-2); border-bottom: 1px solid var(--edge);
+}
+.tab {
+  padding: 9px 14px; border: 0; background: transparent; cursor: pointer;
+  color: var(--fg-mute); border-bottom: 2px solid transparent;
+}
+.tab:hover { color: var(--fg-dim); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── 연결 끊김 배너 ─────────────────────────────── */
+/* 게임이 꺼져 있어도 캐시로 화면은 채워진다. 그 값이 실시간이 아님을 분명히 알린다. */
+#offline-banner {
+  display: flex; align-items: center; gap: 10px; flex: none;
+  padding: 7px 14px; font-size: 12px;
+  background: var(--warn-bg); color: var(--warn-fg);
+  border-bottom: 1px solid var(--warn-line);
+}
+.banner-mark { color: var(--warn); }
+#offline-banner .btn { margin-left: auto; }
+
+/* ── 본문 ───────────────────────────────────────── */
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.card-wide { grid-column: 1 / -1; }
+
+.card {
+  background: var(--bg-2); border: 1px solid var(--edge);
+  border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px;
+  box-shadow: var(--card-shadow);
+}
+.card h3 {
+  margin: 0 0 10px; font-size: 12px; font-weight: 600;
+  color: var(--fg-dim); text-transform: uppercase; letter-spacing: .04em;
+}
+.card h3 small {
+  margin-left: 6px; text-transform: none; letter-spacing: 0;
+  color: var(--fg-mute); font-weight: 400;
+}
+
+.kv { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-content: start; }
+.kv dt { color: var(--fg-mute); }
+.kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+
+.flags { display: flex; flex-wrap: wrap; gap: 6px; }
+.flag {
+  padding: 3px 8px; border-radius: 5px; font-size: 12px;
+  background: var(--bg-3); color: var(--fg-mute); border: 1px solid var(--line);
+}
+.flag.on { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-line); }
+.flag.busy { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-line); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  padding: 3px 9px; border-radius: 999px; font-size: 12px;
+  background: var(--bg-3); border: 1px solid var(--line);
+  display: inline-flex; gap: 6px; align-items: center;
+}
+.chip b { font-variant-numeric: tabular-nums; color: var(--fg); }
+.chip em { font-style: normal; color: var(--fg-mute); }
+.chip-btn { cursor: pointer; }
+.chip-btn:hover { background: var(--hover); border-color: var(--line-2); }
+
+/* ── 툴바 / 입력 ────────────────────────────────── */
+
+/* 한 줄에 검색칸 · 체크 · 고르는 칸 여럿 · 개수 · 갱신이 들어간다.
+   좁아지면 **검색칸만 줄어들고** 나머지는 제 크기를 지킨다 — 고르는 칸이 줄어들면
+   글자가 잘려 무엇을 고른 건지 알 수 없게 된다. */
+/* 정말 못 들어갈 때만 줄을 바꾼다. 안 바꾸면 오른쪽(개수·갱신)이 잘려 나간다 —
+   실측: 창을 최소(980px)까지 좁히면 소지품 도구줄이 295px 넘쳤다. */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+.toolbar > * { flex: none; }
+/* 빈칸은 늘어나야 개수와 갱신이 오른쪽 끝에 붙는다 — 위 규칙에 눌리지 않게 다시 적는다 */
+.toolbar > .spacer { flex: 1; }
+.toolbar input[type="search"], .toolbar input[type="text"] { flex: 1 1 140px; min-width: 90px; }
+.toolbar .muted { white-space: nowrap; }
+.row { display: flex; gap: 8px; align-items: center; }
+.spacer { flex: 1; }
+
+input[type="text"], input[type="search"], select {
+  padding: 6px 10px; border-radius: 6px;
+  background: var(--bg-3); color: var(--fg);
+  border: 1px solid var(--line-2); outline: none;
+  min-width: 220px;
+}
+
+/* 고르는 칸에 220px 은 너무 넓다. 글자가 "10초" 인데 칸이 줄의 5분의 1을 먹는다.
+   글로 채우는 입력칸과 달리 고르는 칸은 **가장 긴 항목만큼만** 있으면 된다.
+   .sort 를 단 것들은 아래에서 따로 정하고, 안 단 것들은 여기서 풀어 준다. */
+select { min-width: 0; }
+.row input[type="text"] { flex: 1; }
+input:focus, select:focus { border-color: var(--accent); }
+input::placeholder { color: var(--fg-mute); }
+
+.chk { display: flex; align-items: center; gap: 5px; color: var(--fg-dim); cursor: pointer; }
+.muted { color: var(--fg-mute); }
+.hint { color: var(--fg-mute); font-size: 12px; margin: 6px 0 10px; }
+code { background: var(--bg-3); padding: 1px 5px; border-radius: 4px; color: var(--fg-dim); }
+
+/* ── 표 ─────────────────────────────────────────── */
+
+.tablewrap {
+  border: 1px solid var(--edge); border-radius: var(--radius);
+  overflow: auto; max-height: calc(100vh - 260px); background: var(--bg-2);
+  box-shadow: var(--card-shadow);
+}
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--line); }
+th {
+  position: sticky; top: 0; z-index: 1;
+  border-bottom: 1px solid var(--edge);
+  background: var(--bg-3); color: var(--fg-mute);
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+}
+tbody tr:hover { background: var(--row-hover); }
+tbody tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.w-xs { width: 32px; } .w-sm { width: 70px; } .w-md { width: 130px; } .w-lg { width: 220px; }
+.mark-ok { color: var(--ok); } .mark-bad { color: var(--bad); } .mark-warn { color: var(--warn); }
+.sub { color: var(--fg-mute); font-size: 12px; }
+.empty { padding: 24px; text-align: center; color: var(--fg-mute); }
+
+/* ── 미션 / 퀘스트 ──────────────────────────────── */
+
+.mission { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line); }
+.mission:last-child { border-bottom: 0; }
+.mission .t { flex: 1; }
+.mission .d { color: var(--fg-mute); font-size: 12px; }
+.mission .p { font-variant-numeric: tabular-nums; color: var(--fg-dim); }
+.bar { height: 3px; background: var(--bg-3); border-radius: 2px; overflow: hidden; width: 70px; }
+.bar i { display: block; height: 100%; background: var(--accent); }
+
+/* ── 로그 ───────────────────────────────────────── */
+
+.log {
+  max-height: 260px; overflow: auto; font-size: 12px;
+  font-family: "Cascadia Mono", Consolas, monospace; user-select: text;
+}
+.log div { padding: 2px 0; border-bottom: 1px solid var(--line); }
+.log .t { color: var(--fg-mute); margin-right: 8px; }
+.out {
+  margin: 0; max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-all;
+  font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; color: var(--fg-dim);
+}
+
+/* ── 상태바 ─────────────────────────────────────── */
+
+#statusbar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 14px; height: 30px; flex: none; font-size: 12px;
+  background: var(--bg-2); border-top: 1px solid var(--edge);
+}
+#sb-busy { display: flex; align-items: center; gap: 8px; color: var(--warn); }
+.hidden { display: none !important; }
+.spin {
+  width: 11px; height: 11px; border-radius: 50%;
+  border: 2px solid var(--line-2); border-top-color: var(--accent);
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── 모달 ───────────────────────────────────────── */
+
+.modal {
+  position: fixed; inset: 0; z-index: 50;
+  background: var(--overlay);
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-box {
+  background: var(--bg-2); border: 1px solid var(--line-2);
+  border-radius: 10px; padding: 18px 20px; width: 440px; max-width: 90vw;
+}
+.modal-box h3 { margin: 0 0 12px; font-size: 15px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.cost {
+  background: var(--bg-3); border: 1px solid var(--line);
+  border-radius: 6px; padding: 10px 12px; margin: 10px 0;
+}
+.cost .big { font-size: 17px; color: var(--gold); font-variant-numeric: tabular-nums; }
+.cost .bad { color: var(--bad); }
+
+/* CSP(style-src 'self')가 인라인 style= 을 막으므로 유틸 클래스로 대신한다 */
+.mt10 { margin-top: 10px; }
+.w-full { width: 100%; }
+
+/* ── 카드 안에서 스크롤되는 목록 ────────────────── */
+/* 악보 164개처럼 긴 목록이 카드를 끝없이 늘리지 않도록 높이를 묶는다 */
+.scroll-list {
+  overflow-y: auto;
+  overscroll-behavior: contain;   /* 끝까지 내려도 페이지가 따라 움직이지 않게 */
+  padding-right: 4px;             /* 스크롤바가 내용을 가리지 않도록 */
+  /* 창이 크면 더 보여주고 작으면 줄인다. 최소치는 확보해 목록이 뭉개지지 않게. */
+  max-height: clamp(150px, 32vh, 400px);
+}
+.scroll-list.short { max-height: clamp(66px, 12vh, 140px); }
+.scroll-list.tall  { max-height: clamp(110px, 22vh, 260px); }
+
+/* 스크롤 영역임을 알리는 옅은 경계 */
+.scroll-list.bordered {
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+/* 스크롤 목록 위 소제목 — 여백을 최소화해 카드가 불필요하게 길어지지 않게 */
+.sublabel {
+  margin: 8px 0 3px;
+  font-size: 11px;
+  color: var(--fg-mute);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+/* 카드 제목 오른쪽 개수 표시 */
+.card h3 .count { float: right; font-weight: 400; color: var(--fg-mute); text-transform: none; letter-spacing: 0; }
+
+
+.pl-playing { background: var(--ok-bg); border-radius: 4px; }
+#pl-tracks { max-height: clamp(140px, 26vh, 300px); }
+
+.mb8 { margin-bottom: 8px; }
+
+.mono-path { font-family: "Cascadia Mono", Consolas, monospace; word-break: break-all; user-select: text; }
+details summary { cursor: pointer; }
+
+/* ── 호환성 ─────────────────────────────────────── */
+
+.compat-item { margin-bottom: 8px; }
+.compat-detail {
+  margin: 3px 0 0 16px; padding: 6px 9px;
+  background: var(--bg-3); border: 1px solid var(--line); border-radius: 5px;
+  font-family: "Cascadia Mono", Consolas, monospace; font-size: 11px;
+  color: var(--fg-dim); white-space: pre-wrap; word-break: break-all;
+  user-select: text;
+}
+.compat-scroll { max-height: 300px; overflow: auto; margin-top: 8px; }
+
+/* ── 토스트 ─────────────────────────────────────── */
+
+/* 알림은 작업 큐를 덮지 않는다.
+   전에는 화면 오른쪽 끝에 붙어서, 알림이 떠 있는 동안 큐 아래 조작 버튼(▶ ⏸ ■)을
+   누를 수가 없었다. 큐 폭만큼 왼쪽으로 물리고, 혹시 겹치더라도 클릭은 통과시킨다 —
+   알림은 읽기만 하는 것이라 눌릴 일이 없다. */
+#toasts {
+  position: fixed; right: calc(var(--queue-w) + 14px); bottom: 40px; z-index: 60;
+  display: flex; flex-direction: column; gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  padding: 9px 14px; border-radius: 7px; max-width: 420px;
+  background: var(--bg-3); border: 1px solid var(--line-2);
+  box-shadow: 0 6px 22px var(--shadow);
+  animation: slidein .16s ease-out;
+}
+.toast.ok  { border-color: var(--ok-line); }
+.toast.bad { border-color: var(--bad-line); }
+.toast .h { font-weight: 600; margin-bottom: 2px; }
+/* 해설과 원문을 줄바꿈으로 나눠 보여주므로 개행을 살린다 */
+.toast .m { color: var(--fg-dim); font-size: 12px; white-space: pre-line; }
+@keyframes slidein { from { opacity: 0; transform: translateX(14px); } }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 5px; border: 2px solid var(--bg); }
+::-webkit-scrollbar-thumb:hover { background: var(--scroll-hover); }
+
+/* ── 페이저 ─────────────────────────────────────── */
+/* 목록이 1,800건을 넘어가는 탭이 있어 표를 잘라 보여준다.
+   검색으로만 좁히게 두면 "이름을 모르는 것"은 영영 못 본다. */
+
+.pager {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 10px; flex-wrap: wrap;
+}
+.pager .gap { flex: 1; }
+.pager .at {
+  color: var(--fg-dim); font-size: 12px;
+  padding: 0 6px; white-space: nowrap;
+}
+.pager .at b { color: var(--fg); }
+.pager button[disabled] { opacity: .35; cursor: default; }
+.pager select { min-width: 0; padding: 2px 6px; font-size: 12px; }
+.pager .jump {
+  min-width: 56px; width: 56px; text-align: center;
+  padding: 2px 6px; font-size: 12px;
+}
+
+/* 정렬 드롭다운 — 툴바에서 검색창만큼 넓을 필요가 없다 */
+/* 고르는 칸은 내용에 맞춰 줄되, 너무 길어지지는 않게. 공통 규칙의 min-width: 220px
+   를 그대로 물려받으면 칸 하나가 줄의 3분의 1을 먹는다. */
+select.sort { min-width: 0; max-width: 170px; padding: 5px 8px; font-size: 12px; }
+
+/* 테마 전환 버튼 — 아이콘만 바뀌고 자리는 고정이다 */
+/* 도구줄 밖에 있는 고르는 칸들 — 너무 좁으면 답답하니 바닥만 정해 둔다 */
+#auto-interval { min-width: 84px; }
+#pl-select, #dye-preset, #cmd-select { min-width: 150px; max-width: 260px; }
+
+#btn-theme { min-width: 34px; text-align: center; }
+
+/* 미션 — 수령 대기만 눈에 띄게 */
+.note {
+  margin: 0 0 10px; padding: 7px 11px; border-radius: 6px; font-size: 12px;
+  background: var(--bg-3); color: var(--fg-mute); border: 1px solid var(--line);
+}
+.note-warn { background: var(--warn-bg); color: var(--warn-fg); border-color: var(--warn-line); }
+
+/* 대시보드의 주변 표 — 카드 하나가 화면을 다 먹지 않도록 목록과 같은 높이로 묶는다 */
+#pc-table-wrap { max-height: clamp(110px, 22vh, 260px); }
+
+/* 주변 — NPC는 보통 한두 건뿐이라 플레이어 표에 자리를 더 준다.
+   반씩 나누면 이름 칸이 좁아 "던컨 S급 석궁사수" 같은 이름이 줄바꿈된다. */
+.grid-near { display: grid; grid-template-columns: 2.2fr 1fr; gap: 12px; }
+#pc-table td:first-child { white-space: nowrap; }
+
+/* 버튼이 일하는 중임을 버튼 자리에서 보여준다.
+   상태바(우측 하단)만으로는 어느 버튼을 눌러서 도는 중인지 눈이 가지 않는다. */
+.btn .spin {
+  display: inline-block; vertical-align: -1px; margin-right: 6px;
+  width: 10px; height: 10px; border-width: 2px;
+}
+/* 진행 중은 "못 누름"이 아니라 "지금 일하는 중"이다.
+   .btn:disabled 의 흐린 처리(opacity .4)를 그대로 두면 꺼진 버튼처럼 보인다. */
+.btn.busy, .btn.busy:disabled { opacity: .95; cursor: progress; }
+
+/* 칸 표시 안의 레벨 버튼 — 숫자 바로 옆에서 고칠 수 있게 */
+.chip-lv {
+  padding: 0 6px; border-radius: 999px; cursor: pointer;
+  font-size: 11px; line-height: 17px;
+  background: var(--bg-2); color: var(--fg-dim);
+  border: 1px solid var(--line-2);
+}
+.chip-lv:hover { background: var(--hover); color: var(--fg); border-color: var(--hover-line); }
+/* 아직 안 정했으면 눈에 띄게 — 이 값이 정해져야 칸 수가 맞는다 */
+.chip-lv-unset { color: var(--warn); border-color: var(--warn-line); background: var(--warn-bg); }
+
+/* ── 가공 시설 슬롯 ─────────────────────────────── */
+/* 게임의 가공 시설이 슬롯으로 보이므로 같은 모양으로 그린다.
+   "4/7"보다 몇 칸이 비었는지가 한눈에 들어온다. */
+
+/* 시설이 여섯이라 한 줄씩 쌓으면 카드만 230px를 먹는다. 두 열로 접어 절반으로 줄인다 —
+   레시피 표가 이 카드 밑에 있어서, 여기서 아낀 만큼 그대로 표가 길어진다. */
+.fac-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; margin-bottom: 8px; }
+.fac { display: flex; align-items: center; gap: 8px; }
+.fac-name {
+  display: flex; align-items: center; gap: 6px;
+  width: 84px; flex: none; color: var(--fg-dim);
+}
+.slots { display: flex; gap: 4px; flex-wrap: wrap; }
+
+.slot {
+  width: 62px; height: 28px; flex: none;
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 0 6px; border-radius: 5px; overflow: hidden;
+  border: 1px solid var(--line-2); background: var(--bg-3);
+}
+/* 이름이 칸을 통째로 쓴다. 남은 시간은 마우스를 올렸을 때만 나온다 — 62x28 짜리 칸에
+   둘을 다 넣었더니 정작 무엇이 가공 중인지가 몇 글자 만에 잘렸다. */
+.slot em {
+  font-style: normal; font-size: 11px; line-height: 1.2; color: var(--fg-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  width: 100%; text-align: center;
+}
+
+.slot-done { background: var(--ok-bg); border-color: var(--ok-line); }
+.slot-done em { color: var(--ok); }
+
+/* 빈 칸은 테두리만 남겨 "여기 넣을 수 있다"를 보여 준다 */
+.slot-free { background: transparent; border-style: dashed; border-color: var(--line); }
+
+/* ── 옵션 창 ────────────────────────────────────── */
+/* 확인 모달과 같은 틀을 쓰되, 카드가 여럿 들어가므로 넓고 스크롤된다. */
+
+.modal-wide { width: 900px; max-width: 94vw; padding: 14px 16px; }
+.modal-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.modal-head h3 { margin: 0; flex: 1; }
+.modal-scroll {
+  max-height: calc(100vh - 160px);
+  overflow-y: auto; overscroll-behavior: contain;
+  padding-right: 4px;
+}
+/* 창 안에서는 카드 바깥 여백이 두 번 들어가 보이므로 줄인다 */
+.modal-scroll .card:last-child { margin-bottom: 0; }
+
+/* ── 버전 카드 ──────────────────────────────────── */
+/* 왼쪽 dl(.kv)과 오른쪽 커넥터 정보의 첫 줄 높이를 맞춘다.
+   p 의 기본 위 여백이 오른쪽만 밀어 내려 어긋나 보였다. */
+
+#ver-card .grid2 { align-items: start; margin-bottom: 0; }
+#cli-path-box > :first-child { margin-top: 0; }
+.cli-line { margin: 0; }
+.cli-line .muted { margin-right: 6px; }
+.row-tight { display: flex; gap: 6px; flex-wrap: wrap; }
+#ver-card .grid2 { gap: 24px; }
+
+/* ── 연주 ───────────────────────────────────────── */
+/* 화면을 반으로 갈라 왼쪽에 고르는 것(악기·악보), 오른쪽에 담은 것(재생목록)을 둔다.
+   담으면서 바로 확인할 수 있어야 하므로 위아래가 아니라 좌우로 놓는다. */
+
+.grid-music { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+.grid-music > .col { display: flex; flex-direction: column; min-width: 0; }
+.grid-music .card:last-child { margin-bottom: 0; }
+
+/* 악기는 버튼 격자. 장착 중인 것은 꺼 두되 색은 살려 둔다 — 흐려지면 오히려 안 보인다. */
+.inst-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.btn.inst { font-weight: 400; }
+.btn.inst small { color: var(--fg-mute); margin-left: 4px; pointer-events: none; }
+.btn.inst-on, .btn.inst-on:disabled, .btn.inst-on:hover {
+  opacity: 1; cursor: default;
+  background: var(--ok-bg); border-color: var(--ok-line); color: var(--ok);
+}
+.btn.inst-on small { color: var(--ok); }
+
+/* 지금 연주 중인 곡 — 시간은 게임이 재서 준다 */
+.now {
+  border: 1px solid var(--ok-line); background: var(--ok-bg);
+  border-radius: 6px; padding: 8px 10px; margin-bottom: 10px;
+}
+.now-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.now-time { font-variant-numeric: tabular-nums; color: var(--ok); }
+.now-foot { font-size: 12px; margin-top: 5px; }
+.bar.bar-wide { width: 100%; height: 6px; }
+.now .bar { background: var(--bg-3); }
+.now .bar i { background: var(--ok); }
+
+/* 목록마다 제 필터를 갖되, 머리말 줄 오른쪽에 얹어 세로를 먹지 않게 한다.
+   h3 는 대문자·자간이 걸려 있으므로 안에 들어가는 입력 요소에는 전부 되돌려 준다. */
+
+.card h3.h3-tools {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 8px; min-height: 26px;
+}
+.card h3.h3-tools small { margin-left: 0; }
+.card h3.h3-tools .count { float: none; margin-left: auto; white-space: nowrap; }
+.card h3.h3-tools .sort-inline,
+.card h3.h3-tools .inline-search {
+  font-size: 11px; font-weight: 400;
+  text-transform: none; letter-spacing: 0;
+  padding: 3px 6px; border-radius: 5px; height: 24px;
+}
+.card h3.h3-tools .sort-inline { max-width: 170px; }
+.card h3.h3-tools .inline-search { flex: 1; min-width: 60px; max-width: 220px; }
+
+/* ── 즐겨찾기 ───────────────────────────────────── */
+/* 별표한 것은 같은 표 안의 "즐겨찾기" 구역으로 올라간다. 구역 머리는 표의 한 줄,
+   칩 목록에서는 줄을 통째로 차지하는 칩이다. */
+
+.star {
+  background: none; border: 0; padding: 0 6px 0 0; margin: 0;
+  color: var(--fg-mute); cursor: pointer; font-size: 13px; line-height: 1;
+}
+.star:hover { color: var(--warn); }
+.star.on { color: var(--warn); }
+
+tr.sec td {
+  background: var(--bg-3); color: var(--fg-dim);
+  font-size: 11px; font-weight: 600; letter-spacing: .04em;
+  padding: 4px 10px; border-bottom: 1px solid var(--edge);
+}
+tr.sec:hover td { background: var(--bg-3); }
+tr.sec .muted { font-weight: 400; letter-spacing: 0; margin-left: 4px; }
+
+/* 칩 목록의 구역 머리 — flex-wrap 안에서 한 줄을 통째로 차지한다 */
+.chips .grp {
+  flex-basis: 100%; margin: 2px 0 0;
+  font-size: 11px; font-weight: 600; letter-spacing: .04em; color: var(--fg-dim);
+}
+.chips .grp:first-child { margin-top: 0; }
+
+/* 접었을 때 — 칸 여섯 줄 대신 시설별 사용/전체만 한 줄로 */
+#alter-works-card .fac-mini { display: none; }
+#alter-works-card.folded .fac-mini { display: flex; flex-wrap: wrap; gap: 6px; }
+#alter-works-card.folded .fac-list,
+#alter-works-card.folded .hint { display: none; }
+.chip-full { background: var(--warn-bg, var(--bg-3)); border-color: var(--warn); color: var(--warn); }
+.chip-full b { color: var(--warn); }
+
+
+/* ── 작업 큐 ────────────────────────────────────── */
+/* 탭과 무관하게 항상 오른쪽에 붙어 있다. 캐릭터가 하나라 목표는 하나씩만 돌 수 있고,
+   그래서 "지금 무엇이 돌고 무엇이 기다리는가"가 늘 보여야 한다. */
+
+/* overflow: hidden 은 접고 펴는 그 한 프레임을 위한 것이다. 큐가 잠깐 삐져나올 때
+   가로 스크롤 막대가 번쩍이는 것을 막는다. 본문은 제 안에서 따로 스크롤한다. */
+#work { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+#content { flex: 1; overflow: auto; padding: 14px; min-width: 0; }
+
+#queue {
+  width: var(--queue-w); flex: none;
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--bg-2); border-left: 1px solid var(--edge);
+}
+.q-head {
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 12px; flex: none;
+  border-bottom: 1px solid var(--edge);
+}
+.q-head b { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--fg-dim); }
+.q-head .count { float: none; color: var(--fg-mute); font-size: 12px; }
+.q-list { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 10px; }
+.q-empty { color: var(--fg-mute); font-size: 12px; line-height: 1.6; margin: 0; }
+
+.q-item {
+  border: 1px solid var(--edge); border-radius: 6px;
+  background: var(--bg-3); padding: 8px 10px; margin-bottom: 8px;
+}
+.q-top { display: flex; align-items: center; gap: 6px; }
+.q-top b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-badge {
+  font-size: 10px; padding: 1px 6px; border-radius: 999px; flex: none;
+  border: 1px solid var(--line-2); color: var(--fg-mute);
+}
+.q-sub { font-size: 11px; color: var(--fg-mute); margin-top: 3px; }
+.q-note { font-size: 11px; color: var(--fg-dim); margin-top: 5px; word-break: break-all; }
+.q-move { margin-top: 6px; display: flex; gap: 4px; }
+
+.q-btn {
+  background: none; border: 0; padding: 0 4px; margin: 0;
+  color: var(--fg-mute); cursor: pointer; font-size: 12px; line-height: 1.6;
+}
+.q-btn:hover { color: var(--fg); }
+.q-btn:disabled { opacity: .3; cursor: default; }
+
+.q-run  { border-color: var(--accent); }
+.q-run .q-badge { border-color: var(--accent); color: var(--accent); }
+.q-done { opacity: .72; }
+.q-done .q-badge { border-color: var(--ok-line); color: var(--ok); }
+.q-fail .q-badge { border-color: var(--bad); color: var(--bad); }
+
+/* 큐 아래 일괄 조작 줄 — 재생 · 일시정지 · 정지 · 정리 · 전체 삭제 */
+.q-foot {
+  display: flex; align-items: center; gap: 4px; flex: none;
+  padding: 8px 10px; border-top: 1px solid var(--edge);
+}
+.q-fbtn {
+  background: var(--bg-3); border: 1px solid var(--line-2); color: var(--fg-dim);
+  border-radius: 5px; padding: 3px 9px; cursor: pointer;
+  font-size: 12px; line-height: 1.5;
+}
+.q-fbtn:hover:not(:disabled) { background: var(--hover); color: var(--fg); }
+.q-fbtn:disabled { opacity: .35; cursor: default; }
+#q-play:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+
+/* 접기 — 큐는 탭과 무관하게 늘 붙어 있으므로, 화면이 좁을 때 치울 수단이 필요하다.
+   접어도 없애지는 않는다. 세로 라벨과 개수는 남겨서 "뭐가 돌고 있었지"를 잊지 않게. */
+/* 아래 일괄 조작 단추와 같은 옷을 입힌다 — 테두리 없이 두었더니 단추인 줄 몰랐다. */
+.q-fold {
+  flex: none; margin: 0; cursor: pointer;
+  width: 24px; height: 24px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--bg-3); border: 1px solid var(--line-2); border-radius: 5px;
+  color: var(--fg-dim); font-size: 13px; line-height: 1;
+}
+.q-fold:hover { background: var(--hover); color: var(--fg); border-color: var(--fg-mute); }
+
+.q-tag { display: none; }
+#queue.folded { width: 34px; }
+#queue.folded .q-head {
+  padding: 8px 0; justify-content: center; border-bottom: 0;
+}
+#queue.folded .q-fold { width: 26px; height: 26px; }
+#queue.folded .q-head b,
+#queue.folded .q-head .count,
+#queue.folded .q-head .spacer,
+#queue.folded #q-state,
+#queue.folded .q-list,
+#queue.folded .q-foot { display: none; }
+#queue.folded .q-tag {
+  display: block; flex: 1; width: 100%;
+  background: none; border: 0; margin: 0; padding: 4px 0; cursor: pointer;
+  writing-mode: vertical-rl; text-orientation: mixed;
+  font-size: 12px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--fg-dim); text-align: left;
+}
+#queue.folded .q-tag:hover { color: var(--fg); background: var(--hover); }
+#q-tag-n { color: var(--fg-mute); }
+
+.q-state { font-size: 11px; color: var(--fg-mute); }
+.q-state.on { color: var(--accent); }
+
+.q-pause { opacity: .8; }
+.q-pause .q-badge { border-color: var(--warn); color: var(--warn); }
+
+/* 계획 카드를 없앴으므로 그 자리 규칙도 함께 뺀다 */
+
+/* 카드의 수량 줄 — 목표와 현재 보유를 나란히 */
+.q-amt { font-size: 12px; color: var(--fg-dim); margin-top: 3px; }
+.q-amt b { color: var(--fg); font-variant-numeric: tabular-nums; }
+
+/* ── 색 편집 ────────────────────────────────────── */
+/* 그림판의 "색 편집"과 같은 꼴. 네모에서 채도·명도, 옆 띠에서 색상.
+   CSP 가 인라인 style 을 막으므로 두 판은 전부 canvas 로 그린다. */
+.cpick-box { width: 620px; max-width: 94vw; padding: 14px 16px; }
+/* 스포이드 화면일 때만 넓힌다 — 화면 한 장을 620px 에 우겨 넣으면 아무것도 못 고른다 */
+.cpick-box.wide { width: 1100px; }
+.cpick-main { display: flex; gap: 12px; align-items: flex-start; }
+.cpick-sv, .cpick-hue {
+  display: block; border: 1px solid var(--line-2); border-radius: 6px;
+  cursor: crosshair; touch-action: none;
+}
+.cpick-side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+
+/* 위가 원래 색, 아래가 고른 색 — 바꾸기 전후를 맞대어 본다 */
+.cpick-prev {
+  display: flex; height: 40px; border: 1px solid var(--line-2);
+  border-radius: 6px; overflow: hidden; margin-bottom: 4px;
+}
+.cpick-prev span { flex: 1; }
+
+#cpick-eye, #dye-shot { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.ico { width: 14px; height: 14px; flex: none; fill: currentColor; }
+
+.cpick-row { display: flex; align-items: center; gap: 8px; }
+.cpick-row span { width: 34px; flex: none; font-size: 12px; color: var(--fg-dim); }
+.cpick-row input { flex: 1; min-width: 0; }
+
+/* 스포이드 — 찍어 둔 화면 한 장을 눌러서 고른다 */
+.cpick-stage { position: relative; line-height: 0; }
+#cpick-screen {
+  display: block; width: 100%; height: auto; cursor: crosshair;
+  border: 1px solid var(--line-2); border-radius: 6px;
+}
+/* 돋보기 — 화면을 줄여 놓았으므로 한 픽셀을 확인할 방법이 있어야 한다 */
+.cpick-loupe {
+  position: absolute; right: 8px; top: 8px; pointer-events: none;
+  background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 6px;
+  padding: 4px; display: none;
+}
+.cpick-loupe.on { display: block; }
+#cpick-zoom { display: block; image-rendering: pixelated; border-radius: 3px; }
+#cpick-zoom-hex { display: block; text-align: center; font-size: 11px; color: var(--fg-dim); margin-top: 3px; }
+
+/* ── 염색 도우미 ────────────────────────────────── */
+/* CLI 와 무관한 별개 도구다. 화면 픽셀만 읽고 게임에는 아무것도 보내지 않는다. */
+
+.dye-slot { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.dye-slot input { flex: 1; min-width: 0; text-transform: uppercase; }
+/* 네모 자체가 스포이드 버튼이다 */
+.dye-chip {
+  width: 30px; height: 30px; flex: none; border-radius: 6px;
+  /* 테두리는 제 번호 색(오버레이의 점 색)으로 칠해진다 — 화면 위의 어느 점이
+     이 칸의 것인지 색만 보고 알 수 있어야 한다. 1px 로는 안 보여서 2px 로 둔다. */
+  border: 2px solid var(--line-2); background: var(--bg-3);
+  padding: 0; margin: 0; cursor: pointer;
+}
+.dye-chip:hover { outline: 2px solid var(--accent); outline-offset: 1px; }
+.dye-chip:active { transform: scale(.94); }
+/* 비어 있는 칸은 대각선 하나로 "아직 안 정함"을 보인다 */
+.dye-chip.empty {
+  background: repeating-linear-gradient(45deg,
+    var(--bg-3) 0 5px, var(--line) 5px 6px);
+}
+
+.dye-hit {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 0; border-bottom: 1px solid var(--line);
+}
+.dye-hit:last-child { border-bottom: 0; }
+.dye-hit .dye-chip { width: 22px; height: 22px; }
+.dye-hit.miss b { color: var(--fg-mute); }
+
+.heat-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.heat { margin: 0; }
+.heat canvas {
+  width: 128px; height: 128px; display: block;
+  image-rendering: pixelated;           /* 64px 을 늘려 쓰므로 뭉개지 않는다 */
+  border: 1px solid var(--edge); border-radius: 6px; background: var(--bg-3);
+}
+.heat figcaption { font-size: 11px; color: var(--fg-mute); margin-top: 4px; text-align: center; }
+
+.mono { font-family: "Cascadia Mono", Consolas, monospace; }
+#dye-tol { flex: 1; }
+
+/* 색마다의 허용 오차 — 슬라이더와 숫자를 한 덩어리로 */
+.dye-tol { display: flex; align-items: center; gap: 6px; flex: none; width: 118px; }
+
+/* 슬라이더 칸 위에 붙는 머리말. 아래 줄과 같은 flex 구성이라 자리가 저절로 맞는다. */
+.dye-slot-head { margin-bottom: 4px; }
+.dye-head-gap { flex: 1; }
+.dye-head-tol {
+  flex: none; width: 118px; text-align: center;
+  font-size: 11px; color: var(--fg-mute); letter-spacing: .02em;
+}
+.dye-head-x { visibility: hidden; pointer-events: none; }
+.dye-tol input[type="range"] { flex: 1; min-width: 0; }
+.dye-tol b { width: 18px; text-align: right; color: var(--fg-dim); font-size: 12px; }
+.dye-slot input.mono { flex: 1; min-width: 92px; }
+
+/* 오버레이에 그려지는 것을 그대로 축소해 보여 준다 (스크린샷에 안 찍히므로) */
+.dye-preview {
+  width: 100%; display: block; border-radius: 8px;
+  border: 1px solid var(--edge);
+  /* 게임 화면 대신 체크무늬를 깔아, 투명한 부분과 그린 부분을 구분한다 */
+  background-color: #1b1e25;
+  background-image:
+    linear-gradient(45deg, #23262e 25%, transparent 25%, transparent 75%, #23262e 75%),
+    linear-gradient(45deg, #23262e 25%, transparent 25%, transparent 75%, #23262e 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
+}
+
+/* 칸 번호 — 오버레이의 고유색과 같은 색을 리모콘에도 */
+.dye-no {
+  width: 20px; height: 20px; flex: none; border-radius: 5px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #10131a;
+}
+
+/* 사슬 끝까지 세운 가공 차례 */
+.plan-steps { margin: 6px 0 0; padding-left: 20px; }
+.plan-steps li { font-size: 12px; line-height: 1.8; }

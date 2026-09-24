@@ -1,0 +1,71 @@
+{
+  "appVersion": "2.1.0",
+  "cli": {
+    "productVersion": "0.1.0+0487c37814d251129a5b39edee7cecacc89d35c3",
+    "fileVersion": "0.1.0.0",
+    "company": "Devcat"
+  },
+  "commandCount": 28,
+  "commandSignature": "c43390a2f365835530143ff4852e63da93a36378dea843b4733097ef8e99bfa0",
+  "commands": [
+    "capabilities",
+    "change_instrument",
+    "complete_altering_work",
+    "execute_altering",
+    "execute_crafting",
+    "execute_gathering",
+    "get_activity",
+    "get_alterable_items",
+    "get_altering_works",
+    "get_craftable_items",
+    "get_currencies",
+    "get_current_environment",
+    "get_daily_missions",
+    "get_gatherable_items",
+    "get_instruments",
+    "get_inventory",
+    "get_items",
+    "get_music_scores",
+    "get_my_info",
+    "get_near_npcs",
+    "get_near_pcs",
+    "get_quests",
+    "get_social_actions",
+    "get_weekly_missions",
+    "play_music_score",
+    "stand_up",
+    "stop_action",
+    "write_chat"
+  ],
+  "bodyExamples": {
+    "write_chat": "안녕하세요",
+    "play_music_score": "{\"title\":\"<DisplayTitle from get_music_scores>\"}",
+    "change_instrument": "{\"name\":\"<Name from get_instruments>\"}",
+    "get_items": "{\"category\":\"Ingredient\",\"name\":\"<part of the name, optional>\"}",
+    "get_gatherable_items": "통나무",
+    "execute_gathering": "{\"displayName\":\"<DisplayName from get_gatherable_items>\"}",
+    "get_alterable_items": "버섯",
+    "execute_altering": "{\"displayName\":\"<DisplayName from get_alterable_items>\"}",
+    "complete_altering_work": "{\"displayName\":\"<DisplayName from get_altering_works>\"}",
+    "get_craftable_items": "거미줄",
+    "execute_crafting": "{\"displayName\":\"<DisplayName from get_craftable_items>\",\"craftCount\":1}"
+  },
+  "costs": {
+    "execute_gathering": {
+      "amount": 5,
+      "currency": "정령의 날개"
+    },
+    "execute_altering": {
+      "amount": 5,
+      "currency": "정령의 날개"
+    },
+    "execute_crafting": {
+      "amount": 5,
+      "currency": "정령의 날개"
+    }
+  },
+  "capturedAt": "2026-09-19T14:49:44.215Z",
+  "_설명": "검증된 호환 기준선입니다. 게임/CLI 업데이트 후 앱이 정상 동작하는 것을 확인했다면 앱의 호환성 화면에서 갱신하세요.",
+  "verifiedNote": "명령줄에서 승인",
+  "verifiedAt": "2026-09-19T14:49:44.215Z"
+}

@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'">
+<title>모비 커넥터 리모콘</title>
+<link rel="stylesheet" href="style.css">
+<!-- 첫 페인트 전에 테마를 정해야 화면이 깜빡이지 않는다 -->
+<script src="theme.js"></script>
+</head>
+<body>
+
+<header id="topbar">
+  <div class="tb-group">
+    <span id="conn" class="pill pill-muted">● 확인 중</span>
+    <span id="charname" class="tb-char">—</span>
+    <span id="charsub" class="tb-sub"></span>
+  </div>
+  <div class="tb-group tb-right">
+    <!-- 임시 — 오버레이는 화면 캡처에서 빠지도록 해 두어서 보통 스크린샷에는 안 찍힌다.
+         무엇이 그려지는지 남에게 보여 줄 일이 있을 때만 쓰는 단추라 여기 임시로 둔다. -->
+    <button id="dye-shot" class="btn btn-ghost"
+      title="화면 저장 — 게임 화면과 오버레이를 함께 한 장 (클립보드에 바로 들어갑니다)">
+      <svg class="ico" viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M6 2h4l1 2h3a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3z"/>
+        <circle cx="8" cy="9" r="3.6" fill="#000"/>
+        <circle cx="8" cy="9" r="2.4"/>
+      </svg></button>
+    <span class="stat"><em>정령의 날개</em><b id="wings">—</b></span>
+    <span class="stat"><em>무게</em><b id="weight">—</b></span>
+    <button id="btn-stop" class="btn btn-warn" title="진행 중인 행동 정지 (stop_action)">정지</button>
+    <button id="btn-options" class="btn btn-ghost" title="옵션">⚙</button>
+    <button id="btn-theme" class="btn btn-ghost" title="밝게/어둡게 전환">◐</button>
+    <button id="btn-refresh" class="btn btn-ghost" title="전체 새로고침">↻</button>
+  </div>
+</header>
+
+<nav id="tabs">
+  <button class="tab active" data-tab="dash">대시보드</button>
+  <button class="tab" data-tab="craft">제작</button>
+  <button class="tab" data-tab="alter">가공</button>
+  <button class="tab" data-tab="gather">채집</button>
+  <button class="tab" data-tab="items">소지품</button>
+  <button class="tab" data-tab="mission">미션</button>
+  <button class="tab" data-tab="music">연주</button>
+  <button class="tab" data-tab="social">소셜</button>
+  <button class="tab" data-tab="dye">염색</button>
+</nav>
+
+<div id="offline-banner" class="banner hidden">
+  <span class="banner-mark">▲</span>
+  <span id="offline-text"></span>
+  <button id="offline-retry" class="btn btn-tiny">다시 확인</button>
+</div>
+
+
+<div id="work">
+<main id="content">
+
+
+  <!-- 대시보드 -->
+  <section class="panel active" id="panel-dash">
+    <div class="toolbar">
+      <label class="chk" for="auto-interval">자동 갱신</label>
+      <select id="auto-interval">
+        <option value="0">꺼짐</option>
+        <option value="3000">3초</option>
+        <option value="5000">5초</option>
+        <option value="10000" selected>10초</option>
+        <option value="30000">30초</option>
+      </select>
+      <span id="auto-status" class="muted"></span>
+      <span class="spacer"></span>
+      <button class="btn btn-ghost" data-refresh="dash">↻ 갱신</button>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <h3>캐릭터</h3>
+        <dl id="dash-char" class="kv"></dl>
+      </div>
+      <div class="card">
+        <h3>위치 · 환경</h3>
+        <dl id="dash-env" class="kv"></dl>
+      </div>
+      <div class="card">
+        <h3>현재 활동</h3>
+        <div id="dash-act" class="flags"></div>
+      </div>
+      <div class="card card-wide">
+        <h3>재화</h3>
+        <div id="dash-cur" class="chips"></div>
+      </div>
+
+      <div class="card card-wide">
+        <h3>주변 <small>반경 30 · 실시간</small>
+          <span class="count"><span id="pc-count"></span> · <span id="npc-count"></span></span></h3>
+        <div class="grid-near">
+          <div>
+            <div class="tablewrap" id="pc-table-wrap"><table id="pc-table"><thead><tr>
+              <th>이름</th><th class="w-sm num">거리</th><th class="w-sm num">Lv</th><th class="w-md">직업</th><th class="w-sm num">전투력</th><th class="w-md">상태</th>
+            </tr></thead><tbody></tbody></table></div>
+          </div>
+          <div id="npc-list" class="scroll-list tall bordered"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 제작 -->
+  <section class="panel" id="panel-craft">
+    <div class="toolbar">
+      <input id="craft-search" type="search" placeholder="레시피 검색 (예: 못, 소드)">
+      <label class="chk"><input type="checkbox" id="craft-only-ok"> 제작 가능만</label>
+      <select id="craft-sort" class="sort" title="정렬 기준"></select>
+      <span class="spacer"></span>
+      <span id="craft-count" class="muted"></span>
+      <button class="btn btn-ghost" data-refresh="craft">↻ 갱신</button>
+    </div>
+    <p class="hint">✔ 표시와 부족 재료는 <b>1회 기준</b>이며, 보유량은 <b>보관함 재고를 포함</b>합니다.</p>
+    <div class="tablewrap"><table id="craft-table"><thead><tr>
+      <th class="w-xs"></th><th>이름</th><th class="w-sm num">산출</th><th>상태 · 부족 재료</th><th class="w-md"></th>
+    </tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <!-- 가공 -->
+  <section class="panel" id="panel-alter">
+    <div class="card card-wide" id="alter-works-card">
+      <h3 class="h3-tools">가공 작업 <small>get_altering_works</small>
+        <span class="count" id="alter-works-count"></span>
+        <span id="alter-works-act"></span>
+        <button class="btn btn-tiny" id="alter-works-fold" title="접기">▴</button></h3>
+      <div id="alter-works"></div>
+    </div>
+    <div class="toolbar">
+      <input id="alter-search" type="search" placeholder="가공 레시피 검색 (예: 옷감, 철괴)">
+      <label class="chk"><input type="checkbox" id="alter-only-ok"> 가능한 것만</label>
+      <select id="alter-sort" class="sort" title="정렬 기준"></select>
+      <select id="alter-facility" class="sort" title="가공 시설"></select>
+      <select id="alter-level" class="sort" title="필요 시설 레벨"></select>
+      <span class="spacer"></span>
+      <span id="alter-count" class="muted"></span>
+      <button class="btn btn-ghost" data-refresh="alter">↻ 갱신</button>
+    </div>
+    <p class="hint">✔ 표시와 부족 재료는 <b>1회 기준</b>이며, 보유량은 <b>보관함 재고를 포함</b>합니다.</p>
+    <div class="tablewrap"><table id="alter-table"><thead><tr>
+      <th class="w-xs"></th><th>이름</th><th class="w-sm num">산출</th><th class="w-sm num">시간</th>
+      <th>상태 · 부족 재료</th><th class="w-lg"></th>
+    </tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <!-- 채집 -->
+  <section class="panel" id="panel-gather">
+    <div class="toolbar">
+      <input id="gather-search" type="search" placeholder="채집물 검색 (예: 양털, 달걀)">
+      <label class="chk"><input type="checkbox" id="gather-only-ok" checked> 도구 보유만</label>
+      <select id="gather-sort" class="sort" title="정렬 기준"></select>
+      <span class="spacer"></span>
+      <span id="gather-count" class="muted"></span>
+      <button class="btn btn-ghost" data-refresh="gather">↻ 갱신</button>
+    </div>
+    <p class="hint">1회 호출당 최대 100개까지 채집합니다. 낚시 전용 항목은 자동 낚시가 켜지고 즉시 반환되며, 멈추려면 상단 <b>정지</b>를 누르세요.</p>
+    <div class="tablewrap"><table id="gather-table"><thead><tr>
+      <th class="w-xs"></th><th>이름</th><th class="w-md"></th>
+    </tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <!-- 소지품 -->
+  <section class="panel" id="panel-items">
+    <div class="toolbar">
+      <input id="items-search" type="search" placeholder="아이템 검색 (예: 양털, 포션)">
+      <select id="items-cat" class="sort" title="분류"></select>
+      <select id="items-loc" class="sort" title="보관처">
+        <option value="">보관처 전체</option>
+        <option value="bag">가방에 있는 것</option>
+        <option value="charStore">캐릭창고에 있는 것</option>
+        <option value="accStore">계정창고에 있는 것</option>
+        <option value="storeOnly">창고에만 있는 것</option>
+      </select>
+      <select id="items-sort" class="sort" title="정렬 기준"></select>
+      <span class="spacer"></span>
+      <span id="items-count" class="muted"></span>
+      <button class="btn btn-ghost" data-refresh="items">↻ 갱신</button>
+    </div>
+    <div class="tablewrap"><table id="items-table"><thead><tr>
+      <th>이름</th><th class="w-md">분류</th><th class="w-sm num">합계</th>
+      <th class="w-sm num">가방</th><th class="w-sm num">캐릭창고</th><th class="w-sm num">계정창고</th>
+    </tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <!-- 미션 -->
+  <section class="panel" id="panel-mission">
+    <div class="toolbar">
+      <label class="chk" title="아직 진행 중이거나, 다 했는데 보상을 안 받은 미션만 봅니다"><input type="checkbox" id="mission-only-open"> 진행·수령 필요만</label>
+      <span class="spacer"></span>
+      <button class="btn btn-ghost" data-refresh="mission">↻ 갱신</button>
+    </div>
+    <p id="mission-todo" class="note"></p>
+    <div class="grid2">
+      <div class="card"><h3>일일 미션 <small id="daily-count"></small></h3><div id="daily-list"></div></div>
+      <div class="card"><h3>주간 미션 <small id="weekly-count"></small></h3><div id="weekly-list"></div></div>
+    </div>
+    <div class="card card-wide"><h3>퀘스트 트래커 <small id="quest-count"></small></h3><div id="quest-list"></div></div>
+  </section>
+
+  <!-- 연주 -->
+  <section class="panel" id="panel-music">
+    <div class="grid-music">
+      <div class="col">
+        <div class="card">
+          <h3 class="h3-tools">악기 <small>change_instrument</small>
+            <span class="count" id="instrument-count"></span>
+            <select id="instrument-sort" class="sort sort-inline" title="정렬 기준"></select></h3>
+          <div id="instrument-list" class="inst-grid"></div>
+        </div>
+        <div class="card">
+          <h3 class="h3-tools">악보 <small>play_music_score</small>
+            <span class="count" id="music-count"></span>
+            <input id="music-search" type="search" class="inline-search" placeholder="검색">
+            <select id="music-sort" class="sort sort-inline" title="정렬 기준"></select></h3>
+          <div id="music-list" class="scroll-list bordered"></div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card">
+          <h3>재생목록<span class="count" id="pl-count"></span></h3>
+          <div class="toolbar">
+            <select id="pl-select"></select>
+            <button class="btn btn-tiny" id="pl-new">새로 만들기</button>
+            <button class="btn btn-tiny" id="pl-rename">이름 변경</button>
+            <button class="btn btn-tiny" id="pl-delete">삭제</button>
+            <span class="spacer"></span>
+            <label class="chk"><input type="checkbox" id="pl-loop"> 반복 순회</label>
+            <label class="chk"><input type="checkbox" id="pl-shuffle"> 셔플</label>
+          </div>
+          <p class="hint">연주할 때 <b>현재 캐릭터가 가진 곡만</b> 자동으로 걸러 재생합니다.</p>
+          <div id="pl-now" class="now hidden"></div>
+          <div id="pl-tracks" class="scroll-list bordered"></div>
+          <div class="toolbar mt10">
+            <button class="btn btn-primary" id="pl-play">▶ 재생목록 연주</button>
+            <button class="btn btn-warn" id="pl-stop">■ 정지</button>
+            <span id="pl-status" class="muted"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 소셜 -->
+  <section class="panel" id="panel-social">
+    <div class="toolbar">
+      <input id="social-search" type="search" placeholder="행동/표정 검색">
+      <span class="spacer"></span>
+      <button class="btn btn-ghost" data-refresh="social">↻ 갱신</button>
+    </div>
+
+    <div class="card card-wide">
+      <h3>채팅 보내기 <small>write_chat</small></h3>
+      <div class="row">
+        <input id="chat-input" type="text" placeholder="보낼 메시지 (최대 50자)" maxlength="50">
+        <button id="chat-send" class="btn btn-primary">전송</button>
+      </div>
+    </div>
+
+    <div class="card card-wide">
+      <h3 class="h3-tools">표정 <small>이모지 전송</small>
+        <span class="count" id="facial-count"></span>
+        <select id="facial-sort" class="sort sort-inline" title="정렬 기준"></select></h3>
+      <div id="social-facials" class="chips scroll-list bordered"></div>
+    </div>
+    <div class="card card-wide">
+      <h3 class="h3-tools">행동 <small>채팅 명령 전송</small>
+        <span class="count" id="behaviour-count"></span>
+        <select id="behaviour-sort" class="sort sort-inline" title="정렬 기준"></select></h3>
+      <div id="social-list" class="chips scroll-list bordered"></div>
+    </div>
+  </section>
+
+  <!-- 주변 -->
+  <!-- 루틴 -->
+  <!-- 염색 -->
+  <section class="panel" id="panel-dye">
+    <div class="toolbar">
+      <select id="dye-preset" title="저장해 둔 색 조합"></select>
+      <button class="btn btn-tiny" id="dye-new">새로 만들기</button>
+      <button class="btn btn-tiny" id="dye-rename">이름 변경</button>
+      <button class="btn btn-tiny" id="dye-del">삭제</button>
+      <span class="spacer"></span>
+      <span id="dye-state" class="pill pill-muted">꺼짐</span>
+
+      <button class="btn btn-primary" id="dye-start">염색 시작</button>
+      <button class="btn btn-warn hidden" id="dye-stop">중지</button>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>찾을 색 <small>세 칸</small></h3>
+        <!-- 아래 줄과 **같은 flex 구성**이라 자리가 저절로 맞는다. 맨 끝 ✕ 는 실제와 같은
+             단추를 보이지 않게 둔 것 — 폭을 숫자로 짐작하면 반드시 어긋난다. -->
+        <div class="dye-slot dye-slot-head" aria-hidden="true">
+          <span class="dye-head-gap"></span>
+          <span class="dye-head-tol">오차 범위</span>
+          <button class="q-btn dye-head-x" tabindex="-1">✕</button>
+        </div>
+        <div id="dye-slots"></div>
+      </div>
+
+      <div class="card">
+        <h3>상태 <small>화면만 읽습니다</small></h3>
+        <dl id="dye-info" class="kv"></dl>
+        <div id="dye-found" class="mt10"></div>
+      </div>
+    </div>
+
+    <div class="card card-wide">
+      <h3>화면에 그려지는 것 <small>게임 위에 얹히는 그림</small>
+        <span class="count" id="dye-prev-note"></span></h3>
+      <canvas id="dye-preview" class="dye-preview"></canvas>
+    </div>
+
+    <div class="card card-wide">
+      <h3>일치도 <small>밝을수록 목표색에 가깝습니다</small>
+        <span class="count" id="dye-heat-of"></span></h3>
+      <div id="dye-heats" class="heat-row"></div>
+    </div>
+
+    <video id="dye-video" class="hidden" autoplay muted playsinline></video>
+    <canvas id="dye-canvas" class="hidden"></canvas>
+  </section>
+
+</main>
+
+<!-- 작업 큐 — 탭과 무관하게 항상 오른쪽에 붙어 있다 -->
+<aside id="queue">
+  <div class="q-head">
+    <b>작업 큐</b><span class="count" id="q-count"></span>
+    <span class="spacer"></span>
+    <span id="q-state" class="q-state"></span>
+    <button class="q-fold" id="q-fold" title="접기">◂</button>
+  </div>
+  <!-- 접었을 때만 보이는 세로 라벨. 여기를 눌러도 다시 펼쳐진다. -->
+  <button class="q-tag" id="q-tag" title="펼치기">작업 큐<span id="q-tag-n"></span></button>
+  <div id="q-list" class="q-list"></div>
+  <div class="q-foot">
+    <button class="q-fbtn" id="q-play" title="대기 중인 것부터 차례로 진행">▶</button>
+    <button class="q-fbtn" id="q-pause" title="지금 걸음을 마치고 멈춤 — 재생하면 이어집니다">⏸</button>
+    <button class="q-fbtn" id="q-halt" title="지금 명령까지 끊고 멈춤 — 진행하던 항목은 보류됩니다">■</button>
+    <span class="spacer"></span>
+    <button class="q-fbtn" id="q-tidy" title="중단된 항목 치우기 (완료는 스스로 빠집니다)">정리</button>
+    <button class="q-fbtn" id="q-clear" title="전부 지우기">전체 삭제</button>
+  </div>
+</aside>
+
+</div>
+
+<footer id="statusbar">
+  <span id="sb-msg" class="muted">준비됨</span>
+  <span class="spacer"></span>
+  <span id="sb-busy" class="hidden">
+    <span class="spin"></span>
+    <span id="sb-busy-text">실행 중…</span>
+    <button id="sb-cancel" class="btn btn-tiny btn-warn">취소</button>
+  </span>
+</footer>
+
+<!-- 색 편집 — 그림판의 "색 편집"과 같은 꼴. 염색을 시작하지 않아도 쓸 수 있다. -->
+<div id="cpick" class="modal hidden">
+  <div class="modal-box cpick-box">
+    <div class="modal-head">
+      <h3 id="cpick-title">색 편집</h3>
+      <button id="cpick-close" class="btn btn-ghost" title="닫기">✕</button>
+    </div>
+
+    <!-- 고르기 화면 -->
+    <div id="cpick-main" class="cpick-main">
+      <canvas id="cpick-sv" class="cpick-sv" width="300" height="220"></canvas>
+      <canvas id="cpick-hue" class="cpick-hue" width="24" height="220"></canvas>
+      <div class="cpick-side">
+        <div class="cpick-prev">
+          <span id="cpick-old" title="원래 색"></span>
+          <span id="cpick-new" title="고른 색"></span>
+        </div>
+        <label class="cpick-row"><span>HEX</span>
+          <input class="mono" id="cpick-hex" maxlength="7" placeholder="#RRGGBB"></label>
+        <label class="cpick-row"><span>빨강</span>
+          <input class="mono" type="number" min="0" max="255" id="cpick-r"></label>
+        <label class="cpick-row"><span>녹색</span>
+          <input class="mono" type="number" min="0" max="255" id="cpick-g"></label>
+        <label class="cpick-row"><span>파랑</span>
+          <input class="mono" type="number" min="0" max="255" id="cpick-b"></label>
+        <!-- 유니코드에 스포이드 글자가 없다. 그림은 인라인 SVG 로 — CSP 는 문서 안의
+             <svg> 는 막지 않는다(막는 것은 style 과 바깥에서 불러오는 것). -->
+        <button class="btn btn-tiny mt10" id="cpick-eye">
+          <svg class="ico" viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="11.8" cy="4.2" r="3.1"/>
+            <path d="M9.7 6.3 3.4 12.6l-1 2.9 2.9-1 6.3-6.3z"/>
+          </svg>화면에서 집기</button>
+      </div>
+    </div>
+
+    <!-- 스포이드 화면 — 찍어 둔 화면을 눌러 색을 고른다 -->
+    <div id="cpick-shot" class="cpick-shot hidden">
+      <div class="cpick-stage">
+        <canvas id="cpick-screen"></canvas>
+        <div class="cpick-loupe">
+          <canvas id="cpick-zoom" width="132" height="132"></canvas>
+          <b class="mono" id="cpick-zoom-hex">#000000</b>
+        </div>
+      </div>
+      <p class="hint">색을 집을 자리를 누르세요. <b>Esc</b> 로 돌아갑니다.</p>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" id="cpick-cancel">취소</button>
+      <button class="btn btn-primary" id="cpick-ok">확인</button>
+    </div>
+  </div>
+</div>
+
+<!-- 옵션 창 -->
+<div id="options" class="modal hidden">
+  <div class="modal-box modal-wide">
+    <div class="modal-head">
+      <h3>옵션</h3>
+      <button id="options-close" class="btn btn-ghost" title="닫기">✕</button>
+    </div>
+    <div class="modal-scroll">
+      <div class="card card-wide" id="ver-card">
+        <h3>버전</h3>
+        <div class="grid2">
+          <dl id="ver-info" class="kv"></dl>
+          <div id="cli-path-box"></div>
+        </div>
+      </div>
+      <div class="card card-wide" id="compat-card">
+        <h3>호환성</h3>
+        <div id="compat-status"></div>
+        <div id="compat-changes"></div>
+        <div class="mt10">
+          <button class="btn" id="compat-recheck">다시 검사</button>
+          <button class="btn btn-primary" id="compat-accept">현재 상태를 기준선으로 저장</button>
+        </div>
+        <p class="hint">게임이나 CLI가 업데이트된 뒤 앱이 정상 동작하는 것을 확인했다면 기준선을 갱신하세요.</p>
+      </div>
+
+      <div class="card card-wide">
+        <h3>설정</h3>
+        <label class="chk"><input type="checkbox" id="opt-ask-mismatch">
+          정해 둔 가공 시설 레벨이 실제와 어긋나면 물어보기</label>
+        <p class="hint">칸에 올라간 작업이 설정 레벨보다 많으면 가공 탭에서 한 번 확인합니다.
+          팝업에서 "다시 묻지 않기"를 고르셨다면 여기서 되돌릴 수 있습니다.</p>
+      </div>
+    <div class="toolbar">
+      <span class="muted">28개 명령을 직접 호출합니다. UI에 없는 기능이 필요할 때 쓰세요.</span>
+      <span class="spacer"></span>
+      <button class="btn btn-ghost" id="caps-refresh">↻ 명령 목록 갱신</button>
+    </div>
+    <div class="row">
+      <select id="cmd-select"></select>
+      <input id="cmd-body" type="text" placeholder='본문 (예: {"displayName":"양털"}) — 비워도 됩니다'>
+      <button id="cmd-run" class="btn btn-primary">실행</button>
+    </div>
+    <p id="cmd-desc" class="hint"></p>
+    <div class="card card-wide"><h3>응답</h3><pre id="cmd-out" class="out">명령을 선택하고 실행하세요.</pre></div>
+
+
+
+    <div class="card card-wide">
+      <h3>호출 기록 <small>이번 실행분</small></h3>
+      <div id="call-log" class="log"></div>
+    </div>
+
+    <div class="card card-wide">
+      <h3>파일 로그 <small>앱을 꺼도 남습니다</small></h3>
+      <div class="toolbar">
+        <button class="btn btn-tiny" id="log-refresh">↻ 불러오기</button>
+        <button class="btn btn-tiny" id="log-open">폴더 열기</button>
+        <span id="log-info" class="muted"></span>
+      </div>
+      <div id="file-log" class="log"></div>
+    </div>
+
+    </div>
+  </div>
+</div>
+<!-- 확인 모달 -->
+<div id="modal" class="modal hidden">
+  <div class="modal-box">
+    <h3 id="modal-title">확인</h3>
+    <div id="modal-body"></div>
+    <div class="modal-actions">
+      <button id="modal-cancel" class="btn">취소</button>
+      <button id="modal-ok" class="btn btn-primary">실행</button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script src="../overlay/draw.js"></script>
+<script src="dye.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

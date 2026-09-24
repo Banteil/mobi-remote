@@ -1,0 +1,6668 @@
+{
+ "_설명": "마비노기 모바일 무기 제작표. 게임 화면을 그대로 옮긴 것이라 재료가 빠짐없이 들어 있고, 제작대 레벨과 기술 레벨도 있다.",
+ "_필드": {
+  "per": "한 번 제작에 나오는 개수",
+  "variants": "이름이 같은데 재료가 다른 갈래. SS 단계가 제작대 Lv.3 짜리와 Lv.4 짜리로 갈린다.",
+  "job": "이 무기를 쓰는 직업",
+  "level": "필요한 무기 제작대 레벨",
+  "skill": "필요한 생활 기술 (대장 기술 · 목공 · 매직 크래프트)",
+  "complete": "재료가 빠짐없이 적혀 있는가. 이 표는 전부 true."
+ },
+ "_한계": "CLI에는 같은 이름의 갈래를 골라 시킬 수단이 없다. 미리 셈하는 데 쓰고, 시킬 때는 게임이 고르는 대로 따른다.",
+ "_출처": "마비노기 모바일 제작 리스트.csv",
+ "_만든시각": "2026-09-24T12:40:02.142Z",
+ "_직업": [
+  "전사",
+  "대검전사",
+  "검술사",
+  "궁수",
+  "장궁병",
+  "석궁사수",
+  "마법사",
+  "빙결술사",
+  "화염술사",
+  "전격술사",
+  "힐러",
+  "사제",
+  "수도사",
+  "음유시인",
+  "악사",
+  "댄서",
+  "도적",
+  "듀얼블레이드",
+  "격투가",
+  "기사",
+  "암흑술사"
+ ],
+ "recipes": {
+  "그랜드 듀얼소드": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "듀얼블레이드",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "대장 기술",
+     "skillLevel": 3,
+     "ingredients": {
+      "강철괴": 3,
+      "가죽+": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그랜드 듀얼소드S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "듀얼블레이드",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "대장 기술",
+     "skillLevel": 8,
+     "ingredients": {
+      "합금강괴": 4,
+      "상급 가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그랜드 듀얼소드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "듀얼블레이드",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 13,
+     "ingredients": {
+      "특수강괴": 5,
+      "상급 가죽+": 3,
+      "항마석 가루": 60,
+      "지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "듀얼블레이드",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "대장 기술",
+     "skillLevel": 13,
+     "ingredients": {
+      "은합금괴": 3,
+      "상급 가죽+": 3,
+      "상급 항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그랜드 듀얼소드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "듀얼블레이드",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 17,
+     "ingredients": {
+      "운철괴": 4,
+      "최상급 가죽": 2,
+      "상급 항마석 가루+": 75,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그랜드 롱보우": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "장궁병",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "목공",
+     "skillLevel": 3,
+     "ingredients": {
+      "목재+": 3,
+      "가죽+": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그랜드 롱보우S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "장궁병",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "목공",
+     "skillLevel": 8,
+     "ingredients": {
+      "상급 목재": 4,
+      "상급 가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그랜드 롱보우SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "장궁병",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 13,
+     "ingredients": {
+      "상급 목재+": 5,
+      "상급 가죽+": 3,
+      "항마석 가루": 60,
+      "지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "장궁병",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "목공",
+     "skillLevel": 13,
+     "ingredients": {
+      "최상급 목재": 3,
+      "상급 가죽+": 3,
+      "상급 항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그랜드 롱보우Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "장궁병",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 17,
+     "ingredients": {
+      "최상급 목재+": 4,
+      "최상급 가죽": 2,
+      "상급 항마석 가루+": 75,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그랜드 크로스보우": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "석궁사수",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "목공",
+     "skillLevel": 3,
+     "ingredients": {
+      "목재+": 2,
+      "강철괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그랜드 크로스보우S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "석궁사수",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "목공",
+     "skillLevel": 8,
+     "ingredients": {
+      "상급 목재": 3,
+      "합금강괴": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그랜드 크로스보우SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "석궁사수",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 13,
+     "ingredients": {
+      "상급 목재+": 4,
+      "특수강괴": 4,
+      "항마석 가루": 60,
+      "지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "석궁사수",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "목공",
+     "skillLevel": 13,
+     "ingredients": {
+      "최상급 목재": 2,
+      "상급 목재+": 1,
+      "특수강괴": 4,
+      "상급 항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그랜드 크로스보우Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "석궁사수",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 17,
+     "ingredients": {
+      "최상급 목재+": 3,
+      "최상급 목재": 1,
+      "은합금괴": 3,
+      "상급 항마석 가루+": 75,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그레이스 하프": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "악사",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "목공",
+     "skillLevel": 3,
+     "ingredients": {
+      "목재+": 3,
+      "강철괴": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그레이스 하프S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "악사",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "목공",
+     "skillLevel": 8,
+     "ingredients": {
+      "상급 목재": 4,
+      "합금강괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그레이스 하프SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "악사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 13,
+     "ingredients": {
+      "상급 목재+": 5,
+      "특수강괴": 3,
+      "항마석 가루": 60,
+      "지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "악사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "목공",
+     "skillLevel": 13,
+     "ingredients": {
+      "최상급 목재": 3,
+      "특수강괴": 3,
+      "상급 항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그레이스 하프Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "악사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 17,
+     "ingredients": {
+      "최상급 목재+": 4,
+      "은합금괴": 2,
+      "상급 항마석 가루+": 75,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그레이트 글레이브": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "기사",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "대장 기술",
+     "skillLevel": 3,
+     "ingredients": {
+      "강철괴": 2,
+      "목재+": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그레이트 글레이브S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "기사",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "대장 기술",
+     "skillLevel": 8,
+     "ingredients": {
+      "합금강괴": 3,
+      "상급 목재": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그레이트 글레이브SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "기사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 13,
+     "ingredients": {
+      "특수강괴": 4,
+      "상급 목재+": 4,
+      "항마석 가루": 60,
+      "지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "기사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "대장 기술",
+     "skillLevel": 13,
+     "ingredients": {
+      "은합금괴": 2,
+      "특수강괴": 1,
+      "상급 목재+": 4,
+      "상급 항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그레이트 글레이브Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "기사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 17,
+     "ingredients": {
+      "운철괴": 3,
+      "은합금괴": 1,
+      "최상급 목재": 3,
+      "상급 항마석 가루+": 75,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그레이트 듀얼소드S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "듀얼블레이드",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 10,
+     "ingredients": {
+      "특수강괴": 4,
+      "상급 가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그레이트 듀얼소드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "듀얼블레이드",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "대장 기술",
+     "skillLevel": 14,
+     "ingredients": {
+      "은합금괴": 4,
+      "상급 가죽+": 3,
+      "상급 항마석 가루": 60,
+      "상급 지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "듀얼블레이드",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "대장 기술",
+     "skillLevel": 14,
+     "ingredients": {
+      "은합금괴": 3,
+      "최상급 가죽": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그레이트 듀얼소드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "듀얼블레이드",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 18,
+     "ingredients": {
+      "운철괴": 5,
+      "최상급 가죽": 2,
+      "상급 항마석 가루+": 90,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그레이트 소드": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "대검전사",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "대장 기술",
+     "skillLevel": 1,
+     "ingredients": {
+      "철괴": 3,
+      "목재": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그레이트 소드S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "대검전사",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "대장 기술",
+     "skillLevel": 6,
+     "ingredients": {
+      "합금강괴": 4,
+      "목재+": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그레이트 소드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "대검전사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 11,
+     "ingredients": {
+      "특수강괴": 4,
+      "상급 목재+": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그레이트 소드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "대검전사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 15,
+     "ingredients": {
+      "운철괴": 3,
+      "최상급 목재": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그레이트 클리버": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "대검전사",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "대장 기술",
+     "skillLevel": 3,
+     "ingredients": {
+      "강철괴": 3,
+      "목재+": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그레이트 클리버S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "대검전사",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "대장 기술",
+     "skillLevel": 8,
+     "ingredients": {
+      "합금강괴": 4,
+      "상급 목재": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그레이트 클리버SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "대검전사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 13,
+     "ingredients": {
+      "특수강괴": 5,
+      "상급 목재+": 3,
+      "항마석 가루": 60,
+      "지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "대검전사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "대장 기술",
+     "skillLevel": 13,
+     "ingredients": {
+      "은합금괴": 3,
+      "상급 목재+": 3,
+      "상급 항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "그레이트 클리버Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "대검전사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 17,
+     "ingredients": {
+      "운철괴": 4,
+      "최상급 목재": 2,
+      "상급 항마석 가루+": 75,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "글래시어 오브": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "빙결술사",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "매직 크래프트",
+     "skillLevel": 3,
+     "ingredients": {
+      "목재+": 2,
+      "강철괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "글래시어 오브S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "빙결술사",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "매직 크래프트",
+     "skillLevel": 8,
+     "ingredients": {
+      "상급 목재": 3,
+      "합금강괴": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "글래시어 오브SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "빙결술사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 13,
+     "ingredients": {
+      "상급 목재+": 4,
+      "특수강괴": 4,
+      "항마석 가루": 60,
+      "지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "빙결술사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 13,
+     "ingredients": {
+      "최상급 목재": 2,
+      "상급 목재+": 1,
+      "특수강괴": 4,
+      "상급 항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "글래시어 오브Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "빙결술사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 17,
+     "ingredients": {
+      "최상급 목재+": 3,
+      "최상급 목재": 1,
+      "은합금괴": 3,
+      "상급 항마석 가루+": 75,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "깃털 접부채S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "댄서",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 10,
+     "ingredients": {
+      "상급 목재+": 3,
+      "합금강괴": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "깃털 접부채SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "댄서",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "목공",
+     "skillLevel": 14,
+     "ingredients": {
+      "최상급 목재": 3,
+      "상급 목재+": 1,
+      "특수강괴": 4,
+      "상급 항마석 가루": 60,
+      "상급 지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "댄서",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "목공",
+     "skillLevel": 14,
+     "ingredients": {
+      "최상급 목재": 2,
+      "상급 목재+": 1,
+      "은합금괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "깃털 접부채Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "댄서",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 18,
+     "ingredients": {
+      "최상급 목재+": 4,
+      "최상급 목재": 1,
+      "은합금괴": 3,
+      "상급 항마석 가루+": 90,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "꽃잎 접부채": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "댄서",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "목공",
+     "skillLevel": 1,
+     "ingredients": {
+      "목재": 2,
+      "철괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "꽃잎 접부채S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "댄서",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "목공",
+     "skillLevel": 6,
+     "ingredients": {
+      "상급 목재": 3,
+      "강철괴": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "꽃잎 접부채SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "댄서",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 11,
+     "ingredients": {
+      "상급 목재+": 3,
+      "특수강괴": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "꽃잎 접부채Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "댄서",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 15,
+     "ingredients": {
+      "최상급 목재+": 2,
+      "최상급 목재": 1,
+      "은합금괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "디바인 쿼터스태프": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "수도사",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "매직 크래프트",
+     "skillLevel": 3,
+     "ingredients": {
+      "강철괴": 3,
+      "목재+": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "디바인 쿼터스태프S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "수도사",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "매직 크래프트",
+     "skillLevel": 8,
+     "ingredients": {
+      "합금강괴": 4,
+      "상급 목재": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "디바인 쿼터스태프SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "수도사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 13,
+     "ingredients": {
+      "특수강괴": 5,
+      "상급 목재+": 3,
+      "항마석 가루": 60,
+      "지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "수도사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 13,
+     "ingredients": {
+      "은합금괴": 3,
+      "상급 목재+": 3,
+      "상급 항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "디바인 쿼터스태프Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "수도사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 17,
+     "ingredients": {
+      "운철괴": 4,
+      "최상급 목재": 2,
+      "상급 항마석 가루+": 75,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라운드 너클": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "격투가",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "대장 기술",
+     "skillLevel": 3,
+     "ingredients": {
+      "강철괴": 2,
+      "가죽+": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라운드 너클S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "격투가",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "대장 기술",
+     "skillLevel": 8,
+     "ingredients": {
+      "합금강괴": 3,
+      "상급 가죽": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라운드 너클SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "격투가",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 13,
+     "ingredients": {
+      "특수강괴": 4,
+      "상급 가죽+": 4,
+      "항마석 가루": 60,
+      "지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "격투가",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "대장 기술",
+     "skillLevel": 13,
+     "ingredients": {
+      "은합금괴": 2,
+      "특수강괴": 1,
+      "상급 가죽+": 4,
+      "상급 항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라운드 너클Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "격투가",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 17,
+     "ingredients": {
+      "운철괴": 3,
+      "은합금괴": 1,
+      "최상급 가죽": 3,
+      "상급 항마석 가루+": 75,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라운드 코일": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전격술사",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "매직 크래프트",
+     "skillLevel": 1,
+     "ingredients": {
+      "철괴": 3,
+      "가죽": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라운드 코일S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전격술사",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "매직 크래프트",
+     "skillLevel": 6,
+     "ingredients": {
+      "합금강괴": 4,
+      "가죽+": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라운드 코일SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전격술사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 11,
+     "ingredients": {
+      "특수강괴": 4,
+      "상급 가죽+": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라운드 코일Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전격술사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 15,
+     "ingredients": {
+      "운철괴": 3,
+      "최상급 가죽": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라운드 하프SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "악사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 12,
+     "ingredients": {
+      "상급 목재+": 5,
+      "특수강괴": 2,
+      "항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라운드 하프Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "악사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 16,
+     "ingredients": {
+      "최상급 목재+": 3,
+      "은합금괴": 2,
+      "상급 항마석 가루+": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라운드헤드 케인": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "화염술사",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "매직 크래프트",
+     "skillLevel": 1,
+     "ingredients": {
+      "철괴": 3,
+      "목재": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라운드헤드 케인S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "화염술사",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "매직 크래프트",
+     "skillLevel": 6,
+     "ingredients": {
+      "합금강괴": 4,
+      "목재+": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라운드헤드 케인SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "화염술사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 11,
+     "ingredients": {
+      "특수강괴": 4,
+      "상급 목재+": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라운드헤드 케인Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "화염술사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 15,
+     "ingredients": {
+      "운철괴": 3,
+      "최상급 목재": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라이트 너클": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "격투가",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "대장 기술",
+     "skillLevel": 1,
+     "ingredients": {
+      "철괴": 2,
+      "가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라이트 너클S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "격투가",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "대장 기술",
+     "skillLevel": 6,
+     "ingredients": {
+      "합금강괴": 3,
+      "가죽+": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라이트 너클SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "격투가",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 11,
+     "ingredients": {
+      "특수강괴": 3,
+      "상급 가죽+": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라이트 너클Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "격투가",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 15,
+     "ingredients": {
+      "운철괴": 2,
+      "은합금괴": 1,
+      "최상급 가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라이트 롱보우": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "장궁병",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "목공",
+     "skillLevel": 1,
+     "ingredients": {
+      "목재": 3,
+      "가죽": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라이트 롱보우S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "장궁병",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "목공",
+     "skillLevel": 6,
+     "ingredients": {
+      "상급 목재": 4,
+      "가죽+": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라이트 롱보우SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "장궁병",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 11,
+     "ingredients": {
+      "상급 목재+": 4,
+      "상급 가죽+": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라이트 롱보우Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "장궁병",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 15,
+     "ingredients": {
+      "최상급 목재+": 3,
+      "최상급 가죽": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라이트 크로스보우": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "석궁사수",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "목공",
+     "skillLevel": 1,
+     "ingredients": {
+      "목재": 2,
+      "철괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라이트 크로스보우S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "석궁사수",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "목공",
+     "skillLevel": 6,
+     "ingredients": {
+      "상급 목재": 3,
+      "강철괴": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라이트 크로스보우SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "석궁사수",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 11,
+     "ingredients": {
+      "상급 목재+": 3,
+      "특수강괴": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라이트 크로스보우Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "석궁사수",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 15,
+     "ingredients": {
+      "최상급 목재+": 2,
+      "최상급 목재": 1,
+      "은합금괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라이트 핼버드": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "기사",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "대장 기술",
+     "skillLevel": 1,
+     "ingredients": {
+      "철괴": 2,
+      "목재": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라이트 핼버드S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "기사",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "대장 기술",
+     "skillLevel": 6,
+     "ingredients": {
+      "합금강괴": 3,
+      "목재+": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라이트 핼버드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "기사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 11,
+     "ingredients": {
+      "특수강괴": 3,
+      "상급 목재+": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "라이트 핼버드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "기사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 15,
+     "ingredients": {
+      "운철괴": 2,
+      "은합금괴": 1,
+      "최상급 목재": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "런들 대거SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "도적",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 12,
+     "ingredients": {
+      "특수강괴": 4,
+      "상급 가죽+": 3,
+      "항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "런들 대거Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "도적",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 16,
+     "ingredients": {
+      "운철괴": 2,
+      "은합금괴": 1,
+      "최상급 가죽": 3,
+      "상급 항마석 가루+": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "로터스 힐링 완드": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "힐러",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "매직 크래프트",
+     "skillLevel": 3,
+     "ingredients": {
+      "목재+": 2,
+      "강철괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "로터스 힐링 완드S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "힐러",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "매직 크래프트",
+     "skillLevel": 8,
+     "ingredients": {
+      "상급 목재": 3,
+      "합금강괴": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "로터스 힐링 완드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "힐러",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 13,
+     "ingredients": {
+      "상급 목재+": 4,
+      "특수강괴": 4,
+      "항마석 가루": 60,
+      "지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "힐러",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 13,
+     "ingredients": {
+      "최상급 목재": 2,
+      "상급 목재+": 1,
+      "특수강괴": 4,
+      "상급 항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "로터스 힐링 완드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "힐러",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 17,
+     "ingredients": {
+      "최상급 목재+": 3,
+      "최상급 목재": 1,
+      "은합금괴": 3,
+      "상급 항마석 가루+": 75,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "론 엣지소드": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "검술사",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "대장 기술",
+     "skillLevel": 1,
+     "ingredients": {
+      "철괴": 2,
+      "가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "론 엣지소드S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "검술사",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "대장 기술",
+     "skillLevel": 6,
+     "ingredients": {
+      "합금강괴": 3,
+      "가죽+": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "론 엣지소드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "검술사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 11,
+     "ingredients": {
+      "특수강괴": 3,
+      "상급 가죽+": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "론 엣지소드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "검술사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 15,
+     "ingredients": {
+      "운철괴": 2,
+      "은합금괴": 1,
+      "최상급 가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "롱 류트SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "음유시인",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 12,
+     "ingredients": {
+      "상급 목재+": 5,
+      "특수강괴": 2,
+      "항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "롱 류트Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "음유시인",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 16,
+     "ingredients": {
+      "최상급 목재+": 3,
+      "은합금괴": 2,
+      "상급 항마석 가루+": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "리인포스드 보우S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "궁수",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 10,
+     "ingredients": {
+      "상급 목재+": 4,
+      "상급 가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "리인포스드 보우SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "궁수",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "목공",
+     "skillLevel": 14,
+     "ingredients": {
+      "최상급 목재": 4,
+      "상급 가죽+": 3,
+      "상급 항마석 가루": 60,
+      "상급 지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "궁수",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "목공",
+     "skillLevel": 14,
+     "ingredients": {
+      "최상급 목재": 3,
+      "최상급 가죽": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "리인포스드 보우Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "궁수",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 18,
+     "ingredients": {
+      "최상급 목재+": 5,
+      "최상급 가죽": 2,
+      "상급 항마석 가루+": 90,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "마그네틱 코일": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전격술사",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "매직 크래프트",
+     "skillLevel": 3,
+     "ingredients": {
+      "강철괴": 3,
+      "가죽+": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "마그네틱 코일S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전격술사",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "매직 크래프트",
+     "skillLevel": 8,
+     "ingredients": {
+      "합금강괴": 4,
+      "상급 가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "마그네틱 코일SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전격술사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 13,
+     "ingredients": {
+      "특수강괴": 5,
+      "상급 가죽+": 3,
+      "항마석 가루": 60,
+      "지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "전격술사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 13,
+     "ingredients": {
+      "은합금괴": 3,
+      "상급 가죽+": 3,
+      "상급 항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "마그네틱 코일Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전격술사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 17,
+     "ingredients": {
+      "운철괴": 4,
+      "최상급 가죽": 2,
+      "상급 항마석 가루+": 75,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "마블 힐링 완드": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "힐러",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "매직 크래프트",
+     "skillLevel": 1,
+     "ingredients": {
+      "목재": 2,
+      "철괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "마블 힐링 완드S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "힐러",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "매직 크래프트",
+     "skillLevel": 6,
+     "ingredients": {
+      "상급 목재": 3,
+      "강철괴": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "마블 힐링 완드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "힐러",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 11,
+     "ingredients": {
+      "상급 목재+": 3,
+      "특수강괴": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "마블 힐링 완드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "힐러",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 15,
+     "ingredients": {
+      "최상급 목재+": 2,
+      "최상급 목재": 1,
+      "은합금괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "바스타드 소드S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 10,
+     "ingredients": {
+      "특수강괴": 4,
+      "상급 목재": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "바스타드 소드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "대장 기술",
+     "skillLevel": 14,
+     "ingredients": {
+      "은합금괴": 4,
+      "상급 목재+": 3,
+      "상급 항마석 가루": 60,
+      "상급 지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "전사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "대장 기술",
+     "skillLevel": 14,
+     "ingredients": {
+      "은합금괴": 3,
+      "최상급 목재": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "바스타드 소드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 18,
+     "ingredients": {
+      "운철괴": 5,
+      "최상급 목재": 2,
+      "상급 항마석 가루+": 90,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "본셰이드 의식용 단검": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "암흑술사",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "매직 크래프트",
+     "skillLevel": 3,
+     "ingredients": {
+      "강철괴": 2,
+      "가죽+": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "본셰이드 의식용 단검S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "암흑술사",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "매직 크래프트",
+     "skillLevel": 8,
+     "ingredients": {
+      "합금강괴": 3,
+      "상급 가죽": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "본셰이드 의식용 단검SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "암흑술사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 13,
+     "ingredients": {
+      "특수강괴": 4,
+      "상급 가죽+": 4,
+      "항마석 가루": 60,
+      "지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "암흑술사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 13,
+     "ingredients": {
+      "은합금괴": 2,
+      "특수강괴": 1,
+      "상급 가죽+": 4,
+      "상급 항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "본셰이드 의식용 단검Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "암흑술사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 17,
+     "ingredients": {
+      "운철괴": 3,
+      "은합금괴": 1,
+      "최상급 가죽": 3,
+      "상급 항마석 가루+": 75,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "브로드 소드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 12,
+     "ingredients": {
+      "특수강괴": 5,
+      "상급 목재+": 2,
+      "항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "브로드 소드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 16,
+     "ingredients": {
+      "운철괴": 3,
+      "최상급 목재": 2,
+      "상급 항마석 가루+": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "블런트 쿼터스태프": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "수도사",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "매직 크래프트",
+     "skillLevel": 1,
+     "ingredients": {
+      "철괴": 3,
+      "목재": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "블런트 쿼터스태프S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "수도사",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "매직 크래프트",
+     "skillLevel": 6,
+     "ingredients": {
+      "합금강괴": 4,
+      "목재+": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "블런트 쿼터스태프SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "수도사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 11,
+     "ingredients": {
+      "특수강괴": 4,
+      "상급 목재+": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "블런트 쿼터스태프Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "수도사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 15,
+     "ingredients": {
+      "운철괴": 3,
+      "최상급 목재": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "비스트 너클SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "격투가",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 12,
+     "ingredients": {
+      "특수강괴": 4,
+      "상급 가죽+": 3,
+      "항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "비스트 너클Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "격투가",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 16,
+     "ingredients": {
+      "운철괴": 2,
+      "은합금괴": 1,
+      "최상급 가죽": 3,
+      "상급 항마석 가루+": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "샤프 듀얼소드": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "듀얼블레이드",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "대장 기술",
+     "skillLevel": 1,
+     "ingredients": {
+      "철괴": 3,
+      "가죽": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "샤프 듀얼소드S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "듀얼블레이드",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "대장 기술",
+     "skillLevel": 6,
+     "ingredients": {
+      "합금강괴": 4,
+      "가죽+": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "샤프 듀얼소드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "듀얼블레이드",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 11,
+     "ingredients": {
+      "특수강괴": 4,
+      "상급 가죽+": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "샤프 듀얼소드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "듀얼블레이드",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 15,
+     "ingredients": {
+      "운철괴": 3,
+      "최상급 가죽": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "샤프 트라이던트SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "기사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 12,
+     "ingredients": {
+      "특수강괴": 4,
+      "상급 목재+": 3,
+      "항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "샤프 트라이던트Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "기사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 16,
+     "ingredients": {
+      "운철괴": 2,
+      "은합금괴": 1,
+      "최상급 목재": 3,
+      "상급 항마석 가루+": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "섀도아이 의식용 단검S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "암흑술사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 10,
+     "ingredients": {
+      "특수강괴": 3,
+      "상급 가죽": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "섀도아이 의식용 단검SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "암흑술사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 14,
+     "ingredients": {
+      "은합금괴": 3,
+      "특수강괴": 1,
+      "상급 가죽+": 4,
+      "상급 항마석 가루": 60,
+      "상급 지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "암흑술사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 14,
+     "ingredients": {
+      "은합금괴": 2,
+      "특수강괴": 1,
+      "최상급 가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "섀도아이 의식용 단검Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "암흑술사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 18,
+     "ingredients": {
+      "운철괴": 4,
+      "은합금괴": 1,
+      "최상급 가죽": 3,
+      "상급 항마석 가루+": 90,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "서펜트 의식용 단검": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "암흑술사",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "매직 크래프트",
+     "skillLevel": 1,
+     "ingredients": {
+      "철괴": 2,
+      "가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "서펜트 의식용 단검S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "암흑술사",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "매직 크래프트",
+     "skillLevel": 6,
+     "ingredients": {
+      "합금강괴": 3,
+      "가죽+": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "서펜트 의식용 단검SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "암흑술사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 11,
+     "ingredients": {
+      "특수강괴": 3,
+      "상급 가죽+": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "서펜트 의식용 단검Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "암흑술사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 15,
+     "ingredients": {
+      "운철괴": 2,
+      "은합금괴": 1,
+      "최상급 가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "숏보우": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "궁수",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "목공",
+     "skillLevel": 1,
+     "ingredients": {
+      "목재": 3,
+      "가죽": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "숏보우S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "궁수",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "목공",
+     "skillLevel": 6,
+     "ingredients": {
+      "상급 목재": 4,
+      "가죽+": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "숏보우SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "궁수",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 11,
+     "ingredients": {
+      "상급 목재+": 4,
+      "상급 가죽+": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "숏보우Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "궁수",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 15,
+     "ingredients": {
+      "최상급 목재+": 3,
+      "최상급 가죽": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "숏소드": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전사",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "대장 기술",
+     "skillLevel": 1,
+     "ingredients": {
+      "철괴": 3,
+      "목재": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "숏소드S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전사",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "대장 기술",
+     "skillLevel": 6,
+     "ingredients": {
+      "합금강괴": 4,
+      "목재+": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "숏소드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 11,
+     "ingredients": {
+      "특수강괴": 4,
+      "상급 목재+": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "숏소드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 15,
+     "ingredients": {
+      "운철괴": 3,
+      "최상급 목재": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "스노우 오브": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "빙결술사",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "매직 크래프트",
+     "skillLevel": 1,
+     "ingredients": {
+      "목재": 2,
+      "철괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "스노우 오브S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "빙결술사",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "매직 크래프트",
+     "skillLevel": 6,
+     "ingredients": {
+      "상급 목재": 3,
+      "강철괴": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "스노우 오브SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "빙결술사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 11,
+     "ingredients": {
+      "상급 목재+": 3,
+      "특수강괴": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "스노우 오브Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "빙결술사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 15,
+     "ingredients": {
+      "최상급 목재+": 2,
+      "최상급 목재": 1,
+      "은합금괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "스톤애쉬 블레이드S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "대검전사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 10,
+     "ingredients": {
+      "특수강괴": 4,
+      "상급 목재": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "스톤애쉬 블레이드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "대검전사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "대장 기술",
+     "skillLevel": 14,
+     "ingredients": {
+      "은합금괴": 4,
+      "상급 목재+": 3,
+      "상급 항마석 가루": 60,
+      "상급 지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "대검전사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "대장 기술",
+     "skillLevel": 14,
+     "ingredients": {
+      "은합금괴": 3,
+      "최상급 목재": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "스톤애쉬 블레이드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "대검전사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 18,
+     "ingredients": {
+      "운철괴": 5,
+      "최상급 목재": 2,
+      "상급 항마석 가루+": 90,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "스틸레토": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "도적",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "대장 기술",
+     "skillLevel": 3,
+     "ingredients": {
+      "강철괴": 2,
+      "가죽+": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "스틸레토S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "도적",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "대장 기술",
+     "skillLevel": 8,
+     "ingredients": {
+      "합금강괴": 3,
+      "상급 가죽": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "스틸레토SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "도적",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 13,
+     "ingredients": {
+      "특수강괴": 4,
+      "상급 가죽+": 4,
+      "항마석 가루": 60,
+      "지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "도적",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "대장 기술",
+     "skillLevel": 13,
+     "ingredients": {
+      "은합금괴": 2,
+      "특수강괴": 1,
+      "상급 가죽+": 4,
+      "상급 항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "스틸레토Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "도적",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 17,
+     "ingredients": {
+      "운철괴": 3,
+      "은합금괴": 1,
+      "최상급 가죽": 3,
+      "상급 항마석 가루+": 75,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "스파이크 탬버린SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "댄서",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 12,
+     "ingredients": {
+      "상급 목재+": 4,
+      "특수강괴": 3,
+      "항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "스파이크 탬버린Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "댄서",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 16,
+     "ingredients": {
+      "최상급 목재+": 2,
+      "최상급 목재": 1,
+      "은합금괴": 3,
+      "상급 항마석 가루+": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "심볼 크로스 스태프SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "사제",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 12,
+     "ingredients": {
+      "상급 목재+": 4,
+      "특수강괴": 3,
+      "항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "심볼 크로스 스태프Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "사제",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 16,
+     "ingredients": {
+      "최상급 목재+": 2,
+      "최상급 목재": 1,
+      "은합금괴": 3,
+      "상급 항마석 가루+": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "썬더스톰 코일SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전격술사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 12,
+     "ingredients": {
+      "특수강괴": 5,
+      "상급 가죽+": 2,
+      "항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "썬더스톰 코일Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전격술사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 16,
+     "ingredients": {
+      "운철괴": 3,
+      "최상급 가죽": 2,
+      "상급 항마석 가루+": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "아크 디바인 스태프S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "사제",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 10,
+     "ingredients": {
+      "상급 목재+": 3,
+      "합금강괴": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "아크 디바인 스태프SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "사제",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 14,
+     "ingredients": {
+      "최상급 목재": 3,
+      "상급 목재+": 1,
+      "특수강괴": 4,
+      "상급 항마석 가루": 60,
+      "상급 지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "사제",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 14,
+     "ingredients": {
+      "최상급 목재": 2,
+      "상급 목재+": 1,
+      "은합금괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "아크 디바인 스태프Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "사제",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 18,
+     "ingredients": {
+      "최상급 목재+": 4,
+      "최상급 목재": 1,
+      "은합금괴": 3,
+      "상급 항마석 가루+": 90,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "아크스피어 케인": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "화염술사",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "매직 크래프트",
+     "skillLevel": 3,
+     "ingredients": {
+      "강철괴": 3,
+      "목재+": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "아크스피어 케인S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "화염술사",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "매직 크래프트",
+     "skillLevel": 8,
+     "ingredients": {
+      "합금강괴": 4,
+      "상급 목재": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "아크스피어 케인SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "화염술사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 13,
+     "ingredients": {
+      "특수강괴": 5,
+      "상급 목재+": 3,
+      "항마석 가루": 60,
+      "지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "화염술사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 13,
+     "ingredients": {
+      "은합금괴": 3,
+      "상급 목재+": 3,
+      "상급 항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "아크스피어 케인Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "화염술사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 17,
+     "ingredients": {
+      "운철괴": 4,
+      "최상급 목재": 2,
+      "상급 항마석 가루+": 75,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "앤티크 차크람": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "댄서",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "목공",
+     "skillLevel": 3,
+     "ingredients": {
+      "목재+": 2,
+      "강철괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "앤티크 차크람S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "댄서",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "목공",
+     "skillLevel": 8,
+     "ingredients": {
+      "상급 목재": 3,
+      "합금강괴": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "앤티크 차크람SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "댄서",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 13,
+     "ingredients": {
+      "상급 목재+": 4,
+      "특수강괴": 4,
+      "항마석 가루": 60,
+      "지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "댄서",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "목공",
+     "skillLevel": 13,
+     "ingredients": {
+      "최상급 목재": 2,
+      "상급 목재+": 1,
+      "특수강괴": 4,
+      "상급 항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "앤티크 차크람Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "댄서",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 17,
+     "ingredients": {
+      "최상급 목재+": 3,
+      "최상급 목재": 1,
+      "은합금괴": 3,
+      "상급 항마석 가루+": 75,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "앤티크 쿼터스태프S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "수도사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 10,
+     "ingredients": {
+      "특수강괴": 4,
+      "상급 목재": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "앤티크 쿼터스태프SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "수도사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 14,
+     "ingredients": {
+      "은합금괴": 4,
+      "상급 목재+": 3,
+      "상급 항마석 가루": 60,
+      "상급 지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "수도사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 14,
+     "ingredients": {
+      "은합금괴": 3,
+      "최상급 목재": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "앤티크 쿼터스태프Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "수도사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 18,
+     "ingredients": {
+      "운철괴": 5,
+      "최상급 목재": 2,
+      "상급 항마석 가루+": 90,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "앤티크 크로스보우S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "석궁사수",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 10,
+     "ingredients": {
+      "상급 목재+": 3,
+      "합금강괴": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "앤티크 크로스보우SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "석궁사수",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "목공",
+     "skillLevel": 14,
+     "ingredients": {
+      "최상급 목재": 3,
+      "상급 목재+": 1,
+      "특수강괴": 4,
+      "상급 항마석 가루": 60,
+      "상급 지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "석궁사수",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "목공",
+     "skillLevel": 14,
+     "ingredients": {
+      "최상급 목재": 2,
+      "상급 목재+": 1,
+      "은합금괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "앤티크 크로스보우Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "석궁사수",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 18,
+     "ingredients": {
+      "최상급 목재+": 4,
+      "최상급 목재": 1,
+      "은합금괴": 3,
+      "상급 항마석 가루+": 90,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "우드 완드": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "마법사",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "매직 크래프트",
+     "skillLevel": 1,
+     "ingredients": {
+      "목재": 2,
+      "가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "우드 완드S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "마법사",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "매직 크래프트",
+     "skillLevel": 6,
+     "ingredients": {
+      "상급 목재": 3,
+      "가죽+": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "우드 완드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "마법사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 11,
+     "ingredients": {
+      "상급 목재+": 3,
+      "상급 가죽+": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "우드 완드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "마법사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 15,
+     "ingredients": {
+      "최상급 목재+": 2,
+      "최상급 목재": 1,
+      "최상급 가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "웨이브 엣지소드S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "검술사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 10,
+     "ingredients": {
+      "특수강괴": 3,
+      "상급 가죽": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "웨이브 엣지소드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "검술사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "대장 기술",
+     "skillLevel": 14,
+     "ingredients": {
+      "은합금괴": 3,
+      "특수강괴": 1,
+      "상급 가죽+": 4,
+      "상급 항마석 가루": 60,
+      "상급 지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "검술사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "대장 기술",
+     "skillLevel": 14,
+     "ingredients": {
+      "은합금괴": 2,
+      "특수강괴": 1,
+      "최상급 가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "웨이브 엣지소드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "검술사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 18,
+     "ingredients": {
+      "운철괴": 4,
+      "은합금괴": 1,
+      "최상급 가죽": 3,
+      "상급 항마석 가루+": 90,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "윈터브레스 오브S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "빙결술사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 10,
+     "ingredients": {
+      "상급 목재+": 3,
+      "합금강괴": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "윈터브레스 오브SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "빙결술사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 14,
+     "ingredients": {
+      "최상급 목재": 3,
+      "상급 목재+": 1,
+      "특수강괴": 4,
+      "상급 항마석 가루": 60,
+      "상급 지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "빙결술사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 14,
+     "ingredients": {
+      "최상급 목재": 2,
+      "상급 목재+": 1,
+      "은합금괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "윈터브레스 오브Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "빙결술사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 18,
+     "ingredients": {
+      "최상급 목재+": 4,
+      "최상급 목재": 1,
+      "은합금괴": 3,
+      "상급 항마석 가루+": 90,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "자이언트 블레이드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "대검전사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 12,
+     "ingredients": {
+      "특수강괴": 5,
+      "상급 목재+": 2,
+      "항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "자이언트 블레이드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "대검전사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 16,
+     "ingredients": {
+      "운철괴": 3,
+      "최상급 목재": 2,
+      "상급 항마석 가루+": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "잔영의 그레이트 소드ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "대검전사",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "대장 기술",
+     "skillLevel": 18,
+     "ingredients": {
+      "백금강괴": 3,
+      "최상급 목재+": 3,
+      "망령의 영혼석": 9,
+      "야생의 영혼석": 15,
+      "공명의 영혼석": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "잔영의 꽃잎 접부채ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "댄서",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "목공",
+     "skillLevel": 18,
+     "ingredients": {
+      "특급 목재": 3,
+      "운철괴": 3,
+      "망령의 영혼석": 9,
+      "야생의 영혼석": 15,
+      "공명의 영혼석": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "잔영의 라운드 코일ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전격술사",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "매직 크래프트",
+     "skillLevel": 18,
+     "ingredients": {
+      "백금강괴": 3,
+      "최상급 가죽+": 3,
+      "망령의 영혼석": 9,
+      "야생의 영혼석": 15,
+      "공명의 영혼석": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "잔영의 라운드헤드 케인ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "화염술사",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "매직 크래프트",
+     "skillLevel": 18,
+     "ingredients": {
+      "백금강괴": 3,
+      "최상급 목재+": 3,
+      "망령의 영혼석": 9,
+      "야생의 영혼석": 15,
+      "공명의 영혼석": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "잔영의 라이트 너클ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "격투가",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "대장 기술",
+     "skillLevel": 18,
+     "ingredients": {
+      "백금강괴": 3,
+      "최상급 가죽+": 3,
+      "망령의 영혼석": 9,
+      "삼림의 영혼석": 15,
+      "파동의 영혼석": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "잔영의 라이트 롱보우ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "장궁병",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "목공",
+     "skillLevel": 18,
+     "ingredients": {
+      "특급 목재": 3,
+      "최상급 가죽+": 3,
+      "망령의 영혼석": 9,
+      "삼림의 영혼석": 15,
+      "파동의 영혼석": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "잔영의 라이트 크로스보우ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "석궁사수",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "목공",
+     "skillLevel": 18,
+     "ingredients": {
+      "특급 목재": 3,
+      "운철괴": 3,
+      "망령의 영혼석": 9,
+      "삼림의 영혼석": 15,
+      "파동의 영혼석": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "잔영의 라이트 핼버드ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "기사",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "대장 기술",
+     "skillLevel": 18,
+     "ingredients": {
+      "백금강괴": 3,
+      "최상급 목재+": 3,
+      "망령의 영혼석": 9,
+      "야생의 영혼석": 15,
+      "공명의 영혼석": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "잔영의 론 엣지소드ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "검술사",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "대장 기술",
+     "skillLevel": 18,
+     "ingredients": {
+      "백금강괴": 3,
+      "최상급 가죽+": 3,
+      "망령의 영혼석": 9,
+      "야생의 영혼석": 15,
+      "공명의 영혼석": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "잔영의 마블 힐링 완드ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "힐러",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "매직 크래프트",
+     "skillLevel": 18,
+     "ingredients": {
+      "특급 목재": 3,
+      "운철괴": 3,
+      "망령의 영혼석": 9,
+      "삼림의 영혼석": 15,
+      "파동의 영혼석": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "잔영의 블런트 쿼터스태프ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "수도사",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "매직 크래프트",
+     "skillLevel": 18,
+     "ingredients": {
+      "백금강괴": 3,
+      "최상급 목재+": 3,
+      "망령의 영혼석": 9,
+      "삼림의 영혼석": 15,
+      "파동의 영혼석": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "잔영의 샤프 듀얼소드ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "듀얼블레이드",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "대장 기술",
+     "skillLevel": 18,
+     "ingredients": {
+      "백금강괴": 3,
+      "최상급 가죽+": 3,
+      "망령의 영혼석": 9,
+      "삼림의 영혼석": 15,
+      "파동의 영혼석": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "잔영의 서펜트 의식용 단검ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "암흑술사",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "매직 크래프트",
+     "skillLevel": 18,
+     "ingredients": {
+      "백금강괴": 3,
+      "최상급 가죽+": 3,
+      "망령의 영혼석": 9,
+      "삼림의 영혼석": 15,
+      "파동의 영혼석": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "잔영의 숏보우ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "궁수",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "목공",
+     "skillLevel": 18,
+     "ingredients": {
+      "특급 목재": 3,
+      "최상급 가죽+": 3,
+      "망령의 영혼석": 9,
+      "삼림의 영혼석": 15,
+      "파동의 영혼석": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "잔영의 숏소드ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전사",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "대장 기술",
+     "skillLevel": 18,
+     "ingredients": {
+      "백금강괴": 3,
+      "최상급 목재+": 3,
+      "망령의 영혼석": 9,
+      "야생의 영혼석": 15,
+      "공명의 영혼석": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "잔영의 스노우 오브ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "빙결술사",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "매직 크래프트",
+     "skillLevel": 18,
+     "ingredients": {
+      "특급 목재": 3,
+      "운철괴": 3,
+      "망령의 영혼석": 9,
+      "야생의 영혼석": 15,
+      "공명의 영혼석": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "잔영의 우드 완드ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "마법사",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "매직 크래프트",
+     "skillLevel": 18,
+     "ingredients": {
+      "특급 목재": 3,
+      "최상급 가죽+": 3,
+      "망령의 영혼석": 9,
+      "야생의 영혼석": 15,
+      "공명의 영혼석": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "잔영의 커브드 하프ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "악사",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "목공",
+     "skillLevel": 18,
+     "ingredients": {
+      "특급 목재": 3,
+      "운철괴": 3,
+      "망령의 영혼석": 9,
+      "야생의 영혼석": 15,
+      "공명의 영혼석": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "잔영의 켈틱 류트ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "음유시인",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "목공",
+     "skillLevel": 18,
+     "ingredients": {
+      "특급 목재": 3,
+      "운철괴": 3,
+      "망령의 영혼석": 9,
+      "야생의 영혼석": 15,
+      "공명의 영혼석": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "잔영의 크리스탈 스태프ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "사제",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "매직 크래프트",
+     "skillLevel": 18,
+     "ingredients": {
+      "특급 목재": 3,
+      "운철괴": 3,
+      "망령의 영혼석": 9,
+      "삼림의 영혼석": 15,
+      "파동의 영혼석": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "잔영의 플랫 대거ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "도적",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "대장 기술",
+     "skillLevel": 18,
+     "ingredients": {
+      "백금강괴": 3,
+      "최상급 가죽+": 3,
+      "망령의 영혼석": 9,
+      "삼림의 영혼석": 15,
+      "파동의 영혼석": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "커브드 듀얼소드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "듀얼블레이드",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 12,
+     "ingredients": {
+      "특수강괴": 5,
+      "상급 가죽+": 2,
+      "항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "커브드 듀얼소드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "듀얼블레이드",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 16,
+     "ingredients": {
+      "운철괴": 3,
+      "최상급 가죽": 2,
+      "상급 항마석 가루+": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "커브드 보우SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "궁수",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 12,
+     "ingredients": {
+      "상급 목재+": 5,
+      "상급 가죽+": 2,
+      "항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "커브드 보우Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "궁수",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 16,
+     "ingredients": {
+      "최상급 목재+": 3,
+      "최상급 가죽": 2,
+      "상급 항마석 가루+": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "커브드 엣지소드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "검술사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 12,
+     "ingredients": {
+      "특수강괴": 4,
+      "상급 가죽+": 3,
+      "항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "커브드 엣지소드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "검술사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 16,
+     "ingredients": {
+      "운철괴": 2,
+      "은합금괴": 1,
+      "최상급 가죽": 3,
+      "상급 항마석 가루+": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "커브드 완드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "마법사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 12,
+     "ingredients": {
+      "상급 목재+": 4,
+      "상급 가죽+": 3,
+      "항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "커브드 완드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "마법사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 16,
+     "ingredients": {
+      "최상급 목재+": 2,
+      "최상급 목재": 1,
+      "최상급 가죽": 3,
+      "상급 항마석 가루+": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "커브드 하프": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "악사",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "목공",
+     "skillLevel": 1,
+     "ingredients": {
+      "목재": 3,
+      "철괴": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "커브드 하프S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "악사",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "목공",
+     "skillLevel": 6,
+     "ingredients": {
+      "상급 목재": 4,
+      "강철괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "커브드 하프SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "악사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 11,
+     "ingredients": {
+      "상급 목재+": 4,
+      "특수강괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "커브드 하프Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "악사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 15,
+     "ingredients": {
+      "최상급 목재+": 3,
+      "은합금괴": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "커브드 힐링 완드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "힐러",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 12,
+     "ingredients": {
+      "상급 목재+": 4,
+      "특수강괴": 3,
+      "항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "커브드 힐링 완드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "힐러",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 16,
+     "ingredients": {
+      "최상급 목재+": 2,
+      "최상급 목재": 1,
+      "은합금괴": 3,
+      "상급 항마석 가루+": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "켈틱 류트": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "음유시인",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "목공",
+     "skillLevel": 1,
+     "ingredients": {
+      "목재": 3,
+      "철괴": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "켈틱 류트S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "음유시인",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "목공",
+     "skillLevel": 6,
+     "ingredients": {
+      "상급 목재": 4,
+      "강철괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "켈틱 류트SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "음유시인",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 11,
+     "ingredients": {
+      "상급 목재+": 4,
+      "특수강괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "켈틱 류트Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "음유시인",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 15,
+     "ingredients": {
+      "최상급 목재+": 3,
+      "은합금괴": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "켈틱 완드": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "마법사",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "매직 크래프트",
+     "skillLevel": 3,
+     "ingredients": {
+      "목재+": 2,
+      "가죽+": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "켈틱 완드S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "마법사",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "매직 크래프트",
+     "skillLevel": 8,
+     "ingredients": {
+      "상급 목재": 3,
+      "상급 가죽": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "켈틱 완드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "마법사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 13,
+     "ingredients": {
+      "상급 목재+": 4,
+      "상급 가죽+": 4,
+      "항마석 가루": 60,
+      "지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "마법사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 13,
+     "ingredients": {
+      "최상급 목재": 2,
+      "상급 목재+": 1,
+      "상급 가죽+": 4,
+      "상급 항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "켈틱 완드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "마법사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 17,
+     "ingredients": {
+      "최상급 목재+": 3,
+      "최상급 목재": 1,
+      "최상급 가죽": 3,
+      "상급 항마석 가루+": 75,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "켈틱 크로스보우SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "석궁사수",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 12,
+     "ingredients": {
+      "상급 목재+": 4,
+      "특수강괴": 3,
+      "항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "켈틱 크로스보우Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "석궁사수",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 16,
+     "ingredients": {
+      "최상급 목재+": 2,
+      "최상급 목재": 1,
+      "은합금괴": 3,
+      "상급 항마석 가루+": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "콤파운드 롱보우SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "장궁병",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 12,
+     "ingredients": {
+      "상급 목재+": 5,
+      "상급 가죽+": 2,
+      "항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "콤파운드 롱보우Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "장궁병",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 16,
+     "ingredients": {
+      "최상급 목재+": 3,
+      "최상급 가죽": 2,
+      "상급 항마석 가루+": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "콤포지트 보우": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "궁수",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "목공",
+     "skillLevel": 3,
+     "ingredients": {
+      "목재+": 3,
+      "가죽+": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "콤포지트 보우S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "궁수",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "목공",
+     "skillLevel": 8,
+     "ingredients": {
+      "상급 목재": 4,
+      "상급 가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "콤포지트 보우SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "궁수",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 13,
+     "ingredients": {
+      "상급 목재+": 5,
+      "상급 가죽+": 3,
+      "항마석 가루": 60,
+      "지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "궁수",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "목공",
+     "skillLevel": 13,
+     "ingredients": {
+      "최상급 목재": 3,
+      "상급 가죽+": 3,
+      "상급 항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "콤포지트 보우Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "궁수",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 17,
+     "ingredients": {
+      "최상급 목재+": 4,
+      "최상급 가죽": 2,
+      "상급 항마석 가루+": 75,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "크레센트 엣지소드": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "검술사",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "대장 기술",
+     "skillLevel": 3,
+     "ingredients": {
+      "강철괴": 2,
+      "가죽+": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "크레센트 엣지소드S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "검술사",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "대장 기술",
+     "skillLevel": 8,
+     "ingredients": {
+      "합금강괴": 3,
+      "상급 가죽": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "크레센트 엣지소드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "검술사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 13,
+     "ingredients": {
+      "특수강괴": 4,
+      "상급 가죽+": 4,
+      "항마석 가루": 60,
+      "지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "검술사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "대장 기술",
+     "skillLevel": 13,
+     "ingredients": {
+      "은합금괴": 2,
+      "특수강괴": 1,
+      "상급 가죽+": 4,
+      "상급 항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "크레센트 엣지소드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "검술사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 17,
+     "ingredients": {
+      "운철괴": 3,
+      "은합금괴": 1,
+      "최상급 가죽": 3,
+      "상급 항마석 가루+": 75,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "크리스탈 스태프": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "사제",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "매직 크래프트",
+     "skillLevel": 1,
+     "ingredients": {
+      "목재": 2,
+      "철괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "크리스탈 스태프S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "사제",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "매직 크래프트",
+     "skillLevel": 6,
+     "ingredients": {
+      "상급 목재": 3,
+      "강철괴": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "크리스탈 스태프SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "사제",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 11,
+     "ingredients": {
+      "상급 목재+": 3,
+      "특수강괴": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "크리스탈 스태프Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "사제",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 15,
+     "ingredients": {
+      "최상급 목재+": 2,
+      "최상급 목재": 1,
+      "은합금괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "크리스탈 완드S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "마법사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 10,
+     "ingredients": {
+      "상급 목재+": 3,
+      "상급 가죽": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "크리스탈 완드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "마법사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 14,
+     "ingredients": {
+      "최상급 목재": 3,
+      "상급 목재+": 1,
+      "상급 가죽+": 4,
+      "상급 항마석 가루": 60,
+      "상급 지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "마법사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 14,
+     "ingredients": {
+      "최상급 목재": 2,
+      "상급 목재+": 1,
+      "최상급 가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "크리스탈 완드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "마법사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 18,
+     "ingredients": {
+      "최상급 목재+": 4,
+      "최상급 목재": 1,
+      "최상급 가죽": 3,
+      "상급 항마석 가루+": 90,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "크리스탈 힐링 완드S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "힐러",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 10,
+     "ingredients": {
+      "상급 목재+": 3,
+      "합금강괴": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "크리스탈 힐링 완드SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "힐러",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 14,
+     "ingredients": {
+      "최상급 목재": 3,
+      "상급 목재+": 1,
+      "특수강괴": 4,
+      "상급 항마석 가루": 60,
+      "상급 지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "힐러",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 14,
+     "ingredients": {
+      "최상급 목재": 2,
+      "상급 목재+": 1,
+      "은합금괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "크리스탈 힐링 완드Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "힐러",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 18,
+     "ingredients": {
+      "최상급 목재+": 4,
+      "최상급 목재": 1,
+      "은합금괴": 3,
+      "상급 항마석 가루+": 90,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "클래식 쿼터스태프SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "수도사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 12,
+     "ingredients": {
+      "특수강괴": 5,
+      "상급 목재+": 2,
+      "항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "클래식 쿼터스태프Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "수도사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 16,
+     "ingredients": {
+      "운철괴": 3,
+      "최상급 목재": 2,
+      "상급 항마석 가루+": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "클래식 하프S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "악사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 10,
+     "ingredients": {
+      "상급 목재+": 4,
+      "합금강괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "클래식 하프SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "악사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "목공",
+     "skillLevel": 14,
+     "ingredients": {
+      "최상급 목재": 4,
+      "특수강괴": 3,
+      "상급 항마석 가루": 60,
+      "상급 지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "악사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "목공",
+     "skillLevel": 14,
+     "ingredients": {
+      "최상급 목재": 3,
+      "은합금괴": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "클래식 하프Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "악사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 18,
+     "ingredients": {
+      "최상급 목재+": 5,
+      "은합금괴": 2,
+      "상급 항마석 가루+": 90,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "트윈블레이드 폴액스S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "기사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 10,
+     "ingredients": {
+      "특수강괴": 3,
+      "상급 목재": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "트윈블레이드 폴액스SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "기사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "대장 기술",
+     "skillLevel": 14,
+     "ingredients": {
+      "은합금괴": 3,
+      "특수강괴": 1,
+      "상급 목재+": 4,
+      "상급 항마석 가루": 60,
+      "상급 지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "기사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "대장 기술",
+     "skillLevel": 14,
+     "ingredients": {
+      "은합금괴": 2,
+      "특수강괴": 1,
+      "최상급 목재": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "트윈블레이드 폴액스Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "기사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 18,
+     "ingredients": {
+      "운철괴": 4,
+      "은합금괴": 1,
+      "최상급 목재": 3,
+      "상급 항마석 가루+": 90,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "티어드롭 류트S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "음유시인",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 10,
+     "ingredients": {
+      "상급 목재+": 4,
+      "합금강괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "티어드롭 류트SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "음유시인",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "목공",
+     "skillLevel": 14,
+     "ingredients": {
+      "최상급 목재": 4,
+      "특수강괴": 3,
+      "상급 항마석 가루": 60,
+      "상급 지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "음유시인",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "목공",
+     "skillLevel": 14,
+     "ingredients": {
+      "최상급 목재": 3,
+      "은합금괴": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "티어드롭 류트Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "음유시인",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 18,
+     "ingredients": {
+      "최상급 목재+": 5,
+      "은합금괴": 2,
+      "상급 항마석 가루+": 90,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "파이어플린트 케인S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "화염술사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 10,
+     "ingredients": {
+      "특수강괴": 4,
+      "상급 목재": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "파이어플린트 케인SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "화염술사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 14,
+     "ingredients": {
+      "은합금괴": 4,
+      "상급 목재+": 3,
+      "상급 항마석 가루": 60,
+      "상급 지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "화염술사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 14,
+     "ingredients": {
+      "은합금괴": 3,
+      "최상급 목재": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "파이어플린트 케인Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "화염술사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 18,
+     "ingredients": {
+      "운철괴": 5,
+      "최상급 목재": 2,
+      "상급 항마석 가루+": 90,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "페더드 의식용 단검SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "암흑술사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 12,
+     "ingredients": {
+      "특수강괴": 4,
+      "상급 가죽+": 3,
+      "항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "페더드 의식용 단검Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "암흑술사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 16,
+     "ingredients": {
+      "운철괴": 2,
+      "은합금괴": 1,
+      "최상급 가죽": 3,
+      "상급 항마석 가루+": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "페스카즈S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "도적",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 10,
+     "ingredients": {
+      "특수강괴": 3,
+      "상급 가죽": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "페스카즈SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "도적",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "대장 기술",
+     "skillLevel": 14,
+     "ingredients": {
+      "은합금괴": 3,
+      "특수강괴": 1,
+      "상급 가죽+": 4,
+      "상급 항마석 가루": 60,
+      "상급 지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "도적",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "대장 기술",
+     "skillLevel": 14,
+     "ingredients": {
+      "은합금괴": 2,
+      "특수강괴": 1,
+      "최상급 가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "페스카즈Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "도적",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 18,
+     "ingredients": {
+      "운철괴": 4,
+      "은합금괴": 1,
+      "최상급 가죽": 3,
+      "상급 항마석 가루+": 90,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "프라임 너클S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "격투가",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 10,
+     "ingredients": {
+      "특수강괴": 3,
+      "상급 가죽": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "프라임 너클SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "격투가",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "대장 기술",
+     "skillLevel": 14,
+     "ingredients": {
+      "은합금괴": 3,
+      "특수강괴": 1,
+      "상급 가죽+": 4,
+      "상급 항마석 가루": 60,
+      "상급 지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "격투가",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "대장 기술",
+     "skillLevel": 14,
+     "ingredients": {
+      "은합금괴": 2,
+      "특수강괴": 1,
+      "최상급 가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "프라임 너클Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "격투가",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 18,
+     "ingredients": {
+      "운철괴": 4,
+      "은합금괴": 1,
+      "최상급 가죽": 3,
+      "상급 항마석 가루+": 90,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "프로스트 오브SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "빙결술사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 12,
+     "ingredients": {
+      "상급 목재+": 4,
+      "특수강괴": 3,
+      "항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "프로스트 오브Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "빙결술사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 16,
+     "ingredients": {
+      "최상급 목재+": 2,
+      "최상급 목재": 1,
+      "은합금괴": 3,
+      "상급 항마석 가루+": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "플라스마 코일S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전격술사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 10,
+     "ingredients": {
+      "특수강괴": 4,
+      "상급 가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "플라스마 코일SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전격술사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 14,
+     "ingredients": {
+      "은합금괴": 4,
+      "상급 가죽+": 3,
+      "상급 항마석 가루": 60,
+      "상급 지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "전격술사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 14,
+     "ingredients": {
+      "은합금괴": 3,
+      "최상급 가죽": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "플라스마 코일Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전격술사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 18,
+     "ingredients": {
+      "운철괴": 5,
+      "최상급 가죽": 2,
+      "상급 항마석 가루+": 90,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "플랫 대거": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "도적",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "대장 기술",
+     "skillLevel": 1,
+     "ingredients": {
+      "철괴": 2,
+      "가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "플랫 대거S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "도적",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "대장 기술",
+     "skillLevel": 6,
+     "ingredients": {
+      "합금강괴": 3,
+      "가죽+": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "플랫 대거SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "도적",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 11,
+     "ingredients": {
+      "특수강괴": 3,
+      "상급 가죽+": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "플랫 대거Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "도적",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 15,
+     "ingredients": {
+      "운철괴": 2,
+      "은합금괴": 1,
+      "최상급 가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "플랫 류트": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "음유시인",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "목공",
+     "skillLevel": 3,
+     "ingredients": {
+      "목재+": 3,
+      "강철괴": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "플랫 류트S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "음유시인",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "목공",
+     "skillLevel": 8,
+     "ingredients": {
+      "상급 목재": 4,
+      "합금강괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "플랫 류트SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "음유시인",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 13,
+     "ingredients": {
+      "상급 목재+": 5,
+      "특수강괴": 3,
+      "항마석 가루": 60,
+      "지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "음유시인",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "목공",
+     "skillLevel": 13,
+     "ingredients": {
+      "최상급 목재": 3,
+      "특수강괴": 3,
+      "상급 항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "플랫 류트Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "음유시인",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 17,
+     "ingredients": {
+      "최상급 목재+": 4,
+      "은합금괴": 2,
+      "상급 항마석 가루+": 75,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "한손 도끼": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전사",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "대장 기술",
+     "skillLevel": 3,
+     "ingredients": {
+      "강철괴": 3,
+      "목재+": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "한손 도끼S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전사",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "대장 기술",
+     "skillLevel": 8,
+     "ingredients": {
+      "합금강괴": 4,
+      "상급 목재": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "한손 도끼SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "대장 기술",
+     "skillLevel": 13,
+     "ingredients": {
+      "특수강괴": 5,
+      "상급 목재+": 3,
+      "항마석 가루": 60,
+      "지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "전사",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "대장 기술",
+     "skillLevel": 13,
+     "ingredients": {
+      "은합금괴": 3,
+      "상급 목재+": 3,
+      "상급 항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "한손 도끼Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "대장 기술",
+     "skillLevel": 17,
+     "ingredients": {
+      "운철괴": 4,
+      "최상급 목재": 2,
+      "상급 항마석 가루+": 75,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해머헤드 케인SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "화염술사",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 12,
+     "ingredients": {
+      "특수강괴": 5,
+      "상급 목재+": 2,
+      "항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해머헤드 케인Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "화염술사",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 16,
+     "ingredients": {
+      "운철괴": 3,
+      "최상급 목재": 2,
+      "상급 항마석 가루+": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해연의 그레이트 소드ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "대검전사",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "대장 기술",
+     "skillLevel": 19,
+     "ingredients": {
+      "백금강괴": 5,
+      "특급 목재": 5,
+      "포식의 마력석": 15,
+      "망령의 영혼석": 80,
+      "야생의 영혼석": 75,
+      "파동의 영혼석": 90
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해연의 꽃잎 접부채ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "댄서",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "목공",
+     "skillLevel": 19,
+     "ingredients": {
+      "특급 목재": 5,
+      "백금강괴": 5,
+      "허상의 마력석": 15,
+      "망령의 영혼석": 80,
+      "야생의 영혼석": 75,
+      "파동의 영혼석": 90
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해연의 라운드 코일ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전격술사",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "매직 크래프트",
+     "skillLevel": 19,
+     "ingredients": {
+      "백금강괴": 5,
+      "특급 가죽": 5,
+      "심해의 마력석": 15,
+      "망령의 영혼석": 80,
+      "야생의 영혼석": 75,
+      "파동의 영혼석": 90
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해연의 라운드헤드 케인ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "화염술사",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "매직 크래프트",
+     "skillLevel": 19,
+     "ingredients": {
+      "백금강괴": 5,
+      "특급 목재": 5,
+      "심해의 마력석": 15,
+      "망령의 영혼석": 80,
+      "야생의 영혼석": 75,
+      "파동의 영혼석": 90
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해연의 라이트 너클ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "격투가",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "대장 기술",
+     "skillLevel": 19,
+     "ingredients": {
+      "백금강괴": 5,
+      "특급 가죽": 5,
+      "허상의 마력석": 15,
+      "망령의 영혼석": 80,
+      "삼림의 영혼석": 75,
+      "공명의 영혼석": 90
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해연의 라이트 롱보우ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "장궁병",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "목공",
+     "skillLevel": 19,
+     "ingredients": {
+      "특급 목재": 5,
+      "특급 가죽": 5,
+      "포식의 마력석": 15,
+      "망령의 영혼석": 80,
+      "삼림의 영혼석": 75,
+      "공명의 영혼석": 90
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해연의 라이트 크로스보우ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "석궁사수",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "목공",
+     "skillLevel": 19,
+     "ingredients": {
+      "특급 목재": 5,
+      "백금강괴": 5,
+      "포식의 마력석": 15,
+      "망령의 영혼석": 80,
+      "삼림의 영혼석": 75,
+      "공명의 영혼석": 90
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해연의 라이트 핼버드ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "기사",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "대장 기술",
+     "skillLevel": 19,
+     "ingredients": {
+      "백금강괴": 5,
+      "특급 목재": 5,
+      "포식의 마력석": 15,
+      "망령의 영혼석": 80,
+      "야생의 영혼석": 75,
+      "파동의 영혼석": 90
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해연의 론 엣지소드ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "검술사",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "대장 기술",
+     "skillLevel": 19,
+     "ingredients": {
+      "백금강괴": 5,
+      "특급 가죽": 5,
+      "포식의 마력석": 15,
+      "망령의 영혼석": 80,
+      "야생의 영혼석": 75,
+      "파동의 영혼석": 90
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해연의 마블 힐링 완드ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "힐러",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "매직 크래프트",
+     "skillLevel": 19,
+     "ingredients": {
+      "특급 목재": 5,
+      "백금강괴": 5,
+      "심해의 마력석": 15,
+      "망령의 영혼석": 80,
+      "삼림의 영혼석": 75,
+      "공명의 영혼석": 90
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해연의 블런트 쿼터스태프ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "수도사",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "매직 크래프트",
+     "skillLevel": 19,
+     "ingredients": {
+      "백금강괴": 5,
+      "특급 목재": 5,
+      "심해의 마력석": 15,
+      "망령의 영혼석": 80,
+      "삼림의 영혼석": 75,
+      "공명의 영혼석": 90
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해연의 샤프 듀얼소드ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "듀얼블레이드",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "대장 기술",
+     "skillLevel": 19,
+     "ingredients": {
+      "백금강괴": 5,
+      "특급 가죽": 5,
+      "허상의 마력석": 15,
+      "망령의 영혼석": 80,
+      "삼림의 영혼석": 75,
+      "공명의 영혼석": 90
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해연의 서펜트 의식용 단검ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "암흑술사",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "매직 크래프트",
+     "skillLevel": 19,
+     "ingredients": {
+      "백금강괴": 5,
+      "특급 가죽": 5,
+      "심해의 마력석": 15,
+      "망령의 영혼석": 80,
+      "삼림의 영혼석": 75,
+      "공명의 영혼석": 90
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해연의 숏보우ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "궁수",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "목공",
+     "skillLevel": 19,
+     "ingredients": {
+      "특급 목재": 5,
+      "특급 가죽": 5,
+      "포식의 마력석": 15,
+      "망령의 영혼석": 80,
+      "삼림의 영혼석": 75,
+      "공명의 영혼석": 90
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해연의 숏소드ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "전사",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "대장 기술",
+     "skillLevel": 19,
+     "ingredients": {
+      "백금강괴": 5,
+      "특급 목재": 5,
+      "포식의 마력석": 15,
+      "망령의 영혼석": 80,
+      "야생의 영혼석": 75,
+      "파동의 영혼석": 90
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해연의 스노우 오브ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "빙결술사",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "매직 크래프트",
+     "skillLevel": 19,
+     "ingredients": {
+      "특급 목재": 5,
+      "백금강괴": 5,
+      "심해의 마력석": 15,
+      "망령의 영혼석": 80,
+      "야생의 영혼석": 75,
+      "파동의 영혼석": 90
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해연의 우드 완드ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "마법사",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "매직 크래프트",
+     "skillLevel": 19,
+     "ingredients": {
+      "특급 목재": 5,
+      "특급 가죽": 5,
+      "심해의 마력석": 15,
+      "망령의 영혼석": 80,
+      "야생의 영혼석": 75,
+      "파동의 영혼석": 90
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해연의 커브드 하프ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "악사",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "목공",
+     "skillLevel": 19,
+     "ingredients": {
+      "특급 목재": 5,
+      "백금강괴": 5,
+      "허상의 마력석": 15,
+      "망령의 영혼석": 80,
+      "야생의 영혼석": 75,
+      "파동의 영혼석": 90
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해연의 켈틱 류트ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "음유시인",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "목공",
+     "skillLevel": 19,
+     "ingredients": {
+      "특급 목재": 5,
+      "백금강괴": 5,
+      "허상의 마력석": 15,
+      "망령의 영혼석": 80,
+      "야생의 영혼석": 75,
+      "파동의 영혼석": 90
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해연의 크리스탈 스태프ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "사제",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "매직 크래프트",
+     "skillLevel": 19,
+     "ingredients": {
+      "특급 목재": 5,
+      "백금강괴": 5,
+      "심해의 마력석": 15,
+      "망령의 영혼석": 80,
+      "삼림의 영혼석": 75,
+      "공명의 영혼석": 90
+     },
+     "complete": true
+    }
+   ]
+  },
+  "해연의 플랫 대거ZZ": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "도적",
+     "facility": "무기 제작대",
+     "level": 6,
+     "skill": "대장 기술",
+     "skillLevel": 19,
+     "ingredients": {
+      "백금강괴": 5,
+      "특급 가죽": 5,
+      "허상의 마력석": 15,
+      "망령의 영혼석": 80,
+      "삼림의 영혼석": 75,
+      "공명의 영혼석": 90
+     },
+     "complete": true
+    }
+   ]
+  },
+  "헌터클랜 롱보우S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "장궁병",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "목공",
+     "skillLevel": 10,
+     "ingredients": {
+      "상급 목재+": 4,
+      "상급 가죽": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "헌터클랜 롱보우SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "장궁병",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "목공",
+     "skillLevel": 14,
+     "ingredients": {
+      "최상급 목재": 4,
+      "상급 가죽+": 3,
+      "상급 항마석 가루": 60,
+      "상급 지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "장궁병",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "목공",
+     "skillLevel": 14,
+     "ingredients": {
+      "최상급 목재": 3,
+      "최상급 가죽": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "헌터클랜 롱보우Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "장궁병",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "목공",
+     "skillLevel": 18,
+     "ingredients": {
+      "최상급 목재+": 5,
+      "최상급 가죽": 2,
+      "상급 항마석 가루+": 90,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "홀리윙 스태프": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "사제",
+     "facility": "무기 제작대",
+     "level": 1,
+     "skill": "매직 크래프트",
+     "skillLevel": 3,
+     "ingredients": {
+      "목재+": 2,
+      "강철괴": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "홀리윙 스태프S": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "사제",
+     "facility": "무기 제작대",
+     "level": 2,
+     "skill": "매직 크래프트",
+     "skillLevel": 8,
+     "ingredients": {
+      "상급 목재": 3,
+      "합금강괴": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "홀리윙 스태프SS": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "사제",
+     "facility": "무기 제작대",
+     "level": 3,
+     "skill": "매직 크래프트",
+     "skillLevel": 13,
+     "ingredients": {
+      "상급 목재+": 4,
+      "특수강괴": 4,
+      "항마석 가루": 60,
+      "지배의 도안(무기)": 2
+     },
+     "complete": true
+    },
+    {
+     "job": "사제",
+     "facility": "무기 제작대",
+     "level": 4,
+     "skill": "매직 크래프트",
+     "skillLevel": 13,
+     "ingredients": {
+      "최상급 목재": 2,
+      "상급 목재+": 1,
+      "특수강괴": 4,
+      "상급 항마석 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "홀리윙 스태프Z": {
+   "via": "craft",
+   "per": 1,
+   "variants": [
+    {
+     "job": "사제",
+     "facility": "무기 제작대",
+     "level": 5,
+     "skill": "매직 크래프트",
+     "skillLevel": 17,
+     "ingredients": {
+      "최상급 목재+": 3,
+      "최상급 목재": 1,
+      "은합금괴": 3,
+      "상급 항마석 가루+": 75,
+      "상급 지배의 도안(무기)+": 4
+     },
+     "complete": true
+    }
+   ]
+  }
+ }
+}

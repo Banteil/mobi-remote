@@ -1,0 +1,1476 @@
+{
+ "_설명": "마비노기 모바일 가공 재료표. 사람이 정리한 것이라 재료가 빠짐없이 들어 있고, 필요한 시설과 레벨도 있다.",
+ "_필드": {
+  "per": "한 번 가공에 나오는 개수",
+  "variants": "같은 이름을 만드는 서로 다른 조합. facility/level 은 그 조합에 필요한 시설과 레벨.",
+  "sec": "한 번 가공에 걸리는 시간(초). 표에 없으면 null.",
+  "complete": "재료가 빠짐없이 적혀 있는가. 이 표는 전부 true."
+ },
+ "_출처": "마비노기 모바일 가공 재료.csv",
+ "_만든시각": "2026-09-23T20:11:34.624Z",
+ "recipes": {
+  "가죽": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "가죽 가공 시설",
+     "level": 1,
+     "sec": 30,
+     "ingredients": {
+      "생가죽": 10
+     },
+     "complete": true
+    }
+   ]
+  },
+  "가죽+": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "가죽 가공 시설",
+     "level": 1,
+     "sec": 300,
+     "ingredients": {
+      "가죽": 3,
+      "타닌 가루": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "강철괴": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "금속 가공 시설",
+     "level": 1,
+     "sec": 300,
+     "ingredients": {
+      "철괴": 3,
+      "석탄": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "광휘의 결정(달무늬 사슴벌레)": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 6,
+     "sec": 600,
+     "ingredients": {
+      "달무늬 사슴벌레": 3,
+      "마나 허브": 10,
+      "점토": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "광휘의 결정(유령 반딧불이)": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 1,
+     "sec": 600,
+     "ingredients": {
+      "유령 반딧불이": 3,
+      "마나 허브": 10,
+      "점토": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "구름결 막대": {
+   "via": "alter",
+   "per": 5,
+   "variants": [
+    {
+     "facility": "목재 가공 시설",
+     "level": 5,
+     "sec": 10800,
+     "ingredients": {
+      "부드러운 목재": 2,
+      "환영 가루": 30,
+      "변화의 핵": 50,
+      "사포": 10
+     },
+     "complete": true
+    }
+   ]
+  },
+  "깔끔 버섯 진액": {
+   "via": "alter",
+   "per": 5,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 3,
+     "sec": 2100,
+     "ingredients": {
+      "깔끔 버섯 포자": 10,
+      "물이 든 병": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "깔끔 버섯 포자": {
+   "via": "alter",
+   "per": 15,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 3,
+     "sec": 1500,
+     "ingredients": {
+      "깔끔 버섯": 30,
+      "종이": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "끈적 풀 가루": {
+   "via": "alter",
+   "per": 5,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 6,
+     "sec": 1800,
+     "ingredients": {
+      "끈적 풀": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "단단한 목재": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "목재 가공 시설",
+     "level": 3,
+     "sec": 9750,
+     "ingredients": {
+      "상급 목재+": 15,
+      "단단한 통나무": 30,
+      "나무 진액": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "두꺼운 옷감": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "옷감 가공 시설",
+     "level": 2,
+     "sec": 5400,
+     "ingredients": {
+      "두꺼운 양털": 50,
+      "상급 양털": 100,
+      "밀랍": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "두부": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "식재료 가공 시설",
+     "level": 4,
+     "sec": 3300,
+     "ingredients": {
+      "물에 불린 콩": 3,
+      "물이 든 병": 3,
+      "소금": 2,
+      "옷감": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "두유": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "식재료 가공 시설",
+     "level": 4,
+     "sec": 3300,
+     "ingredients": {
+      "물에 불린 콩": 3,
+      "물이 든 병": 3,
+      "소금": 1,
+      "식용유": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "마력 기폭제": {
+   "via": "alter",
+   "per": 10,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 3,
+     "sec": 3600,
+     "ingredients": {
+      "마력 깃든 돌": 50,
+      "마나 허브": 50,
+      "반짝이는 이끼": 25
+     },
+     "complete": true
+    }
+   ]
+  },
+  "마요네즈": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "식재료 가공 시설",
+     "level": 1,
+     "sec": 45,
+     "ingredients": {
+      "달걀": 10,
+      "식용유": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "말린 찻잎": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "식재료 가공 시설",
+     "level": 5,
+     "sec": 3600,
+     "ingredients": {
+      "찻잎": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "면": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "식재료 가공 시설",
+     "level": 3,
+     "sec": 1500,
+     "ingredients": {
+      "밀가루": 3,
+      "달걀": 5,
+      "물이 든 병": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "목재": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "목재 가공 시설",
+     "level": 1,
+     "sec": 45,
+     "ingredients": {
+      "통나무": 10
+     },
+     "complete": true
+    }
+   ]
+  },
+  "목재+": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "목재 가공 시설",
+     "level": 1,
+     "sec": 360,
+     "ingredients": {
+      "목재": 3,
+      "나무 진액": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "물에 불린 쌀": {
+   "via": "alter",
+   "per": 5,
+   "variants": [
+    {
+     "facility": "식재료 가공 시설",
+     "level": 5,
+     "sec": 600,
+     "ingredients": {
+      "쌀": 30,
+      "물이 든 병": 6
+     },
+     "complete": true
+    }
+   ]
+  },
+  "물에 불린 콩": {
+   "via": "alter",
+   "per": 5,
+   "variants": [
+    {
+     "facility": "식재료 가공 시설",
+     "level": 4,
+     "sec": 1200,
+     "ingredients": {
+      "콩": 30,
+      "물이 든 병": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "밀가루": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "식재료 가공 시설",
+     "level": 2,
+     "sec": 600,
+     "ingredients": {
+      "밀": 15
+     },
+     "complete": true
+    }
+   ]
+  },
+  "발효된 찻잎": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "식재료 가공 시설",
+     "level": 5,
+     "sec": 7200,
+     "ingredients": {
+      "말린 찻잎": 5,
+      "옷감": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "밥": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "식재료 가공 시설",
+     "level": 5,
+     "sec": 4500,
+     "ingredients": {
+      "물에 불린 쌀": 8,
+      "물이 든 병": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "밧줄": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "옷감 가공 시설",
+     "level": 3,
+     "sec": 2400,
+     "ingredients": {
+      "식물 섬유": 45,
+      "밀랍": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "백금강괴": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "금속 가공 시설",
+     "level": 6,
+     "sec": 18000,
+     "ingredients": {
+      "운철괴": 5,
+      "백금 광석": 20,
+      "석탄": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "봉인된 망각의 파편": {
+   "via": "alter",
+   "per": 1,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 3,
+     "sec": 3600,
+     "ingredients": {
+      "망각의 파편": 10,
+      "종이": 10,
+      "봉인의 결정": 5
+     },
+     "complete": true
+    }
+   ]
+  },
+  "봉인된 분노의 파편": {
+   "via": "alter",
+   "per": 1,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 3,
+     "sec": 3600,
+     "ingredients": {
+      "분노의 파편": 10,
+      "종이": 10,
+      "봉인의 결정": 5
+     },
+     "complete": true
+    }
+   ]
+  },
+  "봉인된 야성의 파편": {
+   "via": "alter",
+   "per": 1,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 3,
+     "sec": 3600,
+     "ingredients": {
+      "야성의 파편": 10,
+      "종이": 10,
+      "봉인의 결정": 5
+     },
+     "complete": true
+    }
+   ]
+  },
+  "봉인의 결정(황혼잠자리)": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 5,
+     "sec": 600,
+     "ingredients": {
+      "황혼잠자리": 3,
+      "마나 허브": 10,
+      "점토": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "부드러운 목재": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "목재 가공 시설",
+     "level": 3,
+     "sec": 9750,
+     "ingredients": {
+      "상급 목재+": 15,
+      "부드러운 통나무": 30,
+      "나무 진액": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "불꽃의 결정(석양나비)": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 2,
+     "sec": 600,
+     "ingredients": {
+      "석양나비": 3,
+      "마나 허브": 10,
+      "점토": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "산뜻 버섯 진액": {
+   "via": "alter",
+   "per": 5,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 6,
+     "sec": 7200,
+     "ingredients": {
+      "산뜻 버섯 포자": 10,
+      "물이 든 병": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "산뜻 버섯 포자": {
+   "via": "alter",
+   "per": 15,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 6,
+     "sec": 2100,
+     "ingredients": {
+      "산뜻 버섯": 30,
+      "종이": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "상급 가죽": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "가죽 가공 시설",
+     "level": 2,
+     "sec": 3000,
+     "ingredients": {
+      "가죽+": 3,
+      "상급 생가죽": 15,
+      "타닌 가루": 8
+     },
+     "complete": true
+    }
+   ]
+  },
+  "상급 가죽+": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "가죽 가공 시설",
+     "level": 3,
+     "sec": 9000,
+     "ingredients": {
+      "상급 가죽": 4,
+      "상급 생가죽+": 20,
+      "타닌 가루": 12
+     },
+     "complete": true
+    }
+   ]
+  },
+  "상급 목재": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "목재 가공 시설",
+     "level": 2,
+     "sec": 3000,
+     "ingredients": {
+      "목재+": 3,
+      "상급 통나무": 15,
+      "나무 진액": 8
+     },
+     "complete": true
+    }
+   ]
+  },
+  "상급 목재+": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "목재 가공 시설",
+     "level": 3,
+     "sec": 9000,
+     "ingredients": {
+      "상급 목재": 4,
+      "상급 통나무+": 20,
+      "나무 진액": 12
+     },
+     "complete": true
+    }
+   ]
+  },
+  "상급 실크": {
+   "via": "alter",
+   "per": 2,
+   "variants": [
+    {
+     "facility": "옷감 가공 시설",
+     "level": 2,
+     "sec": 4050,
+     "ingredients": {
+      "실크": 4,
+      "튼튼 버섯 진액": 8
+     },
+     "complete": true
+    }
+   ]
+  },
+  "상급 옷감": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "옷감 가공 시설",
+     "level": 2,
+     "sec": 3000,
+     "ingredients": {
+      "옷감+": 3,
+      "상급 양털": 15,
+      "양털": 8
+     },
+     "complete": true
+    }
+   ]
+  },
+  "상급 옷감+": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "옷감 가공 시설",
+     "level": 3,
+     "sec": 9000,
+     "ingredients": {
+      "상급 옷감": 4,
+      "상급 양털+": 20,
+      "양털": 12
+     },
+     "complete": true
+    }
+   ]
+  },
+  "새록 버섯 진액": {
+   "via": "alter",
+   "per": 5,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 1,
+     "sec": 30,
+     "ingredients": {
+      "새록 버섯 포자": 10,
+      "물이 든 병": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "새록 버섯 포자": {
+   "via": "alter",
+   "per": 15,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 2,
+     "sec": 300,
+     "ingredients": {
+      "새록 버섯": 30,
+      "종이": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "생채기꽃 가루": {
+   "via": "alter",
+   "per": 5,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 4,
+     "sec": 1500,
+     "ingredients": {
+      "생채기꽃": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "생크림": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "식재료 가공 시설",
+     "level": 3,
+     "sec": 1500,
+     "ingredients": {
+      "우유": 12,
+      "달걀": 6,
+      "설탕": 2
+     },
+     "complete": true
+    }
+   ]
+  },
+  "솔솔 버섯 진액": {
+   "via": "alter",
+   "per": 5,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 5,
+     "sec": 6000,
+     "ingredients": {
+      "솔솔 버섯 포자": 10,
+      "물이 든 병": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "솔솔 버섯 포자": {
+   "via": "alter",
+   "per": 15,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 5,
+     "sec": 2100,
+     "ingredients": {
+      "솔솔 버섯": 30,
+      "종이": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "숙성된 커다란 고기": {
+   "via": "alter",
+   "per": 1,
+   "variants": [
+    {
+     "facility": "식재료 가공 시설",
+     "level": 4,
+     "sec": 9000,
+     "ingredients": {
+      "커다란 고기": 1,
+      "허브": 6,
+      "마늘": 2,
+      "소금": 2,
+      "후추": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "숨숨꽃 가루": {
+   "via": "alter",
+   "per": 5,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 3,
+     "sec": 900,
+     "ingredients": {
+      "숨숨꽃": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "식물 섬유": {
+   "via": "alter",
+   "per": 10,
+   "variants": [
+    {
+     "facility": "옷감 가공 시설",
+     "level": 3,
+     "sec": 1200,
+     "ingredients": {
+      "긴 줄기": 150
+     },
+     "complete": true
+    }
+   ]
+  },
+  "실크": {
+   "via": "alter",
+   "per": 2,
+   "variants": [
+    {
+     "facility": "옷감 가공 시설",
+     "level": 1,
+     "sec": 90,
+     "ingredients": {
+      "거미줄": 10
+     },
+     "complete": true
+    }
+   ]
+  },
+  "쑥쑥 버섯 진액": {
+   "via": "alter",
+   "per": 5,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 2,
+     "sec": 900,
+     "ingredients": {
+      "쑥쑥 버섯 포자": 10,
+      "물이 든 병": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "쑥쑥 버섯 포자": {
+   "via": "alter",
+   "per": 15,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 2,
+     "sec": 360,
+     "ingredients": {
+      "쑥쑥 버섯": 30,
+      "종이": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "아교": {
+   "via": "alter",
+   "per": 5,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 2,
+     "sec": 5400,
+     "ingredients": {
+      "상급 생가죽": 30,
+      "물이 든 병": 10
+     },
+     "complete": true
+    }
+   ]
+  },
+  "얼음의 결정(흰얼음풍뎅이)": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 3,
+     "sec": 600,
+     "ingredients": {
+      "흰얼음풍뎅이": 3,
+      "마나 허브": 10,
+      "점토": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "오트밀": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "식재료 가공 시설",
+     "level": 6,
+     "sec": 5400,
+     "ingredients": {
+      "귀리": 30
+     },
+     "complete": true
+    }
+   ]
+  },
+  "옷감": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "옷감 가공 시설",
+     "level": 1,
+     "sec": 45,
+     "ingredients": {
+      "양털": 10
+     },
+     "complete": true
+    }
+   ]
+  },
+  "옷감+": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "옷감 가공 시설",
+     "level": 1,
+     "sec": 360,
+     "ingredients": {
+      "옷감": 3,
+      "양털": 4
+     },
+     "complete": true
+    }
+   ]
+  },
+  "운철괴": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "금속 가공 시설",
+     "level": 5,
+     "sec": 14400,
+     "ingredients": {
+      "은합금괴": 5,
+      "운철 광석": 20,
+      "석탄": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "은합금괴": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "금속 가공 시설",
+     "level": 4,
+     "sec": 11400,
+     "ingredients": {
+      "특수강괴": 5,
+      "은 광석": 20,
+      "석탄": 16
+     },
+     "complete": true
+    },
+    {
+     "facility": "금속 가공 시설",
+     "level": 6,
+     "sec": 21600,
+     "ingredients": {
+      "마력 깃든 돌": 12,
+      "은 광석": 20,
+      "석탄": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "전기의 결정(낙엽나방)": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 4,
+     "sec": 600,
+     "ingredients": {
+      "낙엽나방": 3,
+      "마나 허브": 10,
+      "점토": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "증폭 버섯 진액": {
+   "via": "alter",
+   "per": 5,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 4,
+     "sec": 3900,
+     "ingredients": {
+      "증폭 버섯 포자": 10,
+      "물이 든 병": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "증폭 버섯 포자": {
+   "via": "alter",
+   "per": 15,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 4,
+     "sec": 1800,
+     "ingredients": {
+      "증폭 버섯": 30,
+      "종이": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "진정초 가루": {
+   "via": "alter",
+   "per": 5,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 5,
+     "sec": 1800,
+     "ingredients": {
+      "진정초": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "철괴": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "금속 가공 시설",
+     "level": 1,
+     "sec": 30,
+     "ingredients": {
+      "광석": 20
+     },
+     "complete": true
+    },
+    {
+     "facility": "금속 가공 시설",
+     "level": 1,
+     "sec": 30,
+     "ingredients": {
+      "철 광석": 10
+     },
+     "complete": true
+    }
+   ]
+  },
+  "최상급 가죽": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "가죽 가공 시설",
+     "level": 4,
+     "sec": 11400,
+     "ingredients": {
+      "상급 가죽+": 5,
+      "최상급 생가죽": 20,
+      "타닌 가루": 16
+     },
+     "complete": true
+    },
+    {
+     "facility": "가죽 가공 시설",
+     "level": 6,
+     "sec": 21600,
+     "ingredients": {
+      "반짝이는 이끼": 4,
+      "최상급 생가죽": 20,
+      "타닌 가루": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "최상급 가죽+": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "가죽 가공 시설",
+     "level": 5,
+     "sec": 14400,
+     "ingredients": {
+      "최상급 가죽": 5,
+      "최상급 생가죽+": 20,
+      "타닌 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "최상급 목재": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "목재 가공 시설",
+     "level": 4,
+     "sec": 11400,
+     "ingredients": {
+      "상급 목재+": 5,
+      "최상급 통나무": 20,
+      "나무 진액": 16
+     },
+     "complete": true
+    },
+    {
+     "facility": "목재 가공 시설",
+     "level": 6,
+     "sec": 21600,
+     "ingredients": {
+      "단단한 통나무": 4,
+      "최상급 통나무": 20,
+      "나무 진액": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "최상급 목재+": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "목재 가공 시설",
+     "level": 5,
+     "sec": 14400,
+     "ingredients": {
+      "최상급 목재": 5,
+      "최상급 통나무+": 20,
+      "나무 진액": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "최상급 실크": {
+   "via": "alter",
+   "per": 2,
+   "variants": [
+    {
+     "facility": "옷감 가공 시설",
+     "level": 4,
+     "sec": 12900,
+     "ingredients": {
+      "상급 실크": 4,
+      "최상급 거미줄": 20,
+      "튼튼 버섯 진액": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "최상급 옷감": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "옷감 가공 시설",
+     "level": 4,
+     "sec": 11400,
+     "ingredients": {
+      "상급 옷감+": 5,
+      "최상급 양털": 20,
+      "양털": 16
+     },
+     "complete": true
+    },
+    {
+     "facility": "옷감 가공 시설",
+     "level": 6,
+     "sec": 21600,
+     "ingredients": {
+      "두꺼운 양털": 40,
+      "최상급 양털": 20,
+      "양털": 16
+     },
+     "complete": true
+    }
+   ]
+  },
+  "최상급 옷감+": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "옷감 가공 시설",
+     "level": 5,
+     "sec": 14400,
+     "ingredients": {
+      "최상급 옷감": 5,
+      "최상급 양털+": 20,
+      "양털": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "치즈": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "식재료 가공 시설",
+     "level": 2,
+     "sec": 600,
+     "ingredients": {
+      "우유": 6,
+      "소금": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "타르": {
+   "via": "alter",
+   "per": 5,
+   "variants": [
+    {
+     "facility": "금속 가공 시설",
+     "level": 2,
+     "sec": 5400,
+     "ingredients": {
+      "통나무": 50,
+      "점토": 25
+     },
+     "complete": true
+    }
+   ]
+  },
+  "특급 가죽": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "가죽 가공 시설",
+     "level": 6,
+     "sec": 18000,
+     "ingredients": {
+      "최상급 가죽+": 5,
+      "특급 생가죽": 20,
+      "타닌 가루": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "특급 목재": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "목재 가공 시설",
+     "level": 6,
+     "sec": 18000,
+     "ingredients": {
+      "최상급 목재+": 5,
+      "특급 통나무": 20,
+      "나무 진액": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "특급 실크": {
+   "via": "alter",
+   "per": 2,
+   "variants": [
+    {
+     "facility": "옷감 가공 시설",
+     "level": 6,
+     "sec": 21600,
+     "ingredients": {
+      "최상급 실크": 4,
+      "특급 거미줄": 20,
+      "튼튼 버섯 진액": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "특급 옷감": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "옷감 가공 시설",
+     "level": 6,
+     "sec": 18000,
+     "ingredients": {
+      "최상급 옷감+": 5,
+      "특급 양털": 20,
+      "양털": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "특수강괴": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "금속 가공 시설",
+     "level": 3,
+     "sec": 9000,
+     "ingredients": {
+      "합금강괴": 4,
+      "백동 광석": 20,
+      "석탄": 12
+     },
+     "complete": true
+    }
+   ]
+  },
+  "튼튼 버섯 가루": {
+   "via": "alter",
+   "per": 5,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 1,
+     "sec": 150,
+     "ingredients": {
+      "튼튼 버섯": 20
+     },
+     "complete": true
+    }
+   ]
+  },
+  "튼튼 버섯 진액": {
+   "via": "alter",
+   "per": 5,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 1,
+     "sec": 300,
+     "ingredients": {
+      "튼튼 버섯 포자": 10,
+      "물이 든 병": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "튼튼 버섯 포자": {
+   "via": "alter",
+   "per": 15,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 2,
+     "sec": 300,
+     "ingredients": {
+      "튼튼 버섯": 30,
+      "종이": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "튼튼한 밧줄": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "옷감 가공 시설",
+     "level": 4,
+     "sec": 6900,
+     "ingredients": {
+      "밧줄": 6,
+      "식물 섬유": 90,
+      "밀랍": 8,
+      "타르": 3
+     },
+     "complete": true
+    }
+   ]
+  },
+  "합금강괴": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "금속 가공 시설",
+     "level": 2,
+     "sec": 3000,
+     "ingredients": {
+      "강철괴": 3,
+      "동 광석": 15,
+      "석탄": 8
+     },
+     "complete": true
+    }
+   ]
+  },
+  "헤이즐넛 오일": {
+   "via": "alter",
+   "per": 3,
+   "variants": [
+    {
+     "facility": "식재료 가공 시설",
+     "level": 6,
+     "sec": 5400,
+     "ingredients": {
+      "헤이즐넛": 15,
+      "옷감+": 1
+     },
+     "complete": true
+    }
+   ]
+  },
+  "환영 가루": {
+   "via": "alter",
+   "per": 5,
+   "variants": [
+    {
+     "facility": "약품 가공 시설",
+     "level": 5,
+     "sec": 1800,
+     "ingredients": {
+      "벼락 맞은 나뭇가지": 20,
+      "나비잠자리": 10
+     },
+     "complete": true
+    }
+   ]
+  }
+ }
+}

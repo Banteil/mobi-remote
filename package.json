@@ -1,0 +1,20 @@
+{
+  "name": "mobi-remote",
+  "version": "2.1.0",
+  "description": "모비 커넥터 리모콘 — 마비노기 모바일 AI 커넥터(MabinogiMobile_CLI) GUI",
+  "private": true,
+  "main": "app/main.js",
+  "bin": {
+    "mobi-remote": "src/index.js"
+  },
+  "scripts": {
+    "start": "electron .",
+    "cli": "node src/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "electron": "^44.4.1"
+  }
+}

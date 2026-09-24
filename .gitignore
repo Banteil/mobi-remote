@@ -1,0 +1,22 @@
+# 받아 오면 되는 것
+node_modules/
+package-lock.json.bak
+
+# 포장 결과물
+dist/
+
+# 사람마다 다른 것
+*.log
+npm-debug.log*
+
+# 내가 만든 루틴은 %LOCALAPPDATA%\mobi-remote\routines 에 있다.
+# 프로그램에는 예시만 들어간다.
+routines/*.json
+!routines/*.json.example
+
+# 편집기
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
