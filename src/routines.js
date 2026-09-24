@@ -12,10 +12,39 @@ const connector = require('./connector');
 const query = require('./query');
 const cache = require('./cache');
 const errors = require('./errors');
+const paths = require('./paths');
 
-const ROUTINE_DIR = path.join(__dirname, '..', 'routines');
+/*
+ * 루틴은 **내 것**이라 프로그램 폴더가 아니라 %LOCALAPPDATA% 에 둔다.
+ *
+ * 포장한 뒤에는 프로그램 폴더가 app.asar 안이라 읽기 전용이다. 거기에 쓰려 하면
+ * 조용히 실패해서, 저장한 줄 알았던 루틴이 다음에 켜면 없다. 게다가 새 판을
+ * 덮어쓸 때마다 만들어 둔 루틴이 날아간다.
+ *
+ * 프로그램에 딸려 오는 폴더는 **예시 보관소**로만 남긴다.
+ */
+const ROUTINE_DIR = paths.dataPath('routines');
+const SEED_DIR = path.join(__dirname, '..', 'routines');
+
+/** 전에 프로그램 폴더에 저장하던 루틴을 한 번만 옮겨 온다. */
+let moved = false;
+function migrateOnce() {
+  if (moved) return;
+  moved = true;
+  try {
+    const olds = fs.readdirSync(SEED_DIR).filter((f) => f.endsWith('.json'));
+    if (!olds.length) return;
+    fs.mkdirSync(ROUTINE_DIR, { recursive: true });
+    for (const f of olds) {
+      const to = path.join(ROUTINE_DIR, f);
+      if (fs.existsSync(to)) continue;           // 새 자리 것이 우선이다
+      fs.copyFileSync(path.join(SEED_DIR, f), to);
+    }
+  } catch (_) { /* 못 옮겨도 프로그램은 돌아야 한다 */ }
+}
 
 function listRoutines() {
+  migrateOnce();
   try {
     return fs
       .readdirSync(ROUTINE_DIR)
@@ -31,14 +60,15 @@ function listRoutines() {
 }
 
 function loadRoutine(fileOrId) {
-  const p = path.isAbsolute(fileOrId)
-    ? fileOrId
-    : path.join(ROUTINE_DIR, fileOrId.endsWith('.json') ? fileOrId : fileOrId + '.json');
-  try {
-    return JSON.parse(fs.readFileSync(p, 'utf8'));
-  } catch (_) {
-    return null;
+  migrateOnce();
+  if (path.isAbsolute(fileOrId)) {
+    try { return JSON.parse(fs.readFileSync(fileOrId, 'utf8')); } catch (_) { return null; }
   }
+  const name = fileOrId.endsWith('.json') ? fileOrId : fileOrId + '.json';
+  for (const dir of [ROUTINE_DIR, SEED_DIR]) {
+    try { return JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8')); } catch (_) { /* 다음 자리 */ }
+  }
+  return null;
 }
 
 function saveRoutine(id, routine) {

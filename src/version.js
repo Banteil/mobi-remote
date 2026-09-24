@@ -15,7 +15,19 @@ const path = require('path');
 const crypto = require('crypto');
 const connector = require('./connector');
 
-const COMPAT_FILE = path.join(__dirname, '..', 'compat.json');
+const paths = require('./paths');
+
+/*
+ * 기준선은 두 자리에 있다.
+ *
+ *   씨앗  프로그램 폴더의 compat.json — 배포할 때 넣어 둔, 만든 사람이 확인한 기준
+ *   내 것 %LOCALAPPDATA%/.../compat.json — 이 컴퓨터에서 내가 갱신한 기준 (우선)
+ *
+ * 포장한 뒤에는 프로그램 폴더가 app.asar 안이라 읽기 전용이다. 거기에 쓰려 하면
+ * 조용히 실패해서, '확인했다'고 눌러도 다음에 켜면 같은 경고가 또 뜬다.
+ */
+const COMPAT_SEED = path.join(__dirname, '..', 'compat.json');
+const COMPAT_FILE = paths.dataPath('compat.json');
 const PKG_FILE = path.join(__dirname, '..', 'package.json');
 
 /** 심각도. 숫자가 클수록 위험하다. */
@@ -123,11 +135,12 @@ function fingerprint() {
 /* ── 기준선 ─────────────────────────────────────────────────── */
 
 function loadBaseline() {
-  try {
-    return JSON.parse(fs.readFileSync(COMPAT_FILE, 'utf8'));
-  } catch (_) {
-    return null;
+  for (const file of [COMPAT_FILE, COMPAT_SEED]) {
+    try {
+      return JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch (_) { /* 다음 자리를 본다 */ }
   }
+  return null;
 }
 
 /**
@@ -150,6 +163,7 @@ function saveBaseline(fp, note) {
     verifiedNote: note || '',
     verifiedAt: new Date().toISOString(),
   });
+  fs.mkdirSync(path.dirname(COMPAT_FILE), { recursive: true });
   fs.writeFileSync(COMPAT_FILE, JSON.stringify(data, null, 2), 'utf8');
   return data;
 }
