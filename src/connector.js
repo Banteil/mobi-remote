@@ -410,14 +410,22 @@ function run(command, body, opts) {
   return runCancelable(command, body, opts).promise;
 }
 
-/** 연결 상태. reason: game_off | option_off | null */
+/**
+ * 연결 상태. reason: no_connector | game_off | option_off | null
+ *
+ * no_connector 는 **게임이 꺼진 것과 다르다.** 커넥터 실행 파일 자체를 못 찾았거나
+ * 띄우지 못한 경우로, 대개 마비노기 모바일이 이 PC에 없다는 뜻이다. 처음 받은
+ * 사람에게 "게임에 연결할 수 없습니다"라고만 하면 무엇을 해야 할지 알 수 없어서
+ * 따로 가른다.
+ */
 async function status() {
   const r = await run('status');
   const pipe = r.data && r.data.pipe;
+  const gone = r.reason === 'spawn_failed' || !resolveExe().found;
   return {
     connected: pipe === 'connected',
     pipe: pipe || 'unknown',
-    reason: (r.data && r.data.reason) || null,
+    reason: (r.data && r.data.reason) || (gone ? 'no_connector' : null),
     raw: r,
   };
 }

@@ -158,22 +158,6 @@ function createWindow() {
     });
   }
 
-  /*
-   * 작업 표시줄에 뜰 이름을 창에 직접 박는다.
-   *
-   * app.setAppUserModelId 만으로는 모자랐다. 그것은 프로세스에 표를 붙이는 것이라,
-   * 시작 메뉴에 그 표를 가진 바로가기가 있어야 윈도우가 이름을 찾아낸다. 설치판은
-   * 바로가기가 생기지만 무설치판은 없으므로, 윈도우가 실행 파일에서 유추하다가
-   * 'Electron' 을 집어 든다.
-   *
-   * setAppDetails 는 **이 창**의 속성에 직접 쓴다. 바로가기가 없어도 통한다.
-   */
-  win.setAppDetails({
-    appId: 'com.banteil.mobi-remote',
-    relaunchDisplayName: '모비 커넥터 리모콘',
-    relaunchCommand: '"' + process.execPath + '"',
-  });
-
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
   // 창을 닫아도 트레이에 남는다. 완전 종료는 트레이 메뉴에서.

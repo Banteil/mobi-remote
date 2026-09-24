@@ -295,6 +295,18 @@ function setOffline(st) {
     banner.classList.add('hidden');
     return;
   }
+  // 커넥터를 아예 못 찾은 것은 "게임이 꺼져 있다"와 전혀 다른 상황이다.
+  // 처음 받은 사람이 여기 걸리므로, 무엇이 없는지와 무엇을 하면 되는지를 같이 준다.
+  if (st.reason === 'no_connector') {
+    $('#offline-text').textContent =
+      '마비노기 모바일 커넥터를 찾지 못했습니다. 이 프로그램은 게임에 딸려 오는 ' +
+      'MabinogiMobile_CLI.exe 가 있어야 동작합니다 — 게임을 설치한 뒤 다시 찾아 주세요.';
+    $('#offline-retry').textContent = '커넥터 찾기';
+    banner.classList.remove('hidden');
+    return;
+  }
+  $('#offline-retry').textContent = '다시 확인';
+
   const what = st.reason === 'game_off'
       ? '마비노기 모바일이 실행되어 있지 않습니다.'
     : st.reason === 'option_off'
@@ -4219,6 +4231,19 @@ function wire() {
   wireUpdate();
 
   $('#offline-retry').addEventListener('click', async () => {
+    // 커넥터를 못 찾은 상태에서는 '다시 확인'이 아무 소용이 없다. 찾기부터 시킨다.
+    if ($('#offline-retry').textContent === '커넥터 찾기') {
+      say('커넥터를 찾는 중…');
+      const loc = await mm.cli.locate(true);
+      if (!loc || !loc.found) {
+        toast('커넥터를 찾지 못했습니다',
+          '마비노기 모바일이 설치되어 있는지 확인하세요. 설치했는데도 안 잡히면 옵션에서 위치를 직접 지정할 수 있습니다.', 'bad');
+        say('준비됨');
+        return;
+      }
+      toast('커넥터를 찾았습니다', loc.path, 'ok');
+    }
+
     say('연결 확인 중…');
     const ok = await refreshTopbar();
     if (ok) {
