@@ -27,6 +27,7 @@ const favorites = require('../src/favorites');
 const queueStore = require('../src/queue');
 const recipebook = require('../src/recipebook');
 const dyeprefs = require('../src/dyeprefs');
+const update = require('../src/update');
 
 let win = null;
 let tray = null;
@@ -687,6 +688,45 @@ function registerIpc() {
   ipcMain.handle('dye:draw', async (_e, payload) => { await overlayDraw(payload); return true; });
   ipcMain.handle('dye:hide', async () => { overlayHide(); return true; });
 
+  /* ── 새 판 확인 ─────────────────────────────────────────────
+   * 확인과 내려받기만 한다. 언제 끌지는 사람이 정한다 — 게임을 켜 둔 채로 쓰는
+   * 프로그램이라, 작업 중에 저 혼자 꺼지면 곤란하다.
+   */
+  ipcMain.handle('update:check', async () => update.check(version.appVersion()));
+
+  ipcMain.handle('update:download', async (e, asset) => {
+    try {
+      const sender = e.sender;
+      let last = 0;
+      const file = await update.download(asset, (got, total) => {
+        // 너무 자주 보내면 화면만 바쁘다. 1%씩만 알린다.
+        const pct = total ? Math.floor((got / total) * 100) : 0;
+        if (pct === last) return;
+        last = pct;
+        if (!sender.isDestroyed()) sender.send('mm:update-progress', { pct: pct, got: got, total: total });
+      });
+      return { ok: true, file: file };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  /**
+   * 설치 파일을 띄우고 우리는 빠진다.
+   *
+   * 설치 프로그램이 우리 실행 파일을 덮어쓰려면 우리가 먼저 꺼져 있어야 한다.
+   * 창만 숨기는 평소 동작(트레이로 내려감)으로는 안 되므로 quitting 을 세워 둔다.
+   */
+  ipcMain.handle('update:install', async (_e, file) => {
+    const err = await shell.openPath(file);
+    if (err) return { ok: false, error: err };
+    quitting = true;
+    setTimeout(() => app.quit(), 500);
+    return { ok: true };
+  });
+
+  ipcMain.handle('update:page', async () => { shell.openExternal(update.PAGE); return true; });
+
   /* 레시피 장부 — 게임이 알려 준 재료를 긁어모은다. 조회뿐이라 공짜다. */
   ipcMain.handle('book:stats', async () => recipebook.stats());
   ipcMain.handle('book:harvest', async () => {
@@ -899,6 +939,15 @@ if (!app.requestSingleInstanceLock()) {
       win.focus();
     }
   });
+
+  /*
+   * 윈도우에게 우리가 누구인지 알려 준다.
+   *
+   * 이것을 안 하면 작업 표시줄에서 마우스 오른쪽을 눌렀을 때 'Electron' 이라고 뜬다.
+   * 윈도우는 창을 띄운 실행 파일이 아니라 이 식별자로 앱을 가른다 — 알림, 점프 목록,
+   * 작업 표시줄 고정이 전부 여기에 묶인다. package.json 의 appId 와 같게 둔다.
+   */
+  app.setAppUserModelId('com.banteil.mobi-remote');
 
   app.whenReady().then(async () => {
     setupMenu();

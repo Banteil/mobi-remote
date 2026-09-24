@@ -106,6 +106,15 @@ contextBridge.exposeInMainWorld('mm', {
     hide: () => ipcRenderer.invoke('dye:hide'),
   },
 
+  /* 새 판 확인 — 받는 것까지만 하고, 설치는 사람이 누를 때 */
+  update: {
+    check: () => ipcRenderer.invoke('update:check'),
+    download: (asset) => ipcRenderer.invoke('update:download', asset),
+    install: (file) => ipcRenderer.invoke('update:install', file),
+    page: () => ipcRenderer.invoke('update:page'),
+    onProgress: (cb) => on('mm:update-progress', cb),
+  },
+
   /* 창 — 작업 큐를 접을 때 창도 같이 좁힌다 */
   win: {
     narrow: (px) => ipcRenderer.invoke('win:narrow', px),

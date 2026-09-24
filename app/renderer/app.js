@@ -3076,6 +3076,66 @@ function dyeTargets() {
     .filter(Boolean);
 }
 
+/* ══ 새 판 알림 ═════════════════════════════════════════════════
+ *
+ * 켤 때 한 번 조용히 확인하고, 있으면 위에 띠를 하나 띄운다. 누르기 전에는
+ * 아무것도 받지 않고 아무것도 끄지 않는다 — 게임을 켜 둔 채로 쓰는 프로그램이라
+ * 작업 도중에 저 혼자 꺼지면 곤란하다.
+ */
+const updUI = { info: null, file: null, busy: false };
+
+function showUpdate(text, canGo) {
+  $('#update-text').textContent = text;
+  $('#update-go').classList.toggle('hidden', !canGo);
+  $('#update-banner').classList.remove('hidden');
+}
+
+async function wireUpdate() {
+  $('#update-later').addEventListener('click', () => $('#update-banner').classList.add('hidden'));
+
+  mm.update.onProgress((p) => {
+    if (!updUI.busy) return;
+    const mb = (n) => (n / 1048576).toFixed(1);
+    $('#update-text').textContent = '받는 중 ' + p.pct + '%  (' + mb(p.got) + ' / ' + mb(p.total) + 'MB)';
+  });
+
+  $('#update-go').addEventListener('click', async () => {
+    const info = updUI.info;
+    if (!info || updUI.busy) return;
+
+    // 받아 둔 것이 있으면 바로 설치로 간다.
+    if (updUI.file) return mm.update.install(updUI.file);
+
+    // 설치 파일이 없는 릴리즈(무설치판만 올린 경우)는 받을 자리를 알 수 없다.
+    if (!info.asset) { mm.update.page(); return; }
+
+    updUI.busy = true;
+    $('#update-go').disabled = true;
+    const r = await mm.update.download(info.asset);
+    updUI.busy = false;
+    $('#update-go').disabled = false;
+
+    if (!r || !r.ok) {
+      showUpdate('받지 못했습니다 — ' + ((r && r.error) || '알 수 없음') + '. 눌러서 받는 곳을 엽니다.', true);
+      updUI.info = Object.assign({}, info, { asset: null });
+      return;
+    }
+    updUI.file = r.file;
+    $('#update-go').textContent = '설치하고 다시 켜기';
+    showUpdate('내려받았습니다 — 누르면 프로그램이 꺼지고 설치가 시작됩니다.', true);
+  });
+
+  // 켜자마자 묻지 않는다. 첫 화면이 다 그려진 뒤에 조용히 확인한다.
+  setTimeout(async () => {
+    const r = await mm.update.check().catch(() => null);
+    if (!r || !r.ok || !r.newer) return;      // 못 물어봤거나 최신이면 아무 말도 안 한다
+    updUI.info = r;
+    showUpdate('새 판이 나왔습니다 — ' + r.version, true);
+  }, 4000);
+}
+
+/* ══ 새 판 알림 끝 ══════════════════════════════════════════════ */
+
 /* ── 시작 / 중지 ── */
 
 async function startDye() {
@@ -4155,6 +4215,8 @@ function wire() {
   $('#pl-play').addEventListener('click', playPlaylist);
   $('#pl-stop').addEventListener('click', stopPlaylist);
 
+
+  wireUpdate();
 
   $('#offline-retry').addEventListener('click', async () => {
     say('연결 확인 중…');

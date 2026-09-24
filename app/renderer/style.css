@@ -877,3 +877,8 @@ tr.sec .muted { font-weight: 400; letter-spacing: 0; margin-left: 4px; }
 /* 사슬 끝까지 세운 가공 차례 */
 .plan-steps { margin: 6px 0 0; padding-left: 20px; }
 .plan-steps li { font-size: 12px; line-height: 1.8; }
+
+/* 새 판 알림 — 오프라인 배너와 같은 자리, 같은 모양 */
+#update-banner .banner-mark { color: var(--ok, #3ac); }
+#update-banner #update-go { margin-left: auto; }
+#update-banner #update-later { margin-left: 6px; }

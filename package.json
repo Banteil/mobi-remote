@@ -3,18 +3,94 @@
   "version": "2.1.0",
   "description": "모비 커넥터 리모콘 — 마비노기 모바일 AI 커넥터(MabinogiMobile_CLI) GUI",
   "private": true,
+  "license": "MIT",
+  "author": "Banteil",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Banteil/mobi-remote.git"
+  },
   "main": "app/main.js",
   "bin": {
     "mobi-remote": "src/index.js"
   },
   "scripts": {
     "start": "electron .",
-    "cli": "node src/index.js"
+    "cli": "node src/index.js",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
   },
   "engines": {
     "node": ">=18"
   },
   "devDependencies": {
-    "electron": "^44.4.1"
+    "electron": "^44.4.1",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.banteil.mobi-remote",
+    "productName": "모비 커넥터 리모콘",
+    "copyright": "Copyright © 2026 Banteil",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "app/**/*",
+      "src/**/*",
+      "alter-recipes.json",
+      "craft-weapons.json",
+      "recipe-book.json",
+      "facility-map.json",
+      "game-rules.json",
+      "compat.json",
+      "package.json",
+      "!**/*.map",
+      "!app/renderer/icon-source.png"
+    ],
+    "extraResources": [
+      {
+        "from": "routines",
+        "to": "routines",
+        "filter": [
+          "*.example"
+        ]
+      }
+    ],
+    "win": {
+      "icon": "app/renderer/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "모비 커넥터 리모콘",
+      "artifactName": "mobi-remote-${version}-setup.${ext}",
+      "deleteAppDataOnUninstall": false
+    },
+    "portable": {
+      "artifactName": "mobi-remote-${version}-portable.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Banteil",
+        "repo": "mobi-remote"
+      }
+    ]
   }
 }
