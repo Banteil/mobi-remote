@@ -1,6 +1,6 @@
 {
   "name": "mobi-remote",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "모비 커넥터 리모콘 — 마비노기 모바일 AI 커넥터(MabinogiMobile_CLI) GUI",
   "private": true,
   "license": "MIT",
