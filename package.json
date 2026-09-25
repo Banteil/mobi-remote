@@ -27,7 +27,7 @@
     "electron-builder": "^26.15.3"
   },
   "build": {
-    "appId": "com.banteil.mobi-remote",
+    "appId": "com.banteil.MobiRemote",
     "productName": "모비 커넥터 리모콘",
     "copyright": "Copyright © 2026 Banteil",
     "directories": {

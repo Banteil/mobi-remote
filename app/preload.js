@@ -115,6 +115,9 @@ contextBridge.exposeInMainWorld('mm', {
     onProgress: (cb) => on('mm:update-progress', cb),
   },
 
+  /* 화살표 키로 커서 1px — 누른 만큼만 움직인다 */
+  cursorNudge: (on) => ipcRenderer.invoke('cursor:nudge', on),
+
   /* 창 — 작업 큐를 접을 때 창도 같이 좁힌다 */
   win: {
     narrow: (px) => ipcRenderer.invoke('win:narrow', px),

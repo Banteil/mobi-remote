@@ -36,9 +36,10 @@
    * 나란히 찍혀도 어느 칸의 것인지 헷갈리지 않는다.
    */
   const SLOT = [
-    { line: '#ff00ff', name: '마젠타' },   // 1번
-    { line: '#00ff00', name: '초록' },     // 2번
-    { line: '#00ffff', name: '시안' },     // 3번
+    // fill 은 구역 안쪽에 옅게 까는 색. 진하면 정작 팔레트 색이 안 보인다.
+    { line: '#ff00ff', fill: 'rgba(255,0,255,.22)', name: '마젠타' },   // 1번
+    { line: '#00ff00', fill: 'rgba(0,255,0,.22)', name: '초록' },       // 2번
+    { line: '#00ffff', fill: 'rgba(0,255,255,.22)', name: '시안' },     // 3번
   ];
 
   function roundRect(ctx, x, y, w, h, r) {
@@ -166,9 +167,25 @@
    * 덮여 정작 소용돌이가 안 보였다. 테두리만 그으면 구역의 모양이 그대로 드러나면서
    * 안쪽은 비어 있어 색을 그대로 볼 수 있다.
    */
-  function regions(ctx, list, k) {
+  function regions(ctx, list, k, fills) {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
+
+    /*
+     * 안쪽을 슬롯 색으로 옅게 깐다.
+     *
+     * 테두리만 그으면 구역의 모양은 보이지만 **어느 슬롯의 것인지**를 테두리 색만으로
+     * 가려야 해서, 구역이 겹치거나 가늘어지면 헷갈린다. 옅게 채우면 한눈에 갈린다.
+     * 진하게 깔면 정작 팔레트 색이 안 보이므로 아주 옅게만 얹는다.
+     */
+    (fills || []).forEach((runs, i) => {
+      if (!runs || !runs.length) return;
+      ctx.fillStyle = (SLOT[i] || SLOT[0]).fill;
+      for (let p = 0; p < runs.length; p += 4) {
+        ctx.fillRect(runs[p], runs[p + 1], runs[p + 2] - runs[p], runs[p + 3] - runs[p + 1]);
+      }
+    });
+
     (list || []).forEach((segs, i) => {
       if (!segs || !segs.length) return;
       const trace = () => {
@@ -289,7 +306,9 @@
     banner(ctx, W, d.status, d.tone, s);
     chips(ctx, W, d.chips, s, 54 * s);
     paletteBox(ctx, d.box, s);
-    regions(ctx, d.regions, s);
+    // 표시 방식은 사람이 고른다 — 구역(테두리+채움)이냐, 점이냐.
+    if (d.spots) spots(ctx, d.spots, s);
+    else regions(ctx, d.regions, s, d.fills);
     triangle(ctx, d.tri, s);
     picks(ctx, d.picks, s);
   }

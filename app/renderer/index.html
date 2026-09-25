@@ -315,6 +315,13 @@
         <h3>상태 <small>화면만 읽습니다</small></h3>
         <dl id="dye-info" class="kv"></dl>
         <div id="dye-found" class="mt10"></div>
+
+        <h3 class="mt10">염색 옵션</h3>
+        <div class="row">
+          <label class="chk"><input type="checkbox" id="dye-nudge"> Ctrl+Alt+WASD로 마우스 1px 이동</label>
+          <span id="dye-nudge-msg" class="muted"></span>
+        </div>
+        <p class="hint">켤 때 관리자 권한을 한 번 묻습니다. 켜 둔 동안 다른 프로그램에서는 이 조합이 듣지 않습니다.</p>
       </div>
     </div>
 
@@ -455,6 +462,10 @@
           정해 둔 가공 시설 레벨이 실제와 어긋나면 물어보기</label>
         <p class="hint">칸에 올라간 작업이 설정 레벨보다 많으면 가공 탭에서 한 번 확인합니다.
           팝업에서 "다시 묻지 않기"를 고르셨다면 여기서 되돌릴 수 있습니다.</p>
+
+        <label class="chk mt10"><input type="checkbox" id="opt-close-to-tray">
+          창을 닫으면 트레이로 내리기</label>
+        <p class="hint">꺼 두면 창을 닫을 때 프로그램도 함께 끝납니다.</p>
       </div>
     <div class="toolbar">
       <span class="muted">28개 명령을 직접 호출합니다. UI에 없는 기능이 필요할 때 쓰세요.</span>

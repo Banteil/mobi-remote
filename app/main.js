@@ -28,10 +28,25 @@ const queueStore = require('../src/queue');
 const recipebook = require('../src/recipebook');
 const dyeprefs = require('../src/dyeprefs');
 const update = require('../src/update');
+const cursor = require('../src/cursor');
+
+/**
+ * 윈도우가 이 프로그램을 가리는 표. package.json 의 build.appId 와 같아야 한다 —
+ * 설치판은 바로가기에 이 값을 박고, 윈도우는 그것으로 알림·점프 목록·작업 표시줄
+ * 고정을 묶는다.
+ *
+ * **한 번 쓴 값은 되도록 바꾸지 말되, 바꿔야 할 일이 생기면 새 값을 쓴다.**
+ * 윈도우는 이 표에 아이콘을 캐시해 두는데 그 캐시가 상당히 질기다. 실제로 겪었다 —
+ * 아이콘을 못 읽던 초기 판을 한 번 돌렸더니 Electron 기본 아이콘이 이 표에 눌어붙어,
+ * 그 뒤로 실행 파일·창 아이콘·.ico 를 다 고쳐도 작업 표시줄만 원자 로고를 계속 그렸다.
+ * 표를 새 값으로 바꾸자 한 번에 풀렸다.
+ */
+const AUMID = 'com.banteil.MobiRemote';
 
 let win = null;
 let tray = null;
 let quitting = false;
+
 
 /** 실행 중인 CLI 호출 핸들. 취소를 위해 하나만 들고 있는다. */
 let currentAction = null;
@@ -108,6 +123,12 @@ function overlayHide() {
   if (overlayWin && !overlayWin.isDestroyed()) overlayWin.hide();
 }
 
+/** 완전히 없앤다. 앱을 끝낼 때 부른다 — 숨기기만 하면 창이 남아 앱이 안 끝난다. */
+function overlayClose() {
+  if (overlayWin && !overlayWin.isDestroyed()) overlayWin.destroy();
+  overlayWin = null;
+}
+
 /* ── 창 / 트레이 ────────────────────────────────────────────── */
 
 /**
@@ -164,22 +185,15 @@ function createWindow() {
    * app.setAppUserModelId 만으로는 모자랐다. 그것은 프로세스에 표를 붙이는 것이라,
    * 시작 메뉴에 그 표를 가진 바로가기가 있어야 윈도우가 이름을 찾아낸다. 설치판은
    * 바로가기가 생기지만 무설치판은 없으므로, 윈도우가 실행 파일에서 유추하다가
-   * 'Electron' 을 집어 든다.
+   * 'Electron' 을 집어 든다. setAppDetails 는 **이 창**의 속성에 직접 쓰므로
+   * 바로가기가 없어도 통한다.
    *
-   * setAppDetails 는 **이 창**의 속성에 직접 쓴다. 바로가기가 없어도 통한다.
-   *
-   * 아이콘도 같이 줘야 한다. appId 를 창에 박는 순간 윈도우는 아이콘도 그 표를 따라
-   * 다시 찾는데, 줄 것이 없으면 기본 아이콘으로 떨어진다. 실행 파일 안에 아이콘이
-   * 박혀 있으므로 그것을 가리킨다.
-   *
-   * 포장했을 때만 한다. 개발 중에는 실행 파일이 electron.exe 라 저 아이콘을 가리키면
-   * 오히려 Electron 아이콘이 뜬다. 개발판 작업 표시줄 이름은 고칠 이유도 없다.
+   * 개발 중에는 하지 않는다. 그때 실행 파일은 electron.exe 이고, 개발판 작업 표시줄
+   * 이름을 고칠 이유도 없다.
    */
   if (app.isPackaged) {
     win.setAppDetails({
-      appId: 'com.banteil.mobi-remote',
-      appIconPath: process.execPath,
-      appIconIndex: 0,
+      appId: AUMID,
       relaunchDisplayName: '모비 커넥터 리모콘',
       relaunchCommand: '"' + process.execPath + '"',
     });
@@ -187,13 +201,31 @@ function createWindow() {
 
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
-  // 창을 닫아도 트레이에 남는다. 완전 종료는 트레이 메뉴에서.
+  /*
+   * 창을 닫으면 끝낼지, 트레이로 내릴지.
+   *
+   * 기본은 **끝내는 것**이다. 창을 닫았는데 프로그램이 살아 있으면 끈 줄 알고 넘어가게
+   * 되고, 나중에 왜 안 꺼졌는지 찾느라 헤맨다. 트레이에 남기고 싶은 쓰임(작업 큐를 걸어
+   * 두고 게임만 보기)이 분명히 있어서 옵션으로 두되, 켜는 사람이 알고 켜게 한다.
+   *
+   * 누를 때마다 설정을 읽는다. 옵션을 바꾸고 나서 다시 켜야 적용되면 안 된다.
+   */
   win.on('close', (e) => {
-    if (!quitting) {
-      e.preventDefault();
-      win.hide();
+    if (quitting) return;
+    let toTray = false;
+    try { toTray = settings.load().closeToTray === true; } catch (_) { /* 못 읽으면 끈다 */ }
+    if (!toTray) {
+      // 오버레이를 같이 닫는다. 창이 하나라도 남아 있으면 window-all-closed 가 안 울려서
+      // 앱이 끝나지 않는다 — 실제로 그래서 창을 닫았는데 게임 위 표시만 남았다.
+      quitting = true;
+      overlayClose();
+      return;
     }
+    e.preventDefault();
+    win.hide();
   });
+
+  win.on('closed', () => { win = null; });
 
   // 외부 링크는 기본 브라우저로
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -754,6 +786,24 @@ function registerIpc() {
 
   ipcMain.handle('update:page', async () => { shell.openExternal(update.PAGE); return true; });
 
+  /* ── 화살표 키로 커서 1px ───────────────────────────────────
+   * 염색할 때 스포이드를 한 점 차이로 맞추려고 쓴다. **누른 만큼만** 움직인다 —
+   * 색을 찾아 저절로 가는 기능이 아니다.
+   *
+   * 게임이 앞에 있을 때 눌러야 하므로 창 단축키로는 안 되고 전역으로 잡아야 한다.
+   * 그래서 켜고 끄는 것을 사람이 쥐게 했다. 켜 있는 동안은 다른 창에서도 화살표가
+   * 안 듣기 때문이다.
+   */
+  /* ── Ctrl+Alt+화살표로 커서 1px ─────────────────────────────
+   * 단축키를 잡는 일도, 커서를 옮기는 일도 관리자 권한이 필요해서 별도 프로세스가
+   * 맡는다. 자세한 사정은 src/cursor.js 머리말에 적어 두었다.
+   */
+  ipcMain.handle('cursor:nudge', async (_e, on) => (on ? cursor.start() : (cursor.stop(), { ok: true })));
+
+  // 리모콘이 끝나면 헬퍼도 물러나게 표시를 지운다. 표시를 못 지우고 죽더라도
+  // 헬퍼가 우리 프로세스를 지켜보다 스스로 끝낸다.
+  app.on('will-quit', () => { cursor.stop(); });
+
   /* 레시피 장부 — 게임이 알려 준 재료를 긁어모은다. 조회뿐이라 공짜다. */
   ipcMain.handle('book:stats', async () => recipebook.stats());
   ipcMain.handle('book:harvest', async () => {
@@ -794,6 +844,8 @@ function registerIpc() {
     askFacilityLevelMismatch: 'boolean',
     alterWorksFolded: 'boolean',
     queueFolded: 'boolean',
+    dyeNudge: 'boolean',
+    closeToTray: 'boolean',
   };
   ipcMain.handle('cfg:set', async (_e, key, value) => {
     if (CFG_KEYS[key] !== typeof value) return settings.load();
@@ -961,10 +1013,11 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (win) {
-      win.show();
-      win.focus();
-    }
+    // 창이 이미 부서진 뒤일 수 있다. 그대로 부르면 메인 프로세스가 통째로 죽는다
+    // ('Object has been destroyed') — 실제로 그렇게 됐다.
+    if (!win || win.isDestroyed()) return;
+    win.show();
+    win.focus();
   });
 
   /*
@@ -974,21 +1027,44 @@ if (!app.requestSingleInstanceLock()) {
    * 윈도우는 창을 띄운 실행 파일이 아니라 이 식별자로 앱을 가른다 — 알림, 점프 목록,
    * 작업 표시줄 고정이 전부 여기에 묶인다. package.json 의 appId 와 같게 둔다.
    */
-  app.setAppUserModelId('com.banteil.mobi-remote');
+  app.setAppUserModelId(AUMID);
 
-  app.whenReady().then(async () => {
-    setupMenu();
-    registerIpc();
-    createWindow();
-    await createTray();
-  });
+  /*
+   * 관리자 권한이 필요한 옵션을 켜 뒀으면, 관리자로 다시 띄우고 물러난다.
+   *
+   * 창을 만들기 **전에** 판단한다. 띄워 놓고 나서 바꿔치기하면 창이 두 번 번쩍인다.
+   * 관리자로 새로 뜬 쪽은 이 검사에서 걸리지 않으므로 무한히 도는 일은 없다.
+   *
+   * **새 것이 실제로 떴을 때만 물러난다.** 띄우기가 실패했는데도 종료해 버리면
+   * 새 것도 없고 옛 것도 없는 상태가 된다 — 실제로 그렇게 만들어 놨다가, 옵션을
+   * 켠 뒤로는 실행해도 아무 창이 안 뜨는 상태를 만들었다. UAC 를 거절했을 때도
+   * 마찬가지로 그냥 일반 권한으로 뜬다. 그 기능만 못 쓸 뿐 나머지는 멀쩡하다.
+   *
+   * 소스로 띄운 경우(app.isPackaged=false)에는 하지 않는다. 그때 실행 파일은
+   * electron.exe 라, 관리자로 띄워 봐야 인자 없이 Electron 만 뜬다.
+   */
+  const startNormally = () => {
+    app.whenReady().then(async () => {
+      setupMenu();
+      registerIpc();
+      createWindow();
+      await createTray();
+    });
+  };
+
+  startNormally();
 
   app.on('window-all-closed', () => {
-    // 트레이에 남아야 하므로 아무것도 하지 않는다.
+    // 트레이로 내리는 설정이면 창이 없어도 남아 있어야 하므로 아무것도 하지 않는다.
+    // 그 설정이 꺼져 있으면 창을 닫은 것이 곧 종료다.
+    let toTray = false;
+    try { toTray = settings.load().closeToTray === true; } catch (_) { /* 못 읽으면 끈다 */ }
+    if (!toTray) app.quit();
   });
 
   app.on('before-quit', () => {
     quitting = true;
     if (currentAction) currentAction.cancel();
+    overlayClose();
   });
 }

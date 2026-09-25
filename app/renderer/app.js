@@ -299,8 +299,7 @@ function setOffline(st) {
   // 처음 받은 사람이 여기 걸리므로, 무엇이 없는지와 무엇을 하면 되는지를 같이 준다.
   if (st.reason === 'no_connector') {
     $('#offline-text').textContent =
-      '마비노기 모바일 커넥터를 찾지 못했습니다. 이 프로그램은 게임에 딸려 오는 ' +
-      'MabinogiMobile_CLI.exe 가 있어야 동작합니다 — 게임을 설치한 뒤 다시 찾아 주세요.';
+      '마비노기 모바일 커넥터를 찾지 못했습니다. 게임을 설치한 뒤 커넥터 찾기를 누르세요.';
     $('#offline-retry').textContent = '커넥터 찾기';
     banner.classList.remove('hidden');
     return;
@@ -3321,20 +3320,30 @@ async function dyeTick() {
   const lead = { skip: dyeUI.lead.skip, rings: dye.readRings(f, dyeUI.lead.rings) };
 
   const found = dye.findColors(f, dyeUI.box, targets, { skip: lead.skip });
-  const regionSets = dye.findRegions(f, dyeUI.box, targets, { skip: lead.skip, bands: dyeUI.bands });
 
   const marks = found.map((r) => ({
     x: toScreen(r.x, 'x'), y: toScreen(r.y, 'y'),
     hex: r.hex, color: r.color, delta: r.delta, found: r.found,
   }));
 
-  // 선분 [x1,y1,x2,y2,...] 을 화면 좌표로. 색은 오버레이가 칸 번호로 정한다 —
-  // 찾는 색 그 자체로 그으면 같은 색 위에서 안 보인다.
-  const regions = regionSets.map((segs) => {
-    const out = new Array(segs.length);
-    for (let k = 0; k < segs.length; k += 2) { out[k] = toScreen(segs[k], 'x'); out[k + 1] = toScreen(segs[k + 1], 'y'); }
+  // 좌표 묶음 [x,y,x,y,...] 을 화면 좌표로. 선분이든 네모든 같은 규칙이다.
+  const toXY = (arr) => {
+    const out = new Array(arr.length);
+    for (let k = 0; k < arr.length; k += 2) { out[k] = toScreen(arr[k], 'x'); out[k + 1] = toScreen(arr[k + 1], 'y'); }
     return out;
-  });
+  };
+
+  /*
+   * 오차 안에 든 자리를 점으로 찍는다. 맞는 자리마다 하나씩이다.
+   *
+   * 한동안 구역(테두리 + 옅은 채움)으로 그려 봤는데, 어디가 **정확히** 맞는지를 보는
+   * 데는 점이 나았다. 구역은 격자 단위라 가장자리가 실제보다 넉넉하게 잡히고,
+   * 한 점 차이를 다투는 작업에서는 그 넉넉함이 방해가 된다.
+   *
+   * 색은 오버레이가 칸 번호로 정한다. 찾는 색 그 자체로 찍으면 같은 색 위에서 안 보인다.
+   */
+  const spots = dye.findSpots(f, dyeUI.box, targets, { skip: lead.skip })
+    .map((pts) => ({ pts: toXY(pts) }));
 
   /**
    * 스포이드 동그라미 안쪽 색 = **그 파트가 지금 고른 색.** 게임이 위 딱지에 적어 두는
@@ -3395,7 +3404,7 @@ async function dyeTick() {
     status: status + (allCaught ? '  ·  셋 다 잡았습니다' : ''),
     tone: 'ok', chips: chips,
     // marks 는 리모콘 창에 글로 적으려고 같이 보낸다. 화면 위에는 안 그린다.
-    box: box, regions: regions, tri: tri, marks: marks, picks: picks,
+    box: box, spots: spots, tri: tri, marks: marks, picks: picks,
   };
   await mm.dye.draw(payload).catch(() => {});
   paintDyePreview(payload);
@@ -3936,6 +3945,8 @@ async function paintOptionSettings() {
   try { cfg = await mm.cfg.get(); } catch (_) { return; }
   const el = $('#opt-ask-mismatch');
   if (el) el.checked = cfg.askFacilityLevelMismatch !== false;
+  const tray = $('#opt-close-to-tray');
+  if (tray) tray.checked = cfg.closeToTray === true;
 }
 
 /* ── 콘솔 ───────────────────────────────────────── */
@@ -4107,6 +4118,41 @@ function wire() {
 
   wireColorPicker();
 
+  /*
+   * 화살표 키로 커서 1px.
+   *
+   * 켜 두는 동안 화살표를 **전역으로** 가로채므로, 켜고 끄는 것은 사람이 쥔다.
+   * 설정에는 남기지 않는다 — 다음에 켰을 때 저도 모르게 화살표가 안 듣는 상태로
+   * 시작하면 무엇이 문제인지 알아내기 어렵다.
+   */
+  /*
+   * Ctrl+Alt+WASD 로 커서 1px.
+   *
+   * 전역 단축키라 켜 둔 동안 다른 프로그램에서도 이 조합을 못 쓴다. 그래서 켜고 끄는
+   * 것을 사람이 쥔다. 설정에 남아 다음에 켤 때 그대로 걸린다.
+   */
+  $('#dye-nudge').addEventListener('change', async (e) => {
+    const on = e.target.checked;
+    await mm.cfg.set('dyeNudge', on);
+    const r = await mm.cursorNudge(on).catch(() => null);
+    if (on && (!r || !r.ok)) {
+      e.target.checked = false;
+      await mm.cfg.set('dyeNudge', false);
+      $('#dye-nudge-msg').textContent = (r && r.error) || '켜지 못했습니다';
+      return;
+    }
+    $('#dye-nudge-msg').textContent = '';
+  });
+
+  // 켜 둔 채로 떴으면 바로 걸어 둔다.
+  (async () => {
+    const c = await mm.cfg.get().catch(() => null);
+    if (!c || c.dyeNudge !== true) return;
+    $('#dye-nudge').checked = true;
+    const r = await mm.cursorNudge(true).catch(() => null);
+    if (!r || !r.ok) $('#dye-nudge-msg').textContent = (r && r.error) || '켜지 못했습니다';
+  })();
+
   $('#dye-start').addEventListener('click', startDye);
   $('#dye-stop').addEventListener('click', stopDye);
   $('#dye-preset').addEventListener('change', async (e) => {
@@ -4175,6 +4221,13 @@ function wire() {
     toast('저장했습니다', e.target.checked ? '어긋나면 물어봅니다.' : '묻지 않습니다.', 'ok');
   });
 
+  $('#opt-close-to-tray').addEventListener('change', async (e) => {
+    await mm.cfg.set('closeToTray', e.target.checked);
+    toast('저장했습니다', e.target.checked
+      ? '창을 닫으면 트레이에 남습니다.'
+      : '창을 닫으면 프로그램도 함께 끝납니다.', 'ok');
+  });
+
   $('#btn-refresh').addEventListener('click', refreshActive);
   $('#btn-stop').addEventListener('click', () =>
     runAction('stop_action', undefined, { label: '행동 정지', skipConfirm: true }));
@@ -4237,7 +4290,7 @@ function wire() {
       const loc = await mm.cli.locate(true);
       if (!loc || !loc.found) {
         toast('커넥터를 찾지 못했습니다',
-          '마비노기 모바일이 설치되어 있는지 확인하세요. 설치했는데도 안 잡히면 옵션에서 위치를 직접 지정할 수 있습니다.', 'bad');
+          '게임이 설치되어 있는지 확인하세요. 옵션에서 위치를 직접 지정할 수도 있습니다.', 'bad');
         say('준비됨');
         return;
       }

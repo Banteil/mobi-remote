@@ -623,8 +623,8 @@ function findLeaders(f, box) {
     if (!seen) continue;
     rings.push({ x: cx, y: cy, r: outR, rgb: seen.rgb, share: seen.share });
     // 가장자리는 배경과 섞여 흐릿하다 — 실측으로 바깥 반지름 +1~2px 까지 흰기가 남는다.
-    const pad = RING_PAD;
-    skip.push({ x: cx - outR - pad, y: cy - outR - pad, w: (outR + pad) * 2, h: (outR + pad) * 2 });
+    // 동그라미는 동그랗게 가린다. 네모로 가리면 모서리 네 곳이 공연히 지워진다.
+    skip.push({ cx: cx, cy: cy, r: outR + RING_PAD });
   }
   return { skip: skip, rings: rings };
 }
@@ -735,12 +735,22 @@ function defaultRingR(box) {
 }
 
 /** 건너뛸 네모들. 없으면 null 을 돌려 호출 쪽이 검사 자체를 생략하게 한다. */
-function skipper(rects) {
-  if (!rects || !rects.length) return null;
+/**
+ * 가릴 자리를 판정하는 함수를 만든다.
+ *
+ * 모양이 두 가지다. 안내선은 세로로 길쭉하니 **네모**로 가리고, 스포이드는 동그라미이니
+ * **원**으로 가린다. 예전에는 스포이드도 네모(외접 사각형)로 가렸는데, 그러면 원보다
+ * 21% 넓게 지워져 모서리 네 곳의 팔레트가 괜히 사라졌다 — 색을 고를 자리가 그만큼 준다.
+ */
+function skipper(shapes) {
+  if (!shapes || !shapes.length) return null;
   return (x, y) => {
-    for (let i = 0; i < rects.length; i++) {
-      const r = rects[i];
-      if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) return true;
+    for (let i = 0; i < shapes.length; i++) {
+      const s = shapes[i];
+      if (s.r !== undefined) {
+        const dx = x - s.cx, dy = y - s.cy;
+        if (dx * dx + dy * dy <= s.r * s.r) return true;
+      } else if (x >= s.x && x < s.x + s.w && y >= s.y && y < s.y + s.h) return true;
     }
     return false;
   };
@@ -846,7 +856,8 @@ function findRegions(f, rect, targets, opts) {
     const got = marchOnce(f, box, targets, skipper(o.skip), base * mul, o.max || 2000, bandOf);
     if (got) return got;
   }
-  return marchOnce(f, box, targets, skipper(o.skip), base * 8, 1e9, bandOf);
+  return marchOnce(f, box, targets, skipper(o.skip), base * 8, 1e9, bandOf) ||
+    { segs: targets.map(() => []), fills: targets.map(() => []) };
 }
 
 function marchOnce(f, box, targets, skip, step, cap, bandOf) {
@@ -900,7 +911,32 @@ function marchOnce(f, box, targets, skip, step, cap, bandOf) {
     blocked.set(grown);
   }
 
-  // 2) 마칭 스퀘어 — 네 칸의 켜짐꼴에 따라 정해진 선분을 낸다
+  /*
+   * 2) 채울 자리 — 켜진 칸을 가로로 이어 띠로 묶는다.
+   *
+   * 칸을 하나씩 내보내면 격자가 촘촘할 때 수천 개가 된다. 한 줄에서 이어진 칸은
+   * 어차피 같은 네모로 칠하므로 [x0,y0,x1,y1] 하나로 묶어 보낸다 — 그리는 쪽도
+   * 네모 한 번이면 끝이고, 오버레이로 넘길 글자 수도 크게 준다.
+   */
+  const fills = masks.map((m) => {
+    const runs = [];
+    for (let gy = 0; gy < gh; gy++) {
+      let from = -1;
+      for (let gx = 0; gx <= gw; gx++) {
+        const on = gx < gw && m[gy * gw + gx] && !blocked[gy * gw + gx];
+        if (on && from < 0) from = gx;
+        if (!on && from >= 0) {
+          const x0 = box.x + from * step + (step >> 1);
+          const y0 = box.y + gy * step + (step >> 1);
+          runs.push(x0, y0, x0 + (gx - from) * step, y0 + step);
+          from = -1;
+        }
+      }
+    }
+    return runs;
+  });
+
+  // 3) 마칭 스퀘어 — 네 칸의 켜짐꼴에 따라 정해진 선분을 낸다
   const all = [];
   for (const m of masks) {
     const out = [];
@@ -933,7 +969,7 @@ function marchOnce(f, box, targets, skip, step, cap, bandOf) {
     }
     all.push(out);
   }
-  return all;
+  return { segs: all, fills: fills };
 }
 
 /**
