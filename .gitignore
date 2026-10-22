@@ -1,22 +1,34 @@
-# 받아 오면 되는 것
-node_modules/
-package-lock.json.bak
+# 파이썬
+.venv/
+__pycache__/
+*.pyc
 
-# 포장 결과물
+# 개발 중 데이터 폴더(= 프로젝트 폴더)에 생기는 사용자 데이터
+logs/
+captures/
+cache/
+state/
+profile.json
+settings.json
+paths.json
+knowledge.json
+/recipe-book.json
+queue.json
+favorites.json
+playlists.json
+dye-presets.json
+compat.json
+
+# 포장 결과
+build/
 dist/
+*.spec
+/portraits/
+/characters.json
 
-# 사람마다 다른 것
-*.log
-npm-debug.log*
+# 개인 설정 (개발 PC 의 실제 값). 새로 받은 사람은 첫 실행 때 config.default.toml 을 복사해 만든다
+/config.toml
 
-# 내가 만든 루틴은 %LOCALAPPDATA%\mobi-remote\routines 에 있다.
-# 프로그램에는 예시만 들어간다.
-routines/*.json
-!routines/*.json.example
-
-# 편집기
-.vscode/
-.idea/
-*.swp
-Thumbs.db
-desktop.ini
+# 화면 설정 자동 맞춤이 남기는 백업, 실기 시험 기록 (캐릭터 이름 등 개인 정보)
+/data/backup/
+docs/TEST-*.md

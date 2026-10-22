@@ -1,0 +1,381 @@
+"""타이틀/캐릭터 선택 화면에서 지정한 캐릭터로 필드 메인 화면까지 진입.
+
+캐릭터는 선택 화면에서의 순서(slot)로 고른다 (profile.json 에 사용자가 입력).
+카드는 생성 순으로 한 줄에 columns 개씩 놓이고, 보유 캐릭터 수는 화면의 카드 수로 센다. 카드 위치는 고정 좌표 대신 카드 우상단
+'•••' 버튼을 화면에서 찾아 계산하고, 스크롤이 실제로 됐는지와 노란 선택 테두리가
+그 카드에 생겼는지 확인한 뒤에만 게임 시작을 누른다 (엉뚱한 캐릭터 접속 방지).
+첫 줄은 스크롤 맨 위, 마지막 줄은 스크롤 맨 아래에서 고른다. 카드 수는 스크롤 맨 위에서 보이는
+카드로 세므로 두 줄(columns * 2개)까지 지원한다.
+
+오전 6시 이후 캐릭터가 처음 접속하면 메인 화면 전에 이런 화면이 순서 없이 나올 수 있다 (settle_first_login):
+- 출석 대사 → (버튼 없는 첫 대사는 3초쯤 뒤 화면 클릭) → '출석부 건너뛰기' → '출석 완료' 확인(Space)
+- '새로운 이벤트' 안내 창 → 닫기
+- '오늘의 스텔라 픽' → 아무 카드나 골라 '스텔라 픽' (Space)
+- 공지사항 웹 팝업 → ESC
+"""
+import time
+
+import numpy as np
+
+from ..bot import AuthBlocked, Bot, StepTimeout
+from ..vision import Match
+
+
+class SelectFailed(StepTimeout):
+    pass
+
+
+_last_login = 0.0  # 마지막으로 '게임 시작'을 누른 시각 (monotonic)
+
+
+def _rows(menus: list[Match], tol: int = 20) -> list[list[Match]]:
+    """'•••' 위치를 줄 단위로 묶는다 (위 → 아래, 줄 안에서는 왼쪽 → 오른쪽)."""
+    rows: list[list[Match]] = []
+    for m in sorted(menus, key=lambda m: (m.y, m.x)):
+        if rows and abs(rows[-1][0].y - m.y) <= tol:
+            rows[-1].append(m)
+        else:
+            rows.append([m])
+    return [sorted(r, key=lambda m: m.x) for r in rows]
+
+
+def _is_selected(frame: np.ndarray, menu: Match, cs: dict) -> bool:
+    """카드 왼쪽 테두리에 노란 선택 테두리가 있는지."""
+    dx0, dx1 = cs["border_dx"]
+    y = menu.y + cs["border_dy"]
+    strip = frame[y - 20:y + 20, max(0, menu.x + dx0):menu.x + dx1].reshape(-1, 3).astype(int)
+    target = np.array(cs["border_bgr"])
+    close = np.abs(strip - target).max(axis=1) <= 40
+    return int(close.sum()) >= 20
+
+
+def _scroll(bot: Bot, cs: dict, notches: int) -> None:
+    r = bot.window.client_rect()
+    bot.input.scroll(r.left + cs["scroll_at"][0], r.top + cs["scroll_at"][1], notches)
+    bot.sleep(1.0, 1.4)
+
+
+def _scrolled_rows(bot: Bot, cs: dict, top: bool) -> list[list[Match]] | None:
+    """스크롤 맨 위(top) 또는 맨 아래로 보낸 뒤 '•••' 줄 목록. 스크롤이 확인되지 않으면 None.
+    맨 위면 첫 줄이 제자리에 있어야 하고, 맨 아래면 첫 줄이 화면 밖으로 밀려나야 한다."""
+    for attempt in range(4):
+        _scroll(bot, cs, cs["scroll_notches"] if top else -cs["scroll_notches"])
+        rows = _rows(bot.find_all(cs["card_menu"]))
+        top_visible = bool(rows) and abs(rows[0][0].y - cs["top_menu_y"]) <= 30
+        if rows and top_visible == top:
+            return rows
+        bot.log.debug(f"캐릭터 선택: 스크롤 확인 실패 (시도 {attempt + 1}), rows={[len(r) for r in rows]}")
+    return None
+
+
+def count_characters(bot: Bot, cfg: dict) -> int:
+    """선택 화면의 캐릭터 수 (스크롤 맨 위에서 보이는 카드 수)."""
+    rows = _scrolled_rows(bot, cfg["charselect"], top=True)
+    if rows is None:
+        raise SelectFailed(f"캐릭터 카드를 찾지 못함 → {bot.snapshot('charselect').name}")
+    return sum(len(r) for r in rows)
+
+
+def select_character(bot: Bot, cfg: dict, character: dict) -> None:
+    cs = cfg["charselect"]
+    name = character.get("name", f"슬롯 {character['slot']}")
+    total = count_characters(bot, cfg)  # 스크롤 맨 위 상태가 된다
+    if character["slot"] > total:
+        raise SelectFailed(f"{name}: 캐릭터가 {total}개뿐이라 슬롯 {character['slot']} 이 없음")
+    row, col = divmod(character["slot"] - 1, cs["columns"])
+    last_row = (total - 1) // cs["columns"]
+    if row not in (0, last_row):
+        raise SelectFailed(f"{name}: 세 줄 이상인 캐릭터 목록은 지원하지 않음")
+
+    rows = _scrolled_rows(bot, cs, top=row == 0)
+    r = (rows[0] if row == 0 else rows[-1]) if rows else []
+    if col >= len(r):
+        raise SelectFailed(f"{name}: 캐릭터 카드 위치를 찾지 못함 → {bot.snapshot('charselect').name}")
+    target = r[col]
+
+    ox, oy = cs["card_click_offset"]
+    x, y = target.x + ox, target.y + oy
+    if y > cs["max_click_y"]:
+        raise SelectFailed(f"{name}: 카드 클릭 위치가 게임 시작 버튼과 겹침 (y={y})")
+
+    for _ in range(2):
+        bot.click((x, y))
+        bot.sleep(0.8, 1.2)
+        frame = bot.frame()
+        menus = bot.vision.find_all(frame, cs["card_menu"])
+        # 클릭 후 같은 자리의 카드가 선택됐는지 (스크롤이 움직였으면 실패로 본다)
+        same = next((m for m in menus if abs(m.x - target.x) <= 6 and abs(m.y - target.y) <= 6), None)
+        if same and _is_selected(frame, same, cs):
+            bot.log.info(f"{name} 선택 확인")
+            return
+    raise SelectFailed(f"{name}: 선택 테두리 확인 실패 → {bot.snapshot('charselect').name}")
+
+
+def settle_first_login(bot: Bot, cfg: dict, timeout: float) -> list[str]:
+    """접속 직후 화면들(이벤트 대화, 스텔라 픽, 공지 팝업)을 처리하고 메인 화면이 몇 초 유지되면 끝낸다.
+    처리한 화면 이름 목록 반환."""
+    c, ui = cfg["login"], bot.ui
+    handled = []
+    end = time.monotonic() + timeout
+    stable = unknown = 0
+    while stable < 3:
+        if time.monotonic() > end:
+            raise StepTimeout(f"접속 후 메인 화면이 안정되지 않음 → {bot.snapshot('login').name}")
+        bot.sleep(1.2, 1.6)
+        frame = bot.frame()
+        if bot.vision.find(frame, c["stella_title"]):
+            stable = 0
+            bot.click(tuple(c["stella_card_xy"]))  # 어느 카드든 상관없음
+            bot.wait(c["stella_pick"], timeout=10)
+            bot.sleep(0.5, 0.8)
+            bot.key("space")
+            handled.append("스텔라 픽")
+            continue
+        if bot.vision.find(frame, c["notice_webview"]):
+            stable = 0
+            bot.key("esc")
+            handled.append("공지 팝업")
+            continue
+        # 출석은 '출석부 건너뛰기'로만 넘긴다. '대화 넘기기'는 다른 대사로 이어지므로 쓰지 않는다 (사용자 2026-10-22)
+        skip = next((m for n in (c["attendance_skip"], ui["scene_skip"]) if (m := bot.vision.find(frame, n))), None)
+        if skip:
+            stable = 0
+            bot.click(skip)
+            handled.append("출석부 건너뛰기" if skip.name == c["attendance_skip"] else "장면 넘기기")
+            continue
+        if bot.vision.find(frame, ui["confirm_green"]):  # '출석 완료' 보상 창 등의 초록 확인
+            stable = 0
+            bot.key("space")
+            handled.append("확인")
+            continue
+        if (m := bot.vision.find(frame, c["event_popup_close"])):  # '새로운 이벤트' 안내 창 (새 캐릭터 등)
+            stable = 0
+            bot.click(m)
+            handled.append("새 이벤트 창 닫기")
+            continue
+        if bot.vision.find(frame, ui["main_hud"]):
+            stable += 1
+            unknown = 0
+            continue
+        stable = 0
+        unknown += 1
+        # 출석 이벤트의 첫 NPC 대사엔 버튼이 없고 화면을 한 번 눌러야 '출석부 건너뛰기'가 나온다.
+        # 대사가 뜬 뒤 한동안 입력을 안 받으므로 3초쯤 지나서 누른다 (2026-10-22 새 캐릭터로 확인).
+        # 대사 화면엔 믿을 만한 표시가 없어(말풍선 아이콘은 움직임) '모르는 화면 + 로딩 아님(CLI)' 으로 판단한다
+        # 아무것도 처리하기 전(=첫 대사)에만 누른다. '출석 완료' 연출 중에 누르면 가운데 보상 아이템이 눌린다
+        if not handled and unknown in (2, 6) and bot.state.query("get_my_info") is not None:
+            bot.log.info("버튼 없는 화면이 이어짐 (출석 대사) → 화면 한 번 클릭")
+            bot.snapshot("first_dialog")
+            bot.click(tuple(c["first_dialog_xy"]))
+            continue
+        if unknown % 10 == 0:  # 모르는 창(채팅 입력 등)이 열려 HUD 가 가려졌을 수 있다 → ESC 로 정리 시도
+            try:
+                bot.to_main(tries=3)
+            except StepTimeout:
+                pass
+    return handled
+
+
+def _auth_names(bot: Bot) -> list[str]:
+    """접속 오류 창들. 보통 '계정 인증 실패' → 확인 → '서버에 입장할 수 없음' 이 세트로 뜬다."""
+    return [n for n in bot.ui.get("login_errors", []) if bot.vision.has(n)]
+
+
+def _auth_fail_visible(bot: Bot) -> bool:
+    names = _auth_names(bot)
+    if not names:
+        return False
+    frame = bot.frame()
+    return any(bot.vision.find(frame, n) for n in names)
+
+
+def _clear_auth_fail(bot: Bot, cfg: dict) -> None:
+    """접속 오류 창들을 확인(Space)으로 모두 닫고 타이틀이 나오면 auth_cooldown 초 쉰다.
+    한 실행(bot)에서 두 번째면 더 시도하지 않고 AuthBlocked (계속 두드리면 더 꼬일 수 있다)."""
+    bot.auth_fails = getattr(bot, "auth_fails", 0) + 1
+    shot = bot.snapshot("auth_fail").name
+    if bot.auth_fails >= 2:
+        raise AuthBlocked(f"접속 오류(계정 인증 실패)가 다시 남 → 실행을 멈춥니다. 게임에서 확인 후 직접 로그인해 주세요 → {shot}")
+    bot.log.warning(f"접속 오류 창 → 확인 누르고 {cfg['login']['auth_cooldown']}초 쉰 뒤 다시 접속 → {shot}")
+    names, title = _auth_names(bot), bot.ui["title_start"]
+    for _ in range(4):  # 창이 연달아 뜬다 → 타이틀이 나올 때까지 확인
+        bot.key("space")
+        try:
+            m = bot.wait_any([title, *names], timeout=30)
+        except StepTimeout:
+            break  # 아래 접속 흐름이 다시 화면을 기다린다
+        if m.name == title:
+            break
+        bot.log.info(f"접속 오류 창 이어짐: {m.name} → 확인")
+        bot.sleep(1, 1.5)
+    bot.sleep(cfg["login"]["auth_cooldown"])
+
+
+NAME_AREA = (100, 45, 260, 32)  # 메인 화면 왼쪽 위 캐릭터 이름 줄 [x, y, w, h] (위 줄은 타이틀)
+
+
+def _norm_name(t: str) -> str:
+    return "".join(t.split())
+
+
+def current_name(bot: Bot) -> str:
+    """메인 화면 왼쪽 위의 캐릭터 이름 (RapidOCR). CLI get_my_info 에는 이름이 없다. 못 읽으면 ''.
+    메인 화면이 아니면 (창이 열려 있으면) 그 자리에 다른 것이 있으므로 읽지 않는다."""
+    if not bot.at_main():
+        return ""
+    from .. import ocr
+    texts = [t for t, _, _ in ocr.find_texts(bot.frame(), NAME_AREA)]
+    return _norm_name(texts[0]) if len(texts) == 1 else ""
+
+
+def _leave_dungeon(bot: Bot) -> bool:
+    """던전 안이거나 클리어/보상 화면에 남아 있으면 (중단·충돌 뒤 다시 시작한 경우) 마무리하고 나온다."""
+    from .content import dungeon_state, finish_dungeon, game_space, hunt_quest, play_dungeon, wait_field, wait_until
+    ui = bot.ui
+    # 검은 구멍·사냥터 안에서 끊겼으면 나가지 않고 끝날 때까지 본다 — 캐릭터를 다시 고르면 그 판(횟수·은동전)이 날아간다.
+    # 끝난 뒤 그 숙제를 하면 숙제 쪽이 게임 상태(일일 달성·은동전 수)와 자기 단계 기록을 보고 나머지만 한다
+    bh = bot.cfg["black_hole"]
+    if bh["space_keyword"] in game_space(bot):
+        bot.step("bh_inside_at_login", "검은 구멍 안에서 시작 → 클리어까지 기다림")
+        wait_until(bot, lambda: bh["space_keyword"] not in game_space(bot), bh["clear_timeout"], interval=5,
+                   what="검은 구멍 클리어")
+        bot.sleep(2, 3)
+        bot.dismiss_popups()
+        return True
+    if hunt := hunt_quest(bot):
+        bot.step("field_inside_at_login", f"사냥터 안에서 시작 ({hunt}) → 클리어까지 기다림")
+        wait_field(bot, "", bot.cfg["silver"]["field_timeout"])
+        return True
+    state = dungeon_state(bot) if bot.state.available() else None
+    if state == "InProgress":
+        bot.step("dungeon_inside_at_login", "던전 안에서 시작 → 클리어까지 기다렸다가 나옴")
+        play_dungeon(bot, bot.cfg["tribute"]["clear_timeout"])
+        return True
+    if state == "Cleared" or bot.exists(ui["dungeon_touch"]) or bot.exists(ui["reward_exit"]):
+        bot.step("dungeon_reward_at_login", "던전 클리어 화면에서 시작 → 보상 받고 나옴")
+        finish_dungeon(bot)
+        return True
+    return False
+
+
+def run(bot: Bot, cfg: dict, character: dict | None = None) -> str:
+    """character 가 None 이면 현재(또는 마지막) 캐릭터로 접속.
+    '계정 인증 실패' 창이 있거나 접속 중에 뜨면 확인 → 쉬었다가 한 번 더 시도한다."""
+    for attempt in range(2):
+        if _auth_fail_visible(bot):
+            _clear_auth_fail(bot, cfg)
+        try:
+            return _run(bot, cfg, character)
+        except StepTimeout:
+            if attempt or not _auth_fail_visible(bot):
+                raise
+    raise AssertionError("unreachable")
+
+
+def _run(bot: Bot, cfg: dict, character: dict | None) -> str:
+    c, ui = cfg["login"], bot.ui
+    main, title, charsel = ui["main_hud"], ui["title_start"], ui["charselect_title"]
+    name = character.get("name", f"슬롯 {character['slot']}") if character else "현재 캐릭터"
+    auth = _auth_names(bot)
+
+    def wait_screen_for(names: list[str], timeout: float) -> Match:
+        """화면 대기 중 접속 오류 창이 뜨면 바로 StepTimeout (run 이 처리) — 180초를 버리지 않게."""
+        m = bot.wait_any([*names, *auth], timeout=timeout)
+        if m.name in auth:
+            raise StepTimeout(f"접속 오류 창 ({m.name})")
+        return m
+
+    def wait_screen(names: list[str]) -> Match:
+        return wait_screen_for(names, c["timeout"])
+
+    if bot.state.available():
+        _leave_dungeon(bot)
+
+    # NPC 대화(아르바이트 메뉴·전달 창 등)에 멈춰 있으면 ESC 로는 안 닫히고 (to_main 이 헛돈다) 닫혀도 그 일이 날아간다
+    # → 아르바이트 정리로 끝까지 넘긴다 (Space 선택지면 진행). 2026-10-22 케이틴 메뉴에서 이어 하다 26초 헛돎
+    if bot.state.available() and bot.exists(cfg["arbeit"]["dialog_log"]):
+        from .arbeit import _settle
+        bot.log.info("NPC 대화 중에 시작 → 대화부터 정리")
+        _settle(bot)
+
+    # 게임 안에서 창(지도, 퀘스트 등)이 열려 있으면 어느 화면인지 판단할 수 없으므로 먼저 닫는다
+    if not bot.at_main() and not (bot.exists(title) or bot.exists(charsel)):
+        try:
+            bot.to_main(tries=4)
+        except StepTimeout:
+            pass  # 로딩 중 등. 아래에서 화면이 나타날 때까지 기다린다
+
+    if bot.at_main():
+        if character is None:
+            bot.dismiss_popups()
+            return "이미 접속 중"
+        # 왼쪽 위 이름이 이 캐릭터면 다시 고르지 않는다 (접속 전환을 아끼고, 하던 숙제를 그 자리에서 이어 한다)
+        now = current_name(bot)
+        if now and now == _norm_name(character.get("name", "")):
+            bot.log.info(f"이미 {character['name']} 로 접속 중 (화면 이름 확인) → 다시 고르지 않음")
+            bot.dismiss_popups()
+            bot.to_main()
+            return f"{name} 이미 접속 중"
+        bot.log.info(f"지금 캐릭터: {now or '이름을 못 읽음'} → {name} 로 다시 고름")
+        bot.to_charselect()
+
+    m = wait_screen([main, charsel, title])
+    bot.log.debug(f"접속 시작 화면: {m.name}")
+    if m.name == title:
+        bot.click(m)
+        m = wait_screen([main, charsel])
+    if m.name == main and character is not None:  # 타이틀에서 바로 마지막 캐릭터로 들어간 경우
+        bot.to_charselect()
+        m = bot.wait(charsel)
+
+    if m.name == charsel:
+        bot.sleep(1.5, 2)  # 카드 목록 표시 대기
+        if character is not None:
+            try:
+                select_character(bot, cfg, character)
+            except SelectFailed as e:  # 화면 전환 직후 카드가 움직이는 중일 수 있다
+                bot.log.warning(f"캐릭터 선택 실패, 다시 시도: {e}")
+                bot.sleep(3, 4)
+                select_character(bot, cfg, character)
+        global _last_login
+        wait = c["min_interval"] - (time.monotonic() - _last_login)
+        if _last_login and wait > 0:
+            bot.log.info(f"접속 간격 유지: {wait:.0f}초 대기")  # 너무 잦은 접속 전환은 게임 오류를 부른다
+            bot.sleep(wait)
+        bot.wait(ui["charselect_start"], timeout=10)
+        bot.key("space")  # '게임 시작' 단축키. 클릭보다 확실하다
+        t0 = _last_login = time.monotonic()
+        # 입력이 무시되는 경우가 있다 → 선택 화면이 그대로면 다시 누른다
+        for _ in range(3):
+            bot.sleep(5)
+            if not bot.exists(charsel):
+                break
+            bot.log.info("게임 시작이 눌리지 않음 → 다시 시도")
+            bot.key("space")
+        closers = [n for n in ui["popup_closers"] if bot.vision.has(n)]
+        first = [c["stella_title"], c["notice_webview"], c["attendance_skip"], c["event_popup_close"],
+                 ui["scene_skip"]]  # 하루 첫 접속 화면
+        # 출석 첫 대사처럼 아는 버튼이 하나도 없는 화면도 있다 → 로딩이 끝나 게임 안(CLI)이면 settle 로 넘긴다
+        end = time.monotonic() + c["timeout"]
+        while True:
+            try:
+                m = wait_screen_for([main, *first, *closers], 6)
+                bot.log.debug(f"게임 시작 → {m.name} ({time.monotonic() - t0:.0f}s)")
+                break
+            except StepTimeout:
+                if _auth_fail_visible(bot):
+                    raise
+                if bot.state.query("get_my_info") is not None:
+                    bot.log.debug(f"게임 시작 → 버튼 없는 화면, 게임 안 ({time.monotonic() - t0:.0f}s)")
+                    break
+                if time.monotonic() > end:
+                    raise StepTimeout(f"{name} 접속 후 메인 화면이 나타나지 않음 → {bot.snapshot('login').name}")
+
+    bot.state.available(refresh=True)
+    handled = settle_first_login(bot, cfg, c["settle_timeout"])
+    if handled:
+        bot.log.info(f"접속 직후 화면 처리: {', '.join(handled)}")
+    closed = bot.dismiss_popups()
+    bot.to_main()
+    extra = handled + ([f"팝업 {closed}개"] if closed else [])
+    return f"{name} 접속 완료" + (f" ({', '.join(extra)})" if extra else "")

@@ -1,0 +1,315 @@
+# 마비노기 모바일 일일 숙제 자동화 설정
+# 값이 문자열인 항목은 대부분 templates/<이름>.png 템플릿 이름이다.
+
+[game]
+window_title = "마비노기 모바일"
+stop_key = "f12"            # 실행 중 이 키를 누르면 즉시 중단
+# 상태 조회용 공식 CLI (게임 설정 'MM AI 에이전트 활성화' 필요, 7일마다 만료).
+# 연결이 안 되면 재화 개수는 화면 숫자 판독으로 대체한다.
+cli_path = ""                          # 비우면 자동으로 찾는다 (레지스트리 → 기본 설치 경로 → Nexon 폴더 → 제거 프로그램 목록)
+fast_travel_key = "t"       # 먼 곳으로 자동 이동할 때 누를 빠른 이동 키 (비우면 사용 안 함)
+
+[input]
+jitter_px = 4               # 클릭 좌표 무작위 오차
+delay_min = 0.35            # 조작 사이 대기 (초)
+delay_max = 0.8
+
+[vision]
+threshold = 0.85            # 기본 매칭 임계값 (템플릿별 값은 templates/index.json)
+roi_margin = 80             # 템플릿을 잘라낸 위치 주변 몇 px 까지 탐색할지
+
+[run]
+max_weight_ratio = 1.0                # 가방 무게가 최대치의 이 비율 이상이면 그 캐릭터는 건너뜀
+# 캐릭터마다 접속 후 실행할 숙제 순서 (python run.py --list 로 id 확인)
+order = ["weekday_dungeon", "silver", "tribute", "black_hole", "daily_mission", "arbeit"]
+
+# ---- 숙제를 돌릴 캐릭터 ----
+# 처음 실행할 때 슬롯 번호를 물어보고 profile.json 에 저장한다 (python run.py --setup 으로 다시 입력).
+# 캐릭터별로 숙제 순서를 바꾸려면 아래처럼 적는다.
+# [run.tasks_by_slot]
+# 6 = ["weekday_dungeon", "daily_mission"]
+
+# ---- 캐릭터 선택 화면 (1920x1080 기준, 클라이언트 좌표) ----
+# 카드 위치는 카드 우상단 '•••' 버튼(card_menu)을 찾아 계산한다. 아래 offset 은 '•••' 템플릿 좌상단 기준.
+[charselect]
+columns = 4                       # 한 줄의 카드 수
+card_menu = "charselect_card_menu"
+top_menu_y = 203                  # 스크롤 맨 위일 때 첫 줄 '•••' 의 y
+card_click_offset = [-106, 234]   # '•••' → 카드 중앙
+max_click_y = 940                 # 이보다 아래는 '게임 시작' 버튼과 겹치므로 클릭 거부
+border_dx = [-272, -252]          # '•••' → 카드 왼쪽 테두리 x 범위 (선택 테두리 검사)
+border_dy = 200
+border_bgr = [104, 206, 255]      # 선택된 카드의 노란 테두리 색 (B, G, R)
+scroll_at = [960, 600]            # 스크롤할 마우스 위치
+scroll_notches = 8                # 끝까지 스크롤하는 휠 칸 수
+card_from_menu = [-266, -23]      # '•••' → 카드 왼쪽 위 (카드 314x512)
+portrait = [6, 54, 302, 308]      # 카드 안 그림 영역 [x, y, w, h] (캐릭터 탭 카드 그림)
+focus_wait = [0.8, 1.0]           # 카드를 누르고 그림을 찍기까지 (0.6초면 얼굴 확대가 끝난다. 그 뒤 표정 동작은 상관없음)
+name_area = [20, 330, 274, 170]   # 카드 안 이름·접속 시간·재화 글자 영역
+badge = [16, 14, 54, 38]          # 카드 왼쪽 위 레벨 배지
+job_area = [70, 14, 180, 38]      # 레벨 배지 오른쪽 직업 글자
+
+# ---- 재화 개수 ----
+# CLI 로 읽을 때의 표시 이름, CLI 가 안 될 때 HUD 숫자 판독 영역 [x, y, w, h]
+[counters]
+cli_names = { silver = "은동전", tribute = "마족 공물" }
+white_threshold = 230                 # 현재값(흰색)만 남기고 최대값(회색 '/100')은 거르는 밝기 기준
+silver = [210, 155, 90, 35]
+tribute = [310, 155, 60, 35]
+
+# ---- 공통 UI 템플릿 ----
+[ui]
+main_hud = "hud_main"                 # 필드 메인 화면의 메뉴 버튼 'ESC' 글자 (창이 열려 있으면 가려짐)
+food_b = "hud_food_b"                 # 좌상단 음식 아이콘의 'B' 표시 (배고픔). 보이면 B 를 눌러 먹는다
+title_start = "title_start"           # 타이틀 화면 '게임 시작'
+charselect_title = "charselect_title" # 캐릭터 선택 화면 제목
+charselect_start = "charselect_start" # 캐릭터 선택 화면 '게임 시작'
+menu_quit = "menu_quit"               # ESC 메뉴 우하단 '게임 종료'
+dialog_to_charselect = "dialog_to_charselect"  # 종료 창의 '캐릭터 선택 화면으로'
+popup_closers = ["popup_close", "popup_today_hide", "confirm_green"]
+exit_dialog = "dialog_exit_game"      # 메인에서 ESC 시 뜨는 '게임 종료?' 창
+exit_dialog_cancel = "dialog_cancel"
+auto_off = "auto_battle_off"          # 꺼진 상태의 자동 전투 버튼
+revive = "revive_button"
+questwin_tab_arbeit = "questwin_tab_arbeit"    # 퀘스트 창(J) 하단 '아르바이트' 탭
+questwin_tab_main = "questwin_tab_main"          # 퀘스트 창(J) 하단 '메인' 탭
+dungeon_mission_enter = "dungeon_mission_enter" # 던전 임무 선택 화면 '입장하기'
+dungeon_mission_enter_deep = "dungeon_mission_enter_deep"  # 심층 던전 임무 선택 화면 '(공물) 입장하기'
+dungeon_mission_enter_silver = "dungeon_mission_enter_silver"  # 일반 던전 임무 선택 화면 '(은동전) 입장하기'
+dungeon_tab_normal = "dungeon_tab_normal_on"   # 일반 던전 창의 '던전' 탭 (선택된 상태)
+dungeon_tab_normal_off = "dungeon_tab_normal_off"  # '던전' 탭 (선택 안 된 상태). 이번 주 심층 던전이면 심층 탭으로 열린다
+dungeon_tab_deep = "dungeon_tab_deep_on"     # '심층 던전' 탭 (선택된 상태)
+dungeon_diff_normal = "dungeon_diff_normal"    # 던전 창 난이도 '일반'
+dungeon_diff_hard = "dungeon_diff_hard"        # 던전 창 난이도 '어려움'
+enter_button_region = [1030, 980, 600, 60]     # 던전 창 '…진입' 버튼 글자 영역 (OCR 확인용)
+mission_button_region = [1260, 980, 340, 60]   # 임무 선택 화면 '(비용) 입장하기' 버튼 글자 영역 (OCR 확인용)
+map_go_here = "map_go_here"           # 지도 장소 정보 창의 '여기로 가기'
+map_open = "map_open"                 # 지도(M) 화면 하단 패널의 '지도' 탭 (지도가 열렸는지 확인)
+dungeon_touch = "dungeon_touch"       # 클리어 후 '화면을 터치해 주세요'
+scene_skip = "scene_skip"             # 연출 '장면 넘기기'
+reward_exit = "reward_exit"           # 보상 화면 '나가기'
+field_new_mission = "field_new_mission"  # 사냥터 보상 화면의 '새 임무 선택' (반복 플레이)
+field_recommend = "field_recommend"    # 사냥터 창 난이도 버튼 아래 '추천' 표시
+field_recommend_thumb = "field_recommend_thumb"  # 추천 난이도 버튼 오른쪽 위 엄지 아이콘 (추천 글자와 번갈아 나옴)
+field_mission_start = "field_mission_start"  # 새 임무 선택 후 사냥터 창의 '(비용) 임무 시작'
+dungeon_retry = "dungeon_retry"         # 던전 보상 화면의 '다시 하기' (같은 구역 반복)
+dungeon_retry_enter = "dungeon_retry_enter"  # 다시 하기 후 임무 화면의 '입장하기'
+confirm_green = "confirm_green"       # '퀘스트 클리어' 등의 초록 '확인'
+dialog_skip = "dialog_skip"           # NPC 대화의 '대화 넘기기' (사냥터 클리어 후 등)
+guide_title = "guide_title"           # '/' 콘텐츠 가이드 창 제목
+guide_go = "guide_go"                 # 콘텐츠 가이드 카드의 '바로 가기'
+# 접속 오류 창 제목들 (잦은 접속 전환 등). 보통 '계정 인증 실패' → 확인 → '서버에 입장할 수 없음' 세트로 뜨고 확인(Space) → 타이틀
+login_errors = ["dialog_auth_fail", "dialog_server_denied"]
+
+[login]
+timeout = 180
+min_interval = 60                     # 캐릭터 접속 사이 최소 간격 (초). 너무 잦은 전환은 게임 오류를 부른다
+auth_cooldown = 180                   # '계정 인증 실패' 확인 뒤 다시 접속하기 전에 쉬는 시간 (초). 한 실행에서 두 번 나면 멈춘다
+settle_timeout = 120                  # 접속 직후 화면(이벤트 대화, 스텔라 픽, 공지)을 정리하는 최대 시간
+first_dialog_xy = [960, 540]          # 출석 첫 대사(버튼 없음)를 넘기려고 누르는 곳. 화면 아무 데나 되고 가운데로 확인함
+attendance_skip = "attendance_skip"   # 출석 대사 두 번째부터 우상단에 뜨는 '출석부 건너뛰기' (이것만 눌러야 출석 연출이 통째로 넘어감)
+event_popup_close = "event_popup_close"  # '새로운 이벤트' 안내 창의 회색 '닫기' (새 캐릭터 접속 때 확인)
+stella_title = "stella_pick_title"    # '오늘의 스텔라 픽' (하루 첫 접속)
+stella_card_xy = [957, 610]           # 가운데 카드
+stella_pick = "stella_pick_button"    # '스텔라 픽' 버튼 (Space)
+notice_webview = "notice_webview_tabs" # 공지사항 웹 팝업 아래 탭 (ESC 로 닫힘)
+
+[daily_mission]
+key = "n"                             # 일일 미션 창
+title = "dm_title"
+gift = "dm_gift"                      # '선물 받기'
+go = "dm_go"                          # 미완료 미션의 '진행하기'
+card_title_offset = [-480, -35, 320, 40]  # '진행하기' 버튼 왼쪽 위 기준 카드 제목 영역 (OCR)
+list_scroll_at = [1030, 800]          # 미션 목록 스크롤 위치
+list_pages = 2                        # 목록을 몇 번 내려가며 볼지
+milestone_x = [877, 1017, 1157]       # 상단 2/4/6회 누적 보상
+milestone_label_y = [238, 250]        # 받을 수 있으면 이 높이까지 'N회' 글자가 크고 노랗다
+milestone_icon_y = 310
+ignore = ["뭐가 묻었나?"]              # 따로 하지 않는 미션 (검은 덩어리 정화: 사냥·던전 중 저절로 깨짐). 미완료로 알리지 않는다
+
+[daily_mission.food]
+enabled = true                        # 음식 미션이 남았으면 진행하기 → 여행자 간식 사용
+mission_keyword = "음식"              # 미션 제목/설명에 들어가는 글자
+item = "food_label_snack"             # 음식 탭에서 먹을 음식 이름 템플릿 (여행자 간식)
+icon_dy = -45                         # 이름 위쪽 아이콘까지의 거리
+use = "food_use"                      # '사용하기'
+
+[daily_mission.alchemy]
+enabled = true                        # 연금술 미션이 남았으면 보석 연금술 '모두 승급' 1회
+mission_keyword = "연금술"
+title = "alchemy_title"
+gem_card = "alchemy_gem_card"
+auto_off = "alchemy_auto_off"         # '재료 자동 넣기' 꺼진 토글
+upgrade_all = "alchemy_upgrade_all"   # '모두 승급'
+
+[daily_mission.gather]
+enabled = true                        # 채집 미션이 남았으면 진행하기 → 캐릭터가 근처에서 자동 채집
+mission_keyword = "채집"              # 미션 설명 '재료 아이템 3회 채집'
+timeout = 180
+
+# 콘텐츠 가이드('/') 왼쪽 위 '일일 달성' 패널: 완료한 콘텐츠 아이콘에 초록 체크
+[guide]
+daily_panel = [385, 125, 520, 180]
+check_offset = [-17, 24]              # 이름 글자(템플릿) 왼쪽 위 기준 체크 위치
+
+# ---- 지도 ----
+# M → '울라 대륙' 클릭 → 최대 축소 → 좌측 상단 끝으로 드래그한 화면을 기준으로 장소를 찾는다
+[map]
+ulla_click = [92, 44]
+zoom_notches = 15
+drag_from = [400, 300]
+drag_to = [1400, 900]
+drag_times = 3
+
+castle = "map_castle"                # 월드맵의 지역(성) 아이콘
+list_x = 150                          # 지역 맵 왼쪽 아래 장소 목록의 x
+list_y = [884, 951, 1018]             # 목록 3칸의 y (던전, 던전, 사냥터)
+list_y_tabbed = [816, 883, 950]       # 탭(동부/남부)이 있는 지역의 목록 y
+tabs = { "동부" = [90, 1022], "남부" = [220, 1022] }
+info_name_region = [1335, 760, 340, 75]   # '여기로 가기' 창의 장소 이름 (OCR 확인)
+list_threshold = 0.97                 # 목록 칸 이름 템플릿 일치 기준 (다른 장소는 0.93 이하)
+safe_area = [60, 120, 1850, 880]      # 월드맵에서 클릭해도 되는 영역 (오른쪽 아래 패널 제외)
+
+# 월드맵에서 지역(성) 아이콘의 상대 위치 (던바튼 기준, 최대 축소 화면의 픽셀).
+# 화면에 보이는 아무 지역이나 이름을 읽어 기준점으로 삼고, 목표 지역 위치를 계산한다.
+[map.towns]
+"던바튼" = [0, 0]
+"구름 황야" = [176, -600]
+"이멘마하" = [-355, -697]
+"반호르" = [258, -908]
+"센마이 평원" = [-33, -876]
+"창백한 산" = [-553, -286]
+"가이레흐" = [169, -360]
+"얼음 협곡" = [674, 44]
+"콜헨" = [1075, 50]
+"여신의 뜰" = [-84, 350]
+"두갈드아일" = [170, 348]
+"티르코네일" = [401, 547]
+"늑대의 숲" = [722, 528]
+
+# 장소: 마을 지역 맵 왼쪽 아래 목록의 위치. index 0, 1 = 던전, 2 = 사냥터
+# label = 목록 칸의 이름 글자 템플릿 (작은 글자라 OCR 대신 템플릿으로 확인)
+[places]
+"페카 고분" = { town = "이멘마하", tab = "동부", index = 0, label = "place_00" }
+"페론 고분" = { town = "이멘마하", tab = "동부", index = 1, label = "place_01" }
+"센마이 평원" = { town = "이멘마하", tab = "동부", index = 2, label = "place_02" }
+"피오드 던전" = { town = "이멘마하", tab = "남부", index = 0, label = "place_03" }
+"룬다 던전" = { town = "이멘마하", tab = "남부", index = 1, label = "place_04" }
+"창백한 산" = { town = "이멘마하", tab = "남부", index = 2, label = "place_05" }
+"바리 1광구" = { town = "반호르", index = 0, label = "place_06" }
+"바리 2광구" = { town = "반호르", index = 1, label = "place_07" }
+"구름 황야" = { town = "반호르", index = 2, label = "place_08" }
+"라비 던전" = { town = "던바튼", index = 0, label = "place_09" }
+"마스 던전" = { town = "던바튼", index = 1, label = "place_10" }
+"여신의 뜰" = { town = "던바튼", index = 2, label = "place_11" }
+"알비 던전" = { town = "티르코네일", index = 0, label = "place_12" }
+"키아 던전" = { town = "티르코네일", index = 1, label = "place_13" }
+"늑대의 숲" = { town = "티르코네일", index = 2, label = "place_14" }
+"북쪽 폐허" = { town = "콜헨", index = 0, label = "place_15" }
+"남쪽 폐허" = { town = "콜헨", index = 1, label = "place_16" }
+"얼음 협곡" = { town = "콜헨", index = 2, label = "place_17" }
+
+# ---- 던전 공통 ----
+[dungeon]
+touch_xy = [960, 330]                 # 클리어 화면 '화면을 터치해 주세요'를 넘길 때 누를 곳 (버튼이 없는 위쪽)
+touch_text_region = [760, 970, 400, 60]  # '화면을 터치해 주세요' 글자 영역 (OCR)
+
+# ---- 숙제별 설정 ----
+# open_steps: 메인 화면에서 차례로 클릭할 템플릿 → 마지막에 ui.dungeon_enter 클릭
+# lack: 입장 재화 부족 시 뜨는 팝업 템플릿
+
+# 아르바이트: 구인 중 목록을 위에서부터 지원 → 진행 → 완료, 목록이 빌 때까지 (mabi/tasks/arbeit.py 설명 참고)
+[arbeit]
+slots = []                            # 아르바이트를 도는 캐릭터 슬롯 (캐릭터 탭 ••• 에서 켬). 새 기능이라 기본은 아무도 안 함
+max_jobs = 20                         # 한 캐릭터에서 처리할 최대 횟수 (지원·진행 합쳐서)
+job_timeout = 480                     # 아르바이트 하나에 쓰는 최대 시간 (초)
+travel_timeout = 180                  # '지원하기' 후 수락 대화가 뜰 때까지
+idle_wait = 10                        # 메인 화면에서 이만큼 가만히 있으면 '진행하기' 를 다시 누른다 (초)
+max_pushes = 5                        # 조건이 그대로인 채 '진행하기' 를 다시 누르는 최대 횟수 (조건이 바뀌면 다시 셈)
+list_pages = 3                        # 목록을 몇 번 내려 가며 찾을지
+list_scroll_at = [1540, 600]
+accept = "arbeit_accept"              # NPC 대화의 '수락' (Space)
+report = "npc_space_option"           # NPC 메뉴의 Space 선택지 ('결과 보고' 나 아르바이트 이름 버튼 — 초록 버튼의 Space 표시+G 아이콘)
+deliver_title = "deliver_title"       # '전달하기' 창 제목
+deliver_ready = "deliver_ready"       # 전달하기 버튼의 'Space' 표시 (물품이 다 채워져야 생김)
+dialog_log = "dialog_log"             # NPC 대화 화면 왼쪽 위 '대화 기록' (대화 중인지 확인)
+dialog_next_xy = [1800, 45]           # '대화 넘기기' 자리. 버튼이 없어도(한마디 대사) 눌러서 넘어간다
+craft_list = "craft_facility_move"    # 제작 창 첫 화면의 '설비로 이동' (아르바이트가 요구하는 물품 카드가 그 아래 하나)
+craft_item_from_list = [76, 237]      # '설비로 이동' 템플릿 왼쪽 위 → 물품 카드 가운데
+craft_go = "craft_go"                 # 물품을 고른 뒤 '제작하러 가기' (Space)
+craft_make = "craft_make"             # 설비 앞 제작 창의 '제작하기' (Space)
+craft_short_toast = "toast_no_material"  # 제작 버튼을 눌렀는데 재료가 모자라면 화면 위에 뜨는 '재료가 부족합니다.'
+craft_transfer = "craft_transfer_title"  # '재료를 전송하시겠습니까?' (모자란 재료를 보관함에서) → 확인(Space)
+alter_button = "alter_button"         # 가공 시설 창의 '가공하기' — 가공이 필요한 일은 시간이 걸려 건너뜀
+craft_material_area = [1200, 620, 720, 170]  # '제작하러 가기' 화면의 필요한 재료 칸 [x, y, w, h]
+item_missing = "item_missing"         # '퀘스트를 위해 필요한 아이템이 없습니다.' 창 제목
+item_row_from_title = [170, 147]      # 그 제목 템플릿 왼쪽 위 → 첫 물품 줄 가운데 (누르면 '구하는 방법' 이 열린다)
+howto_title = "howto_title"           # '구하는 방법' 창 제목
+howto_area = [1200, 240, 720, 700]    # 구하는 방법 목록 (맨 위가 가장 가까운 '추천')
+gather_timeout = 300                  # 채집하러 간 뒤 조건이 채워질 때까지 최대 (초)
+
+# 퀘스트 창(J) → 아르바이트 탭 → '요일' 태그 카드의 '진행하기' → 던전 창 '요일 던전' 탭에서 기본 단계로 입장
+[weekday_dungeon]
+achieved = "guide_daily_weekday"     # 콘텐츠 가이드 일일 달성의 '요일 던전' (완료 체크 확인)
+tag = "arbeit_weekday_tag"            # 아르바이트 카드의 '요일' 태그
+go = "arbeit_go"                      # 아르바이트 카드의 '진행하기'
+panel = [1220, 90, 680, 900]          # 퀘스트 창 오른쪽 목록 영역 [x, y, w, h]
+dungeon_tab = "dungeon_tab_weekday_on" # 이동 도착 후 열리는 던전 창의 '요일 던전' 탭 (선택된 상태)
+extra_loot = 3                        # 클리어 보상 화면의 추가 루팅 횟수 (최대 3, 골드 6천/1만2천/1만8천). 요일 던전에만 있음
+travel_timeout = 300
+clear_timeout = 600
+
+# 은동전: 20개 단위로 사냥터/던전에 배분. 아래는 기본값이고 캐릭터별로 [silver.by_slot.<슬롯>] 에서 덮어쓴다.
+[silver]
+unit = 20
+field = "창백한 산"                   # 사냥터
+field_runs = 1                        # 사냥터 최대 횟수 (0 = 던전만)
+field_difficulty_y = 113              # 사냥터 창 난이도 버튼 y. '추천' 표시가 붙은 난이도를 고른다
+black_hole_in_field = true            # 사냥터에 들어가면 검은 구멍부터 한 번 (오늘 아직 안 했으면)
+min_units_for_field = 2               # 은동전이 20 x 이 값 이상일 때만 사냥터 (20개뿐이면 던전 1회)
+dungeon = "피오드 던전"               # 남은 은동전으로 돌 던전 ("" = 사냥터만)
+difficulty = ""                       # "" = 던전 창에 선택된 그대로 / "일반" / "어려움"
+floor = 1                             # 돌 층
+zone = 3                              # 돌 구역 (1, 2, 3=보스)
+dungeon_cost = 20                     # 입장 버튼의 은동전 가격 (소탕 10 + 더블 루팅 10). 다르면 입장하지 않음
+field_timeout = 2400                  # 사냥터 1회 최대 대기 (초)
+travel_timeout = 300
+clear_timeout = 600
+
+# 예) 사냥터 2회 후 남은 은동전은 룬다 던전 2층 1구역 어려움
+# [silver.by_slot.N]
+# field_runs = 2
+# dungeon = "룬다 던전"
+# difficulty = "어려움"
+# floor = 2
+# zone = 1
+#
+# 예) 던전만 / 사냥터만
+# [silver.by_slot.5]
+# field_runs = 0
+# [silver.by_slot.6]
+# dungeon = ""
+# field_runs = 5
+
+# 퀘스트 창(J) → 메인 탭 → '모험가 길드의 고난도 심층 공략' 진행하기 → 심층 던전(매우 어려움)
+[tribute]
+list_scroll_at = [1540, 600]          # 퀘스트 창 오른쪽 목록 스크롤 위치
+cost = 2                              # 1회 입장에 필요한 공물
+quest_card = "quest_card_tribute"     # 퀘스트 창 메인 탭의 고난도 퀘스트 카드 제목
+quest_go = "quest_go_orange"          # 메인 퀘스트 카드의 주황색 '진행하기'
+dungeon_tab = "dungeon_tab_deep_on"   # 이동 도착 후 던전 창의 '심층 던전' 탭 (선택된 상태)
+very_hard = "dungeon_deep_veryhard_on" # '매우 어려움' 선택된 상태
+quest_wait = 180                      # 퀘스트가 나타날 때까지 최대 대기 (초). 앞 숙제를 하는 동안 보통 뜬다. 안 뜨면 건너뜀
+max_runs = 5
+travel_timeout = 600
+clear_timeout = 900
+
+# '/' 콘텐츠 가이드 → 검은 구멍 '바로 가기' → 이동 후 즉시 입장 (입장 즉시 횟수 차감, 클리어까지 머묾)
+[black_hole]
+achieved = "guide_daily_blackhole"   # 콘텐츠 가이드 일일 달성의 '검은 구멍' (완료 체크 확인)
+card = "guide_card_blackhole"         # 콘텐츠 가이드의 검은 구멍 카드 제목
+space_keyword = "검은 구멍"           # 검은 구멍 안일 때 CLI 장소 이름에 들어가는 글자
+travel_timeout = 600
+clear_timeout = 900
+stall = 15                            # 이동도 전투도 아닌 채로 이만큼(초) 멈춰 있으면 바로 가기를 다시 누른다
+max_retries = 5

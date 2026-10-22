@@ -1,0 +1,34 @@
+bottle==0.13.4
+cffi==2.1.1
+clr_loader==0.3.1
+mss==10.2.0
+numpy==2.5.4
+opencv-python==5.0.0.93
+proxy_tools==0.1.0
+pycparser==3.11
+PySide6==6.12.0
+PySide6_Addons==6.12.0
+PySide6_Essentials==6.12.0
+PySide6_Pdf==6.12.0.140
+PySide6_WebEngine==6.12.0.140
+pythonnet==3.2.1
+pywebview==6.2.1
+shiboken6==6.12.0
+tomlkit==0.15.2
+typing_extensions==4.16.0
+winrt-runtime==3.2.1
+winrt-Windows.Foundation==3.2.1
+winrt-Windows.Foundation.Collections==3.2.1
+winrt-Windows.Globalization==3.2.1
+winrt-Windows.Graphics.Imaging==3.2.1
+winrt-Windows.Media.Ocr==3.2.1
+winrt-Windows.Storage.Streams==3.2.1
+# 캐릭터 이름 OCR (PP-OCRv5 한국어). rapidocr 는 opencv-python-headless 를 끌어와 opencv-python 과 cv2 를 두고 겹치므로
+# 의존성 없이 따로 설치한다:  pip install --no-deps rapidocr
+onnxruntime>=1.31
+omegaconf
+colorlog
+tqdm
+requests
+shapely
+pyclipper
