@@ -335,6 +335,13 @@ function paintTopbar(st, me, wings) {
   pill.textContent = '● 연결됨';
   pill.className = 'pill pill-ok';
 
+  if (me && me.error) {
+    // 로그인·캐릭터 선택 화면(not_in_game) — 접속 중인 캐릭터가 없다. 옛 이름·정보를 남기지 않는다
+    $('#charname').textContent = me.error === 'not_in_game' ? '접속 중인 캐릭터 없음' : '—';
+    $('#charname').title = me.message || '';
+    $('#charsub').textContent = '';
+    $('#weight').textContent = '—';
+  }
   if (me && !me.error) {
     // get_my_info는 캐릭터명을 주지 않는다. Title은 착용 타이틀, RealmName은 서버다.
     // 이름은 게임 화면 왼쪽 위를 읽어 온다 (chars.nameNow) — 못 읽었으면 레벨·직업만.
@@ -348,15 +355,24 @@ function paintTopbar(st, me, wings) {
   return true;
 }
 
-/** 지금 캐릭터 이름 (게임 화면 OCR). 게임 창이 맨 앞일 때만 새로 읽히고, 그 밖에는 마지막 값. */
+/** 지금 캐릭터 이름 (게임 창 왼쪽 위 OCR, 15초마다). 게임이 꺼졌거나 접속 중이 아니면 ''. */
 let topName = '';
 
 async function refreshTopbar() {
   const st = await mm.status();
-  if (!st.connected) { topName = ''; return paintTopbar(st); }
-  try { const n = await mm.chars.nameNow(); topName = (n && n.name) || topName; } catch (_) {}
+  if (!st.connected) { await updateNameNow(st); return paintTopbar(st); }
   const r = await mm.queryMany(['me', 'wings'], dashOpts());
+  await updateNameNow(st, r.me);
   return paintTopbar(st, r.me, r.wings);
+}
+
+/** 지금 캐릭터 이름을 새로 받는다. 게임이 꺼졌거나 접속 중이 아니면(캐릭터 선택·로딩 = me 조회 실패) 지운다.
+ * 바뀌면 캐릭터 탭 카드(노란 테두리)도 다시 그린다. */
+async function updateNameNow(st, me) {
+  const before = topName;
+  if (!st || !st.connected || !me || me.error) topName = '';
+  else { try { const n = await mm.chars.nameNow(); topName = n ? n.name || '' : topName; } catch (_) {} }
+  if (topName !== before && typeof paintChars === 'function' && ch.data) paintChars();
 }
 
 /* ── 대시보드 ───────────────────────────────────── */
@@ -417,6 +433,7 @@ async function tickAuto() {
   try {
     const st = await mm.status();
     if (!st.connected) {
+      await updateNameNow(st);
       paintTopbar(st);
       autoStatus('게임 연결 끊김 — ' + Math.round(OFFLINE_MIN_MS / 1000) + '초마다 재확인');
     } else {
@@ -424,6 +441,7 @@ async function tickAuto() {
       const onDash = activeTab === 'dash';
       const names = onDash ? DASH_QUERIES.concat(['wings']) : ['me', 'wings'];
       const r = await mm.queryMany(names, dashOpts());
+      await updateNameNow(st, r.me);
       paintTopbar(st, r.me, r.wings);
       if (onDash) loadDash({ data: r });
       autoStatus('갱신 ' + new Date().toLocaleTimeString('ko-KR') + ' · ' + (Date.now() - t) + 'ms');
@@ -500,8 +518,9 @@ async function loadDash(opts) {
 
   const m = r.me || {};
   // 주의: CLI는 캐릭터명을 제공하지 않는다 (Title=타이틀, RealmName=서버)
-  paint('#dash-char', m.error ? '<dt class="muted">조회 실패</dt><dd></dd>' : [
-    ['타이틀', m.title || '(없음)'], ['레벨', m.level], ['직업', m.job], ['서버(렐름)', m.realm],
+  paint('#dash-char', m.error ? '<dt class="muted">' + (m.error === 'not_in_game' ? '접속 중인 캐릭터 없음' : '조회 실패') +
+    '</dt><dd></dd>' : [
+    ['이름', topName || '—'], ['타이틀', m.title || '(없음)'], ['레벨', m.level], ['직업', m.job], ['서버(렐름)', m.realm],
     ['전투력', num(m.combat)], ['생활력', num(m.living)],
     ['HP', m.hp], ['포만도', m.satiety], ['무게', m.weight + ' (' + m.weightPct + '%)'],
     ['버프', m.buffs + '개'],
@@ -1948,13 +1967,8 @@ let qAbort = false;
 let qSkillHalt = null;
 let qSeq = 1;
 
-const Q_STATE = {
-  wait:  { label: '대기', cls: 'q-wait' },
-  run:   { label: '진행 중', cls: 'q-run' },
-  pause: { label: '보류', cls: 'q-pause' },
-  done:  { label: '완료', cls: 'q-done' },
-  fail:  { label: '중단', cls: 'q-fail' },
-};
+const Q_STATE = Object.fromEntries(['wait', 'run', 'pause', 'done', 'fail'].map((k) =>
+  [k, { label: (mm.labels.queue_state || {})[k] || k, cls: 'q-' + k }]));
 
 async function loadQueue() {
   let saved = null;

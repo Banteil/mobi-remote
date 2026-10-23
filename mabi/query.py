@@ -3,10 +3,10 @@
 제작·가공 목록(학습 지식·레시피 장부가 얽힌 부분)은 그 화면을 옮길 때 따로 둔다.
 모든 함수는 실패하면 {"error", "message"} 를 돌려준다.
 """
-from . import richtext
+from . import gamedata as gd, richtext
 from .cache import QueryCache
 
-LOCATION_LABEL = {"inventory": "가방", "account_storage": "계정창고", "character_storage": "캐릭창고"}
+LOCATION_LABEL = gd.labels()["location"]
 LOCATION_KEY = {"inventory": "bag", "character_storage": "char", "account_storage": "acc"}
 
 
@@ -65,7 +65,7 @@ class Query:
         r = self.currencies(**kw)
         if "error" in r:
             return None
-        return next((i["amount"] for i in r["items"] if i["name"] == "정령의 날개"), 0)
+        return next((i["amount"] for i in r["items"] if i["name"] == gd.currency("wings")), 0)
 
     def activity(self, **kw) -> dict:
         """항상 실시간. IsReviving 은 살아 있어도 true 로 남는 경우가 있어 판단에 쓰지 않는다."""

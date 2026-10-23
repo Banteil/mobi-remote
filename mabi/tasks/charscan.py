@@ -14,7 +14,7 @@ import re
 import cv2
 import numpy as np
 
-from .. import ocr
+from .. import gamedata as gd, ocr
 from ..bot import Bot, StepTimeout
 from . import login
 
@@ -36,8 +36,7 @@ def _text_lines(frame: np.ndarray, x: int, y: int, w: int, h: int, white: int = 
 
 TIME_RE = re.compile(r"^\d+\s*(시간|분|초)")
 # 직업 이름 (OCR 끝에 붙는 군더더기를 떼려고 맞춰 본다. 목록에 없으면 읽은 대로)
-JOBS = ("대검전사", "검술사", "전사", "석궁사수", "장궁병", "궁수", "화염술사", "빙결술사", "전격술사", "마법사",
-        "힐러", "사제", "수도사", "암흑술사", "음유시인", "악사", "댄서", "격투가", "듀얼블레이드")
+JOBS = tuple(gd.rules()["jobs"]["names"])
 
 
 def _hangul(t: str) -> str:
@@ -74,7 +73,7 @@ def _read_card(frame: np.ndarray, menu, cs: dict) -> dict:
     if i:
         name, score = _hangul(reads[i - 1][0]), reads[i - 1][1]
     else:
-        cand = [r for r in reads if len(_hangul(r[0])) >= 2 and not TIME_RE.match(r[0]) and "대표" not in r[0]]
+        cand = [r for r in reads if len(_hangul(r[0])) >= 2 and not TIME_RE.match(r[0]) and gd.text("charscan_main") not in r[0]]
         if cand:
             r = max(cand, key=lambda r: r[1])
             name, score = _hangul(r[0]), r[1] * 0.8  # 위치로 확인 못 했으니 덜 믿는다

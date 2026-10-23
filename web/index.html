@@ -71,7 +71,7 @@
   <!-- 캐릭터 (파이썬판에서 생김) — 게임의 캐릭터 선택 화면처럼 카드로 -->
   <section class="panel active" id="panel-chars">
     <div class="toolbar">
-      <span class="muted">카드 ••• 에서 캐릭터별 숙제 설정</span>
+      <span class="muted">카드를 눌러 캐릭터별 숙제 설정</span>
       <span class="spacer"></span>
       <span id="ch-scan-state" class="muted"></span>
       <button class="btn hidden" id="ch-scan-stop">중단</button>
@@ -364,16 +364,15 @@
     </div>
     <p class="hint">실행 중에는 게임 화면을 가리지 마세요.</p>
     <div class="card card-wide">
-      <h3>오늘 진행 <small>칸을 누르면 고른 것만 실행합니다</small><span class="count" id="dl-pick-note"></span></h3>
+      <h3>오늘 진행 <small>체크한 캐릭터·숙제만 실행합니다</small><span class="count" id="dl-pick-note"></span></h3>
       <div class="tablewrap"><table id="dl-table"><thead></thead><tbody></tbody></table></div>
     </div>
     <div class="grid2">
       <div class="card">
-        <h3>숙제 설정 <small>캐릭터별 설정은 캐릭터 탭에서</small></h3>
+        <h3>숙제 기본값 <small>캐릭터 탭에서 따로 정하지 않은 캐릭터에 적용</small></h3>
         <dl class="kv dl-kv">
-          <dt>사냥터 (기본)</dt><dd><select id="dl-field-runs"></select> 회 · <select id="dl-field"></select></dd>
-          <dt>남은 은동전 던전</dt><dd><select id="dl-dungeon"></select> <select id="dl-floor"><option value="1">1층 3구역</option><option value="2">2층 3구역</option></select></dd>
-          <dt>가방 무게 한도</dt><dd><input id="dl-weight" type="number" min="0.5" max="1" step="0.01" class="w-num"><div class="hint">최대치 대비 비율 · 넘으면 그 캐릭터를 건너뜁니다</div></dd>
+          <dt>사냥터</dt><dd><select id="dl-field-runs"></select> 회 · <select id="dl-field"></select> <span class="muted" id="dl-follow-field"></span></dd>
+          <dt>남은 은동전 던전</dt><dd><select id="dl-dungeon"></select> <select id="dl-floor"></select> <span class="muted" id="dl-follow-dungeon"></span></dd>
         </dl>
         <div class="row"><span class="spacer"></span><span id="dl-save-msg" class="muted"></span>
           <button class="btn btn-primary" id="dl-save">저장</button></div>
@@ -528,6 +527,7 @@
         <h3>일일 숙제</h3>
         <dl class="kv dl-kv">
           <dt>일시정지 키</dt><dd><select id="opt-stop-key"></select><div class="hint">숙제 중 누르면 일시정지, 다시 누르면 재개</div></dd>
+          <dt>게임 조작 시</dt><dd><label><input type="checkbox" id="opt-pause-touch"> 일시정지</label><div class="hint">숙제 중 게임 창을 클릭하거나 키를 누르면</div></dd>
           <dt>데이터 폴더</dt><dd><input id="dl-p-data" class="mono w-path" placeholder="비우면 기본"></dd>
           <dt>로그 폴더</dt><dd><input id="dl-p-logs" class="mono w-path" placeholder="비우면 기본"></dd>
           <dt>스크린샷 폴더</dt><dd><input id="dl-p-shots" class="mono w-path" placeholder="비우면 기본"></dd>
@@ -581,7 +581,7 @@
   </div>
 </div>
 
-<!-- 캐릭터별 설정 (캐릭터 카드의 •••) -->
+<!-- 캐릭터별 설정 (캐릭터 카드를 누르면) -->
 <div id="ch-edit" class="modal hidden">
   <div class="modal-box ch-edit-box">
     <div class="ch-edit-top">
@@ -603,7 +603,7 @@
     </dl>
     <p class="hint">공통 설정과 같은 값은 공통 설정을 따릅니다.</p>
     <div class="modal-actions">
-      <button class="btn btn-ghost ch-left" id="ch-e-del">이 캐릭터 빼기</button>
+      <button class="btn btn-ghost ch-left" id="ch-e-del">캐릭터 제외</button>
       <button class="btn" id="ch-e-cancel">취소</button>
       <button class="btn btn-primary" id="ch-e-save">저장</button>
     </div>

@@ -2,14 +2,16 @@
 
 이 퀘스트는 공물이 2개 이상일 때, 접속 후 몇 분이 지나야 나타난다 (CLI get_quests 로 확인).
 '진행하기'를 누르면 이번 주 심층 던전 입구까지 이동해 '심층 던전' 탭, '매우 어려움'으로 던전 창이 열린다.
-입장할 때마다 공물 cost 개가 소모되고, 공물이 cost 개 미만이 될 때까지 반복한다.
+입장할 때마다 공물 cost 개가 소모된다. 숙제로는 하루 한 번(max_runs) — 퀘스트를 깨면 그 퀘스트가 목록에서 사라지고
+공물이 남아 있어도 완료로 본다.
 """
 import time
 
+from .. import gamedata as gd
 from ..bot import Bot, StepTimeout
 from .content import CannotProceed, enter_from_dungeon_window, travel
 
-QUEST_TITLE = "모험가 길드의 고난도 심층 공략"
+QUEST_TITLE = gd.text("tribute_quest")
 
 
 def quest_visible(bot: Bot) -> bool:
@@ -24,7 +26,6 @@ def open_quest(bot: Bot, c: dict) -> None:
     bot.key("j")
     bot.click(ui["questwin_tab_main"], timeout=10)
     bot.sleep(1, 1.5)
-    r = bot.window.client_rect()
     for _ in range(4):
         card = bot.find(c["quest_card"])
         # 같은 카드의 '진행하기' = 제목 아래에서 가장 가까운 주황색 버튼
@@ -33,12 +34,16 @@ def open_quest(bot: Bot, c: dict) -> None:
             bot.click(go[0])
             return
         # 다른 퀘스트(주간 목표 등)가 위에 있으면 카드나 버튼이 화면 아래로 밀려난다 → 목록을 내린다
-        bot.input.scroll(r.left + c["list_scroll_at"][0], r.top + c["list_scroll_at"][1], -3)
+        bot.scroll(*c["list_scroll_at"], -3)
         bot.sleep(1, 1.3)
     raise RuntimeError(f"고난도 퀘스트의 '진행하기' 버튼을 찾지 못함 → {bot.snapshot('tribute_go').name}")
 
 
 def verify(bot: Bot, cfg: dict) -> bool:
+    """고난도 퀘스트를 깼으면 (목록에서 사라짐) 완료. 공물이 남아 있어도 숙제로는 하루 한 번이면 된다.
+    공물이 모자라 못 도는 날도 완료."""
+    if not quest_visible(bot):
+        return True
     count = bot.read_counter("tribute")
     return count is not None and count < cfg["tribute"]["cost"]
 

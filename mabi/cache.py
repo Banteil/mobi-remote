@@ -81,7 +81,9 @@ class QueryCache:
                 res = {"data": r.data, "cached": False, "age": 0}
             else:
                 stale = self.read(command, float("inf"))
-                res = {**stale, "stale": True} if stale else \
+                # 옛 값을 주더라도 지금 실패한 이유는 남긴다 — 'not_in_game'(로그인·캐릭터 선택 화면)이면 화면이
+                # 옛 캐릭터 정보를 접속 중인 것처럼 보이지 않게 (failed)
+                res = {**stale, "stale": True, "failed": r.error} if stale else \
                     {"data": None, "cached": False, "age": 0, "error": r.error or "unknown", "message": r.message}
             self._results[command] = res
             return res

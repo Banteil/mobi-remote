@@ -12,22 +12,28 @@
   게임은 넥슨 런처가 로그인 정보를 넣어 켜므로 다시 켜는 건 사람이 한다.
 """
 import ctypes
+import json
 import os
 import re
 import shutil
 import time
+import uuid
 import winreg
 from ctypes import wintypes
 from datetime import datetime
 from pathlib import Path
 
-from .. import ocr
+import numpy as np
+
+from .. import gamedata as gd, ocr
+from ..screen import BASE_H, BASE_W, REG_KEYS, exclusive_fullscreen, is_16_9, screen_mode
 from ..bot import Bot, StepTimeout
 
 WIDTH, HEIGHT = 1920, 1080
 SCALE = 80
-REG_KEYS = (r"Software\devCAT\마비노기 모바일", r"Software\devCAT\Mabinogi Mobile")
+SCALE_MIN, SCALE_MAX = 70, 100  # 게임의 인터페이스 스케일 범위 (PC 만. 모바일은 스케일이 없다)
 PREFS_DIRS = ("마비노기 모바일", "Mabinogi Mobile")
+FOLDERID_LOCAL_APPDATA_LOW = "A520A1A4-1780-4FF6-BD18-167343C5AF16"
 # 설정 파일 키 → (형식 번호, 값). 형식 번호는 Changed 기록의 '+N' (2 = 정수, 3 = 실수)
 PREFS = {
     "GraphicsUserSetting.StandaloneResolutionScale": (3, "1"),
@@ -46,31 +52,56 @@ class DisplayFixFailed(RuntimeError):
     pass
 
 
+MIN_W, MIN_H = 1280, 720  # 이보다 작으면 늘려 써도 글자·아이콘이 뭉개져 인식이 흔들린다
+
+
+def size_problem(w: int, h: int) -> str:
+    """게임 화면(창 안쪽) 크기 문제 한 줄, 괜찮으면 ''. 16:9 이고 1280x720 이상이면 된다 —
+    판단은 1920x1080 기준으로 바꿔서 하므로 (Screen) 2560x1440·3840x2160·1600x900 등도 그대로 쓴다."""
+    if not is_16_9(w, h):
+        return f"게임 화면 비율이 16:9 가 아님 ({w}x{h}) — 1920x1080 등 16:9 해상도로"
+    if w < MIN_W:
+        return f"게임 화면이 너무 작음 ({w}x{h}) — {MIN_W}x{MIN_H} 이상으로"
+    return ""
+
+
 # ---------------------------------------------------------------- 확인
-def check(bot: Bot | None = None, window=None) -> dict:
-    """{ok, problems: [..], client: (w, h), dpi}. 게임이 없으면 running False."""
+def check(bot: Bot | None = None, window=None, interface: bool = True) -> dict:
+    """{ok, problems: [..], client: (w, h), dpi}. 게임이 없으면 running False.
+    interface=False: 인터페이스 스타일·스케일은 따지지 않는다 — 일일 숙제는 시작할 때 PC·80% 로 바꾸고 끝나면 되돌린다
+    (prepare_interface / restore_interface)."""
     win = window or (bot.window if bot else None)
     if win is None or not game_running(win):
         return {"ok": False, "running": False, "problems": ["게임이 꺼져 있음"]}
+    if ctypes.windll.user32.IsIconic(win.hwnd):
+        # 내려가 있으면 크기를 알 수 없고, '전체화면' 은 내려가 있는 동안 레지스트리가 창모드로 바뀐다 (2026-10-23) → 앞으로.
+        # 곧 숙제를 시작할 참이라 어차피 앞으로 온다
+        win.focus()
+        time.sleep(2.5)
     try:
         r = win.client_rect()
     except RuntimeError:
         return {"ok": False, "running": False, "problems": ["게임이 꺼져 있음"]}
     dpi = ctypes.windll.user32.GetDpiForWindow(win.hwnd) or 96
-    problems = []
-    if (r.width, r.height) != (WIDTH, HEIGHT):
-        problems.append(f"게임 화면이 {r.width}x{r.height} (1920x1080 이어야 함)")
-    if dpi != 96:
-        problems.append(f"Windows 화면 배율이 {round(dpi / 96 * 100)}% (100% 이어야 함)")
-    # 인터페이스 스타일·스케일은 게임 설정 파일로 본다 (게임이 켜져 있어도 바꾸면 Changed 파일에 바로 덧붙는다 — 2026-10-22).
-    # 파일이 없을 때만 화면의 HUD 모양으로 짐작한다
+    problems = [p for p in [size_problem(r.width, r.height)] if p]
+    # '전체화면'(독점) 은 16:9·크기가 맞아도 안 된다 — 화면을 찍으면 멈춘 옛 화면만 나온다 (screen.exclusive_fullscreen).
+    # 2026-10-23 1280x720 전체화면에서 확인은 통과하고 맞추기는 헛돌았다 → 짚고, 맞추기는 Alt+Enter 로 빼낸 뒤 맞춘다
+    if exclusive_fullscreen():
+        problems.insert(0, "화면 모드가 '전체화면' — '테두리 없는 전체화면' 으로")
+    # Windows 화면 배율(DPI)은 더 따지지 않는다 — 배율이 달라도 게임 창 안쪽은 비율대로 커질 뿐이고, 찍은 화면을
+    # 1920x1080 기준으로 바꿔 쓰므로 (Screen.grab) 해상도가 다른 것과 같다 (2026-10-23)
+    # 렌더링 해상도는 게임 설정 파일로 본다. 인터페이스 스타일·스케일은 파일을 보지 않는다 — 게임 중에 바꿔도 파일에
+    # 바로 쓰이지 않아 (2026-10-23 확인) 지금 값과 다를 수 있다 → 메인 화면 HUD 모양으로 본다
     prefs = read_prefs()
-    if prefs:
-        for key, (_, want) in PREFS.items():
-            have = prefs.get(key)
-            if have is not None and float(have) != float(want):
-                problems.append(f"{PREFS_LABEL[key]}: {_shown(key, have)} ({_shown(key, want)} 이어야 함)")
-    if bot is not None and not problems and not prefs:
+    for key, (_, want) in PREFS.items():
+        if "InterfaceStyle" in key:
+            continue
+        have = prefs.get(key)
+        if have is not None and float(have) != float(want):
+            problems.append(f"{PREFS_LABEL[key]}: {_shown(key, have)} ({_shown(key, want)} 이어야 함)")
+    if interface and not problems and (bot is None or bot.state.query("get_my_info") is None):
+        problems.append("인터페이스 스타일·스케일 확인 못 함 — 게임에 접속한 뒤 다시 확인하거나 '맞추기'")
+    if interface and bot is not None and not problems:
         # 메인 화면인데 HUD 템플릿이 안 맞으면 인터페이스 배율·스타일이 다른 것
         # bot.frame() 은 중단 키를 검사한다 — '직접 맞춘 뒤 F12' 로 다시 확인할 때 그 F12 를 중단으로 받으므로 바로 찍는다.
         # 화면을 그대로 찍으므로 게임이 다른 창(브라우저 등)에 가려 있으면 그 창을 보고 '다름' 으로 판단했다 (2026-10-22)
@@ -79,8 +110,8 @@ def check(bot: Bot | None = None, window=None) -> dict:
             win.focus()
             time.sleep(0.8)
         frame = bot.screen.grab()
-        if bot.state.query("get_my_info") is not None and not bot.vision.find(frame, bot.ui["main_hud"]):
-            problems.append("메인 화면 표시(HUD)가 기준과 다름 — 인터페이스 스타일·스케일 확인 필요")
+        if not bot.vision.find(frame, bot.ui["main_hud"]):
+            problems.append(f"인터페이스가 PC · {SCALE}% 가 아님 (메인 화면 표시가 기준과 다름) — '맞추기'")
     return {"ok": not problems, "running": True, "problems": problems, "client": (r.width, r.height), "dpi": dpi}
 
 
@@ -163,7 +194,7 @@ def _scale_row(bot: Bot):
     """(스케일 값, '<' 위치, '>' 위치). 화살표를 못 읽으면 값 글자에서 배율에 비례한 거리로 계산한다
     (100% 일 때 값 가운데에서 약 171px)."""
     items = _texts(bot)
-    label = _find(items, "스케일조절")
+    label = _find(items, gd.text("display_scale"))
     if not label:
         return None, None, None
     row = [(t, x, y) for t, x, y in items if abs(y - label[2]) < 30 and x > label[1]]
@@ -176,22 +207,151 @@ def _scale_row(bot: Bot):
     return pct, left, right
 
 
+def _open_graphics(bot: Bot) -> None:
+    """ESC → 환경 설정 → 그래픽 탭. 배율이 달라도 찾도록 버튼은 글자로 찾는다.
+    to_main 은 쓰지 않는다 — 인터페이스가 다르면 메인 HUD 템플릿이 안 맞아 ESC 를 거듭 눌러 메뉴를 열었다 닫는다 (2026-10-23)."""
+    W, H = BASE_W, BASE_H
+    menu, top = (W // 2, 0, W // 2, H), (0, 0, W, H // 4)
+    # 탭이 보일 때까지: 메뉴의 '환경 설정' 이 보이면 누르고, 아니면 ESC (다른 창이 열려 있으면 그 창부터 닫힌다).
+    # 설정 창이 이미 열려 있으면 그대로 쓴다. 누른 뒤 창이 늦게 뜨기도 해서 (2026-10-23 창모드) 한 번에 끝내지 않는다
+    for _ in range(6):
+        if _find(_texts(bot, top), gd.text("display_graphics_tab"), exact=True):
+            break
+        hit = _find(_texts(bot, menu), gd.text("display_settings"))
+        if hit:
+            bot.click((hit[1], hit[2]))
+            bot.sleep(2.0, 2.4)
+        else:
+            bot.key("esc")
+            bot.sleep(1.5, 1.8)
+    _click_text(bot, gd.text("display_graphics_tab"), region=top, exact=True, what="그래픽 탭")
+
+
+def _close_settings(bot: Bot) -> None:
+    bot.key("esc")  # 환경 설정 닫기
+    bot.sleep(1.5, 1.8)
+    try:
+        bot.to_main(tries=3)
+    except StepTimeout:
+        pass
+
+
+STYLES = {"auto": ("display_interface_auto", "자동"), "pc": ("display_interface_pc", "PC"),
+          "mobile": ("display_interface_mobile", "모바일")}
+
+
+def _style_now(bot: Bot) -> tuple[str | None, dict[str, tuple[int, int]]]:
+    """(골라진 스타일 'auto'/'pc'/'mobile', 버튼 위치들). 골라진 버튼만 흰 바탕이다 — 가운데 둘레 밝기의 중간값
+    (2026-10-23 실측: 골라진 것 117~214, 나머지 76 이하 — 글자 줄 평균. 중간값은 바탕색을 더 그대로 본다)."""
+    frame = bot.frame()
+    items = ocr.find_texts(frame, (BASE_W // 2, 0, BASE_W // 2, BASE_H))
+    pos = {}
+    for k, (key, _) in STYLES.items():
+        hit = _find(items, gd.text(key), exact=True)
+        if hit:
+            pos[k] = (hit[1], hit[2])
+    lum = {k: float(np.median(frame[max(0, y - 14):y + 14, max(0, x - 40):x + 40])) for k, (x, y) in pos.items()}
+    best = max(lum, key=lum.get) if lum else None
+    return (best if best and lum[best] > 140 else None), pos
+
+
+def _set_interface(bot: Bot, style: str, scale: int | None, done: list[str]) -> tuple[str | None, int | None]:
+    """(그래픽 탭이 열린 상태에서) 인터페이스 스타일과 스케일. 스케일 조절 줄은 PC 일 때만 있고 (자동·모바일은 스케일이
+    없다) 70~100% 를 화살표 한 번에 10%씩 움직인다. scale 은 PC 일 때만 쓴다 — PC 스케일을 맞춰 두고 다른 스타일로 갔다
+    돌아오면 80% 로 돌아가 있었다 (2026-10-23). 바꾸기 전 (스타일, 스케일 %)을 돌려준다 — PC 가 아니었으면 스케일 None.
+    인터페이스를 바꾸면 설정 창 배치도 곧바로 바뀌므로 위치는 매번 다시 읽는다."""
+    W, H = BASE_W, BASE_H
+    bot.scroll(int(W * 0.73), int(H * 0.65), -10)  # 스타일 버튼과 스케일 조절 줄이 함께 보이게 오른쪽 칸을 내린다
+    bot.sleep(1.2, 1.5)
+
+    def pick(want: str) -> None:
+        pos = _style_now(bot)[1]
+        if want not in pos:
+            raise DisplayFixFailed(f"인터페이스 '{STYLES[want][1]}' 버튼을 찾지 못함 → {bot.snapshot('display').name}")
+        bot.click(pos[want])
+        bot.sleep(1.5, 1.8)
+        done.append(f"인터페이스 {STYLES[want][1]}")
+
+    before = _style_now(bot)[0]
+    if before is None:
+        raise DisplayFixFailed(f"지금 인터페이스 스타일을 알아보지 못함 → {bot.snapshot('display').name}")
+    before_scale = _scale_row(bot)[0] if before == "pc" else None
+    if before != style:
+        pick(style)
+    if style == "pc" and scale is not None:
+        scale = min(max(scale, SCALE_MIN), SCALE_MAX)
+        for _ in range(6):
+            pct, left, right = _scale_row(bot)
+            if pct is None:
+                raise DisplayFixFailed(f"스케일 조절 값을 읽지 못함 → {bot.snapshot('display').name}")
+            if pct == scale:
+                break
+            bot.click(left if pct > scale else right)  # 누를 때마다 배치가 바뀌므로 매번 다시 읽는다
+            bot.sleep(1.0, 1.3)
+            done.append(f"스케일 {pct}% → {pct - 10 if pct > scale else pct + 10}%")
+        else:
+            raise DisplayFixFailed(f"스케일을 {scale}% 로 맞추지 못함 → {bot.snapshot('display').name}")
+    if _style_now(bot)[0] != style:
+        raise DisplayFixFailed(f"인터페이스를 {STYLES[style][1]} 로 바꾸지 못함 → {bot.snapshot('display').name}")
+    return before, before_scale
+
+
+def set_interface(bot: Bot, style: str, scale: int | None) -> tuple[list[str], tuple[str | None, int | None]]:
+    """게임 안 환경 설정에서 인터페이스 스타일·스케일만 바꾼다. (바꾼 것 목록, 바꾸기 전 (스타일, PC 스케일)).
+    실패하면 DisplayFixFailed."""
+    done: list[str] = []
+    _open_graphics(bot)
+    try:
+        before = _set_interface(bot, style, scale, done)
+    finally:
+        _close_settings(bot)
+    return done, before
+
+
+# ---- 숙제 동안만 PC·80% (사용자가 평소 쓰는 설정은 기억했다가 끝나면 되돌린다) ----
+# 설정 파일은 보지 않는다 — 게임 중에 바꿔도 파일에 바로 쓰이지 않아 (2026-10-23 확인) 지금 값과 다를 수 있다. 늘 화면으로 본다
+RESTORE_KEY = "_interface_restore"  # 오늘 기록(DailyState)에 남기는 원래 설정 {style, scale, at}
+
+
+def _shown_style(style: str | None, scale: int | None) -> str:
+    return f"PC · {scale}%" if style == "pc" else STYLES.get(style, ("", "?"))[1]
+
+
+def prepare_interface(bot: Bot, state) -> str:
+    """숙제 시작: 환경 설정에서 지금 설정을 보고 기억한 뒤 PC·80% 로 맞춘다. 이미 기억해 둔 게 있으면 (끊겼다 이어 하는 중)
+    덮어쓰지 않는다 — 그때는 이미 80% 로 바꿔 둔 뒤라 원래 값이 아니다."""
+    done, (style, scale) = set_interface(bot, "pc", SCALE)
+    if state.data.get(RESTORE_KEY) is None:
+        state.data[RESTORE_KEY] = {"style": style, "scale": scale, "at": datetime.now().strftime("%H:%M:%S")}
+        state._save()
+    if not done:
+        return f"인터페이스 PC · {SCALE}% (그대로)"
+    return f"인터페이스 {_shown_style(style, scale)} → PC · {SCALE}% ({', '.join(done)})"
+
+
+def restore_interface(bot: Bot, state) -> str:
+    """모든 숙제가 끝난 뒤: 기억해 둔 원래 설정으로 되돌린다. 기억이 없거나 원래 PC·80% 면 할 일 없음."""
+    rec = state.data.get(RESTORE_KEY)
+    if not rec:
+        return ""
+    style, scale = rec.get("style") or "pc", rec.get("scale")
+    scale = (scale or SCALE) if style == "pc" else None
+    if (style, scale) != ("pc", SCALE):
+        set_interface(bot, style, scale)
+    state.data.pop(RESTORE_KEY, None)
+    state._save()
+    return f"인터페이스 원래대로 ({_shown_style(style, scale)})"
+
+
 def fix_ingame(bot: Bot, cfg: dict) -> list[str]:
     """게임 안 환경 설정에서 맞춘다. 바꾼 것 목록. 실패하면 DisplayFixFailed."""
     done = []
-    try:
-        bot.to_main(tries=4)
-    except StepTimeout:
-        pass  # HUD 템플릿이 배율 때문에 안 맞을 수 있다. ESC 메뉴는 글자로 찾는다
-    r = bot.window.client_rect()
-    bot.key("esc")
-    bot.sleep(1.5, 1.8)
-    _click_text(bot, "환경설정", region=(r.width // 2, 0, r.width // 2, r.height), what="환경 설정")
-    _click_text(bot, "그래픽", region=(0, 0, r.width, r.height // 4), exact=True, what="그래픽 탭")
+    W, H = BASE_W, BASE_H  # 찍은 화면 기준 크기
+    _open_graphics(bot)
 
     items = _texts(bot)
-    screen = _find(items, "테두리없는전체화면")
-    res_label = _find(items, "해상도", exact=True)
+    screen = _find(items, gd.text("display_borderless"))
+    res_label = _find(items, gd.text("display_resolution"), exact=True)
     if not screen or not res_label:
         raise DisplayFixFailed(f"화면 설정 칸을 찾지 못함 → {bot.snapshot('display').name}")
     cur = next(((t, x, y) for t, x, y in items
@@ -199,42 +359,126 @@ def fix_ingame(bot: Bot, cfg: dict) -> list[str]:
     changed_screen = False
     bot.click((screen[1], screen[2]))  # 이미 골라져 있어도 누르는 건 해가 없다
     bot.sleep(0.8, 1.0)
-    if not cur or "1920" not in cur[0]:
+    nums = [int(n) for n in re.findall(r"\d{3,4}", cur[0])] if cur else []
+    if len(nums) < 2 or size_problem(nums[0], nums[1]):  # 16:9 · 1280x720 이상이면 그대로 둔다
         bot.click((cur[1], cur[2]) if cur else (res_label[1] + 500, res_label[2]))
         bot.sleep(1.0, 1.3)
-        _click_text(bot, "1920", region=(r.width // 2, 0, r.width // 2, r.height), what="1920x1080", wait=1.0)
-        done.append(f"해상도 {cur[0] if cur else '?'} → 1920x1080")
+        _click_text(bot, "1920", region=(W // 2, 0, W // 2, H), what="1920x1080", wait=1.0)
+        done.append(f"해상도 {cur[0] + ' ' if cur else ''}→ 1920x1080")
         changed_screen = True
-    _click_text(bot, "설정값적용하기", what="설정값 적용하기", wait=2.5)
+    _apply(bot)
     if changed_screen:
         done.append("설정값 적용")
 
-    _click_text(bot, "PC", region=(r.width // 2, 0, r.width // 2, r.height), exact=True, what="인터페이스 PC", wait=1.2)
-    # 스케일 조절 줄이 보이도록 오른쪽 칸을 내린다
-    bot.input.scroll(r.left + int(r.width * 0.73), r.top + int(r.height * 0.65), -10)
-    bot.sleep(1.2, 1.5)
-    for _ in range(8):
-        pct, left, right = _scale_row(bot)
-        if pct is None:
-            raise DisplayFixFailed(f"스케일 조절 값을 읽지 못함 → {bot.snapshot('display').name}")
-        if pct == SCALE:
-            break
-        bot.click(left if pct > SCALE else right)  # 한 번에 10%씩. 누를 때마다 배치가 바뀌므로 매번 다시 읽는다
-        bot.sleep(1.0, 1.3)
-        done.append(f"스케일 {pct}% → {pct - 10 if pct > SCALE else pct + 10}%")
-    else:
-        raise DisplayFixFailed(f"스케일을 {SCALE}% 로 맞추지 못함 → {bot.snapshot('display').name}")
-
-    bot.key("esc")  # 환경 설정 닫기
-    bot.sleep(1.5, 1.8)
-    try:
-        bot.to_main(tries=3)
-    except StepTimeout:
-        pass
-    result = check(bot)
+    # 인터페이스는 여기서 바꾸지 않는다 — 숙제가 시작할 때 PC·80% 로 바꾸고 끝나면 되돌린다 (prepare_interface)
+    _close_settings(bot)
+    result = check(bot, interface=False)
     if not result["ok"]:
         raise DisplayFixFailed("바꾼 뒤에도 확인 실패: " + ", ".join(result["problems"]) + f" → {bot.snapshot('display').name}")
     return done
+
+
+def _apply(bot: Bot, blind: bool = False) -> None:
+    """'설정값 적용하기'. 바꾼 게 화면 모드면 '새 해상도 설정을 유지하시겠습니까? (5초 후 원래대로)' 창이 뜬다 →
+    Space(유지). ESC 를 누르면 원래대로 돌아간다 (2026-10-23 '전체화면' 으로 바꿀 때 확인).
+    blind: '전체화면' 으로 바꾸는 중이라 적용 뒤로는 화면이 멈춰 보인다 → 보지 않고 Space."""
+    _click_text(bot, gd.text("display_apply"), what="설정값 적용하기", wait=2.5)
+    if blind:
+        bot.key("space")
+    elif _find(_texts(bot), gd.text("display_keep")):
+        bot.key("space")
+    else:
+        return
+    bot.sleep(2.0, 2.4)
+
+
+def _nums(t: str) -> list[int]:
+    return [int(n) for n in re.findall(r"\d{3,4}", t)]
+
+
+def _pick_resolution(bot: Bot, w: int, h: int) -> bool:
+    """(그래픽 탭) 해상도 목록에서 w×h 를 고른다. 이미 그 값이거나 목록에 없으면 (창모드 '자유' 등) 그대로. 골랐으면 True."""
+    W, H = BASE_W, BASE_H
+    items = _texts(bot)
+    label = _find(items, gd.text("display_resolution"), exact=True)
+    if not label:
+        return False
+    cur = next(((t, x, y) for t, x, y in items if abs(y - label[2]) < 30 and x > label[1] + 150), None)
+    if not cur or _nums(cur[0])[:2] == [w, h] or not _nums(cur[0]):
+        return False
+    bot.click((cur[1], cur[2]))
+    bot.sleep(1.0, 1.3)
+    opt = next(((t, x, y) for t, x, y in _texts(bot, (W // 2, 0, W // 2, H))
+                if _nums(t)[:2] == [w, h] and (x, y) != (cur[1], cur[2]) and y > cur[2] + 20), None)
+    if not opt:
+        bot.key("esc")  # 목록 닫기
+        bot.sleep(0.8, 1.0)
+        return False
+    bot.click((opt[1], opt[2]))
+    bot.sleep(0.8, 1.0)
+    return True
+
+
+# ---- 숙제 동안만 1920x1080 테두리 없는 전체화면 (원래 화면 모드·해상도는 기억했다가 끝나면 되돌린다) ----
+RESTORE_FILE = "display_restore.json"  # 데이터 폴더에 두는 원래 화면 설정 기록
+MODES = {0: "display_fullscreen", 1: "display_borderless", 3: "display_windowed"}
+MODE_NAMES = {0: "전체화면", 1: "테두리 없는 전체화면", 3: "창모드"}
+
+
+def screen_now(window) -> dict:
+    """지금 화면 모드·해상도·창 위치 {mode, w, h, rect}. 게임을 앞으로 가져온 뒤에 부른다 (screen_mode)."""
+    mode, w, h = screen_mode()
+    r = wintypes.RECT()
+    ctypes.windll.user32.GetWindowRect(window.hwnd, ctypes.byref(r))
+    return {"mode": mode, "w": w, "h": h, "rect": [r.left, r.top, r.right - r.left, r.bottom - r.top],
+            "at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+
+def _shown_screen(rec: dict) -> str:
+    name = MODE_NAMES.get(rec.get("mode"), "?")
+    if rec.get("mode") == 3:
+        return f"{name} {rec['rect'][2]}x{rec['rect'][3]}"
+    return f"{name} {rec.get('w')}x{rec.get('h')}"
+
+
+def restore_screen(bot: Bot, path: Path) -> str:
+    """기억해 둔 (path) 원래 화면 모드·해상도로 되돌린다. 되돌렸으면 기록을 지운다. 기록이 없으면 ''.
+    '전체화면' 으로 되돌리면 적용한 뒤로는 화면이 멈춰 보이므로 확인 창(Space)과 설정 닫기(ESC)는 보지 않고 누른다."""
+    if not path.is_file():
+        return ""
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    mode = rec.get("mode")
+    if mode not in MODES:
+        path.unlink(missing_ok=True)
+        return ""
+    bot.window.focus()
+    bot.sleep(1.0, 1.3)
+    now = screen_now(bot.window)
+    if now["mode"] == mode and (mode == 3 or (now["w"], now["h"]) == (rec["w"], rec["h"])):
+        changed = False
+    else:
+        changed = True
+        _open_graphics(bot)
+        _click_text(bot, gd.text(MODES[mode]), region=(BASE_W // 2, 0, BASE_W // 2, BASE_H), exact=True,
+                    what=MODE_NAMES[mode], wait=1.0)
+        if mode != 3 and rec.get("w") and rec.get("h"):
+            _pick_resolution(bot, rec["w"], rec["h"])
+        if mode == 0:
+            _apply(bot, blind=True)
+            bot.key("esc")  # 환경 설정 닫기 — 한 번이면 메인 화면 (두 번 누르면 메뉴가 열렸다 — 2026-10-23)
+            bot.sleep(1.5, 1.8)
+        else:
+            _apply(bot)
+            _close_settings(bot)
+    if mode == 3:  # 창모드는 해상도 대신 창 크기·위치
+        x, y, w, h = rec["rect"]
+        user32 = ctypes.windll.user32
+        if user32.IsZoomed(bot.window.hwnd):
+            user32.ShowWindow(bot.window.hwnd, 9)  # SW_RESTORE
+        user32.SetWindowPos(bot.window.hwnd, 0, x, y, w, h, 0x0004)  # SWP_NOZORDER
+        changed = True
+    path.unlink(missing_ok=True)
+    return f"화면 원래대로 ({_shown_screen(rec)})" if changed else ""
 
 
 # ---------------------------------------------------------------- 게임 끄기
@@ -259,6 +503,17 @@ def close_game(window, timeout: float = 40) -> bool:
 
 # ---------------------------------------------------------------- 게임이 꺼졌을 때 파일로 바꾸기
 def _prefs_root() -> Path:
+    """%USERPROFILE%\\AppData\\LocalLow\\devCAT — LocalLow 는 옮겨질 수 있어 Windows 에 위치를 묻는다."""
+    try:
+        guid = (ctypes.c_byte * 16).from_buffer_copy(uuid.UUID(FOLDERID_LOCAL_APPDATA_LOW).bytes_le)
+        p = ctypes.c_wchar_p()
+        if ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(guid), 0, None, ctypes.byref(p)) == 0:
+            try:
+                return Path(p.value) / "devCAT"
+            finally:
+                ctypes.windll.ole32.CoTaskMemFree(p)
+    except (OSError, AttributeError):
+        pass
     return Path(os.environ.get("USERPROFILE", "")) / "AppData" / "LocalLow" / "devCAT"
 
 
@@ -321,16 +576,42 @@ def fix_offline(backup_dir: Path, window=None) -> list[str]:
     return done
 
 
+def leave_exclusive(bot: Bot) -> bool:
+    """'전체화면'(독점) 이면 Alt+Enter 로 창모드로 빼낸다. 독점 전체화면에선 화면을 찍어도 멈춘 옛 화면만 보여서
+    (mss·PrintWindow) 환경 설정을 눈으로 따라갈 수 없다 — 창모드가 되면 fix_ingame 이 테두리 없는 전체화면으로 맞춘다.
+    (2026-10-23 확인: Alt+Enter → 창모드 1280x720, 모니터 해상도도 원래대로). 빼냈으면 True."""
+    bot.window.focus()  # 내려가 있는 동안은 레지스트리가 창모드라 앞으로 가져온 뒤에 본다
+    bot.sleep(2.5, 2.8)
+    if not exclusive_fullscreen():
+        return False
+    bot.input.hotkey("alt", "enter")
+    end = time.monotonic() + 10
+    while exclusive_fullscreen() and time.monotonic() < end:
+        time.sleep(0.5)
+    if exclusive_fullscreen():
+        raise DisplayFixFailed("'전체화면' 에서 빠져나오지 못함 (Alt+Enter)")
+    bot.sleep(2.5, 3.0)  # 모니터 해상도가 돌아오고 창이 다시 그려질 때까지
+    bot.window.focus()
+    return True
+
+
 # ---------------------------------------------------------------- 전체 흐름
-def ensure(bot: Bot, cfg: dict, backup_dir: Path, allow_close: bool = True) -> str:
-    """켜져 있으면 게임 안에서, 실패하면 (allow_close) 게임을 끄고 파일로. 꺼져 있으면 파일로."""
+def ensure(bot: Bot, cfg: dict, backup_dir: Path, allow_close: bool = True, remember: Path | None = None) -> str:
+    """켜져 있으면 게임 안에서, 실패하면 (allow_close) 게임을 끄고 파일로. 꺼져 있으면 파일로.
+    remember: 게임 안에서 맞추기 전 화면 모드·해상도를 이 파일에 적어 둔다 — 숙제가 끝나면 되돌린다 (restore_screen).
+    이미 있으면 (전에 맞추고 아직 못 되돌림) 덮어쓰지 않는다 — 그때 값은 이미 바꾼 뒤라 원래 값이 아니다."""
     if not game_running(bot.window):
         done = fix_offline(backup_dir, bot.window)
         return f"게임이 꺼져 있어 파일로 맞춤 ({len(done)}곳). 게임을 켜면 적용됩니다"
     # 창 크기·HUD 가 맞아 보여도 스케일·해상도는 메뉴를 봐야 알 수 있어 늘 메뉴에서 확인한다 (맞으면 안 바꾼다)
     try:
         bot.window.focus()
-        done = fix_ingame(bot, cfg)
+        if remember is not None and not remember.is_file():
+            bot.sleep(2.5, 2.8)  # '전체화면' 은 앞으로 와야 레지스트리가 제 값이다
+            remember.parent.mkdir(parents=True, exist_ok=True)
+            remember.write_text(json.dumps(screen_now(bot.window), ensure_ascii=False), encoding="utf-8")
+        left = leave_exclusive(bot)
+        done = (["전체화면 → 창모드 (Alt+Enter)"] if left else []) + fix_ingame(bot, cfg)
         return "게임 안에서 맞춤: " + (", ".join(done) if done else "이미 맞아 있음")
     except DisplayFixFailed as e:
         bot.log.warning(f"게임 안에서 화면 설정 실패: {e}")

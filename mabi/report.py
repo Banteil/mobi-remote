@@ -12,6 +12,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from . import gamedata as gd
+
 VERSION = "0.2.0"
 
 
@@ -62,8 +64,7 @@ class RunReport:
             "cli": bot.state.available(refresh=True),
             "order": cfg["run"]["order"],
             "silver": cfg["silver"],
-            "max_weight_ratio": cfg["run"].get("max_weight_ratio"),
-        }
+            }
 
     def _counters(self) -> dict:
         """은동전·공물·골드·가방 무게 (CLI). 실패한 값은 None."""
@@ -72,7 +73,7 @@ class RunReport:
             return {}
         cur = {c.get("DisplayName"): c.get("Amount") for c in st.query("get_currencies", timeout=10) or []
                if isinstance(c, dict)}
-        out = {"silver": cur.get("은동전"), "tribute": cur.get("마족 공물"), "gold": cur.get("골드")}
+        out = {k: cur.get(gd.currency(k)) for k in ("silver", "tribute", "gold")}
         inv = st.query("get_inventory", timeout=10) or {}
         if inv:
             out["weight"] = [round(inv.get("CurrentInventoryWeight", 0)), round(inv.get("MaxInventoryWeight", 0))]

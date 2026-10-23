@@ -22,7 +22,7 @@ STATUS_COLORS = {
 }
 
 STATUS_TEXT = {
-    "OK": "완료", "DONE": "이미 완료", "CHECK": "남음", "FAIL": "실패", "ERROR": "오류",
+    "OK": "완료", "DONE": "완료", "CHECK": "남음", "FAIL": "실패", "ERROR": "오류",
     "HEAVY": "가방 무게", "SKIP": "건너뜀", "STOP": "중단", "RUN": "진행 중",
 }
 

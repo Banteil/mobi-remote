@@ -19,11 +19,20 @@ import difflib
 import re
 import time
 
-from .. import ocr
+from .. import gamedata as gd, ocr
 from ..bot import Bot, StepTimeout
 from .content import CannotProceed, open_arbeit_tab
 
-PANEL = (1220, 150, 680, 850)  # 퀘스트 창 오른쪽 목록 [x, y, w, h]
+PROGRESS, APPLY = gd.text("arbeit_progress"), gd.text("arbeit_apply")  # 카드 버튼 '진행하기' · '지원하기'
+HAVE = gd.text("arbeit_have_item")  # CLI 조건 '… 보유 3/10'
+
+
+def in_dialog(bot: Bot, frame=None) -> bool:
+    """NPC 대화 화면인가: 왼쪽 위 '대화 기록' 또는 오른쪽 위 '대화 넘기기'.
+    두 버튼은 반투명이라 뒤 배경이 밝으면 한쪽 템플릿이 안 맞는다 (2026-10-23 부자 NPC: 흰 건물 앞에서
+    '대화 기록' 0.78 < 0.85 → 대화를 못 알아보고 멈춤). 둘 중 하나만 맞아도 대화로 본다."""
+    frame = bot.frame() if frame is None else frame
+    return any(bot.vision.find(frame, n) for n in (bot.cfg["arbeit"]["dialog_log"], bot.ui["dialog_skip"]))
 
 
 def _norm(t: str) -> str:
@@ -59,12 +68,12 @@ def _finished(bot: Bot, title: str) -> bool:
 def missing_items(job: dict) -> list[str]:
     """채우지 못한 '보유' 조건 (있으면 그 일은 지금 끝낼 수 없다)."""
     return [_plain(o["Description"]) for o in job["objectives"]
-            if "보유" in o.get("Description", "") and not o.get("IsCompleted")]
+            if HAVE in o.get("Description", "") and not o.get("IsCompleted")]
 
 
 def _item_name(desc: str) -> str:
     """'새록 버섯 포자 보유 3/10' → '새록 버섯 포자'."""
-    return re.sub(r"\s*보유.*$", "", desc).strip()
+    return re.sub(rf"\s*{HAVE}.*$", "", desc).strip()
 
 
 def ungatherable(bot: Bot, job: dict) -> list[str]:
@@ -78,12 +87,11 @@ def ungatherable(bot: Bot, job: dict) -> list[str]:
 
 
 def _buttons(bot: Bot) -> list[tuple[str, int, int]]:
-    return ocr.find_texts(bot.frame(), PANEL)
+    return ocr.find_texts(bot.frame(), gd.region("arbeit_panel"))  # 퀘스트 창 오른쪽 목록
 
 
 def _scroll_panel(bot: Bot, notches: int) -> None:
-    r = bot.window.client_rect()
-    bot.input.scroll(r.left + bot.cfg["arbeit"]["list_scroll_at"][0], r.top + bot.cfg["arbeit"]["list_scroll_at"][1], notches)
+    bot.scroll(*bot.cfg["arbeit"]["list_scroll_at"], notches)
     bot.sleep(1.0, 1.3)
 
 
@@ -102,7 +110,7 @@ def _find_card_button(bot: Bot, title: str | None, word: str):
                 if below:
                     return below[0]
             # 수락한 일의 '진행하기' 는 목록 맨 위에 모인다 → 그 아래 '지원하기' 가 보이는데도 못 찾았으면 더 내려도 없다
-            if word == "진행하기" and any(_norm(t) == "지원하기" for t, _, _ in items):
+            if word == PROGRESS and any(_norm(t) == APPLY for t, _, _ in items):
                 return None
         if page + 1 < bot.cfg["arbeit"]["list_pages"]:
             _scroll_panel(bot, -4)
@@ -130,7 +138,7 @@ def _card_title(items, bx: int, by: int) -> str:
     """'진행하기' 버튼 (bx, by) 카드의 제목 (짐작). 카드는 위에서부터 [등급·종류] / 제목 / NPC 위치·'n시간 남음' / 설명 /
     [보상 … 버튼] 이다 → 버튼 위에서 가장 가까운 '남음' 줄 바로 위의 글자 (설명이 두 줄이어도 맞는다)."""
     left = [(t, x, y) for t, x, y in items if x < bx - 100 and y < by]
-    rest = [y for t, x, y in left if "남음" in t]
+    rest = [y for t, x, y in left if gd.text("arbeit_time_left") in t]
     if not rest:
         return ""
     ry = max(rest)
@@ -159,14 +167,14 @@ def _panel_jobs(bot: Bot) -> list[tuple[str, tuple[int, int], int]]:
     for page in range(pages):
         items = _buttons(bot)
         for t, x, y in items:
-            if _norm(t) == "진행하기" and not any(o[1] == (x, y) for o in out):
+            if _norm(t) == PROGRESS and not any(o[1] == (x, y) for o in out):
                 out.append((_card_title(items, x, y), (x, y), page))
         # 구인 마감 ('새로운 아르바이트를 기다려주세요') — 남은 일도 지원할 일도 없다. 더 볼 것 없음
-        if any("구인마감" in _norm(t) or "기다려주세요" in _norm(t) for t, _, _ in items):
+        if any(w in _norm(t) for t, _, _ in items for w in gd.words("arbeit_closed")):
             bot._arb_closed = not out
             break
         # 수락한 일('진행하기')은 목록 맨 위에 모이고 그 아래가 구인 중('지원하기') → '지원하기' 가 보이면 더 내릴 필요 없다
-        if any(_norm(t) == "지원하기" for t, _, _ in items) or page + 1 >= pages:
+        if any(_norm(t) == APPLY for t, _, _ in items) or page + 1 >= pages:
             break
         _scroll_panel(bot, -4)
         bot._arb_scrolled += 1
@@ -186,7 +194,7 @@ def _press_other(bot: Bot, exclude) -> str | None:
         for _ in range(page):
             _scroll_panel(bot, -4)
     items = _buttons(bot)
-    btn = next(((x, y) for t, x, y in items if _norm(t) == "진행하기"
+    btn = next(((x, y) for t, x, y in items if _norm(t) == PROGRESS
                 and (_same(_card_title(items, x, y), guess) if guess else abs(y - pos[1]) < 30)), None)
     if not btn:
         bot.to_main()
@@ -240,7 +248,7 @@ def _settle(bot: Bot) -> None:
             elif not pressed_a:  # 자동 넣기는 토글이라 한 번만
                 bot.key("a")
                 pressed_a = True
-        elif find(a["dialog_log"]):
+        elif in_dialog(bot, frame):
             # 말을 건 직후 메뉴 버튼([결과 보고] 등)은 1~2초 늦게 뜬다 → 기다렸다 다시 보고 결정
             bot.sleep(1.5, 2)
             if bot.exists(a["report"]):
@@ -268,7 +276,7 @@ def _press_progress(bot: Bot, title: str) -> bool:
     _settle(bot)
     open_arbeit_tab(bot)
     # 하고 있는(추적 중인) 일은 목록 맨 위 카드다 → 제목을 OCR 로 맞춰 볼 것 없이 맨 위 '진행하기' (2026-10-22 사용자 지적)
-    b = _find_card_button(bot, None, "진행하기")
+    b = _find_card_button(bot, None, PROGRESS)
     if not b:
         bot.to_main()
         return False
@@ -317,7 +325,7 @@ def _work(bot: Bot, title: str) -> str:
         # 채집 물품이 여러 개면 하나를 다 캐고 나서 이 창이 다시 뜬다 → 같은 처리를 되풀이
         if find(a["howto_title"]):
             items = ocr.find_texts(frame, tuple(a["howto_area"]))
-            rows = sorted(((x, y) for t, x, y in items if "추천" not in t and "구하는" not in t), key=lambda r: r[1])
+            rows = sorted(((x, y) for t, x, y in items if not any(w in t for w in gd.words("arbeit_howto_skip"))), key=lambda r: r[1])
             if not rows or howto_tries >= 3:
                 bot.log.warning(f"아르바이트 '{title}': 구하는 방법이 없음 → {bot.snapshot('arbeit_short').name}")
                 for _ in range(2):
@@ -429,7 +437,7 @@ def _work(bot: Bot, title: str) -> str:
             bot.sleep(1.2, 1.5)
             idle_since = None
             continue
-        if find(a["dialog_log"]):  # NPC 대화: 대사가 몇 마디든 '대화 넘기기' 자리를 누르면 넘어간다
+        if in_dialog(bot, frame):  # NPC 대화: 대사가 몇 마디든 '대화 넘기기' 자리를 누르면 넘어간다
             # 말을 건 직후에는 메뉴 버튼([결과 보고] 등)이 1~2초 늦게 뜬다 → 조금 기다렸다 다시 보고 결과 보고면 Space
             bot.sleep(1.5, 2)
             if bot.exists(a["report"]):
@@ -474,7 +482,7 @@ def _apply_top(bot: Bot) -> bool:
     """맨 위 '지원하기' → 이동 → 수락 대화. 수락 대화까지 오면 True (수락은 _work 가 한다)."""
     _settle(bot)
     open_arbeit_tab(bot)
-    b = _find_card_button(bot, None, "지원하기")
+    b = _find_card_button(bot, None, APPLY)
     if not b:
         bot.to_main()
         return False
@@ -486,7 +494,7 @@ def _apply_top(bot: Bot) -> bool:
     bot.key("space")
     bot.sleep(1.5, 2)
     for _ in range(10):  # 수락 뒤 이어지는 대사를 넘긴다
-        if not bot.exists(a["dialog_log"]):
+        if not in_dialog(bot):
             break
         bot.click(tuple(a["dialog_next_xy"]))
         bot.sleep(1.2, 1.6)
@@ -510,6 +518,7 @@ def run(bot: Bot, cfg: dict) -> str:
         raise CannotProceed("아르바이트는 진행 상태 확인에 CLI 가 필요함")
     a = cfg["arbeit"]
     done, skipped, stuck = [], {}, []
+    unconfirmed = 0  # 지원했는데 수락한 일이 안 보인 횟수
     book = _book(bot) or {}
     # 오늘 앞 실행에서 물품 부족으로 건너뛴 일은 다시 가 보지 않는다 (사람 몫). 막혔던 일은 다시 해 본다
     skipped.update(book.get("skipped") or {})
@@ -542,17 +551,24 @@ def run(bot: Bot, cfg: dict) -> str:
             before = {j["title"] for j in accepted(bot)}
             if not _apply_top(bot):
                 break
-            new = [j for j in accepted(bot) if j["title"] not in before]
-            # 수락 직후 후속 대화가 남아 있을 수 있다 → _work 가 정리하며 진행한다
-            title = new[0]["title"] if new else None
-            if title is None:
-                bot.sleep(2, 3)
+            # 수락 직후 후속 대화가 남아 있을 수 있다 → _work 가 정리하며 진행한다.
+            # 추적 칸은 대화·이동이 끝나야 떠서 CLI 에 늦게 나온다 (2026-10-23: 2~3초만 보고 '수락 확인 실패' 로 FAIL)
+            new = []
+            for _ in range(8):
                 new = [j for j in accepted(bot) if j["title"] not in before]
-                if not new:
+                if new:
+                    break
+                bot.sleep(1.5, 2)
+            if new:
+                bot.log.info(f"아르바이트 지원: {new[0]['title']}")
+                unconfirmed = 0
+            else:
+                # 그래도 안 보이면 퀘스트 창 목록(_press_other)에서 '진행하기' 카드로 찾는다. 두 번 거푸면 그만
+                unconfirmed += 1
+                bot.log.info("아르바이트 지원: 추적 칸에 안 보임 → 퀘스트 창 목록으로 확인")
+                if unconfirmed >= 2:
                     stuck.append("(지원 후 수락 확인 실패)")
                     break
-                title = new[0]["title"]
-            bot.log.info(f"아르바이트 지원: {title}")
             continue
         bot.log.info(f"아르바이트 진행: {job['title']}")
         save(job["title"])

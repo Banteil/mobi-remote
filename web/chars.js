@@ -1,6 +1,6 @@
 'use strict';
 /**
- * 캐릭터 탭 — 게임의 캐릭터 선택 화면처럼 카드로 보여 주고, 카드 오른쪽 위 ••• 로 캐릭터별 숙제 설정을 연다.
+ * 캐릭터 탭 — 게임의 캐릭터 선택 화면처럼 카드로 보여 주고, 카드를 누르면 캐릭터별 숙제 설정을 열고, 오른쪽 위 ✕ 로 숙제 목록에서 제외한다.
  * app.js 의 $, esc, toast, say, confirmModal, LOADERS 를 같이 쓴다.
  *
  * 설정 창에는 '기본값' 대신 실제로 적용되는 값을 보여 준다. 저장하면 파이썬이 공통 설정과 다른 값만 남긴다.
@@ -37,16 +37,23 @@ function todayOf(c) {
     : ' · <span class="ch-today part">숙제 ' + t.done + '/' + t.total + '</span>';
 }
 
+/** 지금 게임에 접속 중인 캐릭터인가 (상단바가 읽어 둔 이름 — 띄어쓰기 무시) */
+function isNow(c) {
+  const now = typeof topName === 'string' ? topName.replace(/\s/g, '') : '';
+  return !!now && (c.name || '').replace(/\s/g, '') === now;
+}
+
 function paintChars() {
   const d = ch.data;
   $('#ch-grid').innerHTML = d.chars.map((c) =>
-    '<div class="ch-card" data-slot="' + c.slot + '">' +
+    '<div class="ch-card' + (isNow(c) ? ' ch-now' : '') + '" data-slot="' + c.slot + '"' +
+      (isNow(c) ? ' title="지금 접속 중"' : '') + '>' +
       (c.portrait ? '<img class="ch-art" src="' + c.portrait + '" alt="">'
         : '<div class="ch-art ch-noart">' + esc((c.name || '?').slice(0, 1)) + '</div>') +
       '<div class="ch-head">' +
         (c.level ? '<span class="ch-lv">' + c.level + '</span>' : '') +
         '<span class="ch-job">' + esc(c.job || '') + '</span>' +
-        '<button class="ch-more" data-ch-edit="' + c.slot + '" title="캐릭터별 설정">•••</button>' +
+        '<button class="ch-del" data-ch-del="' + c.slot + '" title="캐릭터 제외">✕</button>' +
       '</div>' +
       '<div class="ch-foot">' +
         '<div class="ch-name">' + esc(c.name) + '</div>' +
@@ -134,12 +141,14 @@ async function saveEdit() {
   if (await saveCharList(list)) closeEdit();
 }
 
+/** 숙제 목록에서 제외한다 (묻고 나서). 제외했으면 true */
+async function removeChar(c) {
+  const ok = await confirmModal('캐릭터 제외', '<p><b>' + esc(c.name) + '</b> 캐릭터를 제외하시겠습니까?</p>', '제외');
+  return ok && saveCharList(ch.data.chars.filter((x) => x.slot !== c.slot));
+}
+
 async function deleteEdit() {
-  const e = ch.edit;
-  const ok = await confirmModal('캐릭터 빼기', '<p><b>' + esc(e.name) + '</b>(슬롯 ' + e.slot +
-    ')을 숙제 목록에서 뺍니다. 게임의 캐릭터는 그대로입니다.</p>', '빼기');
-  if (!ok) return;
-  if (await saveCharList(ch.data.chars.filter((c) => c.slot !== e.slot))) closeEdit();
+  if (await removeChar(ch.edit)) closeEdit();
 }
 
 /* ── 자동 설정 ── */
@@ -212,8 +221,12 @@ async function applyReview() {
 LOADERS.chars = loadChars;
 
 $('#ch-grid').addEventListener('click', (e) => {
-  const more = e.target.closest('[data-ch-edit]');
-  if (more) { openEdit(Number(more.dataset.chEdit)); return; }
+  const del = e.target.closest('[data-ch-del]');
+  if (del) {
+    const c = ch.data.chars.find((x) => x.slot === Number(del.dataset.chDel));
+    if (c) removeChar(c);
+    return;
+  }
   if (e.target.closest('#ch-add')) { openEdit(null); return; }
   const card = e.target.closest('.ch-card[data-slot]');
   if (card) openEdit(Number(card.dataset.slot));

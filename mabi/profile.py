@@ -121,6 +121,28 @@ class DailyState:
     def last_step(self, slot: int, task: str) -> dict | None:
         return self.data.get(str(slot), {}).get(self.STEPS, {}).get(task)
 
+    # ---- 캐릭터 상태 표시: 오늘 알게 된 사실 (예 'no_food' — 먹을 음식이 없음)
+    FLAGS = "_flags"
+
+    def flag(self, slot: int, key: str) -> bool:
+        return key in self.data.get(str(slot), {}).get(self.FLAGS, {})
+
+    def set_flag(self, slot: int, key: str) -> None:
+        self.data.setdefault(str(slot), {}).setdefault(self.FLAGS, {})[key] = datetime.now().strftime("%H:%M:%S")
+        self._save()
+
+    # ---- 캐릭터별 오늘 횟수 (예 'food' — 음식을 먹은 횟수)
+    COUNTS = "_counts"
+
+    def count(self, slot: int, key: str) -> int:
+        return self.data.get(str(slot), {}).get(self.COUNTS, {}).get(key, 0)
+
+    def bump(self, slot: int, key: str) -> int:
+        counts = self.data.setdefault(str(slot), {}).setdefault(self.COUNTS, {})
+        counts[key] = counts.get(key, 0) + 1
+        self._save()
+        return counts[key]
+
     def clear_progress(self) -> None:
         if self.data.pop(self.PROGRESS, None) is not None:
             self._save()

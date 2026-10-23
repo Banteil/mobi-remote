@@ -15,11 +15,11 @@
 """
 import math
 
-from .. import errors, richtext
+from .. import errors, gamedata as gd, richtext
 from ..cache import QueryCache
 from . import lists
 
-VIA = {"GATHER": "채집", "ALTER": "가공", "CRAFT": "제작", "NONE": "자동불가"}
+VIA = gd.labels()["source"]
 MAX_DEPTH = 4  # 재귀 깊이 상한. 철괴 ← 철 광석 정도가 현실적인 최대다
 # True 면 리모콘과 똑같이 레시피의 Reason 을 판단에 쓰지 않는다 (JS 와 결과를 맞춰 볼 때만)
 STRICT_JS = False

@@ -22,7 +22,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, QThread, Signal, Slot
 
-from mabi import craft, errors
+from mabi import craft, errors, gamedata
 from mabi.cache import QueryCache
 from mabi.calllog import CallLog
 from mabi.compat import LEVELS, Compat, cli_version, semver
@@ -44,7 +44,7 @@ from .legacy_shapes import Shapes
 log = logging.getLogger("mabi")
 
 APP_NAME = "모비 커넥터 리모콘"
-APP_VERSION = "3.1.0"
+APP_VERSION = "3.1.1"
 
 
 def _ver(v: str) -> tuple:
@@ -138,7 +138,7 @@ class Api(DailyApi, CharsApi):
     def initial(self) -> dict:
         """첫 페인트 전에 페이지에 심을 값 (window.__MM_INIT__). 테마가 늦게 오면 화면이 번쩍인다."""
         return {"theme": "light" if self.settings.get("theme") == "light" else "dark",
-                "app": {"name": APP_NAME, "version": APP_VERSION}}
+                "app": {"name": APP_NAME, "version": APP_VERSION}, "labels": gamedata.labels()}
 
     def close(self) -> None:
         """앱을 끝낼 때. 단축키 스레드와 진행 중인 게임 행동을 정리한다."""

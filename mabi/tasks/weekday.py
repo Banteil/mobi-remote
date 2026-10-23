@@ -13,7 +13,6 @@ def verify(bot: Bot, cfg: dict) -> bool:
 
 def find_tag(bot: Bot, c: dict):
     """'요일' 태그. 목록이 늦게 뜨거나 아래쪽에 있을 수 있어 몇 번 기다리고 스크롤하며 찾는다."""
-    r = bot.window.client_rect()
     x, y, w, h = c["panel"]
     for i in range(4):
         tag = bot.find(c["tag"])
@@ -21,7 +20,7 @@ def find_tag(bot: Bot, c: dict):
             return tag
         bot.sleep(1, 1.5)
         if i >= 1:
-            bot.input.scroll(r.left + x + w // 2, r.top + y + h // 2, -5)
+            bot.scroll(x + w // 2, y + h // 2, -5)
             bot.sleep(0.8, 1.0)
     return None
 
@@ -31,7 +30,7 @@ def run(bot: Bot, cfg: dict) -> str:
     # 단계: wd_card(요일 아르바이트 찾기) → travel → dungeon_enter → in_dungeon → dungeon_reward (content 가 남김).
     # 던전 안에서 끊겼으면 접속 단계가 클리어까지 보고 나오고, 여기서는 일일 달성 체크로 끝났는지 본다
     if verify(bot, cfg):
-        return "이미 완료 (일일 달성 체크)"
+        return "완료 (일일 달성 체크)"
     bot.step("wd_card", "퀘스트 창 → 요일 아르바이트 찾기")
     open_arbeit_tab(bot)
     tag = find_tag(bot, c)

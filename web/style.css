@@ -336,6 +336,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   background: var(--overlay);
   display: flex; align-items: center; justify-content: center;
 }
+/* 확인 창은 다른 창(캐릭터 편집 등) 위에서 묻는다 — HTML 에서 앞에 있어 같은 층이면 뒤로 숨었다 */
+#modal { z-index: 55; }
 .modal-box {
   background: var(--bg-2); border: 1px solid var(--line-2);
   border-radius: 10px; padding: 18px 20px; width: 440px; max-width: 90vw;
@@ -885,9 +887,10 @@ tr.sec .muted { font-weight: 400; letter-spacing: 0; margin-left: 4px; }
 #update-banner #update-later { margin-left: 6px; }
 
 /* ── 일일 숙제 · 기록 (파이썬판) ── */
-.dl-cell { text-align: center; cursor: pointer; white-space: nowrap; }
-.dl-cell.off { opacity: .35; }
-.dl-cell.dl-name { text-align: left; }
+.dl-cell { text-align: center; white-space: nowrap; }
+.dl-cell.off, #dl-table tr.off .dl-cell { opacity: .35; }
+.dl-name { text-align: left; white-space: nowrap; }
+.dl-pick { display: inline-flex; color: inherit; }
 .dl-kv { grid-template-columns: 110px 1fr; align-items: center; }
 .dl-kv dd { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; }
 .dl-kv dd .hint { flex-basis: 100%; text-align: right; margin: 0; }
@@ -948,9 +951,11 @@ tr.sec .muted { font-weight: 400; letter-spacing: 0; margin-left: 4px; }
 .ch-head { position: absolute; z-index: 2; top: 10px; left: 10px; right: 6px; display: flex; align-items: center; gap: 6px; }
 .ch-lv { background: #fff; color: #111; font-weight: 700; font-size: 12px; border-radius: 999px; padding: 1px 8px; }
 .ch-job { font-size: 14px; text-shadow: 0 1px 3px #000; flex: 1; text-align: left; }
-.ch-more { background: rgba(0, 0, 0, .35); border: 0; color: #fff; border-radius: 999px; padding: 2px 8px;
-  font-size: 13px; letter-spacing: 1px; cursor: pointer; }
-.ch-more:hover { background: rgba(0, 0, 0, .65); }
+/* 지금 접속 중인 캐릭터 */
+.ch-card.ch-now { outline: 3px solid #f5c542; outline-offset: -3px; box-shadow: 0 0 14px rgba(245, 197, 66, .45); }
+.ch-del { background: rgba(0, 0, 0, .35); border: 0; color: #fff; border-radius: 999px; width: 24px; height: 24px;
+  font-size: 12px; line-height: 24px; padding: 0; cursor: pointer; opacity: .7; }
+.ch-del:hover { background: #c0392b; opacity: 1; }
 .ch-foot { position: absolute; z-index: 2; left: 8px; right: 8px; bottom: 12px; }
 .ch-name { font-size: 18px; font-weight: 700; text-shadow: 0 1px 4px #000; }
 .ch-slot { font-size: 12px; color: rgba(255, 255, 255, .7); margin: 2px 0 8px; }

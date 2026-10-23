@@ -8,11 +8,11 @@ Required 는 1회 제작당 소모량이다 (실측: 못 1회 = 철괴 2 → 못
 """
 import math
 
-from .. import richtext
+from .. import gamedata as gd, richtext
 from ..cache import QueryCache
 from . import needs
 
-SOURCE = {"GATHER": "채집", "ALTER": "가공", "CRAFT": "제작", "NONE": "자동불가"}
+SOURCE = gd.labels()["source"]
 GATHER_PER_CALL = 100
 
 

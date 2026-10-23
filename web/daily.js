@@ -6,7 +6,7 @@
  *   start · character · task_start · task_end{status, summary, seconds} · done · failed
  */
 const ST_TEXT = {
-  OK: '완료', DONE: '이미 완료', TODO: '아직 안 함', CHECK: '남음', MANUAL: '남음(직접)', FAIL: '실패', ERROR: '오류', HEAVY: '가방 무게',
+  OK: '완료', DONE: '완료', TODO: '아직 안 함', CHECK: '남음', MANUAL: '남음(직접)', FAIL: '실패', ERROR: '오류', HEAVY: '가방 무게',
   SKIP: '건너뜀', STOP: '중단', RUN: '진행 중',
 };
 const INHERIT = 'inherit';
@@ -33,14 +33,19 @@ function stateOf(v) {
 function paintDailyTable() {
   const st = dl.st;
   const cols = ['login', ...st.order];
-  $('#dl-table thead').innerHTML = '<tr><th>캐릭터</th>' + cols.map((t) =>
-    '<th class="dl-cell' + (t === 'login' || dl.pickedTasks.has(t) ? '' : ' off') + '" data-dl-task="' + esc(t) + '">' +
-    esc(st.labels[t] || t) + '</th>').join('') + '</tr>';
+  // 이번 실행에 넣을 캐릭터·숙제는 체크박스로 고른다 (맨 왼쪽 위 = 캐릭터 전체). 접속은 늘 한다
+  const box = (attr, on) => '<input type="checkbox" ' + attr + (on ? ' checked' : '') + '>';
+  const allOn = st.chars.length > 0 && st.chars.every((c) => dl.pickedChars.has(c.slot));
+  $('#dl-table thead').innerHTML = '<tr><th class="dl-name"><label class="chk dl-pick">' +
+    box('data-dl-all', allOn) + '캐릭터</label></th>' + cols.map((t) => t === 'login'
+    ? '<th class="dl-cell">' + esc(st.labels[t] || t) + '</th>'
+    : '<th class="dl-cell' + (dl.pickedTasks.has(t) ? '' : ' off') + '"><label class="chk dl-pick">' +
+      box('data-dl-task="' + esc(t) + '"', dl.pickedTasks.has(t)) + esc(st.labels[t] || t) + '</label></th>').join('') + '</tr>';
   $('#dl-table tbody').innerHTML = st.chars.map((c) => {
     const today = st.today[String(c.slot)] || {};
     const on = dl.pickedChars.has(c.slot);
-    return '<tr><td class="dl-cell dl-name' + (on ? '' : ' off') + '" data-dl-char="' + c.slot + '">' +
-      c.slot + '. ' + esc(c.name) + '</td>' + cols.map((t) => {
+    return '<tr class="' + (on ? '' : 'off') + '"><td class="dl-name"><label class="chk dl-pick">' +
+      box('data-dl-char="' + c.slot + '"', on) + c.slot + '. ' + esc(c.name) + '</label></td>' + cols.map((t) => {
         if ((st.skip[String(c.slot)] || []).includes(t)) {
           return '<td class="dl-cell st-SKIP" title="캐릭터 탭에서 끔">안 함</td>';
         }
@@ -80,8 +85,9 @@ mm.daily.onEvent((e) => {
     setCell(e.slot, e.task, e.status, (e.summary || '') + ' (' + e.seconds + '초)');
   } else if (e.type === 'done') {
     paintDailyRunning(false);
-    // 일시정지(F12)로 멈춘 것이면 보고서는 끝까지 간 뒤에
-    if (!(e.results || []).some((x) => x[1] === 'STOP')) showReport(e.results || []);
+    // 일시정지(F12)로 멈춘 것이면 보고서는 끝까지 간 뒤에. '결과 보기' 와 같은 오늘 하루 전체 결과로 띄운다
+    // (이번 실행분만 보이면 끊어 돌린 날 앞 실행 결과가 빠진다)
+    if (!(e.results || []).some((x) => x[1] === 'STOP')) showTodayReport(true);
   } else if (e.type === 'paused') {
     const p = $('#dl-state');
     p.textContent = '일시정지 · ' + stopKey() + '로 재개';
@@ -111,8 +117,7 @@ mm.daily.onLog((m) => {
   $('#dl-log-n').textContent = ++dl.logN + '줄';
 });
 
-/* 숙제 시작 전 게임 화면 설정 확인. 기준과 다르면 직접 맞출지 자동으로 맞출지 묻는다.
- * 자동: 맞추고 그대로 이어서 시작. 직접: 맞춘 뒤 F12 나 '숙제 시작' 을 누르면 다시 확인하고 시작. */
+/* 숙제 시작 전 게임 화면 설정 확인. 기준과 다르면 묻지 않고 자동으로 맞춘 뒤 그대로 이어서 시작한다. */
 function paintDisplayState(text) {
   const p = $('#dl-state');
   p.textContent = text || '대기';
@@ -125,24 +130,15 @@ async function startDaily() {
   if (!chars.length || !only.length) { toast('캐릭터와 숙제를 하나 이상 고르세요', '', 'bad'); return; }
   mm.daily.displayWaitCancel();
   paintDisplayState('화면 설정 확인 중');
-  const d = await mm.daily.displayCheck();
+  // 고른 숙제가 오늘 다 끝났으면 화면 설정은 보지 않는다 (ok) — 숙제는 '오늘 완료' 만 알린다
+  const d = await mm.daily.displayCheck({ chars, only, force: $('#dl-force').checked });
   if (d && d.ok) { paintDisplayState(''); await runDaily(chars, only); return; }
-  const problems = (d && d.problems) || ['확인 실패'];
-  const auto = await confirmModal('게임 화면 설정이 기준과 다릅니다',
-    '<p>기준: <b>' + esc((d && d.target) || '') + '</b></p>' +
-    '<p>지금: ' + problems.map(esc).join(', ') + '</p>' +
-    '<p class="hint">직접 맞춘 뒤 <b>' + stopKey() + '</b> 또는 <b>숙제 시작</b>을 누르세요.</p>',
-    '자동으로 맞춰 주세요', '직접 맞출게요');
-  if (auto) {
-    dl.pendingStart = { chars, only };
-    paintDisplayState('화면 설정 맞추는 중');
-    const r = await mm.daily.displayFix();
-    if (r && r.error) { dl.pendingStart = null; paintDisplayState(''); toast('맞추지 못했습니다', r.error, 'bad'); }
-  } else {
-    await mm.daily.displayWait();
-    paintDisplayState('직접 맞춘 뒤 ' + stopKey() + ' 또는 숙제 시작');
-    say('화면 설정을 맞춘 뒤 ' + stopKey() + ' 나 숙제 시작을 누르세요');
-  }
+  // 기준과 다르면 묻지 않고 자동으로 맞춘 뒤 이어서 시작한다 (끝나면 원래대로 되돌린다)
+  say('화면 설정 맞추는 중: ' + ((d && d.problems) || ['확인 실패']).join(', '));
+  dl.pendingStart = { chars, only };
+  paintDisplayState('화면 설정 맞추는 중');
+  const r = await mm.daily.displayFix();
+  if (r && r.error) { dl.pendingStart = null; paintDisplayState(''); toast('맞추지 못했습니다', r.error, 'bad'); }
 }
 
 mm.daily.onDisplay((m) => {
@@ -216,8 +212,12 @@ function paintDailySettings() {
   $('#dl-field-runs').innerHTML = opts(['0', '1', '2', '3', '4', '5'], s.silver.field_runs);
   $('#dl-field').innerHTML = opts(s.fields, s.field);
   $('#dl-dungeon').innerHTML = opts(s.dungeons, s.silver.dungeon);
-  $('#dl-floor').value = String(s.silver.floor);
-  $('#dl-weight').value = s.weight;
+  // [value, label] 짝을 바로 넘겨 값 목록(list)은 비운다
+  $('#dl-floor').innerHTML = opts([], s.silver.floor, Object.entries(mm.labels.floors || {}));
+  const f = s.follow || {};
+  const fol = (n) => (f.total ? n + '명 적용' : '');
+  $('#dl-follow-field').textContent = fol(f.field);
+  $('#dl-follow-dungeon').textContent = fol(f.dungeon);
   paintStopKey();
 }
 
@@ -225,7 +225,6 @@ function collectDailySettings() {
   return {
     silver: { field_runs: Number($('#dl-field-runs').value), dungeon: $('#dl-dungeon').value, floor: Number($('#dl-floor').value) },
     field: $('#dl-field').value,
-    weight: Number($('#dl-weight').value),
   };
 }
 
@@ -243,6 +242,7 @@ async function loadPathSettings() {
   dl.settings = Object.assign(dl.settings || {}, { stop_key: s.stop_key });
   $('#opt-stop-key').innerHTML = Array.from({ length: 12 }, (_, i) => 'f' + (i + 1)).map((k) =>
     '<option value="' + k + '"' + (k === s.stop_key ? ' selected' : '') + '>' + k.toUpperCase() + '</option>').join('');
+  $('#opt-pause-touch').checked = s.pause_on_touch !== false;
   ['data', 'logs', 'shots'].forEach((k) => { $('#dl-p-' + k).value = s.paths[k] || ''; });
   $('#dl-p-now').textContent = '지금: ' + s.current.data + ' (바꾸면 다음 실행부터)';
 }
@@ -250,6 +250,7 @@ async function loadPathSettings() {
 async function savePathSettings() {
   const r = await mm.daily.saveSettings({
     stop_key: $('#opt-stop-key').value,
+    pause_on_touch: $('#opt-pause-touch').checked,
     paths: { data: $('#dl-p-data').value, logs: $('#dl-p-logs').value, shots: $('#dl-p-shots').value },
   });
   if (!(r && r.error)) { dl.settings = Object.assign(dl.settings || {}, { stop_key: $('#opt-stop-key').value }); paintStopKey(); }
@@ -311,8 +312,9 @@ async function showRun(i) {
 /* ── 결과 보고 (숙제가 끝나면 팝업) ──
  * results: [[이름표, 상태, 요약]]. 이름표는 '[캐릭터] 숙제' 또는 '[캐릭터]'(캐릭터 전체 건너뜀).
  * 완료가 아닌 것은 원인(요약)을 목록으로 보이고, 요약에 화면 저장 파일이 있으면 눌러서 그 화면을 본다. */
-/** '결과 보기': 오늘 기록(state/<날짜>.json)으로 지금까지의 결과를 같은 보고서로 (실행 중이어도 된다) */
-async function showTodayReport() {
+/** '결과 보기'·숙제 끝: 오늘 기록(state/<날짜>.json)으로 지금까지의 결과를 보고서로 (실행 중이어도 된다).
+ * finished: 숙제가 막 끝났을 때 — 'done' 시점엔 실행 스레드가 아직 살아 있어 '실행 중' 으로 나오므로 떼어 낸다 */
+async function showTodayReport(finished) {
   const st = await mm.daily.state();
   const results = [];
   for (const c of st.chars) {
@@ -324,7 +326,7 @@ async function showTodayReport() {
       results.push(['[' + c.name + '] ' + (st.labels[t] || t), s, sum]);
     }
   }
-  showReport(results, '오늘 결과 (' + st.date + (st.running ? ', 실행 중' : '') + ')');
+  showReport(results, '오늘 결과 (' + st.date + (st.running && finished !== true ? ', 실행 중' : '') + ')');
 }
 
 function showReport(results, title) {
@@ -344,7 +346,7 @@ function showReport(results, title) {
   $('#dl-rp-title').textContent = bad - todo ? head + ' — 확인이 필요한 것 ' + (bad - todo) + '건'
     : todo ? head + ' — 남은 숙제 ' + todo + '개' : head + ' — 모두 완료';
   $('#dl-rp-sum').innerHTML = [
-    ['완료', n((s) => s === 'OK'), 'pill-ok'], ['이미 완료', n((s) => s === 'DONE'), 'pill-muted'],
+    ['완료', n((s) => s === 'OK' || s === 'DONE'), 'pill-ok'],
     ['남음', n((s) => s === 'CHECK' || s === 'MANUAL'), 'pill-warn'],
     ['실패', n((s) => !GOOD.has(s) && !['CHECK', 'MANUAL', 'TODO'].includes(s)), 'pill-bad'],
     ['아직 안 함', todo, 'pill-muted'],
@@ -360,7 +362,7 @@ function showReport(results, title) {
         '<span>' + esc(r.task || '전체') + '</span><span class="st-' + r.st + '">' + esc(ST_TEXT[r.st] || r.st) + '</span>' +
         '<span class="dl-rp-why">' + esc(why) + '</span></div>';
     }).join('');
-    const okline = oks.length ? '<div class="dl-rp-okline">' + (oks.some((r) => r.task === '전체') ? '오늘 이미 완료'
+    const okline = oks.length ? '<div class="dl-rp-okline">' + (oks.some((r) => r.task === '전체') ? '오늘 완료'
       : '완료: ' + oks.map((r) => esc(r.task)).join(' · ')) + '</div>' : '';
     return '<div class="dl-rp-char">' + head + list + okline + '</div>';
   }).join('') || '<p class="muted">실행한 숙제가 없습니다.</p>';
@@ -399,15 +401,15 @@ $('#dl-rp-body').addEventListener('click', async (e) => {
 $('#dl-stop').addEventListener('click', () => { mm.daily.stop(false); say('일시정지 — 지금 동작이 끝나면 멈춥니다'); });
 $('#dl-save').addEventListener('click', saveDailySettings);
 $('#opt-paths-save').addEventListener('click', savePathSettings);
-$('#dl-table').addEventListener('click', (e) => {
-  const ch = e.target.closest('[data-dl-char]');
-  const tk = e.target.closest('[data-dl-task]');
-  if (ch) {
-    const s = Number(ch.dataset.dlChar);
-    dl.pickedChars.has(s) ? dl.pickedChars.delete(s) : dl.pickedChars.add(s);
-  } else if (tk && tk.dataset.dlTask !== 'login') {
-    const t = tk.dataset.dlTask;
-    dl.pickedTasks.has(t) ? dl.pickedTasks.delete(t) : dl.pickedTasks.add(t);
+$('#dl-table').addEventListener('change', (e) => {
+  const b = e.target;
+  if (b.dataset.dlChar) {
+    const s = Number(b.dataset.dlChar);
+    b.checked ? dl.pickedChars.add(s) : dl.pickedChars.delete(s);
+  } else if (b.dataset.dlTask) {
+    b.checked ? dl.pickedTasks.add(b.dataset.dlTask) : dl.pickedTasks.delete(b.dataset.dlTask);
+  } else if ('dlAll' in b.dataset) {
+    dl.pickedChars = new Set(b.checked ? dl.st.chars.map((c) => c.slot) : []);
   } else return;
   paintDailyTable();
 });

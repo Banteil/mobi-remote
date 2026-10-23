@@ -1,0 +1,43 @@
+{
+  "_설명": [
+    "게임 화면에서 글자(OCR)로 찾는 문구와, 글자를 읽을 화면 영역. 코드에 박지 않고 여기 둔다.",
+    "게임 패치로 문구·배치가 바뀌면 이 파일만 고치면 된다. 고친 뒤에는 프로그램을 다시 켜야 반영된다.",
+    "문구는 띄어쓰기를 빼고 비교한다. 목록이면 그중 하나만 들어 있어도 맞는 것으로 본다.",
+    "영역은 [x, y, 너비, 높이] — 1920x1080 게임 화면 기준."
+  ],
+
+  "text": {
+    "arbeit_tab": "아르바이트",
+    "arbeit_progress": "진행하기",
+    "arbeit_apply": "지원하기",
+    "arbeit_closed": ["구인마감", "기다려주세요"],
+    "arbeit_time_left": "남음",
+    "arbeit_have_item": "보유",
+    "arbeit_howto_skip": ["추천", "구하는"],
+    "dungeon_deep": "심층",
+    "dungeon_enter": "입장",
+    "mission_start": "시작",
+    "clear_touch": "터치",
+    "hunt_quest": "사냥",
+    "tribute_quest": "모험가 길드의 고난도 심층 공략",
+    "charscan_main": "대표",
+    "display_settings": "환경설정",
+    "display_graphics_tab": "그래픽",
+    "display_borderless": "테두리없는전체화면",
+    "display_fullscreen": "전체화면",
+    "display_windowed": "창모드",
+    "display_resolution": "해상도",
+    "display_apply": "설정값적용하기",
+    "display_keep": "새해상도설정을유지하기",
+    "display_interface_auto": "자동",
+    "display_interface_pc": "PC",
+    "display_interface_mobile": "모바일",
+    "display_scale": "스케일조절"
+  },
+
+  "regions": {
+    "arbeit_panel": [1220, 150, 680, 850],
+    "arbeit_tab": [1590, 990, 200, 70],
+    "main_name": [100, 45, 260, 32]
+  }
+}

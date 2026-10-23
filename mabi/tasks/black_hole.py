@@ -65,7 +65,7 @@ def run(bot: Bot, cfg: dict) -> str:
         bot.step("bh_inside", f"검은 구멍 안에서 이어 함: {game_space(bot)}")
     else:
         if verify(bot, cfg):
-            return "이미 완료 (일일 달성 체크)"
+            return "완료 (일일 달성 체크)"
         if bot.resumed_at("bh_travel", "bh_inside"):
             bot.log.info("지난번에 검은 구멍으로 가다(또는 안에서) 끊김 → 바로 가기부터 다시")
         bot.step("bh_open", "콘텐츠 가이드 → 검은 구멍 바로 가기")

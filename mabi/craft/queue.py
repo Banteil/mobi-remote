@@ -11,6 +11,7 @@ import threading
 from pathlib import Path
 from typing import Callable
 
+from .. import gamedata as gd
 from .runner import GoalRunner
 
 # 한 항목이 가질 수 있는 필드. 화면이 주는 값을 그대로 믿지 않고 걸러 담는다
@@ -19,7 +20,7 @@ FIELDS = ["id", "via", "name", "label", "recipe", "target", "status", "note",
           # 일일 숙제 카드 (kind='daily'). 빠지면 다시 켰을 때 숙제 카드인 줄 몰라 새 숙제가 바꿔 끼우지 못하고 쌓인다
           "kind", "chars", "only", "force"]
 
-STATE_LABEL = {"wait": "대기", "run": "진행 중", "pause": "보류", "done": "완료", "fail": "중단"}
+STATE_LABEL = gd.labels()["queue_state"]
 
 
 def load(file: Path) -> dict:

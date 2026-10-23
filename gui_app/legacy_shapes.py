@@ -9,8 +9,9 @@ opts 는 레거시 그대로: refresh, offline, maxAgeMs(ms), search, onlyOk, de
 """
 import math
 import re
+import time
 
-from mabi import errors, richtext
+from mabi import errors, gamedata as gd, richtext
 from mabi.craft import lists as craft_lists
 
 
@@ -344,7 +345,7 @@ class Shapes:
                           for w in works]}
 
     # ---------------------------------------------------------------- 소지품·재화
-    LOCATION_LABEL = {"inventory": "가방", "account_storage": "계정창고", "character_storage": "캐릭창고"}
+    LOCATION_LABEL = gd.labels()["location"]
     # 무게는 가방만 차지하므로 보관처를 고정된 칸으로 나눈다 (어디에 없는지도 보이게)
     LOCATION_KEY = {"inventory": "bag", "character_storage": "charStore", "account_storage": "accStore"}
 
@@ -409,16 +410,26 @@ class Shapes:
 
     def q_wings(self, o):
         """정령의 날개 잔량. execute_gathering / execute_crafting / execute_altering 1회당 5 소모."""
-        r = self.q_currencies({**o, "search": "정령의 날개"})
+        r = self.q_currencies({**o, "search": gd.currency("wings")})
         if _truthy(r.get("error", U)):
             return r
-        w = next((i for i in r["items"] if i["name"] == "정령의 날개"), None)
+        w = next((i for i in r["items"] if i["name"] == gd.currency("wings")), None)
         return {"amount": w["amount"] if w else 0, "cached": r.get("cached", U)}
 
     # ---------------------------------------------------------------- 캐릭터·활동
     def q_me(self, o):
         """get_my_info 에는 캐릭터명이 없다. Title=착용 타이틀, RealmName=서버 — 이름으로 띄우지 말 것."""
         res = self._get("get_my_info", o)
+        # 게임 밖이면 CLI 가 실패로 답하는데 캐시는 옛 값을 준다 → 접속 중이 아닌 것으로 알려 화면이 이름·정보를 지운다.
+        # 로그인 화면은 'not_in_game', 캐릭터 선택 화면은 실제 로딩과 같은 'loading' 으로 답한다 (2026-10-23 확인)
+        # → 'loading' 이 15초 넘게 이어지면 캐릭터 선택 화면으로 본다 (실제 로딩은 몇 초)
+        failed = res.get("failed")
+        if failed == "loading":
+            self._loading_since = getattr(self, "_loading_since", None) or time.monotonic()
+        elif not failed:
+            self._loading_since = None
+        if failed == "not_in_game" or (failed == "loading" and time.monotonic() - self._loading_since > 15):
+            return {"error": "not_in_game", "message": "로그인·캐릭터 선택 화면"}
         if not _truthy(res.get("data")):
             return _fail(res)
         d = res["data"]

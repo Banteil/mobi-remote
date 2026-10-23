@@ -13,6 +13,7 @@ import threading
 from pathlib import Path
 from typing import Callable
 
+from .. import gamedata as gd
 from .facilitymap import FacilityMap
 from .gamerules import GameRules, js_round
 from .recipebook import RecipeBook, now_iso
@@ -21,7 +22,6 @@ from .recipebook import RecipeBook, now_iso
 CRAFT_LIMIT = 10
 
 # 비용으로 나가는 재화. 재료가 아니므로 diff 에서 뺀다
-CURRENCIES = ["정령의 날개", "골드", "두카트"]
 
 _COST = re.compile(r"([^\s]+(?:\s[^\s]+)*?)\s+(\d+)\s+spent(?:,\s*(\d+)\s+left)?", re.I)
 _PAREN_TAIL = re.compile(r"\s*\([^()]*\)$")
@@ -349,7 +349,7 @@ class Knowledge:
 
         ingredients = {}
         for k, d in diff.items():
-            if d >= 0 or k in CURRENCIES or k == name or k == product:
+            if d >= 0 or k in (gd.currency("wings"), gd.currency("gold"), gd.currency("ducat")) or k == name or k == product:
                 continue
             ingredients[k] = -d
         if not ingredients:

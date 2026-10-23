@@ -7,6 +7,7 @@
                     (기본 2: 20개뿐이면 던전 1회만, 40개 이상이면 사냥터부터)
 예) 어떤 캐릭터 = 사냥터 2회, 남은 건 피오드 던전 → field_runs = 2, dungeon = "피오드 던전"
 """
+from .. import gamedata as gd
 from ..bot import Bot, StepTimeout
 from . import black_hole
 from .content import (CannotProceed, enter_from_dungeon_window, go_to_place, has_word, play_field, read_button,
@@ -93,7 +94,7 @@ def field_once(bot: Bot, c: dict, again: bool = False, more: bool = False) -> st
     select_recommended(bot)
     # 처음엔 '20 입장하기', 새 임무 선택으로 돌아오면 '20 임무 시작'. 가격은 Windows OCR, 글자는 둘 중 하나
     price, win, ko = read_button(bot.frame(), ui["mission_button_region"])
-    if price != c["dungeon_cost"] or not has_word("입장", win, ko) and not has_word("시작", win, ko):
+    if price != c["dungeon_cost"] or not has_word(gd.text("dungeon_enter"), win, ko) and not has_word(gd.text("mission_start"), win, ko):
         raise CannotProceed(f"사냥터 입장 버튼 '{win}' / '{ko}' — 비용 {c['dungeon_cost']} 이 아님 "
                             f"→ {bot.snapshot('field_cost').name}")
     on_enter = black_hole_first if c.get("black_hole_in_field") and "black_hole" not in bot.also_done else None
@@ -162,7 +163,7 @@ def run(bot: Bot, cfg: dict) -> str:
         again = False
         for i in range(runs):
             try:
-                before = bot.state.currency("은동전")
+                before = bot.state.currency(gd.currency("silver"))
                 kind = "field" if once is field_once else "dungeon"
                 bot.step(f"silver_{kind}", f"{label} {i + 1}/{runs}회 (은동전 {before})", n=i + 1, runs=runs)
                 if bot.daily and slot:
@@ -171,9 +172,10 @@ def run(bot: Bot, cfg: dict) -> str:
                 if bot.daily and slot:
                     bot.daily.set(slot, "silver_pending", None)
                 again = r == "again"
-                # 화면(가격 OCR·버튼 템플릿)으로 판단한 입장을 CLI 은동전 변화로 한 번 더 확인한다
-                after = bot.state.currency("은동전")
-                if before is not None and after is not None and before - after != c["dungeon_cost"]:
+                # 화면(가격 OCR·버튼 템플릿)으로 판단한 입장을 CLI 은동전 변화로 한 번 더 확인한다.
+                # 은동전은 일정 시간마다 1씩 저절로 차므로 한 판 사이에 1~2 덜 줄어드는 건 정상이다
+                after = bot.state.currency(gd.currency("silver"))
+                if before is not None and after is not None and not 0 <= c["dungeon_cost"] - (before - after) <= 2:
                     bot.log.warning(f"{label} 1회에 은동전 {before} → {after} (예상 -{c['dungeon_cost']})")
                 results.append("clear" if again else r)
                 if once is field_once and results[-1] == "clear" and bot.daily and slot:

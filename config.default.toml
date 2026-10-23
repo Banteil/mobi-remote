@@ -4,6 +4,7 @@
 [game]
 window_title = "마비노기 모바일"
 stop_key = "f12"            # 실행 중 이 키를 누르면 즉시 중단
+pause_on_touch = true       # 숙제 중 사람이 게임을 만지면 (게임 창 클릭·휠, 게임이 맨 앞일 때 키) 일시정지
 # 상태 조회용 공식 CLI (게임 설정 'MM AI 에이전트 활성화' 필요, 7일마다 만료).
 # 연결이 안 되면 재화 개수는 화면 숫자 판독으로 대체한다.
 cli_path = ""                          # 비우면 자동으로 찾는다 (레지스트리 → 기본 설치 경로 → Nexon 폴더 → 제거 프로그램 목록)
@@ -19,7 +20,7 @@ threshold = 0.85            # 기본 매칭 임계값 (템플릿별 값은 templ
 roi_margin = 80             # 템플릿을 잘라낸 위치 주변 몇 px 까지 탐색할지
 
 [run]
-max_weight_ratio = 1.0                # 가방 무게가 최대치의 이 비율 이상이면 그 캐릭터는 건너뜀
+food_max = 2                          # 숙제 중 캐릭터마다 하루에 음식을 먹는 횟수 (배고프면 B). 넘으면 먹지 않는다
 # 캐릭터마다 접속 후 실행할 숙제 순서 (python run.py --list 로 id 확인)
 order = ["weekday_dungeon", "silver", "tribute", "black_hole", "daily_mission", "arbeit"]
 
@@ -58,9 +59,13 @@ silver = [210, 155, 90, 35]
 tribute = [310, 155, 60, 35]
 
 # ---- 공통 UI 템플릿 ----
+[timing]
+loading = 120                         # 던전·사냥터 입장/퇴장 로딩을 기다리는 최대 초 (느린 PC 면 늘린다)
+
 [ui]
 main_hud = "hud_main"                 # 필드 메인 화면의 메뉴 버튼 'ESC' 글자 (창이 열려 있으면 가려짐)
 food_b = "hud_food_b"                 # 좌상단 음식 아이콘의 'B' 표시 (배고픔). 보이면 B 를 눌러 먹는다
+food_none = "hud_food_none"           # 배고픈데 음식이 없을 때 (빨간 원 + 식기). 보이면 B 를 누르지 않고 오늘 음식 먹기를 하지 않는다
 title_start = "title_start"           # 타이틀 화면 '게임 시작'
 charselect_title = "charselect_title" # 캐릭터 선택 화면 제목
 charselect_start = "charselect_start" # 캐릭터 선택 화면 '게임 시작'
@@ -126,13 +131,6 @@ milestone_x = [877, 1017, 1157]       # 상단 2/4/6회 누적 보상
 milestone_label_y = [238, 250]        # 받을 수 있으면 이 높이까지 'N회' 글자가 크고 노랗다
 milestone_icon_y = 310
 ignore = ["뭐가 묻었나?"]              # 따로 하지 않는 미션 (검은 덩어리 정화: 사냥·던전 중 저절로 깨짐). 미완료로 알리지 않는다
-
-[daily_mission.food]
-enabled = true                        # 음식 미션이 남았으면 진행하기 → 여행자 간식 사용
-mission_keyword = "음식"              # 미션 제목/설명에 들어가는 글자
-item = "food_label_snack"             # 음식 탭에서 먹을 음식 이름 템플릿 (여행자 간식)
-icon_dy = -45                         # 이름 위쪽 아이콘까지의 거리
-use = "food_use"                      # '사용하기'
 
 [daily_mission.alchemy]
 enabled = true                        # 연금술 미션이 남았으면 보석 연금술 '모두 승급' 1회
@@ -300,7 +298,7 @@ quest_go = "quest_go_orange"          # 메인 퀘스트 카드의 주황색 '�
 dungeon_tab = "dungeon_tab_deep_on"   # 이동 도착 후 던전 창의 '심층 던전' 탭 (선택된 상태)
 very_hard = "dungeon_deep_veryhard_on" # '매우 어려움' 선택된 상태
 quest_wait = 180                      # 퀘스트가 나타날 때까지 최대 대기 (초). 앞 숙제를 하는 동안 보통 뜬다. 안 뜨면 건너뜀
-max_runs = 5
+max_runs = 1                          # 숙제로는 하루 1회 (고난도 심층 퀘스트 한 번 깨면 완료). 공물이 남아도 더 돌지 않는다
 travel_timeout = 600
 clear_timeout = 900
 

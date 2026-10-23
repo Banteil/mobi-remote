@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterator
 
+from . import gamedata as gd
+
 EXE_NAME = "MabinogiMobile_CLI.exe"
 LOCAL = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
 LAST_RESPONSE = LOCAL / "MabinogiMobileCLI" / "last-response.json"
@@ -28,7 +30,6 @@ EXIT_REASON = {2: "usage_error", 3: "canceled", 4: "unknown_command", 5: "discon
 
 # 비용은 CAPABILITIES 의 Note("Running this command consumes 5 정령의 날개.")에서 읽는다.
 # 아래는 못 읽었을 때의 대체값 (0 으로 보는 것보다 안전)
-WING_COST = 5
 COSTED_COMMANDS = {"execute_gathering", "execute_crafting", "execute_altering"}
 COST_RE = re.compile(r"consumes\s+(\d+)\s+([^.]+?)\s*\.", re.I)
 
@@ -283,7 +284,7 @@ class Connector:
                 if hit:
                     m[c["Command"]] = {"amount": int(hit.group(1)), "currency": hit.group(2).strip()}
             if not m:
-                m = {c: {"amount": WING_COST, "currency": "정령의 날개"} for c in COSTED_COMMANDS}
+                m = {c: {"amount": gd.rules()["wingCostPerCommand"]["amount"], "currency": gd.currency("wings")} for c in COSTED_COMMANDS}
             self._costs = m
         return self._costs
 

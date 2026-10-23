@@ -13,6 +13,7 @@ import re
 import time
 from typing import Callable
 
+from .. import gamedata as gd
 from ..bot import Bot, StepTimeout
 
 
@@ -43,16 +44,13 @@ def open_arbeit_tab(bot: Bot) -> None:
         # 퀘스트 탭 목록이 길면 맨 아래 카드의 '진행하기' 버튼이 탭 아이콘 위에 겹쳐 그림이 안 맞는다
         # (2026-10-22 '함께하는 대모험' 카드) → 탭 글자 '아르바이트' 를 읽어 확인하고 탭 자리를 누른다
         from ..ocr import find_texts
-        x, y, w, h = ARBEIT_TAB_AREA
-        hit = next(((tx, ty) for t, tx, ty in find_texts(bot.frame(), ARBEIT_TAB_AREA) if "아르바이트" in t), None)
+        hit = next(((tx, ty) for t, tx, ty in find_texts(bot.frame(), gd.region("arbeit_tab")) if gd.text("arbeit_tab") in t), None)
         if not hit:
             raise StepTimeout(f"퀘스트 창의 아르바이트 탭을 찾지 못함 → {bot.snapshot('questwin').name}")
         bot.log.debug(f"아르바이트 탭 그림이 가려짐 → 탭 글자 {hit} 를 누름")
         bot.click(hit)  # 아이콘 쪽은 겹친 '진행하기' 버튼이라 글자를 누른다
     bot.sleep(1, 1.5)
 
-
-ARBEIT_TAB_AREA = (1590, 990, 200, 70)  # 퀘스트 창 아래 '아르바이트' 탭 (아이콘 위, 글자 아래) [x, y, w, h]
 
 
 def open_guide(bot: Bot) -> None:
@@ -155,12 +153,11 @@ def open_world_map(bot: Bot) -> None:
     open_map(bot)
     bot.click(tuple(mc["ulla_click"]))
     bot.sleep(1, 1.4)
-    r = bot.window.client_rect()
-    bot.input.scroll(r.left + 900, r.top + 500, -mc["zoom_notches"])
+    bot.scroll(900, 500, -mc["zoom_notches"])
     bot.sleep(0.8, 1.2)
     (fx, fy), (tx, ty) = mc["drag_from"], mc["drag_to"]
     for _ in range(mc["drag_times"]):
-        bot.input.drag(r.left + fx, r.top + fy, r.left + tx, r.top + ty)
+        bot.drag(fx, fy, tx, ty)
         bot.sleep(0.5, 0.8)
     bot.sleep(0.8, 1.2)
 
@@ -227,7 +224,6 @@ def find_town(bot: Bot, town: str) -> tuple[int, int]:
     mc = bot.cfg["map"]
     towns = mc["towns"]
     x0, y0, x1, y1 = mc["safe_area"]
-    r = bot.window.client_rect()
     for _ in range(8):
         castles = _castles(bot)
         named = []
@@ -237,7 +233,7 @@ def find_town(bot: Bot, town: str) -> tuple[int, int]:
                 named.append((x, y, best))
         bot.log.debug(f"월드맵 지역: {[(n, x, y) for x, y, n in named]}")
         if not named:  # 아무 이름도 못 읽음 → 남쪽으로 조금 이동해 다시 본다
-            bot.input.drag(r.left + 900, r.top + 700, r.left + 900, r.top + 300, steps=30)
+            bot.drag(900, 700, 900, 300, steps=30)
             bot.sleep(1.2, 1.5)
             continue
         ax, ay, anchor = _best_anchor(named, towns, town)
@@ -254,7 +250,7 @@ def find_town(bot: Bot, town: str) -> tuple[int, int]:
         # 목표가 화면 가운데로 오도록 끌기 (한 번에 최대 600px)
         dx = max(-600, min(600, 900 - tx))
         dy = max(-600, min(600, 480 - ty))
-        bot.input.drag(r.left + 900, r.top + 480, r.left + 900 + dx, r.top + 480 + dy, steps=30)
+        bot.drag(900, 480, 900 + dx, 480 + dy, steps=30)
         bot.sleep(1.2, 1.5)
     raise CannotProceed(f"월드맵에서 '{town}' 을 찾지 못함 → {bot.snapshot('map').name}")
 
@@ -335,7 +331,7 @@ def select_zone(bot: Bot, difficulty: str, floor: int, zone: int) -> None:
     want = f"{floor}층 {zone}구역"
     _, win, ko = read_button(bot.frame(), ui["enter_button_region"])
     text = ko or win
-    if has_word("심층", win, ko):  # 심층 던전이 있는 던전은 창이 심층 탭으로 열린다. 은동전 숙제가 심층으로 들어가면 안 된다
+    if has_word(gd.text("dungeon_deep"), win, ko):  # 심층 던전이 있는 던전은 창이 심층 탭으로 열린다. 은동전 숙제가 심층으로 들어가면 안 된다
         raise CannotProceed(f"심층 던전 구역이 선택됨: 버튼 '{text}' → {bot.snapshot('zone').name}")
     if not has_word(want, win, ko):
         raise CannotProceed(f"구역 선택 확인 실패: 버튼 '{text}' / '{win}' (기대 '{want}') → {bot.snapshot('zone').name}")
@@ -362,7 +358,7 @@ def enter_from_dungeon_window(bot: Bot, clear_timeout: float, extra_loot: int = 
     bot.sleep(0.8, 1.2)
     if expect_cost is not None:
         price, win, ko = read_button(bot.frame(), ui["mission_button_region"])
-        if price != expect_cost or not has_word("입장", win, ko):
+        if price != expect_cost or not has_word(gd.text("dungeon_enter"), win, ko):
             raise CannotProceed(f"입장 버튼 '{win}' / '{ko}' — 비용 {expect_cost} 이 아님 (더블 루팅 꺼짐?) "
                                 f"→ {bot.snapshot('mission_cost').name}")
     bot.step("dungeon_enter", "던전 입장")
@@ -374,7 +370,7 @@ def play_dungeon(bot: Bot, clear_timeout: float, extra_loot: int = 0, again: str
     """입장 직후부터 클리어 → 보상 → 필드 복귀까지. 반환: 'clear' | 'fail' | 'again'(반복 버튼을 누름)"""
     ui = bot.ui
     if bot.state.available():
-        end = time.monotonic() + 120
+        end = time.monotonic() + bot.cfg["timing"]["loading"]
         while dungeon_state(bot) != "InProgress":
             if time.monotonic() > end:
                 raise StepTimeout("던전 입장 확인 실패")
@@ -411,7 +407,7 @@ def touch_prompt_visible(bot: Bot) -> bool:
     from ..ocr import read_ko, read_text
     d = bot.cfg["dungeon"]
     frame = bot.frame()
-    return has_word("터치", read_ko(frame, d["touch_text_region"]), read_text(frame, d["touch_text_region"], white=220))
+    return has_word(gd.text("clear_touch"), read_ko(frame, d["touch_text_region"]), read_text(frame, d["touch_text_region"], white=220))
 
 
 def finish_dungeon(bot: Bot, extra_loot: int = 0, again: str | None = None) -> bool:
@@ -471,7 +467,7 @@ def close_quest_clears(bot: Bot, max_n: int = 5) -> int:
     ui = bot.ui
     closed = 0
     for _ in range(max_n + 1):
-        m = bot.wait_any([ui["confirm_green"], ui["main_hud"]], timeout=120, interval=1.0)
+        m = bot.wait_any([ui["confirm_green"], ui["main_hud"]], timeout=bot.cfg["timing"]["loading"], interval=1.0)
         if m.name == ui["main_hud"]:
             break
         bot.sleep(1, 1.5)
@@ -485,14 +481,14 @@ def close_quest_clears(bot: Bot, max_n: int = 5) -> int:
 def do_extra_loot(bot: Bot, n: int) -> int:
     """요일 던전 보상 화면에서 추가 루팅(Space)을 n 회 연달아 누른다 (0.5초 간격).
     비용은 골드 6천 / 1만2천 / 1만8천이라, 끝난 뒤 줄어든 골드로 실제 횟수를 확인한다."""
-    gold = bot.state.currency("골드") if bot.state.available() else None
+    gold = bot.state.currency(gd.currency("gold")) if bot.state.available() else None
     for _ in range(n):
         bot.key("space")
         bot.sleep(0.5, 0.7)
     bot.sleep(2, 2.5)  # 마지막 루팅 연출
     done = n
     if gold is not None:
-        now = bot.state.currency("골드")
+        now = bot.state.currency(gd.currency("gold"))
         if now is not None:
             spent = gold - now
             done = sum(1 for cost in (6000, 18000, 36000)[:n] if spent >= cost)
@@ -530,7 +526,7 @@ def play_field(bot: Bot, place: str, clear_timeout: float, on_enter=None, again:
     again 을 주면 보상 화면에서 그 버튼('새 임무 선택')을 눌러 사냥터 창으로 바로 돌아가고 'again' 을 반환한다."""
     bot.step("field_enter", f"{place} 사냥터 입장", place=place)
     bot.key("space")
-    wait_until(bot, lambda: bool(hunt_quest(bot, place)), 120, what="사냥터 입장")
+    wait_until(bot, lambda: bool(hunt_quest(bot, place)), bot.cfg["timing"]["loading"], what="사냥터 입장")
     bot.step("in_field", f"사냥터 진행 중: {hunt_quest(bot, place)}", place=place)
     if on_enter:
         on_enter(bot)
@@ -544,7 +540,7 @@ def hunt_quest(bot: Bot, place: str = "") -> str | None:
         return None
     # 장소를 안 주면 config [places] 의 사냥터(index 2) 중 아무거나 — 이야기 퀘스트의 '사냥' 과 헷갈리지 않게
     places = [place] if place else [n for n, p in bot.cfg["places"].items() if int(p.get("index", -1)) == 2]
-    return next((t for t in titles if "사냥" in t and any(t.startswith(p) for p in places)), "")
+    return next((t for t in titles if gd.text("hunt_quest") in t and any(t.startswith(p) for p in places)), "")
 
 
 def wait_field(bot: Bot, place: str, clear_timeout: float, again: str | None = None) -> str:
@@ -555,9 +551,24 @@ def wait_field(bot: Bot, place: str, clear_timeout: float, again: str | None = N
 
     end = time.monotonic() + clear_timeout
     gone = 0
+    covered_since = None
     # 조회 실패나 일시적인 빈 응답으로 끝났다고 오판하지 않도록 3번 연속 없어야 클리어로 본다
     while gone < 3:
         h = hunt()
+        # CLI 퀘스트 목록은 화면에 보이는 추적 칸만 준다 → 지도 등 창이 열려 HUD 가 가려지면 사냥 퀘스트가 '없음' 으로
+        # 나온다 (2026-10-23: 사냥 중 지도가 열려 클리어로 오판, 다음 던전으로 떠남). 메인 화면일 때만 셈에 넣는다
+        if h == "" and not bot.at_main() and not bot.exists(bot.ui["reward_exit"]) and not touch_prompt_visible(bot):
+            h = None  # 클리어 화면(터치·보상)도 아닌데 HUD 가 가려짐 = 다른 창이 열린 것
+            covered_since = covered_since or time.monotonic()
+            if time.monotonic() - covered_since > 30:  # 창이 계속 열려 있으면 닫는다 (사냥터 시간은 흐르고 있다)
+                bot.log.info("사냥터: 창이 열려 진행 상황이 가려짐 → 닫음")
+                try:
+                    bot.to_main(tries=4)
+                except StepTimeout:
+                    pass
+                covered_since = None
+        else:
+            covered_since = None
         gone = gone + 1 if h == "" else 0
         act = bot.state.activity() or {}
         if act.get("IsDead") and not handle_death(bot):

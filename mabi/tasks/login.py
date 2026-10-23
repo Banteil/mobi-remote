@@ -17,6 +17,7 @@ import time
 
 import numpy as np
 
+from .. import gamedata as gd
 from ..bot import AuthBlocked, Bot, StepTimeout
 from ..vision import Match
 
@@ -50,8 +51,7 @@ def _is_selected(frame: np.ndarray, menu: Match, cs: dict) -> bool:
 
 
 def _scroll(bot: Bot, cs: dict, notches: int) -> None:
-    r = bot.window.client_rect()
-    bot.input.scroll(r.left + cs["scroll_at"][0], r.top + cs["scroll_at"][1], notches)
+    bot.scroll(*cs["scroll_at"], notches)
     bot.sleep(1.0, 1.4)
 
 
@@ -211,7 +211,7 @@ def _clear_auth_fail(bot: Bot, cfg: dict) -> None:
     bot.sleep(cfg["login"]["auth_cooldown"])
 
 
-NAME_AREA = (100, 45, 260, 32)  # 메인 화면 왼쪽 위 캐릭터 이름 줄 [x, y, w, h] (위 줄은 타이틀)
+NAME_AREA = gd.region("main_name")  # 메인 화면 왼쪽 위 캐릭터 이름 줄 [x, y, w, h] (위 줄은 타이틀)
 
 
 def _norm_name(t: str) -> str:
@@ -223,8 +223,40 @@ def current_name(bot: Bot) -> str:
     메인 화면이 아니면 (창이 열려 있으면) 그 자리에 다른 것이 있으므로 읽지 않는다."""
     if not bot.at_main():
         return ""
+    return name_in_frame(bot.frame())
+
+
+def _name_score(a: str, b: str) -> float:
+    import difflib
+    return difflib.SequenceMatcher(None, _norm_name(a), _norm_name(b)).ratio()
+
+
+def name_matches(read: str, name: str) -> bool:
+    """OCR 로 읽은 이름이 이 캐릭터 이름인가. 한글 OCR 은 받침·자모를 한두 글자 틀린다
+    (2026-10-23 첫 글자 '옥' → '목') → 글자 수가 같고 대부분 맞으면 같은 이름으로 본다."""
+    a, b = _norm_name(read), _norm_name(name)
+    if not (a and b):
+        return False
+    if a == b:
+        return True
+    # 세 글자 이상이고 같은 자리 한 글자만 다르면 ('ㅡ' → 'ㅗ' 등) — 짧은 이름은 비율로는 못 잡는다
+    if len(a) == len(b) >= 3 and sum(x != y for x, y in zip(a, b)) == 1:
+        return True
+    return abs(len(a) - len(b)) <= 1 and _name_score(a, b) >= 0.75
+
+
+def snap_name(read: str, names) -> str:
+    """읽은 이름을 등록된 캐릭터 이름 중 가장 가까운 것으로 맞춘다 (확실할 때만). 없으면 읽은 그대로."""
+    hits = sorted(((_name_score(read, n), n) for n in names if name_matches(read, n)), reverse=True)
+    if hits and (len(hits) == 1 or hits[0][0] - hits[1][0] >= 0.1):
+        return _norm_name(hits[0][1])
+    return _norm_name(read)
+
+
+def name_in_frame(frame) -> str:
+    """찍어 둔 메인 화면에서 왼쪽 위 캐릭터 이름 (메인 화면인지는 부르는 쪽이 본다). 못 읽으면 ''."""
     from .. import ocr
-    texts = [t for t, _, _ in ocr.find_texts(bot.frame(), NAME_AREA)]
+    texts = [t for t, _, _ in ocr.find_texts(frame, NAME_AREA)]
     return _norm_name(texts[0]) if len(texts) == 1 else ""
 
 
@@ -293,8 +325,8 @@ def _run(bot: Bot, cfg: dict, character: dict | None) -> str:
 
     # NPC 대화(아르바이트 메뉴·전달 창 등)에 멈춰 있으면 ESC 로는 안 닫히고 (to_main 이 헛돈다) 닫혀도 그 일이 날아간다
     # → 아르바이트 정리로 끝까지 넘긴다 (Space 선택지면 진행). 2026-10-22 케이틴 메뉴에서 이어 하다 26초 헛돎
-    if bot.state.available() and bot.exists(cfg["arbeit"]["dialog_log"]):
-        from .arbeit import _settle
+    from .arbeit import _settle, in_dialog
+    if bot.state.available() and in_dialog(bot):
         bot.log.info("NPC 대화 중에 시작 → 대화부터 정리")
         _settle(bot)
 
@@ -311,7 +343,7 @@ def _run(bot: Bot, cfg: dict, character: dict | None) -> str:
             return "이미 접속 중"
         # 왼쪽 위 이름이 이 캐릭터면 다시 고르지 않는다 (접속 전환을 아끼고, 하던 숙제를 그 자리에서 이어 한다)
         now = current_name(bot)
-        if now and now == _norm_name(character.get("name", "")):
+        if name_matches(now, character.get("name", "")):
             bot.log.info(f"이미 {character['name']} 로 접속 중 (화면 이름 확인) → 다시 고르지 않음")
             bot.dismiss_popups()
             bot.to_main()

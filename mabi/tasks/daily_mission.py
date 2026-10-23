@@ -1,10 +1,9 @@
-"""일일 미션: N → 완료한 미션 '선물 받기' → (연금술 미션이 남았으면) 연금술 → 상단 2/4/6회 누적 보상.
+"""일일 미션: N → (남았으면) 연금술 · 채집(자급자족의 삶) 진행 → 완료한 미션 '선물 받기' → 상단 2/4/6회 누적 보상.
+음식 미션은 여기서 하지 않는다 (메인 화면으로 돌아올 때 배고프면 먹는 것으로 채워진다 — bot.eat_if_hungry).
 
 미션 목록과 진행 상태는 CLI get_daily_missions 로 읽는다 (Title, CurrentCount, GoalCount, IsCompleted, IsRewardReceived).
 - 선물을 받아도 카드 자리는 그대로이고 '미션 완료' 도장이 찍힌다. 아래쪽 카드는 스크롤해야 보인다.
 - 누적 보상은 받을 수 있을 때 'N회' 글자가 크고 노랗게 바뀐다. 받으면 체크 표시가 된다.
-- 음식 N개 먹기: 배고프지 않으면 B 로는 못 먹는다. 미션 카드 '진행하기' → 인벤토리 음식 탭 → 여행자 간식 →
-  사용하기(Space) 를 하면 바로 일일 미션 창으로 돌아온다. 남은 개수만큼 반복.
 - 재료 아이템 3회 채집: 미션 카드 '진행하기' → 미션 창이 닫히고 캐릭터가 근처에서 알아서 채집한다.
   CLI 로 완료를 확인한 뒤 미션 창을 다시 연다. 사냥터에서 가끔 채워지지만 안 될 때가 많다.
 - 연금술 3회 사용: 미션 카드 '진행하기' → 보석 연금술 → 재료 자동 넣기 → 모두 승급 한 번이면 완료.
@@ -57,9 +56,7 @@ def open_window(bot: Bot, c: dict) -> None:
 
 
 def _scroll_list(bot: Bot, c: dict, notches: int) -> None:
-    r = bot.window.client_rect()
-    x, y = c["list_scroll_at"]
-    bot.input.scroll(r.left + x, r.top + y, notches)
+    bot.scroll(*c["list_scroll_at"], notches)
     bot.sleep(0.8, 1.0)
 
 
@@ -107,29 +104,6 @@ def find_go_button(bot: Bot, c: dict, keyword: str):
                 return b
         _scroll_list(bot, c, -10)
     return None
-
-
-def do_food(bot: Bot, c: dict, m: dict) -> str:
-    """음식 미션 카드 '진행하기' → 여행자 간식 사용하기. 남은 개수만큼 반복."""
-    f = c["food"]
-    for _ in range(m["GoalCount"] - m["CurrentCount"]):
-        go = find_go_button(bot, c, m["Title"][:2])
-        if not go:
-            return f"음식 미션 카드를 찾지 못함 → {bot.snapshot('food').name}"
-        bot.click(go)
-        try:
-            label = bot.wait(f["item"], timeout=10)
-        except StepTimeout:
-            _back_to_window(bot, c)
-            return f"음식 창에 '{f['item']}' 없음 → {bot.snapshot('food').name}"
-        bot.sleep(0.5, 0.8)
-        bot.click((label.x + label.w // 2, label.y + f["icon_dy"]))  # 이름 위의 아이콘
-        # 아이템 정보 창이 뜨면 '사용하기'(Space). 기본 음식으로 지정된 음식은 버튼 배치가 달라 템플릿 대신 단축키를 쓴다
-        bot.sleep(1.0, 1.4)
-        bot.key("space")
-        bot.sleep(1.5, 2)
-        _back_to_window(bot, c)  # 보통은 저절로 일일 미션 창으로 돌아온다
-    return "음식 완료" if not _pending(bot, f["mission_keyword"]) else f"음식 먹은 뒤에도 미완료 → {bot.snapshot('food').name}"
 
 
 def do_alchemy(bot: Bot, c: dict, m: dict) -> str:
@@ -195,21 +169,21 @@ def run(bot: Bot, cfg: dict) -> str:
     c = cfg["daily_mission"]
     if not bot.state.available():
         raise RuntimeError("일일 미션은 진행 상태 확인에 CLI 가 필요함")
-    # 단계: dm_gifts → dm_food / dm_alchemy / dm_gather → dm_milestones. 미션마다 진행 수·받은 선물은 CLI 가
-    # 알려 주므로 끊겨도 처음부터 다시 돌면 남은 것만 한다 (이미 받은 선물·채운 미션은 건너뜀)
-    bot.step("dm_gifts", "일일 미션 창 → 선물 받기")
+    # 단계: dm_open → dm_alchemy / dm_gather → dm_gifts → dm_milestones.
+    # 직접 진행하는 건 연금술·채집(자급자족의 삶) 둘뿐이고, 선물·누적 보상은 맨 끝에 한꺼번에 받는다.
+    # 음식 미션은 하지 않는다 — 메인 화면으로 돌아올 때 배고프면 먹는 것(bot.eat_if_hungry, 하루 2번)으로 채워진다.
+    # 미션마다 진행 수·받은 선물은 CLI 가 알려 주므로 끊겨도 처음부터 다시 돌면 남은 것만 한다
+    labels = {"alchemy": "연금술", "gather": "채집"}
+    todo = [(key, m) for key in labels if c[key]["enabled"] and (m := _pending(bot, c[key]["mission_keyword"]))]
+    bot.step("dm_open", "일일 미션 창 → 진행할 미션: " + (", ".join(labels[k] for k, _ in todo) or "없음"))
     open_window(bot, c)
     notes = []
+    for key, m in todo:
+        bot.step(f"dm_{key}", f"{labels[key]} 미션 ({m.get('CurrentCount')}/{m.get('GoalCount')})")
+        notes.append((do_alchemy if key == "alchemy" else do_gather)(bot, c, m))
+
+    bot.step("dm_gifts", "선물 받기")
     gifts = claim_gifts(bot, c)
-
-    labels = {"food": "음식 먹기", "alchemy": "연금술", "gather": "채집"}
-    for key, do in (("food", do_food), ("alchemy", do_alchemy), ("gather", do_gather)):
-        m = _pending(bot, c[key]["mission_keyword"]) if c[key]["enabled"] else None
-        if m:
-            bot.step(f"dm_{key}", f"{labels[key]} 미션 ({m.get('CurrentCount')}/{m.get('GoalCount')})")
-            notes.append(do(bot, c, m))
-            gifts += claim_gifts(bot, c)
-
     if unclaimed(bot):  # 놓친 선물이 있으면 한 번 더
         gifts += claim_gifts(bot, c)
     bot.step("dm_milestones", "누적 보상 받기")

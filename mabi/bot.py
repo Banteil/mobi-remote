@@ -62,14 +62,13 @@ class Bot:
         self.state = GameState(self.cli, self.log)
         self.shot_dir = paths.shots
         self.character: dict | None = None  # 지금 숙제 중인 캐릭터 ({"slot", "name"}), runner 가 설정
-        self.weight_limit = 0.0  # 가방 무게 감시 비율 (0 = 끔), runner 가 설정
+        self.watch_weight = False  # 가방이 꽉 찼는지 감시 (숙제 중에만), runner 가 설정
         self._weight_at = 0.0
         self.daily = None  # 오늘 진행 기록 (profile.DailyState), runner 가 설정
         self.also_done: set[str] = set()  # 다른 태스크 안에서 함께 끝낸 태스크 id (runner 가 완료로 기록)
         self.task_id: str | None = None  # 지금 하는 숙제 id, runner 가 설정
         # 이 숙제를 지난번에 어디까지 했나 ({"stage", "at", ...}) — 도중에 끊겼으면 있다. 숙제가 보고 이어 한다
         self.resume: dict | None = None
-        self._last_food_check = 0.0
         self._frame: np.ndarray | None = None
 
     def step(self, step: str, text: str = "", **data) -> None:
@@ -91,13 +90,13 @@ class Bot:
         self.check_weight()
 
     def check_weight(self, every: float = 20) -> None:
-        """weight_limit(비율)이 켜져 있으면 every 초마다 CLI 로 가방 무게를 보고, 넘으면 Overweight."""
-        if not self.weight_limit or time.monotonic() - self._weight_at < every:
+        """watch_weight 가 켜져 있으면 every 초마다 CLI 로 가방 무게를 보고, 꽉 찼으면 Overweight."""
+        if not self.watch_weight or time.monotonic() - self._weight_at < every:
             return
         self._weight_at = time.monotonic()
         inv = self.state.query("get_inventory", timeout=10) if self.state.available() else None
         cur, mx = (inv or {}).get("CurrentInventoryWeight", 0), (inv or {}).get("MaxInventoryWeight", 0)
-        if not mx or cur < mx * self.weight_limit:
+        if not mx or cur < mx:
             return
         # 무게를 넘으면 자동 이동·전투가 멈추므로 던전 안이라도 바로 그만둔다
         raise Overweight(f"가방 무게 {cur:.0f}/{mx:.0f}")
@@ -187,10 +186,20 @@ class Bot:
         self.sleep(0.3)
 
     def click_xy(self, x: int, y: int) -> None:
+        """기준(1920x1080) 좌표를 누른다. 게임 해상도가 달라도 비율대로 실제 자리를 누른다 (Screen.to_screen)."""
         self.ensure_focus()
-        r = self.window.client_rect()
-        self.input.click(r.left + x, r.top + y)
+        self.input.click(*self.screen.to_screen(x, y))
         self.pause()
+
+    def scroll(self, x: int, y: int, notches: int) -> None:
+        """기준 좌표 (x, y) 에서 휠. notches > 0 위로, < 0 아래로."""
+        self.ensure_focus()
+        self.input.scroll(*self.screen.to_screen(x, y), notches)
+
+    def drag(self, x1: int, y1: int, x2: int, y2: int, steps: int = 20) -> None:
+        """기준 좌표 (x1, y1) → (x2, y2) 로 끈다 (지도 이동 등)."""
+        self.ensure_focus()
+        self.input.drag(*self.screen.to_screen(x1, y1), *self.screen.to_screen(x2, y2), steps=steps)
 
     def click(self, target: str | Match | tuple[int, int], timeout: float = 10) -> Match | None:
         """템플릿 이름이면 나타날 때까지 기다렸다가 중앙을 클릭."""
@@ -238,16 +247,37 @@ class Bot:
     def at_main(self) -> bool:
         return self.exists(self.ui["main_hud"])
 
-    def eat_if_hungry(self, every: float = 60) -> bool:
-        """좌상단 음식 아이콘의 'B' 표시가 보이면 (배고픔) B 를 눌러 음식을 먹는다. every 초에 한 번만 확인."""
-        name = self.ui.get("food_b")
-        if not name or not self.vision.has(name) or time.monotonic() - self._last_food_check < every:
+    def no_food(self, look: bool = True) -> bool:
+        """이 캐릭터가 오늘 먹을 음식이 없나. 배고픈데 음식이 없으면 좌상단에 빨간 원 + 식기 아이콘이 뜬다.
+        그 상태에서 B 를 누르면 제작 창이 열리므로, 한 번 보이면 오늘 기록해 두고 먹기를 시도하지 않는다.
+        look: 지금 화면도 본다 (메인 화면일 때만 의미가 있다)."""
+        slot = self.character["slot"] if self.character else None
+        if self.daily is not None and slot is not None and self.daily.flag(slot, "no_food"):
+            return True
+        name = self.ui.get("food_none")
+        if not look or not name or not self.vision.has(name) or not self.exists(name):
             return False
-        self._last_food_check = time.monotonic()
-        if not self.exists(name):
+        self.log.info("음식 없음 표시 → 오늘은 음식 먹기를 하지 않음")
+        if self.daily is not None and slot is not None:
+            self.daily.set_flag(slot, "no_food")
+        return True
+
+    def eat_if_hungry(self) -> bool:
+        """메인 화면으로 돌아올 때마다 본다: 좌상단 음식 아이콘의 'B' 표시가 보이면 (배고픔) B 를 눌러 음식을 먹는다.
+        숙제로서 먹는 건 캐릭터마다 하루 run.food_max 번까지 (일일 미션 '음식 2개 먹기' 를 채우면 충분하다).
+        그만큼 먹었거나 음식이 없으면 (no_food) 보지도 누르지도 않는다. 일일 미션 쪽에서는 음식을 먹지 않는다."""
+        name = self.ui.get("food_b")
+        if not name or not self.vision.has(name):
+            return False
+        slot = self.character["slot"] if self.character else None
+        tracked = self.daily is not None and slot is not None
+        if tracked and self.daily.count(slot, "food") >= self.cfg["run"].get("food_max", 2):
+            return False
+        if self.no_food(look=False) or not self.exists(name) or self.no_food():
             return False
         self.key("b")
-        self.log.info("배고픔 표시 → 음식 먹기 (B)")
+        n = self.daily.bump(slot, "food") if tracked else 0
+        self.log.info(f"배고픔 표시 → 음식 먹기 (B){f' — 오늘 {n}번째' if tracked else ''}")
         self.sleep(1.5, 2)
         return True
 
@@ -327,7 +357,10 @@ class Bot:
     def snapshot(self, tag: str) -> Path:
         self.shot_dir.mkdir(parents=True, exist_ok=True)
         path = self.shot_dir / f"{datetime.now():%Y%m%d_%H%M%S}_{tag}.png"
-        ok, buf = cv2.imencode(".png", self.screen.grab())
+        try:
+            ok, buf = cv2.imencode(".png", self.screen.grab())
+        except RuntimeError:  # 게임 창이 없음 (꺼짐) — 실패 기록 중에 또 터지지 않게
+            return path.with_name(path.stem + "_게임꺼짐")
         if ok:
             buf.tofile(str(path))
         return path

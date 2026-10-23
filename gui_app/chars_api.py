@@ -15,14 +15,14 @@ from pathlib import Path
 
 import tomlkit
 
-from mabi import profile as prof
+from mabi import gamedata as gd, profile as prof
 from mabi.runner import load_config
 from mabi.whoami import Characters
 
 log = logging.getLogger("mabi")
 
 MANAGED = ("field", "field_runs", "dungeon", "floor", "black_hole_in_field")  # 이 탭이 다루는 by_slot 키 (나머지는 손대지 않는다)
-FLOORS = {1: "1층 3구역", 2: "2층 3구역"}
+FLOORS = {int(k): v for k, v in gd.labels()["floors"].items()}
 
 
 class CharsApi:
@@ -44,12 +44,14 @@ class CharsApi:
 
     # ---- 지금 캐릭터 (상단바) ----
     _name_now: dict = {"name": "", "at": 0.0}
+    _name_checked = 0.0  # 마지막으로 화면을 읽어 본 때 (겹쳐 부를 때 한 번만)
+    _name_crop = None    # 마지막으로 OCR 한 이름 칸 그림 — 그대로면 다시 읽지 않는다
 
     def chars_nameNow(self) -> dict:  # noqa: N802
         """지금 접속한 캐릭터 이름 {name, fresh}. CLI 에는 이름이 없어 메인 화면 왼쪽 위 이름을 OCR 로 읽는다.
-        화면을 통째로 찍으므로 게임 창이 맨 앞이고 메인 화면일 때만 새로 읽고, 아니면 마지막으로 읽은 이름을 준다.
-        일일 숙제가 도는 중이면 그 캐릭터 이름 (화면을 건드리지 않는다)."""
-        import ctypes
+        게임 창만 따로 찍어(다른 창에 가려 있어도 됨) 부를 때마다 본다. 찍기·화면 확인은 60ms 남짓이고 OCR 만 1초쯤
+        걸리므로, 이름 칸 그림이 지난번과 같으면 OCR 을 건너뛴다 (예전엔 15초에 한 번만 읽어 바뀐 게 늦게 보였다).
+        게임이 꺼졌거나 캐릭터 선택·타이틀 화면이면 ''. 일일 숙제가 도는 중이면 그 캐릭터 이름 (화면을 건드리지 않는다)."""
         import time as _t
         runner = getattr(self, "_daily_runner", None)
         bot = getattr(runner, "bot", None) if runner else None
@@ -57,19 +59,43 @@ class CharsApi:
         if bot and thread and thread.is_alive() and bot.character:
             self._name_now = {"name": bot.character.get("name", ""), "at": _t.time()}
             return {"name": self._name_now["name"], "fresh": True}
-        busy = (self._scan_thread and self._scan_thread.is_alive()) or _t.time() - self._name_now["at"] < 15
+        busy = (self._scan_thread and self._scan_thread.is_alive()) or _t.time() - self._name_checked < 2
         if not busy:
-            from mabi.bot import Bot
-            from mabi.tasks.login import current_name
+            self._name_checked = _t.time()
+            from mabi.screen import grab_window
+            from mabi.tasks.login import NAME_AREA, name_in_frame, snap_name
+            from mabi.vision import Vision
+            from mabi.window import GameWindow
             try:
-                b = Bot(load_config(self.paths), self.paths, force_exit=False)
-                try:
-                    if b.window.find() and ctypes.windll.user32.GetForegroundWindow() == b.window.hwnd:
-                        n = current_name(b)
-                        if n:
-                            self._name_now = {"name": n, "at": _t.time()}
-                finally:
-                    b.stopper.close()
+                cfg = load_config(self.paths)
+                w = GameWindow(cfg["game"]["window_title"])
+                if not w.find():
+                    self._name_now = {"name": "", "at": 0.0}  # 게임이 꺼짐
+                else:
+                    # 게임 창을 앞으로 가져오지 않고 그 창만 찍는다 → 리모콘을 보고 있어도 읽힌다 (예전엔 게임이 맨 앞일 때만)
+                    frame = grab_window(w.hwnd)
+                    v = Vision(self.paths.templates)
+                    if frame is None:
+                        pass
+                    elif v.find(frame, cfg["ui"]["main_hud"]):
+                        x, y, cw, ch_ = NAME_AREA
+                        crop = frame[y:y + ch_, x:x + cw].astype("int16")
+                        same = (self._name_crop is not None and self._name_now["name"]
+                                and abs(crop - self._name_crop).mean() < 6)
+                        if same:
+                            self._name_now["at"] = _t.time()
+                        else:
+                            # OCR 이 한두 글자 틀려도 (받침 'ㅇ' → 'ㅁ' 등) 등록된 캐릭터 이름으로 맞춘다
+                            names = [c["name"] for c in
+                                     prof.characters(prof.load_profile(self.paths.profile) or {"slots": []})]
+                            n = snap_name(name_in_frame(frame), names)
+                            n = next((c for c in names if "".join(c.split()) == n), n)
+                            if n:
+                                self._name_now = {"name": n, "at": _t.time()}
+                                self._name_crop = crop
+                    elif any(v.find(frame, cfg["ui"][k]) for k in ("charselect_title", "title_start")):
+                        # 캐릭터 선택·타이틀 화면 = 접속 중인 캐릭터 없음 (CLI 는 이때 '로딩 중' 이라고만 답한다)
+                        self._name_now, self._name_crop = {"name": "", "at": 0.0}, None
             except Exception as e:  # 이름 표시는 덤이다 — 실패해도 조용히
                 log.debug(f"지금 캐릭터 이름 읽기 실패: {e}")
         return {"name": self._name_now["name"], "fresh": _t.time() - self._name_now["at"] < 120}
@@ -215,7 +241,8 @@ class CharsApi:
             try:
                 cfg = load_config(self.paths)
                 bot = self._scan_bot = Bot(cfg, self.paths, force_exit=False)
-                bot.window.require()
+                if not bot.window.find():
+                    raise RuntimeError("게임이 꺼져 있습니다. 게임을 켠 뒤 다시 눌러 주세요")
                 bot.window.focus()
                 bot.sleep(0.5)
                 self._emit("mm:chars-scan", {"stage": "캐릭터 선택 화면으로 나가는 중"})
@@ -230,7 +257,7 @@ class CharsApi:
                                                        for c in r["cards"]]})
             except Exception as e:
                 log.exception("캐릭터 자동 설정 실패")
-                self._emit("mm:chars-scan", {"error": f"{type(e).__name__}: {e}"})
+                self._emit("mm:chars-scan", {"error": str(e) if isinstance(e, RuntimeError) else f"{type(e).__name__}: {e}"})
             finally:
                 try:
                     self._scan_bot.stopper.close()

@@ -5,6 +5,7 @@
 config.toml(숙제 설정, 주석을 살리려고 tomlkit)에 저장한다.
 """
 import base64
+import ctypes
 import json
 import logging
 import os
@@ -82,7 +83,8 @@ class DailyApi:
                 results = runner.run(run_opts)
             except Exception as e:  # 설정 오류, 게임 창 없음 등
                 log.exception("일일 숙제 실행 실패")
-                self._emit("mm:daily", {"type": "failed", "message": f"{type(e).__name__}: {e}"})
+                msg = str(e) if isinstance(e, (ValueError, RuntimeError)) else f"{type(e).__name__}: {e}"
+                self._emit("mm:daily", {"type": "failed", "message": msg})
                 return
             # F12·일시정지 버튼으로 멈췄으면 '일시정지' — F12 를 다시 누르면 이어 한다 (진행 기록으로 끊긴 자리부터).
             # 큐에서 숙제 카드를 지워 멈춘 것(_daily_end)은 종료
@@ -90,9 +92,28 @@ class DailyApi:
                 log.info("일시정지 — F12 를 다시 누르면 이어 합니다")
                 self._emit("mm:daily", {"type": "paused"})
                 self._daily_wait_resume()
+            elif not any(s == "STOP" for _, s, _ in results or []):
+                self._bring_front()  # 끝까지 돌았다 → 결과 창(화면이 'done' 에 띄움)이 게임 위로 보이게
         self._daily_thread = threading.Thread(target=work, name="daily", daemon=True)
         self._daily_thread.start()
         return {"ok": True}
+
+    def _bring_front(self) -> None:
+        """리모콘 창을 게임 위로. 다른 프로세스(게임)가 맨 앞이면 Windows 가 SetForegroundWindow 를 막아 작업 표시줄만
+        깜빡이므로, 게임 창을 앞으로 가져올 때(GameWindow.focus)와 같이 Alt 를 눌렀다 떼며 가져온다."""
+        def go():
+            w = self.win
+            if w is None:
+                return
+            w.show_window()
+            u = ctypes.windll.user32
+            u.keybd_event(0x12, 0, 0, 0)  # VK_MENU
+            u.SetForegroundWindow(int(w.winId()))
+            u.keybd_event(0x12, 0, 2, 0)  # KEYEVENTF_KEYUP
+        try:
+            self._on_gui(go)
+        except Exception:
+            log.exception("결과 창을 앞으로 가져오지 못함")
 
     def daily_stop(self, end: bool = False) -> dict:
         """end=False: 일시정지 (F12 로 이어 함), True: 종료 (큐에서 카드를 지움)."""
@@ -132,18 +153,23 @@ class DailyApi:
     # ---- 게임 화면 설정 (숙제 시작 전에 화면이 확인한다) ----
     _display_thread: threading.Thread | None = None
 
-    def daily_displayCheck(self) -> dict:  # noqa: N802
-        """{ok, running, problems, target}. 게임 창 크기·화면 배율, 메인 화면이면 HUD 모양까지 (1초 안팎)."""
+    def daily_displayCheck(self, opts: dict | None = None) -> dict:  # noqa: N802
+        """{ok, running, problems, target}. 게임 창 크기·화면 모드 (1초 안팎).
+        고른 캐릭터·숙제가 오늘 다 끝났으면 화면을 보지 않고 ok (idle) — 숙제는 '오늘 완료' 만 알리고 게임을 건드리지 않는다."""
         from mabi.bot import Bot
         from mabi.tasks import display
-        target = "테두리 없는 전체화면 · 해상도 1920×1080 · 인터페이스 스타일 PC · 스케일 80%"
+        target = "테두리 없는 전체화면 · 16:9 (1280×720 이상) — 숙제 동안만 맞추고 끝나면 원래대로"
         try:
+            o = opts or {}
+            run_opts = RunOptions(chars=o.get("chars") or None, only=o.get("only") or None, force=bool(o.get("force")))
+            if not Runner(self.paths, force_exit=False).has_work(run_opts):
+                return {"ok": True, "idle": True, "running": True, "problems": [], "target": target}
             cfg = load_config(self.paths)
             bot = Bot(cfg, self.paths, force_exit=False)
             try:
                 if not display.game_running(bot.window):
                     return {"ok": False, "running": False, "problems": ["게임이 꺼져 있음"], "target": target}
-                return {**display.check(bot), "target": target}
+                return {**display.check(bot, interface=False), "target": target}
             finally:
                 bot.stopper.close()
         except Exception as e:
@@ -193,7 +219,7 @@ class DailyApi:
                 self._daily_hook_log()
                 cfg = load_config(self.paths)
                 bot = Bot(cfg, self.paths, force_exit=False)
-                msg = display.ensure(bot, cfg, self.paths.data / "backup")
+                msg = display.ensure(bot, cfg, self.paths.data / "backup", remember=self.paths.data / display.RESTORE_FILE)
                 log.info(f"화면 설정: {msg}")
                 running = display.game_running(bot.window)
                 self._emit("mm:display", {"done": True, "ok": True, "message": msg, "running": running})
@@ -222,15 +248,21 @@ class DailyApi:
         except ValueError:
             pass
         by = s.get("by_slot", {})
+        chars = prof.characters(profile)
+
+        def follow(*keys) -> int:  # 이 기본값을 따르는 캐릭터 수 (그 항목을 캐릭터별로 따로 정하지 않음)
+            return sum(not any(k in by.get(str(c["slot"]), {}) for k in keys) for c in chars)
         return {
             "chars": [{**c, **{k: v for k, v in dict(by.get(str(c["slot"]), {})).items()
-                               if k in ("field_runs", "dungeon", "floor")}} for c in prof.characters(profile)],
+                               if k in ("field_runs", "dungeon", "floor")}} for c in chars],
+            "follow": {"field": follow("field", "field_runs"), "dungeon": follow("dungeon", "floor"),
+                       "total": len(chars)},
             "silver": {"field_runs": int(s["field_runs"]), "dungeon": str(s["dungeon"]), "floor": int(s["floor"])},
-            "weight": float(doc["run"].get("max_weight_ratio", 1.0)),
             "dungeons": [n for n, p in doc["places"].items() if int(p["index"]) < 2],
             "fields": [n for n, p in doc["places"].items() if int(p["index"]) == 2],
             "field": str(s["field"]),
             "stop_key": str(doc["game"].get("stop_key", "f12")),
+            "pause_on_touch": bool(doc["game"].get("pause_on_touch", True)),
             "paths": {k: over.get(k, "") for k in ("data", "logs", "shots")},
             "current": {"data": str(self.paths.data), "logs": str(self.paths.logs), "shots": str(self.paths.shots)},
         }
@@ -247,13 +279,13 @@ class DailyApi:
             s["dungeon"] = sv["dungeon"]
         if v.get("field"):
             s["field"] = v["field"]
-        if v.get("weight"):
-            doc["run"]["max_weight_ratio"] = round(float(v["weight"]), 2)
         if v.get("stop_key"):
             k = str(v["stop_key"]).lower()
             if k not in [f"f{i}" for i in range(1, 13)]:  # 게임이 쓰는 글자·Home/End 키와 겹치지 않게 F 키만
                 return {"error": f"일시정지 키는 F1~F12 중에서: {k}"}
             doc["game"]["stop_key"] = k
+        if "pause_on_touch" in v:
+            doc["game"]["pause_on_touch"] = bool(v["pause_on_touch"])
         self.paths.config.write_text(tomlkit.dumps(doc), encoding="utf-8")
         p = v.get("paths")
         if p is not None:

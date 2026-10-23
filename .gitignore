@@ -32,3 +32,6 @@ dist/
 # 화면 설정 자동 맞춤이 남기는 백업, 실기 시험 기록 (캐릭터 이름 등 개인 정보)
 /data/backup/
 docs/TEST-*.md
+
+# 화면 설정 되돌리기 기록 (숙제 동안만 맞춘 화면의 원래 값)
+/display_restore.json

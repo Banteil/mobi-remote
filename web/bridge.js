@@ -57,6 +57,8 @@
     // 첫 페인트 전에 theme.js 가 읽는다. 파이썬이 페이지를 만들 때 window.__MM_INIT__ 로 심어 준다
     initialTheme: (window.__MM_INIT__ && window.__MM_INIT__.theme) || 'dark',
     appInfo: (window.__MM_INIT__ && window.__MM_INIT__.app) || {},
+    // 표시 문구 표 (data/labels.json — 파이썬과 같은 파일)
+    labels: (window.__MM_INIT__ && window.__MM_INIT__.labels) || {},
 
     status: c('status'),
     query: c('query'),
