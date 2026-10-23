@@ -108,6 +108,14 @@ class Screen:
         # 줄일 때는 AREA(계단 현상 없이), 늘릴 때는 CUBIC(글자 가장자리가 덜 뭉개짐)
         return cv2.resize(img, (BASE_W, BASE_H), interpolation=cv2.INTER_AREA if r.width > BASE_W else cv2.INTER_CUBIC)
 
+    def grab_behind(self) -> np.ndarray | None:
+        """게임이 다른 창에 가려 있어도 찍는다 (PrintWindow). 1920x1080 기준으로 바꿔 돌려준다. 내려가 있으면 None."""
+        img = grab_window(self.window.hwnd)
+        if img is None or img.shape[:2] == (BASE_H, BASE_W):
+            return img
+        import cv2
+        return cv2.resize(img, (BASE_W, BASE_H), interpolation=cv2.INTER_AREA if img.shape[1] > BASE_W else cv2.INTER_CUBIC)
+
     def to_screen(self, x: float, y: float) -> tuple[int, int]:
         """기준(1920x1080) 좌표 → 실제 화면 절대 좌표."""
         r = self.window.client_rect()

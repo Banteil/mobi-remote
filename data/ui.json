@@ -32,12 +32,21 @@
     "display_interface_auto": "자동",
     "display_interface_pc": "PC",
     "display_interface_mobile": "모바일",
-    "display_scale": "스케일조절"
+    "display_scale": "스케일조절",
+    "abyss_menu": "어비스",
+    "abyss_enter": "입장하기",
+    "abyss_together": "함께하기",
+    "abyss_chance": "우연한만남"
   },
 
   "regions": {
     "arbeit_panel": [1220, 150, 680, 850],
     "arbeit_tab": [1590, 990, 200, 70],
-    "main_name": [100, 45, 260, 32]
+    "main_name": [100, 45, 260, 32],
+    "menu_right": [1360, 0, 560, 1080],
+    "abyss_list": [1150, 60, 770, 520],
+    "abyss_entry_top": [600, 20, 700, 80],
+    "abyss_difficulty": [40, 160, 700, 60],
+    "abyss_entry_right": [1180, 560, 740, 500]
   }
 }

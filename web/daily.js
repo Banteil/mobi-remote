@@ -104,16 +104,19 @@ mm.daily.onEvent((e) => {
   if ((e.type === 'done' || e.type === 'failed') && dlWaiter) dlWaiter(e);
 });
 
+// 로그는 일일 숙제 · 어비스 탭 둘 다에 (같은 로그 — 어느 쪽에서 돌렸든 보이게)
 mm.daily.onLog((m) => {
-  const pre = $('#dl-log');
-  if (!pre || !m) return;
-  const line = document.createElement('div');
-  if (m.level === 'WARNING') line.className = 'w';
-  if (m.level === 'ERROR') line.className = 'e';
-  line.textContent = m.text;
-  pre.appendChild(line);
-  if (pre.childElementCount > 1500) pre.removeChild(pre.firstChild);
-  pre.scrollTop = pre.scrollHeight;
+  if (!m) return;
+  for (const pre of [$('#dl-log'), $('#ab-log')]) {
+    if (!pre) continue;
+    const line = document.createElement('div');
+    if (m.level === 'WARNING') line.className = 'w';
+    if (m.level === 'ERROR') line.className = 'e';
+    line.textContent = m.text;
+    pre.appendChild(line);
+    if (pre.childElementCount > 1500) pre.removeChild(pre.firstChild);
+    pre.scrollTop = pre.scrollHeight;
+  }
   $('#dl-log-n').textContent = ++dl.logN + '줄';
 });
 
@@ -266,48 +269,7 @@ async function saveDailySettings() {
   await loadDaily();
 }
 
-/* ── 기록 ── */
-
-const hs = { runs: [], cur: null };
-
-async function loadHistory() {
-  hs.runs = await mm.daily.runs();
-  $('#hs-runs').innerHTML = hs.runs.map((r, i) =>
-    '<div class="hs-run" data-hs="' + i + '"><b>' + esc(r.started.slice(5, 16).replace('T', ' ')) + '</b> ' +
-    esc(r.names.join(', ')) + '<br><span class="' + (r.ok < r.total ? 'bad' : 'muted') + '">' +
-    r.ok + '/' + r.total + ' 성공' + (r.finished ? '' : ' · 중단됨') + '</span></div>').join('') ||
-    '<p class="muted">기록이 없습니다.</p>';
-  if (hs.runs.length) showRun(0);
-}
-
 const SHOT_RE = /\d{8}_\d{6}_[\w-]+\.png/;
-
-async function showRun(i) {
-  document.querySelectorAll('.hs-run').forEach((el) => el.classList.toggle('active', Number(el.dataset.hs) === i));
-  const r = await mm.daily.run(hs.runs[i].file);
-  $('#hs-shot').classList.add('hidden');
-  if (!r) { $('#hs-detail').innerHTML = '<p class="muted">읽지 못했습니다.</p>'; return; }
-  const env = r.env || {};
-  $('#hs-env').textContent = 'v' + r.version + ' · 창 ' + (env.client_size || '?') + ' · 관리자 ' + env.admin + ' · CLI ' + env.cli;
-  const labels = (dl.st && dl.st.labels) || {};
-  $('#hs-detail').innerHTML = r.characters.map((c) =>
-    '<h4>' + (c.slot || '-') + '. ' + esc(c.name || '현재 캐릭터') + '</h4>' + c.tasks.map((t) => {
-      const st = t.status || 'STOP';
-      const b = t.before || {}, a = t.after || {};
-      const delta = ['silver', 'tribute'].filter((k) => b[k] != null && b[k] !== a[k])
-        .map((k) => (k === 'silver' ? '은동전 ' : '공물 ') + b[k] + '→' + a[k]).join(' · ');
-      const shot = (t.summary || '').match(SHOT_RE);
-      return '<div class="hs-task' + (shot ? ' has-shot' : '') + '"' + (shot ? ' data-shot="' + esc(shot[0]) + '"' : '') + '>' +
-        '<span>' + esc(labels[t.id] || t.id) + '</span><span class="st-' + st + '">' + esc(ST_TEXT[st] || st) + '</span>' +
-        '<span class="muted">' + (t.seconds || 0) + 's</span><span>' + esc(t.summary || '') +
-        (delta ? ' <span class="muted">(' + esc(delta) + ')</span>' : '') + '</span></div>' +
-        (t.events || []).map((e) => {
-          const s2 = (e.message || '').match(SHOT_RE);
-          return '<div class="hs-ev' + (s2 ? ' has-shot' : '') + '"' + (s2 ? ' data-shot="' + esc(s2[0]) + '"' : '') + '>' +
-            esc(e.time + ' ' + e.message) + '</div>';
-        }).join('');
-    }).join('')).join('');
-}
 
 /* ── 결과 보고 (숙제가 끝나면 팝업) ──
  * results: [[이름표, 상태, 요약]]. 이름표는 '[캐릭터] 숙제' 또는 '[캐릭터]'(캐릭터 전체 건너뜀).
@@ -371,20 +333,61 @@ function showReport(results, title) {
   $('#dl-report').classList.remove('hidden');
 }
 
-async function showShot(name) {
-  const url = await mm.daily.shot(name);
-  const img = $('#hs-shot');
-  if (!url) { img.classList.add('hidden'); return; }
-  img.src = url;
-  img.classList.remove('hidden');
+/* ── 어비스 반복 ── */
+
+async function loadAbyss() {
+  const a = await mm.daily.abyssSettings();
+  if (!a) return;
+  $('#ab-dungeon').innerHTML = a.dungeons.map((d) => '<option' + (d === a.dungeon ? ' selected' : '') + '>' + esc(d) + '</option>').join('');
+  $('#ab-difficulty').innerHTML =
+    a.difficulties.map((d) => '<option' + (d === a.difficulty ? ' selected' : '') + '>' + esc(d) + '</option>').join('');
+  $('#ab-char').innerHTML = '<option value="0">지금 접속한 캐릭터</option>' + a.chars.map((c) =>
+    '<option value="' + c.slot + '"' + (c.slot === a.slot ? ' selected' : '') + '>' + c.slot + '. ' + esc(c.name) + '</option>').join('');
+  $('#ab-runs').value = a.runs;
+  $('#ab-minutes').value = a.minutes;
+  paintAbyssRunning(a.running);
 }
+
+function paintAbyssRunning(on) {
+  $('#ab-start').classList.toggle('hidden', on);
+  $('#ab-stop').classList.toggle('hidden', !on);
+}
+
+async function startAbyss() {
+  const r = await mm.daily.abyssStart({
+    slot: Number($('#ab-char').value) || 0, dungeon: $('#ab-dungeon').value, difficulty: $('#ab-difficulty').value,
+    runs: Number($('#ab-runs').value) || 0, minutes: Number($('#ab-minutes').value) || 0,
+  });
+  if (r && r.error) { toast('시작하지 못했습니다', r.error, 'bad'); return; }
+  paintAbyssRunning(true);
+  $('#ab-msg').textContent = '시작';
+  toast('어비스 반복 시작', stopKey() + ' = 멈춤', 'ok');
+}
+
+mm.daily.onAbyss((e) => {
+  if (!e) return;
+  const t = e.seconds != null ? ' · ' + Math.floor(e.seconds / 60) + '분' : '';
+  if (e.clears != null) $('#ab-stat').textContent = '클리어 ' + e.clears + ' · 사망 ' + e.deaths + t;
+  if (e.type === 'abyss') {
+    $('#ab-msg').textContent = { match: '매칭 중', play: '진행 중', clear: '클리어' }[e.stage] || '';
+  } else if (e.type === 'done') {
+    paintAbyssRunning(false);
+    $('#ab-msg').textContent = e.stopped ? '멈춤' : '끝';
+  } else if (e.type === 'failed') {
+    paintAbyssRunning(false);
+    $('#ab-msg').textContent = '';
+    toast('어비스 반복이 멈췄습니다', e.message, 'bad');
+  }
+});
 
 /* ── 배선 ── */
 
 LOADERS.daily = loadDaily;
-LOADERS.history = async () => { if (!dl.st) dl.st = await mm.daily.state(); await loadHistory(); };
+LOADERS.abyss = loadAbyss;
 
 $('#dl-start').addEventListener('click', startDaily);
+$('#ab-start').addEventListener('click', startAbyss);
+$('#ab-stop').addEventListener('click', () => mm.daily.abyssStop());
 $('#dl-report-btn').addEventListener('click', showTodayReport);
 $('#dl-rp-close').addEventListener('click', () => $('#dl-report').classList.add('hidden'));
 $('#dl-rp-logs').addEventListener('click', () => mm.daily.openFolder('logs'));
@@ -412,18 +415,4 @@ $('#dl-table').addEventListener('change', (e) => {
     dl.pickedChars = new Set(b.checked ? dl.st.chars.map((c) => c.slot) : []);
   } else return;
   paintDailyTable();
-});
-$('#hs-runs').addEventListener('click', (e) => {
-  const r = e.target.closest('[data-hs]');
-  if (r) showRun(Number(r.dataset.hs));
-});
-$('#hs-detail').addEventListener('click', (e) => {
-  const s = e.target.closest('[data-shot]');
-  if (s) showShot(s.dataset.shot);
-});
-$('#hs-open').addEventListener('click', () => mm.daily.openFolder('logs'));
-$('#hs-export').addEventListener('click', async () => {
-  const r = await mm.daily.export($('#hs-anon').checked);
-  if (r && r.error) toast('내보내지 못했습니다', r.error, 'bad');
-  else toast('진단 파일을 만들었습니다', r && r.file, 'ok');
 });

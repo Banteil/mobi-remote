@@ -597,5 +597,21 @@
   },
   "alter_button": {
     "threshold": 0.88
+  },
+  "abyss_exit": {
+    "roi": [
+      1860,
+      22,
+      32,
+      30
+    ]
+  },
+  "abyss_exit_dialog": {
+    "roi": [
+      770,
+      756,
+      380,
+      40
+    ]
   }
 }

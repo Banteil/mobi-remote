@@ -58,3 +58,11 @@ class GameWindow:
         user32.keybd_event(VK_MENU, 0, 0, 0)
         user32.SetForegroundWindow(self.hwnd)
         user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
+
+    @staticmethod
+    def give_back(hwnd: int) -> None:
+        """잠깐 앞으로 가져왔던 게임 대신 원래 쓰던 창(hwnd)을 다시 앞으로 (백그라운드 클릭 뒤)."""
+        if hwnd and user32.IsWindow(hwnd):
+            user32.keybd_event(VK_MENU, 0, 0, 0)
+            user32.SetForegroundWindow(hwnd)
+            user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)

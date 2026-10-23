@@ -3833,7 +3833,7 @@ function refreshActive() {
     dash: loadDash, craft: () => loadCraft(true), alter: () => loadAlter(true),
     gather: () => loadGather(true), items: () => loadItems(true), mission: () => loadMission(true),
     music: () => loadMusic(true), social: () => loadSocial(true), dye: () => loadDye(),
-    daily: () => LOADERS.daily(), history: () => LOADERS.history(), chars: () => LOADERS.chars(),
+    daily: () => LOADERS.daily(), abyss: () => LOADERS.abyss(), chars: () => LOADERS.chars(),
   };
   refreshTopbar();
   return R[activeTab]();

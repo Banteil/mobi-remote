@@ -99,6 +99,8 @@ field_recommend_thumb = "field_recommend_thumb"  # 추천 난이도 버튼 오�
 field_mission_start = "field_mission_start"  # 새 임무 선택 후 사냥터 창의 '(비용) 임무 시작'
 dungeon_retry = "dungeon_retry"         # 던전 보상 화면의 '다시 하기' (같은 구역 반복)
 dungeon_retry_enter = "dungeon_retry_enter"  # 다시 하기 후 임무 화면의 '입장하기'
+abyss_exit = "abyss_exit"               # 어비스 안 오른쪽 맨 위 나가기 버튼 (보이면 어비스 안)
+abyss_exit_dialog = "abyss_exit_dialog" # '던전에서 퇴장하시겠습니까?' (Space = 나가기)
 confirm_green = "confirm_green"       # '퀘스트 클리어' 등의 초록 '확인'
 dialog_skip = "dialog_skip"           # NPC 대화의 '대화 넘기기' (사냥터 클리어 후 등)
 guide_title = "guide_title"           # '/' 콘텐츠 가이드 창 제목
@@ -235,9 +237,9 @@ dialog_next_xy = [1800, 45]           # '대화 넘기기' 자리. 버튼이 없
 craft_list = "craft_facility_move"    # 제작 창 첫 화면의 '설비로 이동' (아르바이트가 요구하는 물품 카드가 그 아래 하나)
 craft_item_from_list = [76, 237]      # '설비로 이동' 템플릿 왼쪽 위 → 물품 카드 가운데
 craft_go = "craft_go"                 # 물품을 고른 뒤 '제작하러 가기' (Space)
-craft_make = "craft_make"             # 설비 앞 제작 창의 '제작하기' (Space)
-craft_short_toast = "toast_no_material"  # 제작 버튼을 눌렀는데 재료가 모자라면 화면 위에 뜨는 '재료가 부족합니다.'
-craft_transfer = "craft_transfer_title"  # '재료를 전송하시겠습니까?' (모자란 재료를 보관함에서) → 확인(Space)
+craft_make = "craft_make"             # 설비 앞 제작 창의 '제작하기' (Space)
+craft_short_toast = "toast_no_material"  # 제작 버튼을 눌렀는데 재료가 모자라면 화면 위에 뜨는 '재료가 부족합니다.'
+craft_transfer = "craft_transfer_title"  # '재료를 전송하시겠습니까?' (모자란 재료를 보관함에서) → 확인(Space)
 alter_button = "alter_button"         # 가공 시설 창의 '가공하기' — 가공이 필요한 일은 시간이 걸려 건너뜀
 craft_material_area = [1200, 620, 720, 170]  # '제작하러 가기' 화면의 필요한 재료 칸 [x, y, w, h]
 item_missing = "item_missing"         # '퀘스트를 위해 필요한 아이템이 없습니다.' 창 제목
@@ -311,3 +313,14 @@ travel_timeout = 600
 clear_timeout = 900
 stall = 15                            # 이동도 전투도 아닌 채로 이만큼(초) 멈춰 있으면 바로 가기를 다시 누른다
 max_retries = 5
+
+# 어비스 반복 (리모콘 '어비스' 탭). 함께하기 · 우연한 만남으로 들어가 보상 화면의 '다시 하기'를 반복한다
+[abyss]
+dungeon = "허상의 정박지"             # 메뉴 → 어비스 목록의 던전 이름
+difficulty = "매우 어려움2"             # 입문 / 어려움 / 매우 어려움 / 매우 어려움2
+slot = 0                              # 이 슬롯 캐릭터로 접속해서 한다 (0 = 지금 접속한 캐릭터 그대로)
+runs = 0                              # 클리어 이만큼 하면 멈춤 (0 = 제한 없음)
+minutes = 0                           # 이만큼(분) 지나면 그 판을 끝내고 멈춤 (0 = 제한 없음)
+match_timeout = 600                   # 매칭·입장을 이만큼(초) 기다려도 안 되면 처음부터 다시
+run_timeout = 1200                    # 한 판이 이만큼(초) 넘게 안 끝나면 나가서 다시
+background = true                     # 입장 뒤로는 게임을 앞에 두지 않고 한다 (가려져 있어도 됨, 내리면 안 됨)

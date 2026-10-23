@@ -38,6 +38,7 @@
 <nav id="tabs">
   <button class="tab active" data-tab="chars">캐릭터</button>
   <button class="tab" data-tab="daily">일일 숙제</button>
+  <button class="tab" data-tab="abyss">어비스</button>
   <button class="tab" data-tab="dash">대시보드</button>
   <button class="tab" data-tab="craft">제작</button>
   <button class="tab" data-tab="alter">가공</button>
@@ -47,7 +48,6 @@
   <button class="tab" data-tab="music">연주</button>
   <button class="tab" data-tab="social">소셜</button>
   <button class="tab" data-tab="dye">염색</button>
-  <button class="tab" data-tab="history">숙제 기록</button>
 </nav>
 
 <div id="offline-banner" class="banner hidden">
@@ -384,18 +384,25 @@
     </div>
   </section>
 
-  <!-- 숙제 기록 -->
-  <section class="panel" id="panel-history">
-    <div class="toolbar">
-      <button class="btn btn-ghost" id="hs-open">로그 폴더 열기</button>
-      <span class="spacer"></span>
-      <label class="chk"><input type="checkbox" id="hs-anon"> 캐릭터 이름 숨기기</label>
-      <button class="btn" id="hs-export">진단 파일 내보내기</button>
+  <!-- 어비스 반복 -->
+  <section class="panel" id="panel-abyss">
+    <p class="hint">입장할 때만 게임을 앞으로 가져옵니다. 그 뒤로는 게임이 다른 창에 가려져 있어도 됩니다 (작업 표시줄로 내리지는 마세요).</p>
+    <div class="card card-wide">
+      <h3>어비스 반복 <small>함께하기 · 우연한 만남으로 들어가 '다시 하기'를 반복합니다</small><span class="count" id="ab-stat"></span></h3>
+      <div class="row ab-row">
+        <span class="muted">캐릭터</span><select id="ab-char"></select>
+        <span class="muted ab-gap">던전</span><select id="ab-dungeon"></select><select id="ab-difficulty"></select>
+        <span class="muted ab-gap">멈출 때</span><input type="number" id="ab-runs" min="0" class="num-in"> 판
+        <input type="number" id="ab-minutes" min="0" class="num-in"> 분
+        <span class="muted">(0 = 제한 없음 · F12 로 멈춤)</span>
+        <span class="spacer"></span><span id="ab-msg" class="muted"></span>
+        <button class="btn btn-warn hidden" id="ab-stop">멈추기 (F12)</button>
+        <button class="btn btn-primary" id="ab-start">반복 시작</button>
+      </div>
     </div>
-    <div class="hs-wrap">
-      <div class="card hs-list"><h3>실행</h3><div id="hs-runs"></div></div>
-      <div class="card hs-detail"><h3>결과 <span class="count" id="hs-env"></span></h3><div id="hs-detail"></div>
-        <img id="hs-shot" class="hs-shot hidden" alt=""></div>
+    <div class="card card-wide">
+      <h3>로그</h3>
+      <pre id="ab-log" class="dl-log ab-log"></pre>
     </div>
   </section>
 </main>

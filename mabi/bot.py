@@ -4,6 +4,7 @@
 F12(설정 game.stop_key)를 누르면 다음 대기/캡처 시점에 StopRequested 가 발생해 전체 실행이 중단된다.
 5초 안에 멈추지 못하면 프로세스를 강제로 끝낸다 (inputs.StopWatcher).
 """
+import ctypes
 import logging
 import random
 import time
@@ -16,7 +17,7 @@ import numpy as np
 from .digits import DigitReader
 from .connector import Connector
 from .game_state import GameState
-from .inputs import Input, StopWatcher, vk_of
+from .inputs import Input, StopWatcher, post_key, vk_of
 from .screen import Screen
 from .vision import Match, Vision
 from .window import GameWindow
@@ -70,6 +71,10 @@ class Bot:
         # 이 숙제를 지난번에 어디까지 했나 ({"stage", "at", ...}) — 도중에 끊겼으면 있다. 숙제가 보고 이어 한다
         self.resume: dict | None = None
         self._frame: np.ndarray | None = None
+        # 게임을 앞으로 가져오지 않고 한다 — 화면은 가려져 있어도 찍고(PrintWindow), 키는 창에 직접 보낸다.
+        # 클릭은 그렇게 안 되므로 누를 때만 잠깐 앞으로 가져왔다가 원래 창을 되돌린다 (어비스 반복 중에 쓴다)
+        self.background = False
+        self._posted = False  # 뒤에서 키를 보낸 적이 있다 (앞으로 가져올 때 포커스를 한 번 거쳐 준다)
 
     def step(self, step: str, text: str = "", **data) -> None:
         """숙제 안의 단계를 오늘 기록에 남긴다 (끊긴 뒤 다시 시작하면 bot.resume 으로 돌아온다).
@@ -116,6 +121,11 @@ class Bot:
 
     def frame(self) -> np.ndarray:
         self.check_stop()
+        if self.background and not self.input.dry_run:
+            img = self.screen.grab_behind()
+            if img is not None:
+                self._frame = img
+                return img
         # 화면을 그대로 캡처하므로 다른 창(터미널, 알림 등)이 위에 있으면 인식이 틀어진다
         self.ensure_focus()
         self._frame = self.screen.grab()
@@ -180,6 +190,14 @@ class Bot:
         효과 없는 키(Shift)를 한 번 먼저 보낸다."""
         if self.window.is_foreground() or self.input.dry_run:
             return
+        if self._posted:
+            # 뒤에서 키를 보낸 뒤(post_key) 처음 앞으로 가져오면 게임이 그 활성화를 놓쳐 키·클릭을 무시했다
+            # (2026-10-23). 앞으로 → 다른 창(작업 표시줄) → 다시 앞으로, 두 번째 활성화부터 받는다
+            self.window.focus()
+            self.sleep(1.0)
+            self.window.give_back(ctypes.windll.user32.FindWindowW("Shell_TrayWnd", None))
+            self.sleep(1.0)
+            self._posted = False
         self.window.focus()
         self.sleep(0.8)
         self.input.key("shift")
@@ -187,6 +205,14 @@ class Bot:
 
     def click_xy(self, x: int, y: int) -> None:
         """기준(1920x1080) 좌표를 누른다. 게임 해상도가 달라도 비율대로 실제 자리를 누른다 (Screen.to_screen)."""
+        if self.background and not self.window.is_foreground() and not self.input.dry_run:
+            prev = ctypes.windll.user32.GetForegroundWindow()
+            self.ensure_focus()
+            self.input.click(*self.screen.to_screen(x, y))
+            self.sleep(0.3)
+            self.window.give_back(prev)
+            self.pause()
+            return
         self.ensure_focus()
         self.input.click(*self.screen.to_screen(x, y))
         self.pause()
@@ -225,6 +251,11 @@ class Bot:
             self.click(step, timeout)
 
     def key(self, key: str) -> None:
+        if self.background and not self.window.is_foreground() and not self.input.dry_run:
+            post_key(self.window.hwnd, key)
+            self._posted = True
+            self.pause()
+            return
         self.ensure_focus()
         self.input.key(key)
         self.pause()

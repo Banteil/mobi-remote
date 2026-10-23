@@ -920,16 +920,6 @@ tr.sec .muted { font-weight: 400; letter-spacing: 0; margin-left: 4px; }
 .dl-log { max-height: 260px; overflow: auto; margin: 0; font-size: 12px; line-height: 1.5; white-space: pre-wrap; }
 .dl-log .w { color: var(--warn); } .dl-log .e { color: var(--bad); }
 .w-num { width: 70px; min-width: 0; } .w-path { width: 100%; min-width: 0; }
-.hs-wrap { display: flex; gap: 12px; align-items: flex-start; }
-.hs-list { width: 280px; flex: none; max-height: 70vh; overflow: auto; }
-.hs-detail { flex: 1; min-width: 0; }
-.hs-run { padding: 8px 10px; border-bottom: 1px solid var(--line); cursor: pointer; }
-.hs-run.active { background: var(--ok-bg); }
-.hs-run .bad { color: var(--warn); }
-.hs-task { display: grid; grid-template-columns: 120px 70px 50px 1fr; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); cursor: default; }
-.hs-task.has-shot { cursor: pointer; }
-.hs-ev { color: var(--fg-mute); font-size: 12px; padding-left: 130px; }
-.hs-shot { max-width: 100%; margin-top: 10px; border: 1px solid var(--edge); border-radius: 6px; }
 #dl-weight { width: 90px; flex: none; }
 
 /* ── 캐릭터 탭: 게임의 캐릭터 선택 화면 카드 ── */
@@ -990,3 +980,8 @@ tr.sec .muted { font-weight: 400; letter-spacing: 0; margin-left: 4px; }
 .ch-rv-body input { min-width: 0; }
 .ch-rv-read { font-size: 12px; color: var(--fg-dim); }
 .ch-new { color: var(--ok); }
+input[type="number"].num-in { min-width: 0; width: 72px; }
+.ab-row { flex-wrap: wrap; }
+.ab-row select { min-width: 0; }
+.ab-gap { margin-left: 12px; }
+.dl-log.ab-log { min-height: 360px; max-height: 60vh; }

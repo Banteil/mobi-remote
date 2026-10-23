@@ -134,6 +134,25 @@ class Input:
         _send(_key(m, up=True))
 
 
+def post_key(hwnd: int, key: str) -> None:
+    """게임 창이 앞에 없어도 키를 보낸다 (PostMessage). 게임은 자기가 활성 창일 때만 키를 받으므로 활성·포커스
+    메시지로 잠깐 활성인 척하게 한 뒤 누르고, 끝나면 비활성으로 되돌린다 (2026-10-23 확인 — 뒤에 둔 채 M 으로 지도 열림).
+    클릭은 이렇게 해도 좌표대로 들어가지 않는다 (게임이 실제 커서 자리로 받는다)."""
+    vk = vk_of(key)
+    scan = user32.MapVirtualKeyW(vk, 0)
+    user32.SendMessageW(hwnd, 0x001C, 1, 0)  # WM_ACTIVATEAPP
+    user32.SendMessageW(hwnd, 0x0006, 1, 0)  # WM_ACTIVATE (WA_ACTIVE)
+    user32.SendMessageW(hwnd, 0x0007, 0, 0)  # WM_SETFOCUS
+    time.sleep(0.1)
+    user32.PostMessageW(hwnd, 0x0100, vk, 1 | (scan << 16))  # WM_KEYDOWN
+    time.sleep(random.uniform(0.06, 0.1))
+    user32.PostMessageW(hwnd, 0x0101, vk, 1 | (scan << 16) | (0xC0 << 24))  # WM_KEYUP
+    time.sleep(0.3)  # 게임이 다음 프레임에 읽을 때까지 활성으로 둔다
+    user32.SendMessageW(hwnd, 0x0008, 0, 0)  # WM_KILLFOCUS
+    user32.SendMessageW(hwnd, 0x0006, 0, 0)  # WM_ACTIVATE (WA_INACTIVE)
+    user32.SendMessageW(hwnd, 0x001C, 0, 0)
+
+
 def key_pressed(vk: int) -> bool:
     return bool(user32.GetAsyncKeyState(vk) & 0x8000)
 

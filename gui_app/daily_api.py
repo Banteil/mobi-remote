@@ -16,7 +16,6 @@ import tomlkit
 
 from mabi import paths as mpaths
 from mabi import profile as prof
-from mabi import report_tools as rt
 from mabi import tasks
 from mabi.runner import RunOptions, Runner, load_config
 
@@ -69,6 +68,8 @@ class DailyApi:
             return {"error": "이미 실행 중입니다"}
         if getattr(self, "_scan_thread", None) and self._scan_thread.is_alive():
             return {"error": "캐릭터 자동 설정이 도는 중입니다"}
+        if self._abyss_thread and self._abyss_thread.is_alive():
+            return {"error": "어비스 반복이 도는 중입니다"}
         o = opts or {}
         self._daily_hook_log()
         run_opts = RunOptions(chars=o.get("chars") or None, only=o.get("only") or None, force=bool(o.get("force")),
@@ -233,6 +234,75 @@ class DailyApi:
         self._display_thread.start()
         return {"ok": True}
 
+    # ---- 어비스 반복 (mabi.tasks.abyss) ----
+    _abyss_thread: threading.Thread | None = None
+    _abyss_bot = None
+
+    def daily_abyssSettings(self) -> dict:  # noqa: N802
+        a = load_config(self.paths)["abyss"]
+        from mabi.tasks import abyss
+        profile = prof.load_profile(self.paths.profile) or {"slots": [], "names": {}}
+        return {"dungeon": a["dungeon"], "difficulty": a.get("difficulty") or "매우 어려움2", "runs": int(a.get("runs", 0)),
+                "slot": int(a.get("slot", 0)), "chars": [{"slot": c["slot"], "name": c["name"]} for c in prof.characters(profile)],
+                "minutes": float(a.get("minutes", 0)), "dungeons": ["허상의 정박지", "광기의 동굴", "흩어진 물길"],
+                "difficulties": abyss.DIFFICULTIES,
+                "running": bool(self._abyss_thread and self._abyss_thread.is_alive())}
+
+    def daily_abyssStart(self, v: dict) -> dict:  # noqa: N802
+        """고른 던전·난이도·횟수·시간을 config.toml [abyss] 에 저장하고 반복을 시작한다.
+        진행은 'mm:abyss' {type: abyss|done|failed, clears, deaths, ...}, 로그는 일일 숙제 로그 칸으로."""
+        if self._abyss_thread and self._abyss_thread.is_alive():
+            return {"error": "이미 어비스 반복 중입니다"}
+        if self._daily_thread and self._daily_thread.is_alive():
+            return {"error": "일일 숙제가 도는 중입니다"}
+        doc = self._doc()
+        if "abyss" not in doc:
+            doc["abyss"] = tomlkit.table()
+        a = doc["abyss"]
+        a["dungeon"] = str(v.get("dungeon") or "허상의 정박지")
+        a["difficulty"] = str(v.get("difficulty") or "매우 어려움2")
+        a["slot"] = max(0, int(v.get("slot") or 0))
+        a["runs"] = max(0, int(v.get("runs") or 0))
+        a["minutes"] = max(0, int(v.get("minutes") or 0))
+        self.paths.config.write_text(tomlkit.dumps(doc), encoding="utf-8")
+
+        def work():
+            from mabi.bot import Bot, StopRequested
+            from mabi.tasks import abyss
+            bot = None
+            try:
+                self._daily_hook_log()
+                cfg = load_config(self.paths)
+                bot = self._abyss_bot = Bot(cfg, self.paths, force_exit=False)
+                if not bot.window.find():
+                    raise ValueError("게임이 꺼져 있습니다")
+                # '게임 조작 감지' 일시정지는 쓰지 않는다 — 어비스 반복은 게임을 뒤에 두고 PC 를 계속 쓰는 기능인데,
+                # 게임이 잠깐 앞에 있을 때 누른 키(Alt+Tab 등)로 매칭 중에 멈췄다 (2026-10-23). 멈추기는 F12·버튼으로
+                a = cfg["abyss"]  # 게임은 입장할 때만 앞으로 가져온다 (abyss.repeat)
+                profile = prof.load_profile(self.paths.profile) or {"slots": [], "names": {}}
+                ch = next((c for c in prof.characters(profile) if c["slot"] == int(a.get("slot", 0))), None)
+                res = abyss.repeat(bot, cfg, int(a["runs"]), float(a["minutes"]),
+                                   on_event=lambda e: self._emit("mm:abyss", e), character=ch)
+                self._emit("mm:abyss", {"type": "done", **res})
+            except StopRequested:
+                log.info("어비스 반복: 사용자 중단")
+                self._emit("mm:abyss", {"type": "done", "stopped": True})
+            except Exception as e:
+                log.exception("어비스 반복 실패")
+                self._emit("mm:abyss", {"type": "failed", "message": str(e)})
+            finally:
+                self._abyss_bot = None
+                if bot:
+                    bot.stopper.close()
+        self._abyss_thread = threading.Thread(target=work, name="abyss", daemon=True)
+        self._abyss_thread.start()
+        return {"ok": True}
+
+    def daily_abyssStop(self) -> dict:  # noqa: N802
+        if self._abyss_bot:
+            self._abyss_bot.stopper.request()
+        return {"ok": True}
+
     # ---- 캐릭터·숙제 설정 ----
     def _doc(self):
         return tomlkit.parse(self.paths.config.read_text(encoding="utf-8"))
@@ -292,39 +362,12 @@ class DailyApi:
             mpaths.save_overrides(**{k: (p.get(k) or "").strip() for k in ("data", "logs", "shots")})
         return {"ok": True}
 
-    # ---- 기록 ----
-    def daily_runs(self) -> list:
-        rt.use(self.paths)
-        out = []
-        for r in reversed(rt.load_runs(None)):
-            tasks_ = [t for c in r["characters"] for t in c["tasks"]]
-            out.append({"file": r["_file"].name, "started": r["started"], "finished": r.get("finished"),
-                        "names": [c["name"] or "현재 캐릭터" for c in r["characters"]], "total": len(tasks_),
-                        "ok": sum(1 for t in tasks_ if t.get("status") in ("OK", "DONE"))})
-        return out
-
-    def daily_run(self, file: str) -> dict | None:
-        f = self.paths.runs / os.path.basename(file)
-        try:
-            return json.loads(f.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return None
-
     def daily_shot(self, name: str) -> str | None:
         """스크린샷을 data URL 로 (페이지가 다른 폴더의 파일을 직접 못 읽는다 — CSP img-src 'self' data:)."""
         f = self.paths.shots / os.path.basename(name or "")
         if not f.is_file():
             return None
         return "data:image/png;base64," + base64.b64encode(f.read_bytes()).decode("ascii")
-
-    def daily_export(self, anon: bool = False) -> dict:
-        rt.use(self.paths)
-        runs = rt.load_runs(None)[-5:]
-        if not runs:
-            return {"error": "기록이 없습니다"}
-        out = rt.export(runs, bool(anon))
-        os.startfile(out.parent)
-        return {"ok": True, "file": str(out)}
 
     def daily_openFolder(self, kind: str = "logs") -> bool:  # noqa: N802
         d = {"logs": self.paths.logs, "shots": self.paths.shots, "data": self.paths.data}.get(kind, self.paths.logs)
