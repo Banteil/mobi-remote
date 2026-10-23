@@ -32,8 +32,21 @@ Name: "korean"; MessagesFile: "compiler:Languages\Korean.isl"
 [Tasks]
 Name: "desktopicon"; Description: "바탕 화면에 바로 가기 만들기"; GroupDescription: "추가 작업:"
 
+[InstallDelete]
+; app\·_internal\ 은 통째로 바꾼다 — 예전 판에만 있던 파일이 남아 새 것과 섞이지 않게 (패치 받다 남은 것도)
+Type: filesandordirs; Name: "{app}\_internal"
+Type: filesandordirs; Name: "{app}\app"
+Type: filesandordirs; Name: "{app}\app.new"
+Type: filesandordirs; Name: "{app}\app.old"
+Type: filesandordirs; Name: "{app}\update"
+
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[UninstallDelete]
+; 실행 중에 생긴 것 (__pycache__, 패치로 바뀐 app\, 받아 둔 패치)
+Type: filesandordirs; Name: "{app}\app"
+Type: filesandordirs; Name: "{app}\update"
 
 [Icons]
 ; 예전 2.x(Electron) 설치판과 같은 이름·자리 → 2.x 의 새 판 알림으로 이 설치 파일을 실행하면 바로 가기가 새 판을 가리키게 된다

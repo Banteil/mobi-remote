@@ -148,6 +148,8 @@ def post_key(hwnd: int, key: str) -> None:
     time.sleep(random.uniform(0.06, 0.1))
     user32.PostMessageW(hwnd, 0x0101, vk, 1 | (scan << 16) | (0xC0 << 24))  # WM_KEYUP
     time.sleep(0.3)  # 게임이 다음 프레임에 읽을 때까지 활성으로 둔다
+    if user32.GetForegroundWindow() == hwnd:
+        return  # 그 사이 사람이 게임을 앞으로 가져왔다 — 비활성이라고 알리면 게임이 ESC 등 키를 무시한다
     user32.SendMessageW(hwnd, 0x0008, 0, 0)  # WM_KILLFOCUS
     user32.SendMessageW(hwnd, 0x0006, 0, 0)  # WM_ACTIVATE (WA_INACTIVE)
     user32.SendMessageW(hwnd, 0x001C, 0, 0)

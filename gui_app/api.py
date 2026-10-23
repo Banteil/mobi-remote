@@ -44,7 +44,7 @@ from .legacy_shapes import Shapes
 log = logging.getLogger("mabi")
 
 APP_NAME = "모비 커넥터 리모콘"
-APP_VERSION = "3.2.0"
+APP_VERSION = "3.2.1"
 
 
 def _ver(v: str) -> tuple:
@@ -673,6 +673,8 @@ class Api(DailyApi, CharsApi):
 
     # ---------------------------------------------------------------- 새 판 확인 (GitHub 최신 릴리스)
     # 예전 판(src/update.js)과 같은 방식: 최신 릴리스에서 '...setup.exe' 를 받아, 사람이 누르면 실행하고 끈다.
+    # 런타임 구성(설치 폴더 runtime.txt)이 같은 '...-patch-<구성>.zip' 이 있으면 그것(수 MB)만 받아 app\ 을 바꾸고
+    # 다시 켠다 (적용은 다음 실행 때 gui.py 가, 구성 값은 tools/build.py).
     # 몰래 받아서 몰래 바꾸지 않는다 — 게임을 켜 둔 채 쓰는 프로그램이라 언제 꺼질지는 사람이 정한다
     UPDATE_API = "https://api.github.com/repos/Banteil/mobi-remote/releases/latest"
     UPDATE_PAGE = "https://github.com/Banteil/mobi-remote/releases/latest"
@@ -683,6 +685,19 @@ class Api(DailyApi, CharsApi):
         return urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "mobi-remote-updater"}),
                                       timeout=timeout)
 
+    @staticmethod
+    def _install_home() -> Path | None:
+        """패치를 받을 수 있는 설치판이면 설치 폴더 (exe 이고 app\\ 에서 코드를 읽는 판)."""
+        import sys
+        if not getattr(sys, "frozen", False):
+            return None
+        home = Path(sys.executable).resolve().parent
+        return home if (home / "runtime.txt").is_file() and (home / "app" / "version.json").is_file() else None
+
+    def _runtime(self) -> str:
+        home = self._install_home()
+        return (home / "runtime.txt").read_text(encoding="utf-8").strip() if home else ""
+
     def update_check(self):
         try:
             with self._http(self.UPDATE_API) as r:
@@ -690,20 +705,27 @@ class Api(DailyApi, CharsApi):
             ver = str(rel.get("tag_name") or "").lstrip("vV")
             if not ver:
                 return {"ok": False, "newer": False, "page": self.UPDATE_PAGE, "error": "릴리스가 아직 없습니다"}
-            setup = next((a for a in rel.get("assets") or [] if re.search(r"setup\.exe$", a.get("name", ""), re.I)), None)
+            assets = rel.get("assets") or []
+            setup = next((a for a in assets if re.search(r"setup\.exe$", a.get("name", ""), re.I)), None)
+            rt = self._runtime()
+            patch = rt and next((a for a in assets if a.get("name", "").endswith(f"-patch-{rt}.zip")), None)
+            pick = patch or setup
             return {"ok": True, "newer": _ver(ver) > _ver(APP_VERSION), "version": ver, "notes": rel.get("body") or "",
                     "url": rel.get("html_url") or self.UPDATE_PAGE, "page": self.UPDATE_PAGE,
-                    "asset": {"name": setup["name"], "url": setup["browser_download_url"], "size": setup.get("size", 0)}
-                    if setup else None}
+                    "asset": {"name": pick["name"], "url": pick["browser_download_url"], "size": pick.get("size", 0),
+                              "kind": "patch" if patch else "setup"} if pick else None}
         except Exception as e:  # 오프라인 등 — 조용히 넘긴다
             return {"ok": False, "newer": False, "page": self.UPDATE_PAGE, "error": str(e)}
 
     def update_download(self, asset=None):
-        """설치 파일을 임시 폴더에 받는다 (다 받은 뒤에 제 이름으로 — 받다 만 파일을 실행하지 않게)."""
+        """설치 파일은 임시 폴더, 패치는 설치 폴더 update\\ 에 받는다 (다 받은 뒤에 제 이름으로 — 받다 만 파일을 쓰지 않게)."""
         import tempfile
         if not asset or not asset.get("url"):
             return {"ok": False, "error": "받을 파일이 없습니다"}
-        d = Path(tempfile.gettempdir()) / "mobi-remote-update"
+        home = self._install_home() if asset.get("kind") == "patch" else None
+        if asset.get("kind") == "patch" and not home:
+            return {"ok": False, "error": "패치를 넣을 수 없는 판입니다"}
+        d = home / "update" if home else Path(tempfile.gettempdir()) / "mobi-remote-update"
         d.mkdir(parents=True, exist_ok=True)
         f = d / os.path.basename(asset.get("name") or "setup.exe")
         part = f.with_suffix(f.suffix + ".part")
@@ -721,18 +743,37 @@ class Api(DailyApi, CharsApi):
             if total and got != total:
                 part.unlink(missing_ok=True)
                 return {"ok": False, "error": f"받다가 끊겼습니다 ({got}/{total})"}
+            if home:  # 패치가 이 설치의 구성용인지 미리 본다 (아니면 켜는 쪽에서 버리고 지금 판으로 켜진다)
+                import zipfile
+                with zipfile.ZipFile(part) as z:
+                    meta = json.loads(z.read("version.json").decode("utf-8"))
+                if meta.get("runtime") != self._runtime():
+                    part.unlink(missing_ok=True)
+                    return {"ok": False, "error": "이 설치에 맞지 않는 패치입니다 — 설치 파일로 받아 주세요"}
             f.unlink(missing_ok=True)
             part.rename(f)
-            return {"ok": True, "file": str(f)}
+            return {"ok": True, "file": str(f), "kind": "patch" if home else "setup"}
         except Exception as e:
             part.unlink(missing_ok=True)
             return {"ok": False, "error": str(e)}
 
     def update_install(self, file=None):
-        """받은 설치 파일을 실행하고 이 프로그램은 끈다 (덮어쓰기가 막히지 않게)."""
+        """설치 파일은 실행하고 이 프로그램은 끈다 (덮어쓰기가 막히지 않게).
+        패치는 update\\patch.zip 으로 두고 새 프로그램을 띄운 뒤 끈다 — 새 프로그램이 이쪽이 꺼지길 기다렸다가 적용한다."""
         if not file or not Path(file).is_file():
             return {"ok": False, "error": "설치 파일이 없습니다"}
-        os.startfile(file)
+        home = self._install_home()
+        if file.endswith(".zip"):
+            if not home:
+                return {"ok": False, "error": "패치를 넣을 수 없는 판입니다"}
+            import ctypes
+            import sys
+            os.replace(file, home / "update" / "patch.zip")
+            # 관리자 exe 라 ShellExecute 로 띄운다 (권한이 같으면 묻지 않는다)
+            ctypes.windll.shell32.ShellExecuteW(None, "open", sys.executable, f"--wait-pid {os.getpid()}",
+                                                str(home), 1)
+        else:
+            os.startfile(file)
         from PySide6.QtWidgets import QApplication
         self._on_gui(lambda: QApplication.instance().quit())
         return {"ok": True}

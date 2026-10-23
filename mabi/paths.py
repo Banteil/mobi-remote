@@ -1,6 +1,6 @@
 """파일 경로를 한곳에서 정한다. 다른 모듈은 경로를 직접 만들지 않고 Paths 를 받아 쓴다.
 
-- 리소스(읽기 전용): 템플릿, 기본 config.toml. exe 로 묶으면 실행 파일 안(sys._MEIPASS)에 있다.
+- 리소스(읽기 전용): 템플릿, 기본 config.toml. 설치판은 설치 폴더의 app\\ (패치로 바뀌는 곳, gui.py) 에 코드와 같이 있다.
 - 데이터(쓰기): 설정, 캐릭터 프로필, 하루 기록, 로그, 스크린샷, 실행 리포트.
     개발 중(파이썬으로 실행): 프로젝트 폴더 그대로 (지금까지의 배치 유지)
     exe(포터블): 실행 파일 옆 MabiDaily_data\\ , 쓸 수 없는 위치면 %LOCALAPPDATA%\\MabiDaily\\
@@ -22,7 +22,8 @@ def frozen() -> bool:
 
 
 def resource_dir() -> Path:
-    return Path(getattr(sys, "_MEIPASS", PROJECT)) if frozen() else PROJECT
+    """코드(mabi\\)가 있는 폴더 — 개발 중엔 프로젝트, 설치판은 app\\ (web·data·templates 가 코드 옆에 있다)."""
+    return PROJECT
 
 
 def _writable(d: Path) -> bool:

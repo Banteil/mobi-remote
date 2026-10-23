@@ -12,8 +12,6 @@ except (AttributeError, OSError):
     pass
 
 SW_RESTORE = 9
-VK_MENU = 0x12
-KEYEVENTF_KEYUP = 0x2
 
 
 @dataclass(frozen=True)
@@ -54,15 +52,19 @@ class GameWindow:
         self.require()
         if user32.IsIconic(self.hwnd):
             user32.ShowWindow(self.hwnd, SW_RESTORE)
-        # 다른 프로세스가 포그라운드일 때 SetForegroundWindow 가 거부되는 것을 우회
-        user32.keybd_event(VK_MENU, 0, 0, 0)
-        user32.SetForegroundWindow(self.hwnd)
-        user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
+        bring_front(self.hwnd)
 
     @staticmethod
     def give_back(hwnd: int) -> None:
         """잠깐 앞으로 가져왔던 게임 대신 원래 쓰던 창(hwnd)을 다시 앞으로 (백그라운드 클릭 뒤)."""
         if hwnd and user32.IsWindow(hwnd):
-            user32.keybd_event(VK_MENU, 0, 0, 0)
-            user32.SetForegroundWindow(hwnd)
-            user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
+            bring_front(hwnd)
+
+
+def bring_front(hwnd: int) -> None:
+    """hwnd 를 맨 앞으로. 다른 프로세스가 맨 앞이면 Windows 가 SetForegroundWindow 를 막으므로 먼저 입력을 하나
+    보내 '마지막 입력을 받은 프로세스'가 된다. 예전엔 Alt 를 눌렀다 뗐는데, 그 Alt 가 사람이 쓰는 창을 메뉴 모드로
+    만들어 다음 ESC 를 먹고, 사람이 누르고 있던 Alt(Alt+Tab)를 떼 버렸다 → 아무 일도 안 하는 빈 마우스 입력으로."""
+    from .inputs import INPUT, _send
+    _send(INPUT(0))  # INPUT_MOUSE, 움직임·버튼 없음
+    user32.SetForegroundWindow(hwnd)

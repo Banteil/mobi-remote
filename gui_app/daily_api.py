@@ -101,16 +101,15 @@ class DailyApi:
 
     def _bring_front(self) -> None:
         """리모콘 창을 게임 위로. 다른 프로세스(게임)가 맨 앞이면 Windows 가 SetForegroundWindow 를 막아 작업 표시줄만
-        깜빡이므로, 게임 창을 앞으로 가져올 때(GameWindow.focus)와 같이 Alt 를 눌렀다 떼며 가져온다."""
+        깜빡이므로, 게임 창을 앞으로 가져올 때(GameWindow.focus)와 같은 방법(window.bring_front)으로 가져온다."""
+        from mabi.window import bring_front
+
         def go():
             w = self.win
             if w is None:
                 return
             w.show_window()
-            u = ctypes.windll.user32
-            u.keybd_event(0x12, 0, 0, 0)  # VK_MENU
-            u.SetForegroundWindow(int(w.winId()))
-            u.keybd_event(0x12, 0, 2, 0)  # KEYEVENTF_KEYUP
+            bring_front(int(w.winId()))
         try:
             self._on_gui(go)
         except Exception:

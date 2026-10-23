@@ -3159,8 +3159,10 @@ async function wireUpdate() {
       return;
     }
     updUI.file = r.file;
-    $('#update-go').textContent = '설치하고 다시 켜기';
-    showUpdate('내려받았습니다 — 누르면 프로그램이 꺼지고 설치가 시작됩니다.', true);
+    $('#update-go').textContent = r.kind === 'patch' ? '바꾸고 다시 켜기' : '설치하고 다시 켜기';
+    showUpdate(r.kind === 'patch'
+      ? '내려받았습니다 — 누르면 프로그램이 꺼졌다가 새 판으로 다시 켜집니다.'
+      : '내려받았습니다 — 누르면 프로그램이 꺼지고 설치가 시작됩니다.', true);
   });
 
   // 켜자마자 묻지 않는다. 첫 화면이 다 그려진 뒤에 조용히 확인한다.
@@ -3168,7 +3170,10 @@ async function wireUpdate() {
     const r = await mm.update.check().catch(() => null);
     if (!r || !r.ok || !r.newer) return;      // 못 물어봤거나 최신이면 아무 말도 안 한다
     updUI.info = r;
-    showUpdate('새 판이 나왔습니다 — ' + r.version, true);
+    // 패치(코드만, 수 MB)인지 설치 파일 전체인지 크기로 알려 준다
+    const a = r.asset;
+    const size = a && a.size ? ' (' + (a.kind === 'patch' ? '패치 ' : '') + (a.size / 1048576).toFixed(1) + 'MB)' : '';
+    showUpdate('새 판이 나왔습니다 — ' + r.version + size, true);
   }, 4000);
 }
 
