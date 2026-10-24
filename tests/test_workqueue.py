@@ -157,6 +157,47 @@ class WorkQueueTest(unittest.TestCase):
         self.assertEqual([(x["label"], x["status"]) for x in q2.items], [("채집", "wait")])
         self.assertEqual(q2.add({"kind": "action", "label": "또"})["id"], 2)
 
+    def test_paused_card_blocks_queue(self):
+        # 숙제 일시정지 중 수령(지금 바로) → 수령만 하고 숙제 카드에서 선다 (아래 어비스로 넘어가지 않는다)
+        self.q.add({"kind": "daily", "label": "숙제"})
+        self.q.add({"kind": "action", "label": "어비스"})
+        self.q.items[0]["status"] = "pause"
+        self.q.add({"kind": "action", "label": "수령"}, "now")
+        self.assertTrue(wait_for(lambda: not self.q.running and self.quick.ran == ["수령"]))
+        self.assertEqual(self.status(), [("숙제", "pause"), ("어비스", "wait")])
+        self.assertEqual(self.drained, 0)
+
+    def test_only_top_card_paused(self):
+        # 어비스가 위로 올라가 돌다가 멈추면, 그 아래 일시정지였던 숙제는 대기로
+        self.q.add({"kind": "action", "label": "아래"})
+        self.q.add({"kind": "daily", "label": "숙제"})
+        self.q.items[1]["status"] = "pause"
+        self.q.add({"kind": "daily", "label": "새로"}, "now")
+        self.assertTrue(wait_for(lambda: self.long.started == [3]))
+        self.long.f12()
+        self.assertTrue(wait_for(lambda: not self.q.running))
+        self.assertEqual(self.status(), [("새로", "pause"), ("아래", "wait"), ("숙제", "wait")])
+
+    def test_resume_top(self):
+        self.q.add({"kind": "action", "label": "a"})
+        self.q.add({"kind": "daily", "label": "숙제"})
+        self.q.items[1]["status"] = "pause"
+        self.q.resume_top()  # F12
+        self.assertTrue(wait_for(lambda: self.long.started == [2]))
+        self.assertEqual(self.q.items[0]["label"], "숙제")  # 이어 하는 카드가 맨 앞으로
+        self.long.finish()
+        self.assertTrue(wait_for(lambda: self.quick.ran == ["a"] and not self.q.running))
+
+    def test_two_paused_on_load_become_one(self):
+        self.q.add({"kind": "daily", "label": "숙제"})
+        self.q.add({"kind": "action", "label": "어비스"})
+        for x in self.q.items:
+            x["status"] = "pause"
+        from mabi.craft import queue as store
+        store.save(self.dir / "queue.json", {"items": self.q.items})
+        q2 = self.make()
+        self.assertEqual([x["status"] for x in q2.items], ["pause", "wait"])
+
     def test_remote_kind(self):
         sent = []
         remote = RemoteKind(lambda ch, v: sent.append((ch, v)))

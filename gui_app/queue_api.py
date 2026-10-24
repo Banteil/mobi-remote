@@ -25,11 +25,6 @@ class DailyKind(Kind):
     def __init__(self, api):
         self.api = api
 
-    @property
-    def pause_note(self) -> str:
-        key = str(load_config(self.api.paths)["game"].get("stop_key", "f12")).upper()
-        return f"일시정지 · {key} 나 ▶ 로 재개"
-
     @staticmethod
     def detail(it) -> str:
         only = it.get("only")
@@ -168,14 +163,18 @@ class QueueApi:
                                {"daily": DailyKind(self), "abyss": AbyssKind(self), "goal": GoalKind(emit),
                                 "action": ActionKind(self)},
                                on_start=self.daily_pauseCancel,  # 다른 일이 돌면 F12 는 그 일의 것 — 숙제를 깨우지 않는다
-                               on_drained=self._q_drained, on_idle=self._q_idle)
-        self._q_idle(self.queue)  # 일시정지한 숙제를 남긴 채 껐다 켰어도 F12 로 이어 한다
+                               on_drained=self._q_drained, on_idle=self._q_idle, pause_note=self._q_pause_note)
+        self._q_idle(self.queue)  # 일시정지 카드를 남긴 채 껐다 켰어도 F12 로 이어 한다
+
+    def _q_pause_note(self) -> str:
+        key = str(load_config(self.paths)["game"].get("stop_key", "f12")).upper()
+        return f"일시정지 · {key} 나 ▶ 로 재개"
 
     def _q_idle(self, q: WorkQueue) -> None:
-        """큐가 쉰다. 일시정지한 숙제 카드가 있으면 F12 로 이어 할 수 있게 감시를 켠다
+        """큐가 쉰다. 일시정지 카드가 있으면 F12 로 맨 위 일시정지 카드를 이어 할 수 있게 감시를 켠다
         (숙제가 멈출 때만 켜던 때는 리모콘을 다시 켜면 '이어 하기 (F12)' 가 안 들었다 — 2026-10-24)."""
-        if any(x.get("kind") == "daily" and x.get("status") == "pause" for x in q.items):
-            self._daily_wait_resume(lambda: q.resume_paused("daily"))
+        if q.top_paused():
+            self._daily_wait_resume(q.resume_top)
 
     def _q_toast(self, title: str, text: str = "", kind: str = "ok") -> None:
         self._emit("mm:queue-toast", {"title": title, "text": text, "kind": kind})

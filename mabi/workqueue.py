@@ -18,6 +18,10 @@
 둘이 겹치면 센 쪽 (뒤로 갈수록 셈). 예: 밀리던 숙제가 STOP 으로 끝나도 '밀림' 그대로.
 
 상태: wait(대기) · run(진행 중) · pause(일시정지) · done(완료 — 바로 빠진다) · fail(중단)
+
+일시정지는 '큐가 거기서 멈춰 있다' 는 뜻이라 맨 위 한 장만 둔다 (_one_pause). 큐는 위에서부터 돌다가 일시정지 카드를
+만나면 선다 — 예전에는 건너뛰고 아래 대기 카드로 넘어가, 숙제를 일시정지한 채 수령 버튼(지금 바로)을 누르면
+수령 뒤에 어비스가 저절로 시작됐다 (2026-10-24 20:04). 이어 하기(▶·F12)는 맨 위 일시정지 카드부터.
 """
 import logging
 import threading
@@ -90,13 +94,15 @@ class WorkQueue:
     def __init__(self, file: Path, history_file: Path, emit: Callable[[str, object], None],
                  kinds: dict[str, Kind], default_kind: str = "goal",
                  on_start: Callable[[], None] | None = None, on_drained: Callable[["WorkQueue"], None] | None = None,
-                 on_idle: Callable[["WorkQueue"], None] | None = None):
+                 on_idle: Callable[["WorkQueue"], None] | None = None,
+                 pause_note: Callable[[], str] | None = None):
         """on_start() 큐가 돌기 시작할 때 · on_drained(q) 할 일이 다 끝났을 때 (일시정지 카드도 없음) ·
         on_idle(q) 큐가 쉬게 됐을 때 (멈췄거나 다 끝남 — 일시정지 카드의 F12 이어 하기를 켜는 등)."""
         self.file, self.history_file, self.emit = file, history_file, emit
         self.kinds, self.default_kind = kinds, default_kind
         self.on_start, self.on_drained = on_start or (lambda: None), on_drained or (lambda q: None)
         self.on_idle = on_idle or (lambda q: None)
+        self.pause_note = pause_note or (lambda: "일시정지 · ▶ 로 재개")
         self.lock = threading.RLock()
         self.items: list[dict] = []
         self.running = False
@@ -114,6 +120,21 @@ class WorkQueue:
                 x["status"] = "wait"
             self._seq = max(self._seq, int(x.get("id") or 0) + 1)
         self.items = items
+        self._one_pause()
+
+    def _one_pause(self) -> None:
+        """일시정지는 맨 위 한 장만. 그 아래 일시정지 카드는 대기로 (하던 자리 기록은 그대로라 이어서 한다)."""
+        seen = False
+        for x in self.items:
+            if x.get("status") != "pause":
+                continue
+            if seen:
+                x["status"] = "wait"
+                x["note"] = "대기 — 하던 자리에서 이어서"
+            seen = True
+
+    def top_paused(self) -> dict | None:
+        return next((x for x in self.items if x.get("status") == "pause"), None)
 
     def snapshot(self) -> dict:
         with self.lock:
@@ -121,6 +142,7 @@ class WorkQueue:
 
     def _changed(self) -> None:
         with self.lock:
+            self._one_pause()
             store.save(self.file, {"items": self.items})
             snap = self.snapshot()
         self.emit("mm:queue", snap)
@@ -158,14 +180,15 @@ class WorkQueue:
     # ---------------------------------------------------------------- 카드 다루기 (화면 버튼)
     def add(self, spec: dict, where: str = "end", replace_paused: bool = False) -> dict:
         """카드를 넣는다. where='end' 맨 아래에 담기만, 'now' 맨 위에 넣고 바로 (돌던 일은 밀렸다가 이어서).
-        replace_paused: 같은 종류의 일시정지 카드를 이걸로 바꾼다 (숙제 시작 = 새 숙제)."""
+        replace_paused: 같은 종류의 아직 안 돈 카드(일시정지·대기)를 이걸로 바꾼다 (숙제 시작 = 새 숙제.
+        숙제는 진행 기록이 따로 있어 새 카드도 끊긴 자리부터 한다)."""
         with self.lock:
             it = {k: v for k, v in (spec or {}).items() if k != "id"}
             it.update(id=self._seq, status="wait")
             it.setdefault("note", "")
             self._seq += 1
             if replace_paused:
-                for x in [x for x in self.items if x.get("kind") == it.get("kind") and x.get("status") == "pause"]:
+                for x in [x for x in self.items if x.get("kind") == it.get("kind") and x.get("status") in ("pause", "wait")]:
                     self.items.remove(x)
                     self.kind_of(x).removed(x)
             if where == "now":
@@ -233,11 +256,11 @@ class WorkQueue:
         if self.running:
             self.request_stop("pause")
 
-    def resume_paused(self, kind: str) -> None:
-        """일시정지한 kind 카드를 이어 한다 (숙제의 F12 이어 하기). 다른 일이 돌고 있으면 그 F12 는 그 일의 것이다."""
+    def resume_top(self) -> None:
+        """맨 위 일시정지 카드를 이어 한다 (F12). 다른 일이 돌고 있으면 그 F12 는 그 일의 것이다."""
         if self.running:
             return
-        it = next((x for x in self.items if x.get("kind") == kind and x.get("status") == "pause"), None)
+        it = self.top_paused()
         if it:
             self.play_one(it["id"])
 
@@ -326,9 +349,10 @@ class WorkQueue:
                 with self.lock:
                     if self.stop:
                         break
-                    it = next((x for x in self.items if x.get("status") == "wait"), None)
-                    if not it:
-                        drained = not any(x.get("status") == "pause" for x in self.items)
+                    # 위에서부터: 일시정지 카드를 만나면 거기서 선다 (건너뛰고 아래 카드를 돌리지 않는다)
+                    it = next((x for x in self.items if x.get("status") in ("wait", "pause")), None)
+                    if not it or it.get("status") == "pause":
+                        drained = not it
                         break
                     it["status"] = "run"
                     it["startedAt"] = int(time.time() * 1000)
@@ -372,7 +396,7 @@ class WorkQueue:
                                   + " · 날개는 쓰이지 않았습니다.")
                 else:  # 사람이 멈춘 것(⏸·■·F12)은 실패가 아니다 — 일시정지로 두고 ▶ 로 하던 자리에서 이어 간다
                     it["status"] = "pause"
-                    it["note"] = getattr(kind, "pause_note", "일시정지 · ▶ 로 재개")
+                    it["note"] = self.pause_note()
                 self._record(it, {"fail": "fail", "pause": "pause"}.get(it["status"], "stop"))
                 self._changed()
         finally:
