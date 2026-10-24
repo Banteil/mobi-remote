@@ -844,15 +844,6 @@ tr.sec .muted { font-weight: 400; letter-spacing: 0; margin-left: 4px; }
 .dye-hit .dye-chip { width: 22px; height: 22px; }
 .dye-hit.miss b { color: var(--fg-mute); }
 
-.heat-row { display: flex; gap: 12px; flex-wrap: wrap; }
-.heat { margin: 0; }
-.heat canvas {
-  width: 128px; height: 128px; display: block;
-  image-rendering: pixelated;           /* 64px 을 늘려 쓰므로 뭉개지 않는다 */
-  border: 1px solid var(--edge); border-radius: 6px; background: var(--bg-3);
-}
-.heat figcaption { font-size: 11px; color: var(--fg-mute); margin-top: 4px; text-align: center; }
-
 .mono { font-family: "Cascadia Mono", Consolas, monospace; }
 #dye-tol { flex: 1; }
 

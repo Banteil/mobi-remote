@@ -102,15 +102,6 @@ function paintDyeState() {
   $('#dye-stop').classList.toggle('hidden', !dyeUI.on);
 }
 
-function dyeTargets() {
-  const cur = dyeCurrent();
-  if (!cur) return [];
-  const tols = cur.tol || [];
-  return (cur.colors || [])
-    .map((c, i) => dye.target(c, tols[i]))
-    .filter(Boolean);
-}
-
 /* ══ 새 판 알림 ═════════════════════════════════════════════════
  *
  * 켤 때 한 번 조용히 확인하고, 있으면 위에 띠를 하나 띄운다. 누르기 전에는
@@ -264,28 +255,6 @@ function paintDyePreview(payload) {
   window.dyeDraw.draw(ctx, W, H, payload, 1 / k * 0.8);
   const note = $('#dye-prev-note');
   if (note) note.textContent = payload && payload.box ? '실시간' : '대기';
-}
-
-/** 일치도 그림 — 목표색에 가까울수록 밝다. */
-function paintHeat(f, targets) {
-  const row = $('#dye-heats');
-  if (!row.childElementCount || row.childElementCount !== targets.length) {
-    row.innerHTML = targets.map((t, i) =>
-      '<figure class="heat"><canvas data-heat="' + i + '" width="64" height="64"></canvas>' +
-      '<figcaption class="mono">' + esc(t.hex) + '</figcaption></figure>').join('');
-  }
-  targets.forEach((t, i) => {
-    const c = $('[data-heat="' + i + '"]');
-    if (!c) return;
-    const hm = dye.heatmap(f, dyeUI.box, t, 64);
-    const ctx = c.getContext('2d');
-    const img = ctx.createImageData(64, 64);
-    for (let p = 0; p < hm.data.length; p++) {
-      const v = hm.data[p];
-      img.data[p * 4] = v; img.data[p * 4 + 1] = v; img.data[p * 4 + 2] = v; img.data[p * 4 + 3] = 255;
-    }
-    ctx.putImageData(img, 0, 0);
-  });
 }
 
 /* ── 스포이드 ── */

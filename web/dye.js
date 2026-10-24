@@ -83,23 +83,6 @@ function deltaE(labA, labB) {
   return Math.sqrt(dL * dL + da * da + db * db);
 }
 
-/**
- * 화면에서 읽은 색을 목표로 삼을 수 있게 정리한다.
- *
- * 허용 오차는 **색마다** 갖고 다닌다. 머리색처럼 딱 맞아야 하는 것과 배경처럼 비슷하면
- * 되는 것이 한 조합 안에 섞이는데, 기준이 하나면 한쪽에 다른 쪽이 끌려간다.
- */
-function target(hex, tol) {
-  const rgb = hexToRgb(hex);
-  if (!rgb) return null;
-  return {
-    hex: rgbToHex(rgb[0], rgb[1], rgb[2]),
-    rgb: rgb,
-    lab: toLab(rgb[0], rgb[1], rgb[2]),
-    tol: typeof tol === 'number' ? tol : undefined,
-  };
-}
-
 /* ── 프레임 ─────────────────────────────────────────────────── */
 
 /**
@@ -1540,32 +1523,7 @@ function signatureDiff(a, b) {
   return s / a.length;
 }
 
-/* ── 히트맵 ─────────────────────────────────────────────────── */
-
-/**
- * 목표색과 얼마나 가까운지를 밝기로 그린 작은 그림.
- *
- * 화면에 없는 색을 찾을 때, 어느 쪽으로 끌어야 가까워지는지 보여 준다.
- * @returns {{w,h,data}} data 는 0~255 밝기 (가까울수록 밝다)
- */
-function heatmap(f, rect, t, size) {
-  const box = clampRect(rect, f);
-  const k = size || 64;
-  const data = new Uint8Array(k * k);
-  const { buf, w, r: RI, b: BI } = f;
-  let p = 0;
-  for (let gy = 0; gy < k; gy++) {
-    const y = box.y + Math.floor((gy + 0.5) * box.h / k);
-    for (let gx = 0; gx < k; gx++) {
-      const x = box.x + Math.floor((gx + 0.5) * box.w / k);
-      const i = (y * w + x) * 4;
-      const d = deltaE(toLab(buf[i + RI], buf[i + 1], buf[i + BI]), t.lab);
-      // ΔE 0 → 255, 40 이상 → 0. 그 사이는 선형.
-      data[p++] = Math.max(0, 255 - Math.round(d * 255 / 40));
-    }
-  }
-  return { w: k, h: k, data: data };
-}
+/* ── 도우미 ─────────────────────────────────────────────────── */
 
 function clampRect(rect, f) {
   const r = rect || { x: 0, y: 0, w: f.w, h: f.h };
@@ -1586,11 +1544,11 @@ function clampRect(rect, f) {
  * 그래도 파일은 하나만 둔다 — 같은 로직을 두 벌 두면 반드시 한쪽만 고치게 된다.
  */
 const DYE_API = {
-  toLab, deltaE, hexToRgb, rgbToHex, target,
+  toLab, deltaE, hexToRgb, rgbToHex,
   frame, detectPalette, findLeaders, readRings, findColors, findSpots, findRegions, findTriangle,
   matchPatch, makePatches, trackPatches, moveBy,
   findBands, findDoneButton,
-  signature, signatureDiff, heatmap,
+  signature, signatureDiff,
 };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = DYE_API;
