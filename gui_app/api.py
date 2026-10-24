@@ -240,14 +240,17 @@ class Api(DailyApi, CharsApi, QueueApi):
         return {n: out.get(n) for n in names}
 
     # ---------------------------------------------------------------- 명령 실행
-    def exec(self, command, body=None):
+    def exec(self, command, body=None, origin: dict | None = None):
         """게임 행동 명령 하나. 비용 있는 명령은 화면이 미리 사용자 확인을 받은 뒤 부른다.
-        사전 차단(칸 없음)·레시피 학습은 mabi.craft.execute 가 한다."""
+        사전 차단(칸 없음)·레시피 학습은 mabi.craft.execute 가 한다.
+        origin: 작업 큐가 부를 때 {label, act} — 시작·끝 이벤트에 실어 화면이 결과를 알리게 한다
+        (화면이 부른 명령은 화면이 직접 알리므로 origin 이 없다)."""
+        origin = origin if isinstance(origin, dict) else None
         if not self._exec_lock.acquire(blocking=False):
             return {"ok": False, "error": "busy", "message": "다른 명령이 실행 중입니다."}
         try:
             cost = self.cli.cost_of(command)
-            self._emit("mm:exec-start", {"command": command, "body": body, "costed": bool(cost)})
+            self._emit("mm:exec-start", {"command": command, "body": body, "costed": bool(cost), "origin": origin})
             r = execute(self.cd, self.cli, self.qc, command, body,
                         timeout=CONFIRM_WAIT if command == "write_chat" else None,
                         on_facility_level=lambda ch: self._emit("mm:facility-level", ch))
@@ -258,7 +261,7 @@ class Api(DailyApi, CharsApi, QueueApi):
                        "ko": None if r.ok else (r.ko or errors.describe(command, r.error, r.message or "", r.data))}
             if r.ok and cost:
                 self.qc.clear("get_currencies")  # 날개 잔량이 바뀌었다
-            self._emit("mm:exec-done", {"command": command, **payload})
+            self._emit("mm:exec-done", {"command": command, **payload, "origin": origin})
             return payload
         finally:
             self._exec_lock.release()

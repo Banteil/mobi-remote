@@ -261,6 +261,30 @@ async function runAction(command, body, opts) {
   return r;
 }
 
+/* 작업 큐(파이썬)가 부른 명령: 시작·끝을 화면에서 runAction 과 똑같이 알린다 (origin 이 있는 것만 — 화면이 부른 것은 runAction 이 알린다) */
+mm.onExecStart((m) => {
+  if (m && m.origin) setBusy(true, (m.origin.label || m.command) + ' 실행 중…');
+});
+mm.onExecDone((m) => {
+  if (!m || !m.origin) return;
+  setBusy(false);
+  const label = m.origin.label || m.command;
+  if (!m.origin.quiet) {
+    if (m.ok) {
+      toast('완료 — ' + label, describeResult(m.command, m.data) + ' (' + m.durationMs + 'ms)' +
+        (m.wingsSpent ? ' · 날개 ' + m.wingsSpent + ' 소모' : ''), 'ok');
+    } else if (m.ko) {
+      toast('실패 — ' + label + ': ' + m.ko.text, m.ko.hint || '', 'bad');
+    } else {
+      toast('실패 — ' + label, (m.error || '') + (m.message ? ' · ' + m.message : ''), 'bad');
+    }
+    logCall(m.command, m);
+  }
+  refreshTopbar();
+  const re = typeof ACT_REFRESH !== 'undefined' && ACT_REFRESH[m.origin.act];
+  if (re) re();
+});
+
 function describeResult(command, d) {
   if (!d) return '응답 없음';
   if (command === 'execute_gathering') {
@@ -1598,7 +1622,7 @@ function wire() {
   $('#sb-cancel').addEventListener('click', async () => {
     // 실행 중인 명령 하나만 죽이면 여러 단계짜리 작업은 다음 단계로 넘어가 버린다.
     // 반복 루프에도 중단 신호를 같이 보낸다.
-    collectAll.aborted = true;
+    waitForUserInput.aborted = true;
     fillAltering.aborted = true;
     if (qRunning) mm.queue.pause();  // 명령은 아래 mm.cancel 이 끊는다
     player.stopping = true;

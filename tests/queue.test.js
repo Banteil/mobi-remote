@@ -23,7 +23,6 @@ function any() {  // 무엇을 불러도·읽어도 되는 가짜
 
 const calls = [];
 const handlers = {};
-const fake = (k) => new Proxy({}, { get: (t, m) => (m in t ? t[m] : any()) });
 const mmReal = {
   labels: { queue_state: {} },
   queue: new Proxy({
@@ -40,7 +39,7 @@ const ctx = {
   document: any(), navigator: any(), localStorage: any(), location: any(), requestAnimationFrame: any(),
   getComputedStyle: any(), ResizeObserver: function () { return any(); }, MutationObserver: function () { return any(); },
   Image: function () { return any(); }, fetch: any(), alert: any(), performance: { now: () => Date.now() },
-  mm: new Proxy(mmReal, { get: (t, k) => (k in t ? t[k] : fake(k)) }),
+  mm: new Proxy(mmReal, { get: (t, k) => (k in t ? t[k] : any()) }),
 };
 ctx.window = ctx; ctx.globalThis = ctx;
 vm.createContext(ctx);

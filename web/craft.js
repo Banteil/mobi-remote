@@ -712,9 +712,10 @@ async function waitForUserInput(label, timeoutMs) {
   const limit = timeoutMs || 120000;
   const startedAt = Date.now();
   let notified = false;
+  waitForUserInput.aborted = false;  // 상태바 '취소' 가 켠다
 
   while (Date.now() - startedAt < limit) {
-    if (collectAll.aborted) return false;
+    if (waitForUserInput.aborted || qStop) return false;
     const a = await mm.query('activity', {});
     // IsReviving 은 여기서 보지 않는다. 살아 있는데도 켜져 있는 것을 확인해서,
     // 그걸 기다리면 아무 일도 없는데 2분을 버린다.
@@ -731,57 +732,6 @@ async function waitForUserInput(label, timeoutMs) {
   }
   return false;
 }
-
-async function collectAll() {
-  const w = await mm.query('alteringWorks', { refresh: true });
-  const targets = w.facilities.filter((f) => f.completed.length).map((f) => f.completed[0].name);
-  if (!targets.length) { toast('수령할 작업 없음', '', 'ok'); return; }
-
-  // 확인 창을 띄우지 않는다. 수령은 비용이 없고 되돌릴 것도 없어서, 물어봐야 할 이유가 없다.
-  // 확인 창을 눌러 달라는 안내도 하지 않는다 — 실측(6개 시설 29건 연속)에서 한 번도 뜨지 않았다.
-  // 그래도 막히면 아래 waitForUserInput 이 그때 알려 준다.
-  toast(targets.length + '개 시설 수령 시작',
-    '시설마다 이동이 있어 시간이 걸립니다. 상태바의 취소로 멈출 수 있습니다.', 'ok');
-
-  collectAll.aborted = false;
-  let done = 0, failed = 0;
-
-  // 누른 버튼 자리에서 진행을 보여 준다. 끝나면 loadAlter가 다시 그리므로 복구는 보험이다.
-  const restore = btnBusy($('#collect-all'), '수령 중… (0/' + targets.length + ')');
-
-  for (let i = 0; i < targets.length; i++) {
-    if (collectAll.aborted) break;
-    const name = targets[i];
-    const label = '(' + (i + 1) + '/' + targets.length + ') ' + name + ' 시설';
-    btnBusyText($('#collect-all'), '수령 중… (' + (i + 1) + '/' + targets.length + ') ' + name);
-
-    // 앞 시설의 보상 창이 남아 있으면 먼저 정리될 때까지 기다린다
-    if (i > 0 && !(await waitForUserInput(label))) {
-      toast('중단', '확인 창이 닫히지 않아 멈췄습니다.', 'bad');
-      break;
-    }
-
-    let r = await runAction('complete_altering_work', { displayName: name },
-      { label: label + ' 수령', skipConfirm: true });
-
-    // 진행 중 창이 떠서 막혔으면, 사람이 닫기를 기다렸다가 한 번 더 시도한다
-    if (r && !r.ok && r.error === 'blocked') {
-      if (await waitForUserInput(label)) {
-        r = await runAction('complete_altering_work', { displayName: name },
-          { label: label + ' 수령(재시도)', skipConfirm: true });
-      }
-    }
-
-    if (r && r.ok) done++;
-    else failed++;
-  }
-
-  setBusy(false);
-  restore();
-  toast('전체 수령 종료', '완료 ' + done + '곳' + (failed ? ' · 실패 ' + failed + '곳' : ''), failed ? 'bad' : 'ok');
-  loadAlter(true);
-}
-
 
 /**
  * 가공 큐 자동 채우기.

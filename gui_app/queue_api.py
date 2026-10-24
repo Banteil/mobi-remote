@@ -8,6 +8,7 @@
 """
 import logging
 import math
+import time
 
 from mabi import gamedata as gd
 from mabi.runner import RunOptions, load_config
@@ -136,12 +137,24 @@ class GoalKind(RemoteKind):
                 + (f" · 날개 {_num(x['spent'])}" if x.get("spent") else "") + (f" · {x['via']}" if x.get("via") else ""))
 
 
-class ActionKind(RemoteKind):
-    """한 번 하는 행동 (제작·채집·가공·수령·연주 버튼)."""
+class ActionKind(Kind):
+    """한 번 하는 행동 (제작·채집·가공·수령·연주 버튼). 비용 확인은 화면이 카드를 넣기 전에 받았다."""
+
+    def __init__(self, api):
+        self.api = api
 
     @staticmethod
     def detail(x) -> str:
         return x.get("detail") or ""
+
+    def run(self, q, it):
+        if it.get("act") == "collectAll":
+            return self.api._q_collect_all(q, it)
+        r = self.api.exec(it.get("command"), it.get("body"), origin={"label": it.get("label"), "act": it.get("act")})
+        if not r.get("ok"):
+            ko = r.get("ko") or {}
+            q.note(it, "실패 — " + (ko.get("text") or r.get("message") or r.get("error") or "알 수 없음"))
+        return bool(r.get("ok"))
 
 
 class QueueApi:
@@ -153,7 +166,7 @@ class QueueApi:
         emit = lambda ch, v: self._emit(ch, v)  # noqa: E731 — 창은 나중에 붙는다
         self.queue = WorkQueue(self.cd.queue_file, self.cd.history_file, emit,
                                {"daily": DailyKind(self), "abyss": AbyssKind(self), "goal": GoalKind(emit),
-                                "action": ActionKind(emit)},
+                                "action": ActionKind(self)},
                                on_start=self.daily_pauseCancel,  # 다른 일이 돌면 F12 는 그 일의 것 — 숙제를 깨우지 않는다
                                on_drained=self._q_drained, on_idle=self._q_idle)
         self._q_idle(self.queue)  # 일시정지한 숙제를 남긴 채 껐다 켰어도 F12 로 이어 한다
@@ -189,6 +202,53 @@ class QueueApi:
         self._q_toast("화면 설정을 파일로 맞췄습니다" if m.get("running") is False else "화면 설정을 맞췄습니다", m.get("message", ""))
         q.session["screen"] = m.get("running") is not False
         return True
+
+    def _q_wait_dialog_closed(self, q: WorkQueue, label: str, limit: float = 120) -> bool:
+        """게임에 확인 창(대화)이 떠 있으면 사람이 닫을 때까지 기다린다 (처음 한 번 알림). 닫혔으면 True.
+        큐가 서면(q.stop) 그만 기다린다."""
+        end, told = time.monotonic() + limit, False
+        while time.monotonic() < end:
+            if q.stop:
+                return False
+            a = self.query("activity", {})
+            if not (isinstance(a, dict) and a.get("dialogue")):
+                return True
+            if not told:
+                told = True
+                self._q_toast("게임에서 확인이 필요합니다", f"{label} — 게임 창에서 확인을 눌러 주세요. 닫히면 자동으로 이어갑니다.", "bad")
+            time.sleep(2)
+        return False
+
+    def _q_collect_all(self, q: WorkQueue, it: dict) -> bool:
+        """가공 완료분 전체 수령 — 완료분이 있는 시설마다 complete_altering_work 한 번.
+        수령은 비용이 없고 되돌릴 것도 없어 묻지 않는다. 앞 시설의 보상 창이 남아 있으면 닫히길 기다린다."""
+        w = self.query("alteringWorks", {"refresh": True})
+        targets = [f["completed"][0]["name"] for f in (w.get("facilities") or []) if f.get("completed")]
+        if not targets:
+            q.note(it, "수령할 작업 없음")
+            self._q_toast("수령할 작업 없음")
+            return True
+        done = failed = 0
+        for i, name in enumerate(targets):
+            if q.stop:
+                break
+            label = f"({i + 1}/{len(targets)}) {name} 시설"
+            q.note(it, f"수령 중… {label}")
+            if i > 0 and not self._q_wait_dialog_closed(q, label):
+                q.note(it, "확인 창이 닫히지 않아 멈춤")
+                break
+            origin = {"label": f"{label} 수령", "act": "collect"}
+            r = self.exec("complete_altering_work", {"displayName": name}, origin=origin)
+            if not r.get("ok") and r.get("error") == "blocked" and self._q_wait_dialog_closed(q, label):
+                r = self.exec("complete_altering_work", {"displayName": name}, origin={**origin, "label": f"{label} 수령(재시도)"})
+            if r.get("ok"):
+                done += 1
+            else:
+                failed += 1
+        q.note(it, f"완료 {done}곳" + (f" · 실패 {failed}곳" if failed else ""))
+        self._q_toast("전체 수령 종료", f"완료 {done}곳" + (f" · 실패 {failed}곳" if failed else ""), "bad" if failed else "ok")
+        self._emit("mm:exec-done", {"command": "complete_altering_work", "ok": True, "origin": {"act": "collectAll", "quiet": True}})
+        return failed == 0 and not q.stop
 
     def _q_drained(self, q: WorkQueue) -> None:
         """할 일이 다 끝났다 (일시정지 카드도 없음) → 이번 큐에서 맞춘 화면 설정을 되돌린다."""

@@ -199,8 +199,7 @@ const Q_KINDS = {
     doneToast: (x) => ['목표 달성', x.label + ' 새로 ' + num(x.target) + '개' + (x.spent ? ' · 날개 ' + num(x.spent) : '')],
   },
   action: {
-    run: (it) => runActionItem(it),  // 결과 토스트는 runAction 이 띄운다
-    amount: (x) => x.detail || '',
+    amount: (x) => x.detail || '',  // 실행은 파이썬 (queue_api.ActionKind) — 결과는 mm:exec-done 으로 알린다
   },
 };
 
@@ -315,16 +314,10 @@ async function actGoal(spec) {
   toast('큐에 담았습니다', it.label + ' — 재생을 누르면 진행합니다.', 'ok');
 }
 
-const ACT_REFRESH = { craft: () => loadCraft(true), alter: () => loadAlter(true), collect: () => loadAlter(true) };
-
-/** 큐가 부른다. 행동 하나를 하고 성공했으면 true. */
-async function runActionItem(it) {
-  if (it.act === 'collectAll') { await collectAll(); return true; }
-  const r = await runAction(it.command, it.body, { label: it.label, skipConfirm: true });
-  if (ACT_REFRESH[it.act]) ACT_REFRESH[it.act]();
-  if (!r || !r.ok) qNote(it, '실패 — ' + ((r && r.ko && r.ko.text) || (r && (r.message || r.error)) || '알 수 없음'));
-  return !!(r && r.ok);
-}
+/** 큐가 행동을 마친 뒤 다시 읽을 탭 (app.js 의 mm.onExecDone 이 부른다) */
+const ACT_REFRESH = {
+  craft: () => loadCraft(true), alter: () => loadAlter(true), collect: () => loadAlter(true), collectAll: () => loadAlter(true),
+};
 
 /** 이 항목부터 돌린다 (끝난 것이면 다시 걸기). */
 function qPlayOne(id) { mm.queue.playOne(id); }
