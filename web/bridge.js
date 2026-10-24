@@ -112,7 +112,7 @@
 
     // 일일 숙제 (파이썬판에서 새로 생긴 것)
     daily: {
-      state: c('daily.state'), stop: c('daily.stop'), pauseCancel: c('daily.pauseCancel'),
+      state: c('daily.state'), stop: c('daily.stop'),
       settings: c('daily.settings'), saveSettings: c('daily.saveSettings'),
       shot: c('daily.shot'),
       openFolder: c('daily.openFolder'),

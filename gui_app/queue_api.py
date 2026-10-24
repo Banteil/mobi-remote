@@ -8,6 +8,7 @@
 """
 import logging
 import math
+import threading
 import time
 
 from mabi import gamedata as gd
@@ -46,7 +47,7 @@ class DailyKind(Kind):
         def on_event(e):
             if e.get("type") == "task_start" and e.get("label"):
                 q.note(it, e["label"])
-        t = api._daily_launch(opts, on_event=on_event)  # F12 이어 하기는 큐가 쉴 때 켠다 (QueueApi._q_idle)
+        t = api._daily_launch(opts, on_event=on_event)
         if fit:
             q.session["iface"] = True
         t.join()
@@ -60,11 +61,8 @@ class DailyKind(Kind):
         return True  # 끝까지 돌았다 (실패한 숙제가 있어도 — 결과는 보고서로 본다)
 
     def stop(self, reason):
-        # 카드를 뺐으면 종료 (F12 로 이어 하지 않음), 아니면 일시정지
+        # 카드를 뺐으면 종료, 아니면 일시정지 (진행 기록으로 끊긴 자리부터 이어 한다)
         self.api.daily_stop(reason == "remove")
-
-    def removed(self, it):
-        self.api.daily_pauseCancel()  # 일시정지한 숙제 카드를 지우면 F12 이어 하기도 끈다
 
 
 class AbyssKind(Kind):
@@ -162,19 +160,45 @@ class QueueApi:
         self.queue = WorkQueue(self.cd.queue_file, self.cd.history_file, emit,
                                {"daily": DailyKind(self), "abyss": AbyssKind(self), "goal": GoalKind(emit),
                                 "action": ActionKind(self)},
-                               on_start=self.daily_pauseCancel,  # 다른 일이 돌면 F12 는 그 일의 것 — 숙제를 깨우지 않는다
-                               on_drained=self._q_drained, on_idle=self._q_idle, pause_note=self._q_pause_note)
-        self._q_idle(self.queue)  # 일시정지 카드를 남긴 채 껐다 켰어도 F12 로 이어 한다
+                               on_drained=self._q_drained, pause_note=self._q_pause_note)
+        threading.Thread(target=self._q_hotkey, name="queue-f12", daemon=True).start()
 
     def _q_pause_note(self) -> str:
         key = str(load_config(self.paths)["game"].get("stop_key", "f12")).upper()
         return f"일시정지 · {key} 나 ▶ 로 재개"
 
-    def _q_idle(self, q: WorkQueue) -> None:
-        """큐가 쉰다. 일시정지 카드가 있으면 F12 로 맨 위 일시정지 카드를 이어 할 수 있게 감시를 켠다
-        (숙제가 멈출 때만 켜던 때는 리모콘을 다시 켜면 '이어 하기 (F12)' 가 안 들었다 — 2026-10-24)."""
-        if q.top_paused():
-            self._daily_wait_resume(q.resume_top)
+    def _q_stop_key(self) -> None:
+        """일시정지 키를 눌렀다: 돌고 있으면 일시정지, 쉬고 있으면 맨 위 일시정지 카드 이어 하기."""
+        q = self.queue
+        if q.running:
+            log.info("F12 → 작업 큐 일시정지")
+            q.request_stop("pause")
+            self.cli.cancel()
+        elif q.top_paused():
+            log.info("F12 → 이어 하기")
+            q.resume_top()
+
+    def _q_hotkey(self) -> None:
+        """일시정지 키(F12) 하나로 작업 큐 전체를 다룬다 — 앱이 켜져 있는 동안 늘 본다.
+          큐가 돌고 있으면 → 무엇이 돌든 일시정지 (지금 명령도 끊는다 — ■ 와 같다)
+          쉬고 있으면     → 맨 위 일시정지 카드를 이어 한다
+        예전에는 숙제·어비스가 저마다 F12 를 봐서 행동·목표 카드는 F12 로 안 멈췄고, 이어 하기 감시는 숙제가
+        멈출 때만 켜져 리모콘을 다시 켜면 안 들었다 (2026-10-24). 숙제·어비스 안의 중단 감시는 그대로 두지만,
+        키 상태를 읽기만 하므로(GetAsyncKeyState 0x8000) 서로 눌림을 빼앗지 않는다."""
+        from mabi.inputs import key_pressed, vk_of
+        vk, checked, down = None, 0.0, False
+        while True:
+            try:
+                if time.monotonic() - checked > 3:  # 설정에서 키를 바꿀 수 있다
+                    vk, checked = vk_of(load_config(self.paths)["game"].get("stop_key", "f12")), time.monotonic()
+                now = key_pressed(vk)
+                if now and not down:
+                    self._q_stop_key()
+                down = now
+            except Exception:  # noqa: BLE001 — 감시가 죽으면 F12 가 영영 안 든다
+                log.exception("F12 감시 오류")
+                time.sleep(1)
+            time.sleep(0.03)
 
     def _q_toast(self, title: str, text: str = "", kind: str = "ok") -> None:
         self._emit("mm:queue-toast", {"title": title, "text": text, "kind": kind})

@@ -84,12 +84,11 @@ class DailyApi:
 
     _daily_result: tuple = ("failed", "")
 
-    def _daily_launch(self, run_opts: RunOptions, on_event=None, on_resume=None) -> threading.Thread:
+    def _daily_launch(self, run_opts: RunOptions, on_event=None) -> threading.Thread:
         """숙제를 작업 스레드에서 돌리고 그 스레드를 돌려준다 (작업 큐가 join 으로 기다린다).
         결과는 self._daily_result = ('done', results) | ('failed', 메시지). 진행은 'mm:daily' 로 화면에.
-        F12·일시정지로 멈췄으면 F12 를 다시 누를 때 on_resume() (진행 기록으로 끊긴 자리부터 이어 한다)."""
+        F12 로 멈춘 뒤 이어 하기는 작업 큐가 한다 (queue_api — 진행 기록으로 끊긴 자리부터)."""
         self._daily_hook_log()
-        self.daily_pauseCancel()
         on_event = on_event or (lambda e: None)
 
         def event(e):
@@ -109,13 +108,11 @@ class DailyApi:
                 self._emit("mm:daily", {"type": "failed", "message": msg})
                 return
             self._daily_result = ("done", results)
-            # F12·일시정지 버튼으로 멈췄으면 '일시정지' — F12 를 다시 누르면 이어 한다.
+            # F12·일시정지 버튼으로 멈췄으면 '일시정지' — F12 를 다시 누르면 이어 한다 (작업 큐).
             # 큐에서 숙제 카드를 지워 멈춘 것(_daily_end)은 종료
             if any(s == "STOP" for _, s, _ in results or []) and not self._daily_end:
                 log.info("일시정지 — F12 를 다시 누르면 이어 합니다")
                 self._emit("mm:daily", {"type": "paused"})
-                if on_resume:
-                    self._daily_wait_resume(on_resume)
             elif not any(s == "STOP" for _, s, _ in results or []):
                 self._bring_front()  # 끝까지 돌았다 → 결과 창(화면이 'done' 에 띄움)이 게임 위로 보이게
         self._daily_thread = threading.Thread(target=work, name="daily", daemon=True)
@@ -141,38 +138,8 @@ class DailyApi:
     def daily_stop(self, end: bool = False) -> dict:
         """end=False: 일시정지 (F12 로 이어 함), True: 종료 (큐에서 카드를 지움)."""
         self._daily_end = bool(end)
-        if end:
-            self.daily_pauseCancel()
         if self._daily_runner:
             self._daily_runner.stop()
-        return {"ok": True}
-
-    # ---- 일시정지 중 F12 → 이어 하기 ----
-    _pause_wait: threading.Event | None = None
-
-    def _daily_wait_resume(self, on_resume=None) -> None:
-        """일시정지한 숙제를 F12 로 이어 하기. 다른 작업이 돌기 시작하면 작업 큐가 끈다 (daily_pauseCancel)."""
-        from mabi.inputs import key_pressed, vk_of
-        self.daily_pauseCancel()
-        stop = self._pause_wait = threading.Event()
-        vk = vk_of(load_config(self.paths)["game"]["stop_key"])
-
-        def work():
-            while key_pressed(vk) and not stop.is_set():  # 멈출 때 누른 F12 를 뗄 때까지
-                time.sleep(0.05)
-            while not stop.is_set():
-                if key_pressed(vk):
-                    stop.set()
-                    log.info("F12 → 이어 하기")
-                    if on_resume:
-                        on_resume()
-                    return
-                time.sleep(0.05)
-        threading.Thread(target=work, name="daily-resume", daemon=True).start()
-
-    def daily_pauseCancel(self) -> dict:  # noqa: N802
-        if self._pause_wait:
-            self._pause_wait.set()
         return {"ok": True}
 
     # ---- 게임 화면 설정 (숙제·어비스 시작 전에 작업 큐가 확인·맞춤 — queue_api._q_display) ----
@@ -283,8 +250,6 @@ class DailyApi:
             if e.get("type") in ("done", "failed"):
                 self._abyss_result = e
         self._abyss_result = {"type": "failed", "message": "시작하지 못함"}
-        # 일시정지해 둔 숙제의 'F12 로 이어 하기' 감시를 끈다 — 안 그러면 어비스를 멈추는 F12 가 숙제도 깨운다 (2026-10-24)
-        self.daily_pauseCancel()
         doc = self._doc()
         if "abyss" not in doc:
             doc["abyss"] = tomlkit.table()

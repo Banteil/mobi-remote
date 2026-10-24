@@ -79,5 +79,48 @@ class ActionKindTest(unittest.TestCase):
         self.assertEqual(len(api.calls), 1)
 
 
+class StopKeyTest(unittest.TestCase):
+    """F12 하나로 작업 큐 전체 — 돌고 있으면 무엇이든 일시정지, 쉬고 있으면 맨 위 일시정지 카드 이어 하기."""
+
+    def api(self, running, paused):
+        class Cli:
+            canceled = 0
+
+            def cancel(self):
+                Cli.canceled += 1
+
+        class Q:
+            def __init__(self):
+                self.running, self.calls = running, []
+
+            def request_stop(self, r):
+                self.calls.append(("stop", r))
+
+            def top_paused(self):
+                return {"id": 1} if paused else None
+
+            def resume_top(self):
+                self.calls.append(("resume",))
+        a = FakeApi([])
+        a.queue, a.cli = Q(), Cli()
+        return a
+
+    def test_running_pauses_anything(self):
+        a = self.api(running=True, paused=False)
+        a._q_stop_key()
+        self.assertEqual(a.queue.calls, [("stop", "pause")])
+        self.assertEqual(a.cli.canceled, 1)  # 행동·목표의 지금 명령도 끊는다
+
+    def test_idle_resumes_top(self):
+        a = self.api(running=False, paused=True)
+        a._q_stop_key()
+        self.assertEqual(a.queue.calls, [("resume",)])
+
+    def test_idle_nothing(self):
+        a = self.api(running=False, paused=False)
+        a._q_stop_key()
+        self.assertEqual(a.queue.calls, [])
+
+
 if __name__ == "__main__":
     unittest.main()
