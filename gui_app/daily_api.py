@@ -22,14 +22,16 @@ log = logging.getLogger("mabi")
 
 
 class _LogToScreen(logging.Handler):
-    def __init__(self, emit):
+    """로그 줄을 화면으로. ch 로 어느 탭 로그인지 알린다 — 'daily' 숙제 · 'abyss' 어비스 · 'all' 둘 다 (공통)."""
+
+    def __init__(self, emit, channel_of):
         super().__init__(logging.INFO)
-        self.emit_fn = emit
+        self.emit_fn, self.channel_of = emit, channel_of
         self.setFormatter(logging.Formatter("%(asctime)s %(message)s", "%H:%M:%S"))
 
     def emit(self, record):  # noqa: A003
         try:
-            self.emit_fn("mm:daily-log", {"level": record.levelname, "text": self.format(record)})
+            self.emit_fn("mm:daily-log", {"level": record.levelname, "text": self.format(record), "ch": self.channel_of(record)})
         except Exception:
             pass
 
@@ -43,8 +45,21 @@ class DailyApi:
 
     def _daily_hook_log(self) -> None:
         if not self._daily_log_hooked:
-            log.addHandler(_LogToScreen(self._emit))
+            log.addHandler(_LogToScreen(self._emit, self._log_channel))
             self._daily_log_hooked = True
+
+    def _log_channel(self, record) -> str:
+        """이 로그 줄이 어느 탭 것인가. 남긴 스레드로 본다 — 숙제·어비스 스레드는 그대로, 작업 큐 스레드는 그때 돌던 카드
+        (화면 설정 맞추기 등). 그 밖(F12 감시, 화면 설정 되돌리기 …)은 둘 다."""
+        name = record.threadName or ""
+        if name in ("daily", "abyss"):
+            return name
+        q = getattr(self, "queue", None)
+        if name == "work-queue" and q:
+            cur = q.current()
+            if cur and cur.get("kind") in ("daily", "abyss"):
+                return cur["kind"]
+        return "all"
 
     # ---- 상태 ----
     def daily_state(self) -> dict:

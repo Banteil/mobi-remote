@@ -122,5 +122,29 @@ class StopKeyTest(unittest.TestCase):
         self.assertEqual(a.queue.calls, [])
 
 
+class LogChannelTest(unittest.TestCase):
+    """로그 줄이 어느 탭 것인가 (DailyApi._log_channel) — 숙제는 숙제 탭, 어비스는 어비스 탭, 공통은 둘 다."""
+
+    def ch(self, thread, running_kind=None):
+        import logging
+        rec = logging.LogRecord("mabi", logging.INFO, "", 0, "x", None, None)
+        rec.threadName = thread
+
+        class Q:
+            def current(self):
+                return {"kind": running_kind} if running_kind else None
+        from gui_app.daily_api import DailyApi
+        a = DailyApi()
+        a.queue = Q()
+        return a._log_channel(rec)
+
+    def test_channels(self):
+        self.assertEqual(self.ch("daily"), "daily")
+        self.assertEqual(self.ch("abyss"), "abyss")
+        self.assertEqual(self.ch("work-queue", "abyss"), "abyss")  # 어비스 카드의 화면 설정 맞추기
+        self.assertEqual(self.ch("work-queue", "action"), "all")
+        self.assertEqual(self.ch("queue-f12"), "all")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -115,10 +115,11 @@ mm.daily.onEvent((e) => {
   // 일시정지 중 F12 → 이어 하기는 파이썬 작업 큐가 한다 (다른 작업이 돌고 있으면 그 F12 는 그 작업의 것)
 });
 
-// 로그는 일일 숙제 · 어비스 탭 둘 다에 (같은 로그 — 어느 쪽에서 돌렸든 보이게)
+// 로그는 남긴 쪽 탭에만 — 숙제는 일일 숙제 탭, 어비스는 어비스 탭, 공통(F12·화면 설정 되돌리기 등)은 둘 다 (m.ch)
 mm.daily.onLog((m) => {
   if (!m) return;
-  for (const pre of [$('#dl-log'), $('#ab-log')]) {
+  const tabs = m.ch === 'abyss' ? [$('#ab-log')] : m.ch === 'daily' ? [$('#dl-log')] : [$('#dl-log'), $('#ab-log')];
+  for (const pre of tabs) {
     if (!pre) continue;
     const line = document.createElement('div');
     if (m.level === 'WARNING') line.className = 'w';
@@ -128,7 +129,7 @@ mm.daily.onLog((m) => {
     if (pre.childElementCount > 1500) pre.removeChild(pre.firstChild);
     pre.scrollTop = pre.scrollHeight;
   }
-  $('#dl-log-n').textContent = ++dl.logN + '줄';
+  if (m.ch !== 'abyss') $('#dl-log-n').textContent = ++dl.logN + '줄';
 });
 
 /* 화면 설정 맞추기·되돌리기는 작업 큐(파이썬)가 한다. 큐가 다 끝나 되돌렸으면 알린다 */
