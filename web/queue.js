@@ -1,48 +1,6 @@
 'use strict';
-/* 작업 큐 — 목표 루프 · 큐 · 한 번 하는 행동 · 작업 기록. app.js 에서 나눔 — 같은 전역을 쓴다 (index.html 의 script 순서 참고). */
-
-/* ── 목표 걸기 ───────────────────────────────────── */
-
-/* "이걸 N개 만들어 줘" — 끝까지 미는 것은 파이썬 작업 큐 (gui_app/queue_api.py GoalKind). 여기서는 견적을 보여 주고 담는다. */
-
-/**
- * 목표를 큐에 건다.
- *
- * target 은 **새로 만들 개수**다. 판단 엔진(goal.js)은 "몇 개를 들고 있으면 끝인가"로
- * 보므로, 시작 시점의 보유량을 더해 절대 목표로 바꿔 넘긴다. 그 기준점은 큐가 이 항목을
- * 실제로 집어 들 때 다시 잡는다 — 줄 서 있는 동안 직접 캐 왔을 수도 있다.
- */
-async function runGoal(name, target, label, via, have) {
-  if (busy) { toast('실행 중', '이전 명령이 끝난 뒤 시도하세요.', 'bad'); return; }
-
-  const base = Math.max(0, Number(have) || 0);
-  const pre = await mm.goal.next(name, base + target);
-  if (pre.error) { toast('계획 실패', pre.message || pre.error, 'bad'); return; }
-  if (pre.step.kind === 'blocked') { await goalBlockedModal(pre.step, label || name); return; }
-
-  const bal = await mm.query('wings', {});
-  const est = pre.estimate;
-  const okGo = await confirmModal('자동 진행',
-    '<p>' + esc(label || name) + ' 를 <b>새로 ' + num(target) + '개</b> 만듭니다. ' +
-    '<span class="muted">(지금 ' + num(pre.have) + '개 → ' + num(pre.have + target) + '개)</span></p>' +
-    '<div class="cost">' +
-      '<div>예상 <span class="big">' + num(est.wings) + '</span> 정령의 날개' +
-      ' <span class="muted">(호출 ' + est.calls + '회)</span></div>' +
-      '<div class="muted">보유 ' + num(bal.amount || 0) + '</div>' +
-    '</div>' +
-    (est.partial
-      ? '<p class="hint mark-warn">이 견적은 <b>하한</b>입니다. 아직 모르는 레시피가 있어 그 아래 단계는 셀 수 없고, ' +
-        '채집이 한 번에 몇 개를 줄지도 해 봐야 압니다.</p>'
-      : '') +
-    '<p class="hint">채집·가공·제작을 필요한 만큼 이어서 돌립니다. ' +
-    '상태바의 <b>취소</b>로 언제든 멈출 수 있습니다.</p>');
-  if (!okGo) return;
-
-  // 바로 돌리지 않고 큐에 넣는다. 오른쪽 목록에서 순서를 바꾸거나 빼거나 수량을 고칠 수 있고,
-  // 여러 목표를 걸어 두고 자리를 비울 수도 있다.
-  qAdd({ via: via || '제작', name: name, label: label || name, target: target,
-    wings: est.wings, partial: !!est.partial });
-}
+/* 작업 큐 화면 — 카드 그리기 · 버튼 · 한 번 하는 행동 담기 · 막힘 질문 창 · 작업 기록. 큐 자체는 파이썬(mabi/workqueue.py).
+ * 같은 전역을 쓴다 (index.html 의 script 순서 참고). */
 
 /* ── 작업 큐 ────────────────────────────────────── */
 

@@ -1,11 +1,4 @@
-"""작업 큐 저장·기록 (queue.json · queue-history.jsonl). 큐를 돌리는 것은 화면(web/queue.js)이다.
-
-캐릭터는 하나고 CLI 호출도 하나씩이라 동시에 돌릴 수가 없어서 큐다. 걸어 두면 순서대로 진행되고,
-진행 중에도 뒤에 붙이거나 순서를 바꿀 수 있다. 껐다 켜도 목록이 남게 queue.json 에 저장하고,
-진행 중이던 항목은 다시 켤 때 대기로 되돌린다 — 앱이 꺼진 동안 진행됐을 리가 없다.
-
-상태: wait(대기) · run(진행 중) · pause(일시정지) · done(완료) · fail(중단)
-"""
+"""작업 큐 카드 저장(queue.json)·작업 기록(queue-history.jsonl) 파일. 큐 자체는 mabi/workqueue.py 다."""
 import json
 from pathlib import Path
 

@@ -122,10 +122,12 @@ gui.py              GUI 실행 (관리자 아니면 UAC 로 다시) → gui_app/
 run.py              콘솔 실행 (일일 숙제만)
 web/                화면 — app.js(공통·탭 틀) · craft.js · queue.js · music.js · dye-ui.js · daily.js · chars.js,
                     main.js(시작, 마지막에 읽음) + bridge.js. 같은 전역을 써서 index.html 의 script 순서가 중요하다
-gui_app/            web_shell(QtWebEngine 껍데기) · web_main(진입점·트레이) · api(+legacy_shapes) · daily_api · chars_api · dye_service
-                    (옛 Qt 탭 main.py, *_tab.py 는 남아 있음 — 정리 예정)
-mabi/               엔진: paths, runner, report, bot, vision, ocr, inputs, game_state, profile, whoami, connector, cache, query,
-                    craft/, dye/, tasks/(login, charscan, weekday, silver, tribute, black_hole, daily_mission, content)
+gui_app/            web_shell(QtWebEngine 껍데기) · web_main(진입점·트레이) · api(+legacy_shapes) · daily_api · chars_api ·
+                    queue_api(작업 큐 카드 종류: 숙제·어비스·목표·행동, F12) · dye_service(+dye_tab: 겹쳐 그리는 창)
+mabi/               엔진: paths, userconfig, runner, report, bot, vision, ocr, inputs, game_state, profile, whoami, connector,
+                    cache, query, progress, workqueue(작업 큐), craft/, dye/,
+                    tasks/(login, charscan, weekday, silver, tribute, black_hole, daily_mission, arbeit, abyss, display, content)
+tests/              python -m unittest discover tests · node tests/queue.test.js (게임 없이)
 config.toml         숙제 설정 — 기본값과 다른 값만 (mabi.userconfig, 화면은 tomlkit 으로 고침)
 profile.json        숙제할 슬롯·이름 · characters.json 슬롯별 지문·카드 정보 · portraits/ 카드 그림
 ```

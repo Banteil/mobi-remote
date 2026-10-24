@@ -343,7 +343,8 @@ class Api(DailyApi, CharsApi, QueueApi):
 
     # ---------------------------------------------------------------- 목표·계획 (전부 무료 조회)
     def goal_next(self, name, target):
-        """한 걸음씩 물어보고 화면이 실행한다. 한 걸음 돌린 뒤의 캐시는 옛것이라 매번 새로 읽는다."""
+        """다음 한 걸음. 작업 큐(queue_api.GoalKind)가 실행하고, 화면은 담기 전에 견적으로 부른다.
+        한 걸음 돌린 뒤의 캐시는 옛것이라 매번 새로 읽는다."""
         return goal.next_for(self.cd, self.qc, name, target, refresh=True)
 
     def plan_craft(self, name, target, opts=None):
@@ -793,12 +794,6 @@ class Api(DailyApi, CharsApi, QueueApi):
         return None
 
     # ---------------------------------------------------------------- 루틴 (화면이 쓰지 않는 레거시 기능)
-    def routines_list(self):
-        return []
-
-    def routines_run(self, rid=None, opts=None):
-        return {"error": "not_supported"}
-
     # ---------------------------------------------------------------- 캐시
     def cache_list(self):
         out = []

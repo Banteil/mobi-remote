@@ -106,7 +106,6 @@
     },
     fav: { all: c('fav.all'), toggle: c('fav.toggle'), clear: c('fav.clear') },
     version: { info: c('version.info'), check: c('version.check'), accept: c('version.accept') },
-    routines: { list: c('routines.list'), run: c('routines.run') },
     cache: { list: c('cache.list'), clear: c('cache.clear') },
     openExternal: c('openExternal'),
 
@@ -131,7 +130,6 @@
 
     onExecStart: (cb) => on('mm:exec-start', cb),
     onExecDone: (cb) => on('mm:exec-done', cb),
-    onRoutineEvent: (cb) => on('mm:routine-event', cb),
     onFacilityLevel: (cb) => on('mm:facility-level', cb),
   };
 

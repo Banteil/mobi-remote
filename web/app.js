@@ -811,12 +811,6 @@ function btnBusy(el, text) {
   };
 }
 
-/** 진행 중인 버튼의 글자만 갈아 끼운다 (스피너는 그대로 둔다). */
-function btnBusyText(el, text) {
-  if (!el || !el.classList.contains('busy')) return;
-  el.innerHTML = '<i class="spin"></i>' + esc(text);
-}
-
 /**
  * 시설 레벨을 고르게 한다. 가공 탭의 칸 표시와 콘솔 탭이 같이 쓴다.
  * @returns 바꿨으면 true
