@@ -259,25 +259,22 @@ async function runDailyItem(it) {
   if (e.type === 'failed') { qNote(it, '실패 — ' + (e.message || '')); return false; }
   const res = e.results || [];
   if (res.some((x) => x[1] === 'STOP')) {  // 일시정지(F12·버튼): 카드를 일시정지로 두고 뒤 작업도 세운다. F12 로 이어 함
-    it.pauseAfter = true;
-    qAbort = true;
+    qSetStop('stopped');
     return false;
   }
   return true;
 }
 
-/** 큐의 ⏸·■ → 숙제 일시정지 (F12 나 ▶ 로 이어 함). 어비스는 멈춤 (▶ 로 다시). */
-function qPauseDaily() {
-  if (qItems.some((x) => x.kind === 'daily' && x.status === 'run')) mm.daily.stop(false);
-  if (qItems.some((x) => x.kind === 'abyss' && x.status === 'run')) mm.daily.abyssStop();
+function dailyAmount(x) {
+  return (x.chars || []).length + '명 · ' + (x.only ? '숙제 ' + x.only.length + '개' : '전체') + (x.force ? ' · 다시' : '');
 }
 
-/** 큐에서 숙제 카드를 빼거나 큐를 비우면 숙제는 종료 (F12 로 이어 하지 않음). 어비스 카드면 멈춤. */
-function qStopDaily() {
-  if (qItems.some((x) => x.kind === 'daily' && x.status === 'run')) mm.daily.stop(true);
-  else mm.daily.pauseCancel();
-  if (qItems.some((x) => x.kind === 'abyss' && x.status === 'run')) mm.daily.abyssStop();
-}
+/* 작업 큐 카드 종류 (app.js Q_KINDS). 큐가 서면: 숙제는 일시정지 (카드를 뺐으면 종료 — F12 로 이어 하지 않음), 어비스는 멈춤 */
+Q_KINDS.daily = {
+  run: (it) => runDailyItem(it),
+  amount: dailyAmount,
+  stop: (reason) => mm.daily.stop(reason === 'remove'),
+};
 
 /* ── 설정 ── */
 
@@ -500,12 +497,18 @@ async function runAbyssItem(it) {
   it.doneSecs = (it.doneSecs || 0) + (it.lastSecs || 0);
   if (e.type === 'failed') { qNote(it, '실패 — ' + (e.message || '')); return false; }
   if (e.stopped) {  // F12·멈추기: 카드를 일시정지로 두고 뒤 작업도 세운다 (▶ 로 다시)
-    it.pauseAfter = true;
-    qAbort = true;
+    qSetStop('stopped');
     return false;
   }
   return true;
 }
+
+Q_KINDS.abyss = {
+  run: (it) => runAbyssItem(it),
+  amount: (x) => abyssAmount(x),
+  doneToast: (x) => ['어비스 반복 끝', x.label + ' · ' + abyssAmount(x)],
+  stop: () => mm.daily.abyssStop(),
+};
 
 mm.daily.onAbyss((e) => {
   if (!e) return;
