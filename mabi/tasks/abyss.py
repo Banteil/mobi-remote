@@ -145,6 +145,7 @@ def _open_list(bot: Bot, menu_open: bool = False) -> None:
         bot.sleep(1.5, 1.8)
         if _find_text(bot, gd.text("abyss_menu"), gd.region("menu_right")):
             break
+        bot.clear_blockers(ocr=True)  # ESC 를 먹은 창 (메인 HUD 가 보이는 채로 뜬 퀘스트 완료 창 등)
     _click_text(bot, gd.text("abyss_menu"), gd.region("menu_right"), what="메뉴의 어비스")
     bot.sleep(1.0, 1.5)
 
@@ -464,6 +465,12 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
                     if after_clear(bot):  # 나가기 키가 안 들었다
                         bot.key("esc")
                         _wait_settled(bot, bot.cfg["timing"]["loading"])
+                # 판 수를 채운 판에서 깨진 퀘스트(주말 어비스 3판 등)의 완료 창이 필드로 나온 뒤 뜬다. 메인 HUD 가
+                # 보이는 채로 떠서 ESC 를 먹어, 다음 카드가 캐릭터를 바꾸려다 메뉴가 안 열려 실패했다 (2026-10-24 21:24).
+                # 무한 반복은 '다시 하기' Space 가 그 창의 '확인' 까지 눌러 넘어갔다
+                for _ in range(3):
+                    bot.sleep(1.5, 2)
+                    bot.clear_blockers(ocr=True)
                 break
             bot.key("space")  # 다시 하기 (Space) → 같은 던전·난이도로 다시 매칭
             bot.sleep(2, 3)

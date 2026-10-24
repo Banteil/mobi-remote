@@ -55,6 +55,6 @@
     "abyss_entry_right": [1180, 560, 740, 500],
     "abyss_revive_button": [1200, 860, 720, 210],
     "abyss_revive_left": [700, 180, 520, 180],
-    "confirm_button": [660, 970, 600, 80]
+    "confirm_button": [460, 300, 1000, 780]
   }
 }

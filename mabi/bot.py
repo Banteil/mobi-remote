@@ -398,6 +398,8 @@ class Bot:
             except StepTimeout:
                 if i == 2:
                     raise
+                # 메인 HUD 가 보이는 채로 뜬 퀘스트 완료 창이 ESC 를 먹는다 (2026-10-24 어비스 3판 뒤 캐릭터 바꾸기)
+                self.clear_blockers(ocr=True)
                 self.to_main()
         self.click(ui["menu_quit"])
         # 창이 뜨는 애니메이션 중에 클릭하면 아래 '시작 화면으로'가 눌릴 수 있어 단축키(Space)를 쓴다
