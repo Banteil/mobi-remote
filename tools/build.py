@@ -7,7 +7,8 @@
 설치 폴더:
     mobi-remote.exe, _internal\\   파이썬·Qt·OpenCV·OCR (런타임, 약 680MB) — 설치 파일로만 바뀐다
     runtime.txt                   런타임 구성 값 (아래)
-    app\\                          우리 코드(mabi, gui_app)·web·data·templates·config.default.toml, version.json
+    app\\                          우리 코드(mabi, gui_app)·web·data·templates·config.default.toml, version.json,
+                                  packet.key (패킷 상태 표 키 — 저장소엔 없고 개발 PC 에서 넣는다)
                                   — 패치로 통째로 갈아 끼운다 (gui.py)
 구성 값은 파이썬 판, 설치된 패키지 판, exe 에 묶인 모듈 목록, _internal 파일 목록, gui.py 내용의 해시다.
 새 코드가 전에 없던 표준 모듈을 쓰거나 패키지를 올리면 값이 바뀌고, 그러면 새 판 확인이 패치 대신 설치 파일을 받는다.
@@ -90,6 +91,11 @@ def app_dir(out: Path, ver: str, runtime: str) -> Path:
         if src.is_file() and src.suffix != ".pyc":
             (app / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, app / rel)
+    # 패킷 상태 표 키는 저장소에 없다 (mabi/packet_table.py) — 개발 PC 의 것을 직접 넣는다
+    key = ROOT / "packet.key"
+    if not key.exists():
+        raise SystemExit(f"패킷 상태 표 키가 없습니다: {key} (mabi-packets\\packet.key.backup 에서 복사)")
+    shutil.copy2(key, app / key.name)
     (app / "version.json").write_text(json.dumps({"version": ver, "runtime": runtime}), encoding="utf-8")
     (out / "runtime.txt").write_text(runtime, encoding="utf-8")
     # 사용자 데이터가 섞여 들어가지 않았는지 (data\\ 는 제작 레시피 같은 리소스만)

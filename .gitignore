@@ -37,3 +37,6 @@ docs/TEST-*.md
 
 # 화면 설정 되돌리기 기록 (숙제 동안만 맞춘 화면의 원래 값)
 /display_restore.json
+
+# 패킷 상태 표 키 (mabi/packet_table.py). 저장소에 넣지 않고 tools/build.py 가 배포판 app\ 에 넣는다
+/packet.key
