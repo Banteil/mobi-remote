@@ -44,7 +44,7 @@ from .legacy_shapes import Shapes
 log = logging.getLogger("mabi")
 
 APP_NAME = "모비 커넥터 리모콘"
-APP_VERSION = "3.3.0"
+APP_VERSION = "3.3.1"
 
 
 def _ver(v: str) -> tuple:
