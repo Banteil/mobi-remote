@@ -1,20 +1,9 @@
 'use strict';
 /* 작업 큐 — 목표 루프 · 큐 · 한 번 하는 행동 · 작업 기록. app.js 에서 나눔 — 같은 전역을 쓴다 (index.html 의 script 순서 참고). */
 
-/* ── 목표 루프 ───────────────────────────────────── */
+/* ── 목표 걸기 ───────────────────────────────────── */
 
-/**
- * "이걸 N개 만들어 줘"를 끝까지 밀고 간다.
- *
- * 무엇을 할지는 메인(src/goal.js)이 한 걸음씩 정하고, 여기서는 그 걸음을 실행하고
- * 사람이 개입해야 하는 순간만 처리한다. 매 걸음마다 상태를 새로 읽으므로
- * 채집이 예상보다 많이 들어오든, 가공이 늦게 끝나든 알아서 따라간다.
- *
- * 멈추는 조건은 셋뿐이다 — 목표 달성, 사람이 취소, 그리고 **진전이 없을 때.**
- * 마지막이 제일 중요하다. 헛돌면서 날개를 태우는 것이 가장 나쁜 실패다.
- */
-const GOAL_MAX_STEPS = 300;
-const GOAL_STUCK_LIMIT = 4;   // 같은 걸음이 이만큼 연달아 나오면 헛도는 것으로 본다
+/* "이걸 N개 만들어 줘" — 끝까지 미는 것은 파이썬 작업 큐 (gui_app/queue_api.py GoalKind). 여기서는 견적을 보여 주고 담는다. */
 
 /**
  * 목표를 큐에 건다.
@@ -55,122 +44,23 @@ async function runGoal(name, target, label, via, have) {
     wings: est.wings, partial: !!est.partial });
 }
 
-/** 큐 항목이 지금 노리는 절대 수량. 기준점 + 새로 만들 개수. */
-function goalAbsolute(it) {
-  return (it.base || 0) + it.target;
-}
-
-/**
- * 큐에 담긴 목표 하나를 끝까지 민다.
- *
- * 예전에는 이 루프가 곧 자동 진행이었다. 지금은 큐가 순서를 정하고 이 함수는 한 항목만 맡는다.
- * 진행 상황은 상태바가 아니라 그 항목의 카드에 적는다 — 여러 개가 줄 서 있으면 어느 것의
- * 이야기인지 알 수 없기 때문이다.
- *
- * @returns 끝까지 갔으면 true
- */
-async function runGoalItem(it) {
-  const name = it.name, label = it.label;
-
-  // 기준점은 실제로 시작할 때 잡는다. 큐에서 기다리는 동안 보유량이 달라졌을 수 있다.
-  // 이미 잡혀 있다면(정지했다가 이어가는 중) 그대로 둔다 — 다시 잡으면 한 일이 없던 것이 된다.
-  if (it.base === undefined) {
-    try {
-      const r0 = await mm.goal.next(name, 0);
-      it.base = r0 && r0.have !== undefined ? r0.have : 0;
-    } catch (_) { it.base = 0; }
-    saveQueue();
-  }
-  const target = goalAbsolute(it);
-  let spent = 0, done = 0, lastKey = '', repeat = 0;
-  let okEnd = false;
-
-  for (let i = 0; i < GOAL_MAX_STEPS; i++) {
-    if (qStop) break;
-
-    const r = await mm.goal.next(name, goalAbsolute(it));
-    if (r.error) { qNote(it, '중단 — ' + (r.message || r.error)); break; }
-    const st = r.step;
-    it.have = r.have;
-    it.made = Math.max(0, r.have - (it.base || 0));
-
-    if (st.kind === 'done') {
-      qNote(it, '달성 — 새로 ' + num(it.made) + '개 (날개 ' + num(spent) + ')');
-      okEnd = true;
-      break;
-    }
-    if (st.kind === 'blocked') {
-      qNote(it, '막힘 — ' + (st.message || st.reason || ''));
-      if (!(await goalBlockedModal(st, label || name))) break;
-      continue;   // 구해 왔다니 다시 판단해 본다
-    }
-
-    // 같은 걸음만 반복되면 헛도는 것이다. 기다림은 원래 반복되므로 제외한다.
-    const key = st.kind + ':' + (st.name || '') + ':' + (st.batch || st.runs || '');
-    repeat = key === lastKey && st.kind !== 'wait' ? repeat + 1 : 0;
-    lastKey = key;
-    // 학습은 한 번 해 보고 안 되면 더 해도 안 된다. 5씩 태울 이유가 없다.
-    const limit = st.kind === 'learn' ? 1 : GOAL_STUCK_LIMIT;
-    if (repeat >= limit) {
-      qNote(it, '진전이 없어 멈춤 — ' + (st.name || st.kind) + ' ' + (repeat + 1) + '회 반복');
-      break;
-    }
-
-    qNote(it, '[' + (done + 1) + '] ' + (st.why || st.kind));
-
-    if (st.kind === 'wait') {
-      if (!(await goalWait(st))) break;
-      continue;
-    }
-
-    const spentNow = await goalExecute(st, done + 1);
-    if (spentNow === null) break;     // 실패했고 이어갈 수 없다
-    spent += spentNow;
-    done++;
-    it.spent = spent;
-    it.steps = done;
-    saveQueue();
-  }
-
-  setBusy(false);
-  it.spent = spent;
-  it.steps = done;
-  return okEnd;
-}
-
 /* ── 작업 큐 ────────────────────────────────────── */
 
 /**
  * 카드를 줄 세워 두고 위에서부터 하나씩 민다. 캐릭터는 하나고 게임 조작도 한 번에 하나라 동시에 돌릴 수 없어서 큐다.
  *
- * 큐의 주인은 파이썬이다 (mabi/workqueue.py). 순서·상태·멈춤·저장·기록을 거기서 하고, 화면은 'mm:queue' 로 받은
- * 상태를 그리고 버튼을 보내기만 한다. 그래서 화면을 다시 띄워도 숙제·어비스는 끊기지 않고, F12 를 받는 곳도 하나다.
- * 아직 화면에 있는 일(제작 목표·한 번 하는 행동)은 파이썬이 'mm:queue-run' 으로 넘겨 주면 여기서 돌리고
- * queue.uiDone 으로 답한다.
+ * 큐의 주인은 파이썬이다 (mabi/workqueue.py · gui_app/queue_api.py). 순서·상태·실행·멈춤(F12 포함)·저장·기록을
+ * 거기서 하고, 화면은 'mm:queue' 로 받은 상태를 그리고 버튼을 보내기만 한다. 그래서 화면을 다시 띄워도 큐는 끊기지 않는다.
+ * 돌던 카드가 사람에게 물어야 하면(재료를 직접 구해 와야 함) 'mm:queue-ask' 로 묻고, 여기서 창을 띄워 queue.answer 로 답한다.
  *
  * 진행 상황은 상태바가 아니라 **그 항목의 카드**에 적는다. 여러 개가 줄 서 있으면
  * "제작 중"이라는 한 줄만으로는 어느 것 이야기인지 알 수 없다.
  */
 let qItems = [];      // 파이썬이 준 카드 목록 (보기용 — 고치려면 mm.queue.* 로)
 let qRunning = false;
-/** 화면이 돌리고 있는 카드 (goal·action). 진행 수량·메모를 파이썬에 올린다 */
-let qUiItem = null;
 
 /**
- * 화면이 돌리는 카드를 세우는 이유. 파이썬이 'mm:queue-stop' 으로 알려 준다 (돌고 있는 일에만 의미가 있다).
- * 목표 루프는 걸음 사이에 이걸 본다. 생활 스킬 레벨 부족(skill)은 여기서 정해 uiDone 으로 올린다.
- * 둘이 겹치면 센 쪽 — 순서는 파이썬 workqueue.STOP_RANK 와 같다.
- */
-let qStop = null;
-const Q_STOP_RANK = { stopped: 0, preempt: 1, pause: 2, remove: 3, skill: 4 };
-
-function qSetStop(reason, extra) {
-  if (!qStop || Q_STOP_RANK[reason] > Q_STOP_RANK[qStop.reason]) qStop = Object.assign({ reason }, extra);
-}
-
-/**
- * 카드 종류. 종류마다 다른 화면 쪽 처리 (daily·abyss 는 daily.js 가 더한다 — 실행은 파이썬).
- *   run(it)      → 화면이 돌리는 종류만. 끝까지 갔으면 true
+ * 카드 종류의 화면 쪽 표시 (daily·abyss 는 daily.js 가 더한다). 실행은 모두 파이썬.
  *   amount(x)    → 수량·내용 한 줄 (카드)
  *   card(x)      → 카드의 수량 칸 HTML (없으면 amount 한 줄)
  *   editable     → ✎ (목표 수량 바꾸기)
@@ -178,7 +68,6 @@ function qSetStop(reason, extra) {
  */
 const Q_KINDS = {
   goal: {
-    run: (it) => runGoalItem(it),
     editable: true,
     amount: (x) => '목표 ' + num(x.target) + '개' + (x.made ? ' · 만든 ' + num(x.made) : '') +
       (x.spent ? ' · 날개 ' + num(x.spent) : '') + (x.via ? ' · ' + x.via : ''),
@@ -224,12 +113,15 @@ function applyQueue(s) {
 }
 
 async function loadQueue() {
-  try { applyQueue(await mm.queue.state()); } catch (_) { /* 큐를 못 읽어도 화면은 뜬다 */ }
+  try {
+    const s = await mm.queue.state();
+    applyQueue(s);
+    if (s && s.ask) qShowAsk(s.ask);  // 화면을 다시 띄웠는데 기다리는 질문이 있다
+  } catch (_) { /* 큐를 못 읽어도 화면은 뜬다 */ }
 }
 
 mm.queue.onChange(applyQueue);
 mm.queue.onToast((m) => { if (m) toast(m.title, m.text || '', m.kind || 'ok'); });
-mm.queue.onStop((m) => { if (m && m.reason) qSetStop(m.reason); });
 mm.queue.onDone((m) => {
   const it = m && m.item;
   if (!it) return;
@@ -237,32 +129,23 @@ mm.queue.onDone((m) => {
   if (t) toast(t[0], t[1], 'ok');
 });
 
-/** 화면이 돌리는 카드 (goal·action). 끝나면 진행 수량과 함께 답한다. */
-mm.queue.onRun(async (m) => {
-  if (!m || !m.item) return;
-  const it = m.item;
-  qStop = null;
-  qUiItem = it;
-  let ok = false;
-  try { ok = await qKind(it).run(it); }
-  catch (err) { it.note = '오류 — ' + (err && err.message); }
-  qUiItem = null;
-  const stop = qStop && qStop.reason === 'skill' ? qStop : null;
-  qStop = null;
-  mm.queue.uiDone(m.id, { ok: !!ok, patch: qPick(it), stop: stop }).catch(() => {});
+/* 돌던 카드의 질문 (지금은 목표 카드의 '재료를 직접 구해 와야 함'). 큐가 서면 파이썬이 null 을 보내 창을 닫는다 */
+let qAskOpen = null;
+mm.queue.onAsk((ask) => {
+  if (ask) qShowAsk(ask);
+  else if (qAskOpen !== null && !$('#modal').classList.contains('hidden')) $('#modal-cancel').click();
 });
 
-/** 화면이 돌리는 카드의 진행 값 (파이썬에 올릴 것) */
-const Q_SYNC = ['note', 'base', 'have', 'made', 'spent', 'steps', 'wings', 'partial'];
-function qPick(it) {
-  const o = {};
-  for (const k of Q_SYNC) if (it[k] !== undefined) o[k] = it[k];
-  return o;
-}
-
-/** 돌고 있는 화면 카드의 진행 값을 파이썬에 올린다 (예전 이름 그대로 — 저장은 파이썬이 한다). */
-function saveQueue() {
-  if (qUiItem) mm.queue.patch(qUiItem.id, qPick(qUiItem)).catch(() => {});
+async function qShowAsk(ask) {
+  if (qAskOpen !== null) return;
+  qAskOpen = ask.id;
+  let yes = false;
+  try {
+    if (ask.kind === 'goal_blocked') yes = await goalBlockedModal(ask.step || {}, ask.label || '');
+  } finally {
+    qAskOpen = null;
+  }
+  mm.queue.answer(ask.id, !!yes).catch(() => {});
 }
 
 /** 목표 카드를 맨 아래에 담는다 (돌리지는 않는다 — 날개가 나가는 일은 사람이 재생을 누른 뒤에). */
@@ -276,8 +159,7 @@ function qFind(id) { return qItems.find((x) => String(x.id) === String(id)); }
 
 function qNote(it, text) {
   it.note = text;
-  if (it === qUiItem) saveQueue();
-  else if (it.id !== undefined) mm.queue.patch(it.id, { note: text }).catch(() => {});
+  if (it.id !== undefined) mm.queue.patch(it.id, { note: text }).catch(() => {});
 }
 
 function qRemove(id) { mm.queue.remove(id); }
@@ -334,8 +216,7 @@ async function qEdit(id) {
     '진행 중인 항목도 바꿀 수 있습니다. 다음 걸음부터 새 수량으로 판단하며, ' +
     '이미 만든 만큼은 그대로 인정합니다.');
   if (!n) return;
-  if (qUiItem && String(qUiItem.id) === String(id)) qUiItem.target = n;  // 돌고 있는 목표 루프는 다음 걸음부터
-  mm.queue.edit(id, n);
+  mm.queue.edit(id, n);  // 돌고 있는 목표는 다음 걸음부터 새 수량으로
 }
 
 /** 중단된 항목을 치운다. 완료는 끝나는 즉시 스스로 빠지므로, 남는 것은 막혔거나 실패한 것들이다. */
@@ -456,87 +337,6 @@ function paintQueue() {
       '</div>';
   }).join('');
 }
-/** 한 걸음을 실제로 실행한다. 소모한 날개를 돌려주고, 이어갈 수 없으면 null. */
-async function goalExecute(st, n) {
-  const tag = '(' + n + ') ';
-
-  if (st.kind === 'collect') {
-    let r = await runAction('complete_altering_work', { displayName: st.name },
-      { label: tag + st.facility + ' 수령', skipConfirm: true });
-    // 보상 창이 떠서 막혔으면 사람이 닫기를 기다렸다가 한 번 더
-    if (r && !r.ok && r.error === 'blocked') {
-      if (await waitForUserInput(st.facility)) {
-        r = await runAction('complete_altering_work', { displayName: st.name },
-          { label: tag + st.facility + ' 수령(재시도)', skipConfirm: true });
-      }
-    }
-    return r && r.ok ? (r.wingsSpent || 0) : null;
-  }
-
-  const isAlter = st.kind === 'alter' || (st.kind === 'learn' && st.via === '가공');
-  const command =
-    st.kind === 'gather' ? 'execute_gathering'
-    : isAlter ? 'execute_altering'
-    : 'execute_crafting';
-
-  const body =
-    command === 'execute_crafting'
-      ? { displayName: st.name, craftCount: st.kind === 'learn' ? 1 : (st.batch || 1) }
-      : { displayName: st.name };
-
-  let r = await runAction(command, body, { label: tag + (st.why || st.name), skipConfirm: true });
-
-  // 게임 쪽 확인 창에 막힌 것이면 기다렸다가 한 번 더 시도한다.
-  // 다만 가공은 막혀도 날개가 이미 나가므로(실측) 재시도가 공짜가 아니다 — 한 번만.
-  if (r && !r.ok && r.error === 'blocked') {
-    if (await waitForUserInput(st.name)) {
-      r = await runAction(command, body, { label: tag + st.name + ' (재시도)', skipConfirm: true });
-    }
-  }
-
-  if (!r) return null;
-  if (!r.ok) {
-    // 상한을 넘겼다면 메인이 maxCount를 배웠다. 다음 걸음에서 맞춰 부른다.
-    if (r.error === 'invalid_count') return 0;
-
-    /**
-     * 생활 스킬 레벨이 모자라 채집이 아예 안 되는 경우.
-     *
-     * **기다린다고 풀리지 않는다.** 재료가 모자란 것과 달리 다시 불러도 같은 답만 온다.
-     * 그런데 큐는 "진전이 없을 때"까지 몇 번 더 돌아 보는 구조라, 그냥 두면 같은 거절을
-     * 반복하며 시간만 쓴다. 그래서 그 자리에서 카드를 접고 큐 전체를 세운다 — 사람이
-     * 스킬을 올리기 전에는 뒤에 줄 선 목표도 이 재료를 넘지 못한다.
-     *
-     * 날개는 안 나간다. CLI 문서상 이 오류는 "rejected before starting" 쪽이고,
-     * 시작 전 거절은 비용을 물리지 않는다.
-     */
-    if (r.error === 'insufficient_living_skill_level') {
-      qSetStop('skill', {
-        what: st.name,
-        level: r.requiredLevel || (r.data && r.data.requiredLevel) || null,
-        message: r.message || null,
-      });
-      return null;
-    }
-    return null;
-  }
-  return r.wingsSpent || 0;
-}
-
-/** 가공이 끝나기를 기다린다. 남은 시간을 상태바에 보여주고, 취소를 받는다. */
-async function goalWait(st) {
-  const until = Date.now() + Math.max(5, st.seconds) * 1000;
-  toast('대기', st.why || '가공이 끝나기를 기다립니다.', 'ok');
-  while (Date.now() < until) {
-    if (qStop) return false;
-    const left = Math.ceil((until - Date.now()) / 1000);
-    setBusy(true, '가공 완료까지 ' + dur(left) + ' 대기 중… (취소 가능)');
-    await sleep(Math.min(2000, until - Date.now()));
-  }
-  setBusy(false);
-  return true;
-}
-
 /**
  * 자동으로 구할 수 없는 재료를 만났을 때.
  *

@@ -708,31 +708,6 @@ function renderAlter() {
  *
  * @returns true = 정리됨, false = 시간 초과 또는 사용자가 중단
  */
-async function waitForUserInput(label, timeoutMs) {
-  const limit = timeoutMs || 120000;
-  const startedAt = Date.now();
-  let notified = false;
-  waitForUserInput.aborted = false;  // 상태바 '취소' 가 켠다
-
-  while (Date.now() - startedAt < limit) {
-    if (waitForUserInput.aborted || qStop) return false;
-    const a = await mm.query('activity', {});
-    // IsReviving 은 여기서 보지 않는다. 살아 있는데도 켜져 있는 것을 확인해서,
-    // 그걸 기다리면 아무 일도 없는데 2분을 버린다.
-    if (!a.dialogue) return true;
-
-    if (!notified) {
-      notified = true;
-      toast('게임에서 확인이 필요합니다', (label ? label + ' — ' : '') +
-        '게임 창에서 확인을 눌러 주세요. 닫히면 자동으로 이어갑니다.', 'bad');
-    }
-    const left = Math.round((limit - (Date.now() - startedAt)) / 1000);
-    setBusy(true, '게임에서 확인을 눌러 주세요… (' + left + '초 내)');
-    await sleep(2000);
-  }
-  return false;
-}
-
 /**
  * 가공 큐 자동 채우기.
  *

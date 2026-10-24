@@ -5,7 +5,7 @@ import time
 import unittest
 from pathlib import Path
 
-from mabi.workqueue import Kind, RemoteKind, WorkQueue
+from mabi.workqueue import Kind, WorkQueue
 
 
 class FakeLong(Kind):
@@ -197,27 +197,6 @@ class WorkQueueTest(unittest.TestCase):
         store.save(self.dir / "queue.json", {"items": self.q.items})
         q2 = self.make()
         self.assertEqual([x["status"] for x in q2.items], ["pause", "wait"])
-
-    def test_remote_kind(self):
-        sent = []
-        remote = RemoteKind(lambda ch, v: sent.append((ch, v)))
-        self.q.kinds["goal"] = remote
-        self.q.add({"label": "못 10개", "target": 10}, "now")
-        self.assertTrue(wait_for(lambda: sent and sent[0][0] == "mm:queue-run"))
-        self.q.ui_done(sent[0][1]["id"], {"ok": False, "patch": {"made": 3}, "stop": {"reason": "skill", "what": "은 광석", "level": 5}})
-        self.assertTrue(wait_for(lambda: not self.q.running))
-        self.assertEqual(self.q.items[0]["status"], "fail")
-        self.assertEqual(self.q.items[0]["made"], 3)
-        self.assertIn("은 광석", self.q.items[0]["note"])
-
-    def test_remote_abandoned_on_ui_reload(self):
-        remote = RemoteKind(lambda ch, v: None)
-        self.q.kinds["goal"] = remote
-        self.q.add({"label": "못"}, "now")
-        self.assertTrue(wait_for(lambda: remote.current is not None))
-        self.q.ui_reset()
-        self.assertTrue(wait_for(lambda: not self.q.running))
-        self.assertEqual(self.q.items[0]["status"], "pause")
 
 
 if __name__ == "__main__":

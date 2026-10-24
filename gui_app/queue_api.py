@@ -1,8 +1,10 @@
 """작업 큐 화면(web/queue.js)이 부르는 파이썬 쪽 (mm.queue.*). Api 가 이 클래스를 섞어 쓴다.
 
 큐의 주인은 mabi.workqueue.WorkQueue 다. 여기는 카드 종류의 실행기와 화면 연결만 둔다.
-  daily · abyss : 파이썬이 돌린다 (DailyApi 의 _daily_launch · _abyss_launch 를 기다린다)
-  goal · action : 아직 화면이 돌린다 (RemoteKind — 'mm:queue-run' 을 받고 queue.uiDone 으로 답한다)
+  daily · abyss : 숙제·어비스 (DailyApi 의 _daily_launch · _abyss_launch 를 기다린다)
+  goal          : 제작·채집·가공 목표 (판단 엔진 mabi.craft.goal 의 걸음을 하나씩 실행)
+  action        : 한 번 하는 행동 (버튼 하나 = 명령 하나, 전체 수령)
+실행 중 사람에게 물어야 하면(재료를 직접 구해 와야 함) 'mm:queue-ask' 로 묻고 queue.answer 를 기다린다.
 화면 설정 맞추기는 큐 한 번에 한 번 (q.session), 큐가 다 끝나면 한 번 되돌린다.
 변화는 'mm:queue' {items, running} 로 화면에 보낸다.
 """
@@ -13,7 +15,7 @@ import time
 
 from mabi import gamedata as gd
 from mabi.runner import RunOptions, load_config
-from mabi.workqueue import Kind, RemoteKind, WorkQueue
+from mabi.workqueue import Kind, WorkQueue
 
 log = logging.getLogger("mabi")
 
@@ -121,13 +123,119 @@ class AbyssKind(Kind):
         self.api.daily_abyssStop()
 
 
-class GoalKind(RemoteKind):
-    """제작·채집·가공 목표 (화면이 goal 판단 엔진과 함께 돌린다)."""
+class GoalKind(Kind):
+    """제작·채집·가공 목표 — "이걸 새로 N개" 를 끝까지 민다 (예전 web/queue.js 의 runGoalItem·goalExecute 를 옮김).
+
+    무엇을 할지는 판단 엔진(mabi.craft.goal)이 한 걸음씩 정하고, 여기서는 그 걸음을 실행하고 사람이 개입해야 하는
+    순간만 처리한다. 매 걸음마다 상태를 새로 읽으므로 채집이 예상보다 많이 들어오든, 가공이 늦게 끝나든 따라간다.
+    멈추는 조건은 셋 — 목표 달성, 사람이 멈춤, 그리고 진전이 없을 때. 헛돌면서 날개를 태우는 것이 가장 나쁜 실패다.
+
+    target 은 새로 만들 개수다. 엔진은 "몇 개를 들고 있으면 끝인가" 로 보므로 시작할 때의 보유량(base)을 더해 넘긴다.
+    base 는 큐가 이 카드를 처음 집어 들 때 잡고, 일시정지했다 이어 갈 때는 그대로 둔다 (다시 잡으면 한 일이 없던 것이 된다).
+    """
+    MAX_STEPS = 300
+    STUCK_LIMIT = 4  # 같은 걸음이 이만큼 연달아 나오면 헛도는 것으로 본다
+
+    def __init__(self, api):
+        self.api = api
 
     @staticmethod
     def detail(x) -> str:
         return (f"목표 {_num(x.get('target'))}개" + (f" · 만든 {_num(x['made'])}" if x.get("made") else "")
                 + (f" · 날개 {_num(x['spent'])}" if x.get("spent") else "") + (f" · {x['via']}" if x.get("via") else ""))
+
+    def run(self, q, it):
+        api, name = self.api, it.get("name")
+        if it.get("base") is None:
+            try:
+                base = int(api.goal_next(name, 0).get("have") or 0)
+            except Exception:  # noqa: BLE001 — 못 읽으면 0 부터 센다
+                base = 0
+            q.patch(it["id"], {"base": base})
+        spent, done, last_key, repeat, ok = 0, 0, "", 0, False
+        for _ in range(self.MAX_STEPS):
+            if q.stop:
+                break
+            r = api.goal_next(name, (it.get("base") or 0) + int(it.get("target") or 0))  # 수량은 도중에 바뀔 수 있다 (✎)
+            if r.get("error"):
+                q.note(it, f"중단 — {r.get('message') or r.get('error')}")
+                break
+            st = r.get("step") or {}
+            have = r.get("have") or 0
+            q.patch(it["id"], {"have": have, "made": max(0, have - (it.get("base") or 0))}, quiet=True)
+            kind = st.get("kind")
+            if kind == "done":
+                q.note(it, f"달성 — 새로 {_num(it.get('made'))}개 (날개 {_num(spent)})")
+                ok = True
+                break
+            if kind == "blocked":
+                q.note(it, f"막힘 — {st.get('message') or st.get('reason') or ''}")
+                # 상점·거래는 커넥터에 명령이 없어 대신 구해 올 수 없다 → 사람에게 묻는다
+                if not api._q_ask(q, it, {"kind": "goal_blocked", "step": st, "label": it.get("label") or name}):
+                    break
+                continue  # 구해 왔다니 다시 판단해 본다
+            # 같은 걸음만 반복되면 헛도는 것이다. 기다림은 원래 반복되므로 제외한다.
+            key = f"{kind}:{st.get('name') or ''}:{st.get('batch') or st.get('runs') or ''}"
+            repeat = repeat + 1 if key == last_key and kind != "wait" else 0
+            last_key = key
+            # 학습은 한 번 해 보고 안 되면 더 해도 안 된다
+            if repeat >= (1 if kind == "learn" else self.STUCK_LIMIT):
+                q.note(it, f"진전이 없어 멈춤 — {st.get('name') or kind} {repeat + 1}회 반복")
+                break
+            q.note(it, f"[{done + 1}] {st.get('why') or kind}")
+            if kind == "wait":
+                if not self._wait(q, it, st):
+                    break
+                continue
+            got = self._execute(q, it, st, done + 1)
+            if got is None:
+                break  # 실패했고 이어갈 수 없다
+            spent += got
+            done += 1
+            q.patch(it["id"], {"spent": (it.get("spent") or 0) + got, "steps": (it.get("steps") or 0) + 1})
+        return ok
+
+    def _wait(self, q, it, st) -> bool:
+        """가공이 끝나기를 기다린다. 남은 시간을 카드에 적고, 큐가 서면 그만."""
+        until = time.monotonic() + max(5, float(st.get("seconds") or 0))
+        while time.monotonic() < until:
+            if q.stop:
+                return False
+            left = int(until - time.monotonic())
+            q.note(it, f"가공 완료까지 {left // 60}분 {left % 60}초 대기" if left >= 60 else f"가공 완료까지 {left}초 대기")
+            time.sleep(min(5, max(0.1, until - time.monotonic())))
+        return True
+
+    def _execute(self, q, it, st, n) -> int | None:
+        """한 걸음을 실제로 실행한다. 쓴 날개를 돌려주고, 이어갈 수 없으면 None."""
+        api, kind, tag = self.api, st.get("kind"), f"({n}) "
+        if kind == "collect":
+            label = f"{tag}{st.get('facility')} 수령"
+            cmd, body, act = "complete_altering_work", {"displayName": st.get("name")}, "collect"
+        else:
+            is_alter = kind == "alter" or (kind == "learn" and st.get("via") == "가공")
+            cmd = "execute_gathering" if kind == "gather" else "execute_altering" if is_alter else "execute_crafting"
+            body = ({"displayName": st.get("name"), "craftCount": 1 if kind == "learn" else (st.get("batch") or 1)}
+                    if cmd == "execute_crafting" else {"displayName": st.get("name")})
+            label, act = tag + (st.get("why") or st.get("name") or ""), ("alter" if is_alter else "craft")
+        r = api.exec(cmd, body, origin={"label": label, "act": act})
+        # 게임 쪽 확인 창에 막혔으면 닫히길 기다렸다가 한 번 더. 가공은 막혀도 날개가 이미 나가므로(실측) 한 번만
+        if not r.get("ok") and r.get("error") == "blocked" and api._q_wait_dialog_closed(q, st.get("facility") or st.get("name") or ""):
+            r = api.exec(cmd, body, origin={"label": label + " (재시도)", "act": act})
+        if r.get("ok"):
+            return int(r.get("wingsSpent") or 0)
+        if kind == "collect":
+            return None
+        if r.get("error") == "invalid_count":
+            return 0  # 상한을 넘겼다 — 엔진이 maxCount 를 배웠으니 다음 걸음에서 맞춰 부른다
+        if r.get("error") == "insufficient_living_skill_level":
+            # 기다린다고 풀리지 않는다 (같은 거절만 온다) → 카드를 접고 큐 전체를 세운다. 시작 전 거절이라 날개는 안 나간다
+            data = r.get("data") if isinstance(r.get("data"), dict) else {}
+            q.set_stop("skill", {"what": st.get("name"), "level": r.get("requiredLevel") or data.get("requiredLevel")})
+            api._q_toast("생활 스킬 레벨이 모자랍니다",
+                         f"{st.get('name')} 을(를) 캘 수 없어 작업 큐를 세웠습니다."
+                         + (f" 필요 레벨 {data['requiredLevel']}." if data.get("requiredLevel") else ""), "bad")
+        return None
 
 
 class ActionKind(Kind):
@@ -157,8 +265,9 @@ class QueueApi:
 
     def _init_queue(self) -> None:
         emit = lambda ch, v: self._emit(ch, v)  # noqa: E731 — 창은 나중에 붙는다
+        self._q_pending_ask: dict | None = None
         self.queue = WorkQueue(self.cd.queue_file, self.cd.history_file, emit,
-                               {"daily": DailyKind(self), "abyss": AbyssKind(self), "goal": GoalKind(emit),
+                               {"daily": DailyKind(self), "abyss": AbyssKind(self), "goal": GoalKind(self),
                                 "action": ActionKind(self)},
                                on_drained=self._q_drained, pause_note=self._q_pause_note)
         threading.Thread(target=self._q_hotkey, name="queue-f12", daemon=True).start()
@@ -226,6 +335,22 @@ class QueueApi:
         q.session["screen"] = m.get("running") is not False
         return True
 
+    def _q_ask(self, q: WorkQueue, it: dict, payload: dict) -> bool:
+        """돌던 카드가 사람에게 묻는다 ('mm:queue-ask'). 화면이 queue.answer(True|False) 로 답할 때까지 기다린다.
+        큐가 서면(F12·⏸) 그만 기다리고 False. 화면을 새로 띄우면 queue.state 가 이 질문을 다시 준다."""
+        ask = {"id": it["id"], **payload}
+        ev = threading.Event()
+        self._q_pending_ask = {"ask": ask, "event": ev, "answer": False}
+        self._emit("mm:queue-ask", ask)
+        try:
+            while not ev.wait(0.5):
+                if q.stop:
+                    return False
+            return bool(self._q_pending_ask and self._q_pending_ask["answer"])
+        finally:
+            self._q_pending_ask = None
+            self._emit("mm:queue-ask", None)  # 화면이 띄운 질문 창을 닫는다 (큐가 서서 그만 기다린 경우)
+
     def _q_wait_dialog_closed(self, q: WorkQueue, label: str, limit: float = 120) -> bool:
         """게임에 확인 창(대화)이 떠 있으면 사람이 닫을 때까지 기다린다 (처음 한 번 알림). 닫혔으면 True.
         큐가 서면(q.stop) 그만 기다린다."""
@@ -280,9 +405,18 @@ class QueueApi:
 
     # ---- 화면 (mm.queue.*) ----
     def queue_state(self) -> dict:
-        """화면이 처음 뜰 때. 화면이 돌리던 카드가 있었다면 이어 갈 수 없으니 일시정지로 돌린다."""
-        self.queue.ui_reset()
-        return {**self.queue.snapshot(), "labels": gd.labels().get("queue_state", {})}
+        """화면이 처음 뜰 때. 기다리는 질문이 있으면 같이 준다 (다시 띄운다)."""
+        p = self._q_pending_ask
+        return {**self.queue.snapshot(), "labels": gd.labels().get("queue_state", {}), "ask": p["ask"] if p else None}
+
+    def queue_answer(self, item_id, yes) -> dict:
+        """돌던 카드의 질문에 답한다."""
+        p = self._q_pending_ask
+        if not p or str(p["ask"]["id"]) != str(item_id):
+            return {"ok": False}
+        p["answer"] = bool(yes)
+        p["event"].set()
+        return {"ok": True}
 
     def queue_add(self, spec: dict, where: str = "end", replace_paused: bool = False) -> dict:
         return self.queue.add(spec if isinstance(spec, dict) else {}, where, bool(replace_paused))
@@ -333,5 +467,3 @@ class QueueApi:
         self.queue.patch(item_id, fields if isinstance(fields, dict) else {})
         return {"ok": True}
 
-    def queue_uiDone(self, item_id, result) -> dict:  # noqa: N802
-        return {"ok": self.queue.ui_done(item_id, result if isinstance(result, dict) else {})}

@@ -6,8 +6,7 @@
   - 예약·루틴처럼 화면을 누르지 않고 도는 일을 붙일 수 없었다.
 그래서 상태·순서·멈춤·저장은 모두 이 클래스가 한다.
 
-카드 종류(kind)마다 실행기(Kind)가 있다. 숙제·어비스처럼 파이썬이 하는 일은 여기서 바로 돌리고, 아직 화면에 있는 일
-(제작 목표·한 번 하는 행동)은 RemoteKind 가 화면에 'mm:queue-run' 으로 넘기고 끝났다는 답(ui_done)을 기다린다.
+카드 종류(kind)마다 실행기(Kind)가 있다 (gui_app/queue_api.py — 숙제·어비스·제작 목표·한 번 하는 행동).
 
 멈추는 이유는 하나만 둔다 (stop). 돌고 있는 카드가 끝나면 그 이유를 보고 카드를 어떻게 둘지 정한다.
   stopped : 작업이 스스로 멈춤 (숙제 F12·어비스 멈추기) → 일시정지
@@ -48,46 +47,6 @@ class Kind:
 
     def removed(self, it: dict) -> None:
         """돌지 않는 이 카드가 큐에서 빠졌다 (일시정지한 숙제의 F12 이어 하기 감시를 끄는 등)."""
-
-
-class RemoteKind(Kind):
-    """화면(JS)이 돌리는 종류. 'mm:queue-run' {id, item} 을 보내고 ui_done 을 기다린다."""
-
-    def __init__(self, emit: Callable[[str, object], None]):
-        self.emit = emit
-        self.done = threading.Event()
-        self.result: dict = {}
-        self.current: int | None = None
-
-    def run(self, q, it):
-        self.done.clear()
-        self.result = {}
-        self.current = it["id"]
-        self.emit("mm:queue-run", {"id": it["id"], "item": dict(it)})
-        self.done.wait()
-        self.current = None
-        r = self.result
-        if r.get("patch"):
-            q.patch(it["id"], r["patch"], quiet=True)
-        if r.get("stop"):  # 화면에서 정한 멈춤 (생활 스킬 레벨 부족)
-            q.set_stop(r["stop"].get("reason") or "pause", {k: v for k, v in r["stop"].items() if k != "reason"})
-        return bool(r.get("ok"))
-
-    def finish(self, item_id, result: dict) -> bool:
-        if self.current is None or str(item_id) != str(self.current):
-            return False
-        self.result = result or {}
-        self.done.set()
-        return True
-
-    def abandon(self) -> None:
-        """화면이 새로 떴다 — 돌던 일은 끊긴 것으로 (일시정지)."""
-        if self.current is not None:
-            self.result = {"ok": False, "stop": {"reason": "pause"}}
-            self.done.set()
-
-    def stop(self, reason):
-        self.emit("mm:queue-stop", {"reason": reason})
 
 
 class WorkQueue:
@@ -308,23 +267,6 @@ class WorkQueue:
 
     def note(self, it: dict, text: str) -> None:
         self.patch(it["id"], {"note": text})
-
-    def ui_done(self, item_id, result: dict) -> bool:
-        """화면이 돌리던 카드가 끝났다."""
-        it = self.find(item_id)
-        k = self.kind_of(it) if it else None
-        if isinstance(k, RemoteKind):
-            return k.finish(item_id, result)
-        for k in self.kinds.values():  # 그새 큐에서 빠졌어도 기다림은 풀어 준다
-            if isinstance(k, RemoteKind) and k.finish(item_id, result):
-                return True
-        return False
-
-    def ui_reset(self) -> None:
-        """화면이 새로 떴다 — 화면이 돌리던 일은 이어 갈 수 없으니 일시정지로."""
-        for k in self.kinds.values():
-            if isinstance(k, RemoteKind):
-                k.abandon()
 
     # ---------------------------------------------------------------- 돌리기
     def tick(self) -> None:

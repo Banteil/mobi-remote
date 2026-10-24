@@ -1622,7 +1622,6 @@ function wire() {
   $('#sb-cancel').addEventListener('click', async () => {
     // 실행 중인 명령 하나만 죽이면 여러 단계짜리 작업은 다음 단계로 넘어가 버린다.
     // 반복 루프에도 중단 신호를 같이 보낸다.
-    waitForUserInput.aborted = true;
     fillAltering.aborted = true;
     if (qRunning) mm.queue.pause();  // 명령은 아래 mm.cancel 이 끊는다
     player.stopping = true;
