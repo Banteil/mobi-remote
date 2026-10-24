@@ -63,8 +63,35 @@ def _chance_on(bot: Bot) -> tuple[bool, tuple[int, int]] | None:
     return green > 0.2, (x, y)
 
 
-def open_entry(bot: Bot, dungeon: str, difficulty: str = "") -> None:
-    """메인 화면 → 메뉴 → 어비스 → dungeon 입장 화면. '함께하기' · 난이도 · '우연한 만남' 을 맞춘다."""
+def _wait_settled(bot: Bot, timeout: float) -> bool:
+    """로딩·자동 이동이 끝나 메인 화면이 보일 때까지. 보이면 True."""
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        act = (bot.state.activity() if bot.state.available() else None) or {}
+        if not act.get("IsAutoTraveling") and bot.at_main():
+            return True
+        bot.sleep(2, 2.5)
+    return False
+
+
+def _travel_to_entry(bot: Bot) -> None:
+    """입장 화면 버튼이 '이동하기' 다 — 캐릭터가 어비스 입구에서 멀다 (캐릭터를 바꾸면 그 캐릭터가 마지막에 있던 곳에서
+    시작해 거의 늘 이렇다 — 2026-10-24 '입장하기' 만 기다리다 실패). 눌러서 입구로 가고, 멀면 빠른 이동(T)."""
+    bot.log.info("어비스 입구에서 멂 → 이동하기")
+    _click_text(bot, gd.text("abyss_move"), gd.region("abyss_entry_right"), what="이동하기")
+    bot.sleep(2, 3)
+    key = bot.cfg["game"].get("fast_travel_key")
+    act = (bot.state.activity() if bot.state.available() else None) or {}
+    if key and act.get("IsAutoTraveling") and act.get("AutoTravelRemainingPositionCount", 0) > 0:
+        bot.log.info("빠른 이동")
+        bot.key(key)
+    if not _wait_settled(bot, bot.cfg["abyss"].get("travel_timeout", 300)):
+        raise CannotProceed(f"어비스 입구로 가지 못함 → {bot.snapshot('abyss_travel').name}")
+
+
+def open_entry(bot: Bot, dungeon: str, difficulty: str = "", _moved: bool = False) -> None:
+    """메인 화면 → 메뉴 → 어비스 → dungeon 입장 화면. '함께하기' · 난이도 · '우연한 만남' 을 맞춘다.
+    입구에서 멀어 버튼이 '이동하기' 면 입구로 간 뒤 한 번 더 연다."""
     bot.to_main()
     for _ in range(3):
         bot.key("esc")
@@ -76,10 +103,13 @@ def open_entry(bot: Bot, dungeon: str, difficulty: str = "") -> None:
     bot.sleep(1.0, 1.5)
     _click_text(bot, dungeon, gd.region("abyss_list"), what=f"어비스 '{dungeon}'")
     bot.sleep(1.0, 1.5)
-    # 입장 화면: '입장하기' 가 보일 때까지
+    # 입장 화면: '입장하기' 가 보일 때까지 ('이동하기' 면 입구로 가서 다시)
     for _ in range(5):
         if _find_text(bot, gd.text("abyss_enter"), gd.region("abyss_entry_right")):
             break
+        if not _moved and _find_text(bot, gd.text("abyss_move"), gd.region("abyss_entry_right")):
+            _travel_to_entry(bot)
+            return open_entry(bot, dungeon, difficulty, _moved=True)
         bot.sleep(1.0, 1.4)
     else:
         raise CannotProceed(f"'{dungeon}' 입장 화면이 열리지 않음 → {bot.snapshot('abyss').name}")
@@ -224,9 +254,9 @@ def _switch_character(bot: Bot, cfg: dict, character: dict) -> None:
     elif after_clear(bot):
         bot.key("esc")  # 보상 화면 '나가기' — 판은 이미 끝났다
         bot.sleep(3, 4)
-        leave_wait = time.monotonic() + bot.cfg["timing"]["loading"]
-        while not bot.at_main() and time.monotonic() < leave_wait:
-            bot.sleep(2)
+        _wait_settled(bot, bot.cfg["timing"]["loading"])
+    elif not bot.at_main():
+        _wait_settled(bot, bot.cfg["timing"]["loading"])  # 로딩 중이면 끝나길 (ESC 메뉴가 안 뜬다)
     bot.character = character
     bot.log.info(login.run(bot, cfg, character))
 
@@ -343,6 +373,12 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
             if done():
                 bot.key("esc")  # 보상 화면 '나가기'
                 bot.sleep(3, 4)
+                # 필드로 나오는 로딩이 끝나 메인 화면이 보일 때까지 — 3~4초만 보고 끝내면 다음 카드(다른 캐릭터)가
+                # 로딩 화면에서 ESC 메뉴를 찾다 실패했다 (2026-10-24 21:24)
+                if not _wait_settled(bot, bot.cfg["timing"]["loading"]):
+                    if after_clear(bot):  # 나가기 키가 안 들었다
+                        bot.key("esc")
+                        _wait_settled(bot, bot.cfg["timing"]["loading"])
                 break
             bot.key("space")  # 다시 하기 (Space) → 같은 던전·난이도로 다시 매칭
             bot.sleep(2, 3)
