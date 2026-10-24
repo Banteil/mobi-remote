@@ -44,6 +44,11 @@ class AuthBlocked(Exception):
 
 
 class Bot:
+    # 뒤에서 키를 보낸 적이 있다 (앞으로 가져올 때 포커스를 한 번 거쳐 준다). 게임 쪽 상태라 Bot 마다가 아니라 함께 쓴다 —
+    # 큐는 카드마다 Bot 을 새로 만들어, 앞 카드(어비스)가 뒤에서 키를 보낸 뒤 다음 카드가 이걸 모르고 앞으로 가져와
+    # ESC 가 세 번 다 무시됐다 (2026-10-24 21:24, 캐릭터 바꾸기 실패)
+    _posted = False
+
     def __init__(self, cfg: dict, paths, dry_run: bool = False, force_exit: bool = True, cli=None):
         self.cfg = cfg
         self.paths = paths
@@ -74,7 +79,6 @@ class Bot:
         # 게임을 앞으로 가져오지 않고 한다 — 화면은 가려져 있어도 찍고(PrintWindow), 키는 창에 직접 보낸다.
         # 클릭은 그렇게 안 되므로 누를 때만 잠깐 앞으로 가져왔다가 원래 창을 되돌린다 (어비스 반복 중에 쓴다)
         self.background = False
-        self._posted = False  # 뒤에서 키를 보낸 적이 있다 (앞으로 가져올 때 포커스를 한 번 거쳐 준다)
         # 기다리는 게 오래 안 나오면 막는 화면(대화·연출·퀘스트 클리어 확인·화면 터치)을 넘겨 본다 (tasks.content.clear_blockers).
         # 혼자 오래 도는 일(일일 숙제·어비스 반복)만 켠다 — runner·abyss.repeat 가 설정
         self.auto_clear = False
@@ -214,7 +218,7 @@ class Bot:
             self.sleep(1.0)
             self.window.give_back(ctypes.windll.user32.FindWindowW("Shell_TrayWnd", None))
             self.sleep(1.0)
-            self._posted = False
+            Bot._posted = False
         self.window.focus()
         self.sleep(0.8)
         self.input.key("shift")
@@ -275,7 +279,7 @@ class Bot:
     def key(self, key: str) -> None:
         if self.background and not self.window.is_foreground() and not self.input.dry_run:
             post_key(self.window.hwnd, key)
-            self._posted = True
+            Bot._posted = True
             self.pause()
             return
         self.ensure_focus()
