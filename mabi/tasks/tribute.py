@@ -9,11 +9,10 @@ import time
 
 from .. import gamedata as gd
 from ..bot import Bot, StepTimeout
-from .content import CannotProceed, enter_from_dungeon_window, travel
+from .content import CannotProceed, enter_from_dungeon_window, questwin_buttons, travel
 
 QUEST_TITLE = gd.text("tribute_quest")
 CARD_H = 450  # 퀘스트 카드 하나의 높이 (1920 기준, 제목 → '진행하기' 약 400px)
-TAB_BAR_Y = 950  # 퀘스트 창 아래 탭 줄(지도·퀘스트·아르바이트·이벤트) 윗선. 이 아래로 걸친 버튼은 누르면 탭이 눌린다
 
 
 def quest_visible(bot: Bot) -> bool:
@@ -33,9 +32,8 @@ def open_quest(bot: Bot, c: dict) -> None:
         # 같은 카드의 '진행하기' = 제목 아래 카드 안(CARD_H 이내)에서 가장 가까운 주황색 버튼.
         # 주말에는 '주말에는 어비스!' 같은 이벤트 카드도 주황 '진행하기' 라, 고난도 카드 버튼이 화면 밖이면
         # 아래 카드 버튼을 눌러 이벤트 탭이 열렸다 (2026-10-24 16:37 — 7분 동안 던전 입구를 기다림).
-        # 버튼이 아래 탭 줄에 걸쳐 반쯤 보이면 그 자리를 누를 때 '이벤트' 탭이 눌린다 (16:48) → 다 보이는 것만, 아니면 내린다
-        go = sorted((b for b in bot.find_all(c["quest_go"])
-                     if card and 0 < b.y - card.y < CARD_H and b.y + b.h <= TAB_BAR_Y), key=lambda b: b.y)
+        # 버튼이 아래 탭 줄에 걸쳐 반쯤 보이면 누르지 않고 (questwin_buttons) 내린다
+        go = [b for b in questwin_buttons(bot, c["quest_go"]) if card and 0 < b.y - card.y < CARD_H]
         if go:
             bot.click(go[0])
             return

@@ -4,7 +4,7 @@
 완료 여부는 콘텐츠 가이드('/')의 '일일 달성' 체크로 판단한다 (아르바이트 목록만으로는 잘못 판단한 적이 있음).
 """
 from ..bot import Bot
-from .content import CannotProceed, daily_achieved, enter_from_dungeon_window, open_arbeit_tab, travel
+from .content import CannotProceed, daily_achieved, enter_from_dungeon_window, open_arbeit_tab, questwin_buttons, travel
 
 
 def verify(bot: Bot, cfg: dict) -> bool:
@@ -41,11 +41,15 @@ def run(bot: Bot, cfg: dict) -> str:
 
     # 태그가 붙은 카드의 '진행하기' = 태그보다 아래에 있는 첫 번째 버튼.
     # 새 카드('NEW')는 태그가 먼저 보이고 버튼이 늦게 그려진다 (2026-10-22 탭 누르고 2초 만에 못 찾음) → 몇 초 기다린다
+    # 버튼이 아래 탭 줄에 걸쳐 반쯤 보이면 누르지 않고 (questwin_buttons) 목록을 조금 내린다
     buttons = []
-    for _ in range(6):
-        buttons = [b for b in bot.find_all(c["go"], region=c["panel"]) if b.y > tag.y]
+    x, y, w, h = c["panel"]
+    for i in range(6):
+        buttons = [b for b in questwin_buttons(bot, c["go"], region=c["panel"]) if b.y > tag.y]
         if buttons:
             break
+        if i >= 2:
+            bot.scroll(x + w // 2, y + h // 2, -2)
         bot.sleep(0.8, 1.0)
         tag = bot.find(c["tag"]) or tag  # 카드가 미끄러져 들어오면 태그 위치도 바뀐다
     if not buttons:

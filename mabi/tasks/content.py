@@ -33,6 +33,22 @@ def handle_death(bot: Bot) -> bool:
     return False
 
 
+# 퀘스트 창(J) 아래 탭 줄(지도·퀘스트·아르바이트·이벤트) 윗선 (1920 기준). 카드 버튼이 이 줄에 반쯤 걸쳐 보일 때
+# 그 자리를 누르면 버튼 대신 탭('이벤트')이 눌린다 — 공물 던전(2026-10-24 16:48)·알바(17:42, 18:10)에서 따로 터졌다.
+# 퀘스트 창의 버튼은 모두 questwin_buttons / questwin_text_ok 로 걸러서 누른다 (안 보이면 목록을 내려서 다시)
+QUESTWIN_TAB_BAR_Y = 950
+
+
+def questwin_buttons(bot: Bot, name: str, region=None) -> list:
+    """퀘스트 창에서 템플릿 name 버튼 중 탭 줄에 걸치지 않고 다 보이는 것 (위에서부터)."""
+    return sorted((b for b in bot.find_all(name, region=region) if b.y + b.h <= QUESTWIN_TAB_BAR_Y), key=lambda b: b.y)
+
+
+def questwin_text_ok(y: int) -> bool:
+    """OCR 로 찾은 버튼 글자(가운데 y)가 탭 줄에 걸치지 않았나 (버튼 높이 약 60)."""
+    return y <= QUESTWIN_TAB_BAR_Y - 30
+
+
 def open_arbeit_tab(bot: Bot) -> None:
     """퀘스트 창(J)을 열고 아르바이트 탭으로."""
     ui = bot.ui
