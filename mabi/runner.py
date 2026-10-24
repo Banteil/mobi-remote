@@ -57,8 +57,13 @@ def _merged(base: dict, over: dict) -> dict:
 
 
 def load_config(paths: Paths) -> dict:
-    """사용자 설정(config.toml) 아래에 배포 기본값(config.default.toml)을 깐다.
-    config.toml 은 처음 켤 때 한 번 복사되므로, 새 판에서 늘어난 키는 기본값에서 채워야 한다 (없으면 KeyError)."""
+    """사용자 설정(config.toml — 기본값과 다른 값만, mabi.userconfig) 아래에 배포 기본값(config.default.toml)을 깐다.
+    옛 판처럼 통째로 복사해 둔 config.toml 이면 처음 한 번 '다른 값만' 으로 옮긴다."""
+    from . import userconfig
+    try:
+        userconfig.migrate(paths, log)
+    except Exception as e:  # noqa: BLE001 — 옮기지 못해도 읽기는 된다
+        log.warning(f"설정 파일을 옮기지 못함 — 그대로 씀: {e}")
     user = tomllib.loads(paths.config.read_text(encoding="utf-8"))
     default = paths.resources / "config.default.toml"
     if not default.exists():

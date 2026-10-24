@@ -15,7 +15,7 @@ from pathlib import Path
 
 import tomlkit
 
-from mabi import gamedata as gd, profile as prof
+from mabi import gamedata as gd, profile as prof, userconfig
 from mabi.runner import load_config
 from mabi.whoami import Characters
 
@@ -165,7 +165,7 @@ class CharsApi:
             arr = tomlkit.array()
             arr.extend(sorted(int(c["slot"]) for c in chars if c.get("arbeit")))
             doc["arbeit"]["slots"] = arr
-        self.paths.config.write_text(tomlkit.dumps(doc), encoding="utf-8")
+        userconfig.save(self.paths, doc)
         return {"ok": True}
 
     @staticmethod

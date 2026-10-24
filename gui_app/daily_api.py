@@ -16,6 +16,7 @@ import tomlkit
 
 from mabi import paths as mpaths
 from mabi import profile as prof
+from mabi import userconfig
 from mabi import tasks
 from mabi.runner import RunOptions, Runner, load_config
 
@@ -312,7 +313,7 @@ class DailyApi:
         a["minutes"] = max(0, int(v.get("minutes") or 0))
         a["revive"] = v.get("revive") is not False
         a["fit_display"] = bool(v.get("fit_display"))
-        self.paths.config.write_text(tomlkit.dumps(doc), encoding="utf-8")
+        userconfig.save(self.paths, doc)
 
         def work():
             from mabi.bot import Bot, StopRequested
@@ -359,7 +360,7 @@ class DailyApi:
 
     # ---- 캐릭터·숙제 설정 ----
     def _doc(self):
-        return tomlkit.parse(self.paths.config.read_text(encoding="utf-8"))
+        return userconfig.doc(self.paths)
 
     def daily_settings(self) -> dict:
         doc = self._doc()
@@ -413,7 +414,7 @@ class DailyApi:
             doc["game"]["pause_on_touch"] = bool(v["pause_on_touch"])
         if "fit_display" in v:
             doc["run"]["fit_display"] = bool(v["fit_display"])
-        self.paths.config.write_text(tomlkit.dumps(doc), encoding="utf-8")
+        userconfig.save(self.paths, doc)
         p = v.get("paths")
         if p is not None:
             mpaths.save_overrides(**{k: (p.get(k) or "").strip() for k in ("data", "logs", "shots")})

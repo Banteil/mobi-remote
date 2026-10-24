@@ -33,7 +33,9 @@ CAPTURES = ROOT / "captures"
 
 
 def load_cfg() -> dict:
-    return tomllib.loads((ROOT / "config.toml").read_text(encoding="utf-8"))
+    from mabi.runner import _merged  # config.toml 은 기본값과 다른 값만 담는다 (mabi.userconfig)
+    return _merged(tomllib.loads((ROOT / "config.default.toml").read_text(encoding="utf-8")),
+                   tomllib.loads((ROOT / "config.toml").read_text(encoding="utf-8")))
 
 
 def imread(path: Path) -> np.ndarray:

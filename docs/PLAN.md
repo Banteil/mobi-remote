@@ -125,7 +125,7 @@ gui_app/            web_shell(QtWebEngine 껍데기) · web_main(진입점·트�
                     (옛 Qt 탭 main.py, *_tab.py 는 남아 있음 — 정리 예정)
 mabi/               엔진: paths, runner, report, bot, vision, ocr, inputs, game_state, profile, whoami, connector, cache, query,
                     craft/, dye/, tasks/(login, charscan, weekday, silver, tribute, black_hole, daily_mission, content)
-config.toml         숙제 설정 (화면이 tomlkit 으로 주석을 살려서 고침)
+config.toml         숙제 설정 — 기본값과 다른 값만 (mabi.userconfig, 화면은 tomlkit 으로 고침)
 profile.json        숙제할 슬롯·이름 · characters.json 슬롯별 지문·카드 정보 · portraits/ 카드 그림
 ```
 

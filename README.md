@@ -76,7 +76,7 @@ opencv-python-headless 가 들어와 opencv-python 과 겹칩니다).
 - `mabi/tasks/` login · charscan(캐릭터 선택 화면 읽기) · weekday · silver · tribute · black_hole · daily_mission ·
   arbeit(아르바이트) · display(게임 화면 설정) · content(던전/사냥터 공용)
 - `gui_app/` · `web/` 화면 (docs/PLAN.md '지금 구조')
-- `config.default.toml` 새 사용자 기본 설정 — 첫 실행 때 `config.toml` 로 복사되고, 그 뒤로는 `config.toml` 이
-  실행 순서·숙제별 설정·템플릿 이름을 정한다 (개인 설정이라 저장소에는 올리지 않음)
+- `config.default.toml` 기본 설정 (실행 순서·숙제별 설정·템플릿 이름). `config.toml` 에는 이와 다른 값만 저장되고
+  나머지는 기본값을 따른다 — 새 판에서 바뀐 기본값이 그대로 적용된다 (개인 설정이라 저장소에는 올리지 않음)
 - `profile.json` 숙제할 슬롯 · `state/` 하루 진행 기록 (숙제 안 단계까지 — 끊기면 그 자리부터 이어 함)
 - `captures/` 템플릿을 잘라낸 원본 스크린샷

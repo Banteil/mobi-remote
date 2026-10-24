@@ -75,14 +75,16 @@ class Paths:
 
     @property
     def config(self) -> Path:
-        """사용자 설정. 없으면 기본 설정을 복사해 만든다.
-        기본은 config.default.toml (개인 값 — 캐릭터별 던전·아르바이트 켠 슬롯 등 — 을 뺀 새 사용자용).
+        """사용자 설정 — 기본값(config.default.toml)과 다른 값만 담는다 (mabi.userconfig). 없으면 빈 파일로 만든다.
         개발 중 프로젝트 폴더의 config.toml 은 개발자 개인 설정이라 배포 기본으로 쓰지 않는다."""
         p = self.data / "config.toml"
         if not p.exists():
             self.data.mkdir(parents=True, exist_ok=True)
-            default = self.resources / "config.default.toml"
-            shutil.copyfile(default if default.exists() else self.resources / "config.toml", p)
+            if (self.resources / "config.default.toml").exists():
+                from .userconfig import HEADER, SPARSE_MARK
+                p.write_text("".join(f"# {s}\n" for s in [*HEADER.splitlines(), SPARSE_MARK]), encoding="utf-8")
+            else:
+                shutil.copyfile(self.resources / "config.toml", p)
         return p
 
     @property
