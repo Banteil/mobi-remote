@@ -116,6 +116,15 @@ class ShotTest(unittest.TestCase):
     def test_abyss_no_revives_left(self):  # 2026-10-24 실기: 부활 횟수 0/3 → 나가기
         self.assertEqual(abyss._revives_left(None, self.frame("20261024_143154_abyss_dead.png")), 0)
 
+    def test_abyss_entry_solo_tab_far_away(self):
+        # 2026-10-24: 혼자하기 탭 + 입구에서 먼 캐릭터('이동하기') — 탭 글자로 입장 화면을 알아보고 함께하기를 누를 수 있어야
+        from mabi import gamedata as gd, ocr
+        f = self.frame("20261024_212603_abyss.png")
+        top = [t for t, *_ in ocr.find_texts(f, gd.region("abyss_entry_top"))]
+        right = [t for t, *_ in ocr.find_texts(f, gd.region("abyss_entry_right"))]
+        self.assertTrue(any(gd.text("abyss_together") in t for t in top))
+        self.assertTrue(any(gd.text("abyss_move") in t for t in right))
+
     def test_arbeit_panel_button(self):  # 퀘스트 창 아르바이트 탭, 다 보이는 '진행하기' 하나
         bot = mock.Mock()
         bot.frame.return_value = self.frame("20261024_125340_questwin.png")

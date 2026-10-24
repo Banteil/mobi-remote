@@ -91,7 +91,9 @@ def _travel_to_entry(bot: Bot) -> None:
 
 def open_entry(bot: Bot, dungeon: str, difficulty: str = "", _moved: bool = False) -> None:
     """메인 화면 → 메뉴 → 어비스 → dungeon 입장 화면. '함께하기' · 난이도 · '우연한 만남' 을 맞춘다.
-    입구에서 멀어 버튼이 '이동하기' 면 입구로 간 뒤 한 번 더 연다."""
+    '함께하기' 를 먼저 고른다 — '혼자하기' 탭이면 입구에서 먼 캐릭터는 버튼이 '이동하기' 라 입장할 수 없는데,
+    '함께하기' 는 어디서든 매칭된다 (2026-10-24: 혼자하기 탭에서 '입장하기' 만 찾다 실패). 그래도 '이동하기' 면
+    입구로 간 뒤 한 번 더 연다."""
     bot.to_main()
     for _ in range(3):
         bot.key("esc")
@@ -103,7 +105,17 @@ def open_entry(bot: Bot, dungeon: str, difficulty: str = "", _moved: bool = Fals
     bot.sleep(1.0, 1.5)
     _click_text(bot, dungeon, gd.region("abyss_list"), what=f"어비스 '{dungeon}'")
     bot.sleep(1.0, 1.5)
-    # 입장 화면: '입장하기' 가 보일 때까지 ('이동하기' 면 입구로 가서 다시)
+    # 입장 화면이 열렸나: 위쪽 '혼자하기 / 함께하기' 탭 글자로 본다 (버튼 글자는 탭·위치에 따라 바뀐다)
+    for _ in range(6):
+        if _find_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top")):
+            break
+        bot.sleep(1.0, 1.4)
+    else:
+        raise CannotProceed(f"'{dungeon}' 입장 화면이 열리지 않음 → {bot.snapshot('abyss').name}")
+    _click_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top"), what="함께하기")
+    if difficulty:
+        _click_text(bot, difficulty, gd.region("abyss_difficulty"), what=f"난이도 '{difficulty}'")
+    # 함께하기에서 '입장하기' 가 보일 때까지 ('이동하기' 면 입구로 가서 다시)
     for _ in range(5):
         if _find_text(bot, gd.text("abyss_enter"), gd.region("abyss_entry_right")):
             break
@@ -112,10 +124,7 @@ def open_entry(bot: Bot, dungeon: str, difficulty: str = "", _moved: bool = Fals
             return open_entry(bot, dungeon, difficulty, _moved=True)
         bot.sleep(1.0, 1.4)
     else:
-        raise CannotProceed(f"'{dungeon}' 입장 화면이 열리지 않음 → {bot.snapshot('abyss').name}")
-    _click_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top"), what="함께하기")
-    if difficulty:
-        _click_text(bot, difficulty, gd.region("abyss_difficulty"), what=f"난이도 '{difficulty}'")
+        raise CannotProceed(f"'{dungeon}' 함께하기에 '입장하기' 가 없음 → {bot.snapshot('abyss').name}")
     on = _chance_on(bot)
     if on is None:
         raise CannotProceed(f"'우연한 만남' 을 찾지 못함 → {bot.snapshot('abyss').name}")
