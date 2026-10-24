@@ -1,7 +1,9 @@
-// 작업 큐 상태 기계 시험 (node tests/queue.test.js): app.js·daily.js 를 가짜 DOM·mm 위에 올리고 시나리오를 돌린다.
+// 작업 큐 화면 쪽 시험 (node tests/queue.test.js). 큐의 주인은 파이썬(tests/test_workqueue.py 가 시험)이고,
+// 화면은 'mm:queue-run' 으로 받은 카드(목표·행동)를 돌려 queue.uiDone 으로 답한다. 그 손주고받기를 본다.
 const fs = require('fs');
-process.on('unhandledRejection', () => {}); process.on('uncaughtException', (e) => { if (!/LOADERS|is not a function/.test(String(e))) console.error('uncaught', e.message); });
 const vm = require('vm');
+process.on('unhandledRejection', () => {});
+process.on('uncaughtException', () => {});
 const ROOT = require('path').join(__dirname, '..', 'web') + '/';
 
 function any() {  // 무엇을 불러도·읽어도 되는 가짜
@@ -20,122 +22,86 @@ function any() {  // 무엇을 불러도·읽어도 되는 가짜
 }
 
 const calls = [];
-let dailyWaiterFire = null;
-const mm = new Proxy({}, { get: (t, k) => any() });
+const handlers = {};
+const fake = (k) => new Proxy({}, { get: (t, m) => (m in t ? t[m] : any()) });
 const mmReal = {
   labels: { queue_state: {} },
-  queue: { load: async () => ({ items: [] }), save: async () => {}, record: async (r) => { calls.push(['record', r.label, r.result]); }, history: async () => [] },
-  daily: new Proxy({
-    start: async () => { calls.push(['daily.start']); return {}; },
-    stop: async (end) => { calls.push(['daily.stop', end]); setTimeout(() => dailyWaiterFire && dailyWaiterFire({ type: 'done', results: [[1, 'STOP']] }), 5); },
-    pauseCancel: async () => { calls.push(['daily.pauseCancel']); },
-    abyssStop: async () => { calls.push(['abyssStop']); },
-  }, { get: (t, k) => (k in t ? t[k] : any()) }),
-  cancel: async () => {},
+  queue: new Proxy({
+    state: async () => ({ items: [], running: false }),
+    uiDone: async (id, r) => { calls.push(['uiDone', id, r]); return { ok: true }; },
+    patch: async (id, f) => { calls.push(['patch', id, f]); return { ok: true }; },
+    add: async (spec, where, rp) => { calls.push(['add', spec.kind, where, !!rp]); return Object.assign({ id: 9 }, spec); },
+    onRun: (cb) => { handlers.run = cb; }, onStop: (cb) => { handlers.stop = cb; },
+    onChange: (cb) => { handlers.change = cb; }, onDone: (cb) => { handlers.done = cb; }, onToast: () => {},
+  }, { get: (t, m) => (m in t ? t[m] : any()) }),
 };
 const ctx = {
   console, setTimeout, clearTimeout, setInterval, clearInterval, Promise, Date, Math, JSON, Object, Array, String, Number,
-  document: any(), window: any(), navigator: any(), localStorage: any(), location: any(), requestAnimationFrame: any(),
+  document: any(), navigator: any(), localStorage: any(), location: any(), requestAnimationFrame: any(),
   getComputedStyle: any(), ResizeObserver: function () { return any(); }, MutationObserver: function () { return any(); },
   Image: function () { return any(); }, fetch: any(), alert: any(), performance: { now: () => Date.now() },
-  mm: new Proxy(mmReal, { get: (t, k) => (k in t ? t[k] : any()) }),
+  mm: new Proxy(mmReal, { get: (t, k) => (k in t ? t[k] : fake(k)) }),
 };
 ctx.window = ctx; ctx.globalThis = ctx;
 vm.createContext(ctx);
 // index.html 의 script 순서대로 이어 붙여 읽는다 (같은 전역을 쓰는 여러 파일)
 const order = [...fs.readFileSync(ROOT + 'index.html', 'utf8').matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
 let src = "'use strict';\n" + order.map((f) => fs.readFileSync(ROOT + f, 'utf8').replace(/^'use strict';/, '')).join('\n;\n');
-// const/let 은 vm 전역 객체에 안 붙는다 → 시나리오에서 쓰는 것만 밖으로 꺼낸다
 src += `
-;globalThis.__q = {
-  get items() { return qItems; }, set items(v) { qItems = v; },
-  get running() { return qRunning; }, get stop() { return qStop; },
-  qTick, qStartNow, qPause, qRemove, qPlayAll, Q_KINDS,
-  setBusy: (v) => { busy = v; },
-  setDailyWaiter: (f) => { dlWaiter = f; },
-};`;
+;globalThis.__q = { Q_KINDS, get stop() { return qStop; }, get items() { return qItems; }, qStartNow, qSetStop };`;
 try { vm.runInContext(src, ctx, { filename: 'web/*.js' }); } catch (e) { console.error('load error', e); process.exit(1); }
 const Q = ctx.__q;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// 숙제 runner 를 가짜로: start 후 dlWaiter 를 기다린다 (실제 runDailyItem 그대로, ensureDisplay 만 통과)
-vm.runInContext('ensureDisplay = async () => true;', ctx);
-// dlWaiter 를 바깥에서 부를 수 있게
-dailyWaiterFire = (e) => vm.runInContext('dlWaiter', ctx) && vm.runInContext('dlWaiter', ctx)(e);
-
-let actionRuns = 0;
-Q.Q_KINDS.action.run = async (it) => { actionRuns++; calls.push(['action', it.label]); await sleep(10); return true; };
-
 let failed = 0;
 async function scenario(name, fn) {
-  calls.length = 0; actionRuns = 0;
-  Q.items = [];
-  try { await fn(); console.log('PASS', name); } catch (e) { failed++; console.log('FAIL', name, '-', e.message); console.log(calls); }
+  calls.length = 0;
+  try { await fn(); console.log('PASS', name); } catch (e) { failed++; console.log('FAIL', name, '-', e.message); console.log(JSON.stringify(calls)); }
 }
 function assert(c, m) { if (!c) throw new Error(m); }
 
 (async () => {
-  await sleep(200);  // 시작 코드(loadQueue 등)가 끝나길
-  await scenario('지금 바로: 돌던 숙제는 대기로, 행동 먼저, 그다음 숙제 이어서', async () => {
-    Q.items = [{ id: 1, kind: 'daily', status: 'wait', label: '일일 숙제', chars: [1] }];
-    Q.qTick();
+  await sleep(100);  // 시작 코드가 끝나길
+
+  await scenario('목표 카드: 돌리고 진행 값과 함께 답한다', async () => {
+    Q.Q_KINDS.goal.run = async (it) => { it.made = 4; it.spent = 100; return true; };
+    handlers.run({ id: 3, item: { id: 3, label: '못', target: 10 } });
     await sleep(20);
-    assert(Q.items[0].status === 'run', 'daily should run');
-    Q.qStartNow({ id: 2, kind: 'action', status: 'wait', label: '채집' });
-    await sleep(60);
-    assert(calls.some((c) => c[0] === 'daily.stop' && c[1] === false), 'daily paused (not ended)');
-    assert(actionRuns === 1, 'action ran');
-    // 행동 끝 → 숙제 다시 start
-    assert(calls.filter((c) => c[0] === 'daily.start').length === 2, 'daily restarted: ' + JSON.stringify(calls));
-    dailyWaiterFire({ type: 'done', results: [[1, 'OK']] });
-    await sleep(30);
-    assert(!Q.running && Q.items.length === 0, 'queue drained');
+    const d = calls.find((c) => c[0] === 'uiDone');
+    assert(d && d[1] === 3 && d[2].ok === true, 'uiDone ok');
+    assert(d[2].patch.made === 4 && d[2].patch.spent === 100, 'patch carries progress');
+    assert(d[2].stop === null, 'no stop');
   });
 
-  await scenario('F12 로 숙제가 스스로 멈춤 → 일시정지, 뒤 카드는 안 돈다', async () => {
-    Q.items = [{ id: 1, kind: 'daily', status: 'wait', label: '일일 숙제', chars: [1] },
-               { id: 2, kind: 'action', status: 'wait', label: '채집' }];
-    Q.qTick();
-    await sleep(20);
-    dailyWaiterFire({ type: 'done', results: [[1, 'STOP']] });
-    await sleep(30);
-    assert(Q.items[0].status === 'pause', 'daily pause, got ' + Q.items[0].status);
-    assert(actionRuns === 0, 'action must not run');
-    assert(!Q.running, 'queue stopped');
+  await scenario('멈춤 신호: 돌고 있는 목표 루프가 qStop 을 본다', async () => {
+    let sawStop = null;
+    Q.Q_KINDS.goal.run = async () => { await sleep(30); sawStop = Q.stop && Q.stop.reason; return false; };
+    handlers.run({ id: 4, item: { id: 4, label: '못', target: 10 } });
+    await sleep(5);
+    handlers.stop({ reason: 'preempt' });
+    await sleep(50);
+    assert(sawStop === 'preempt', 'loop saw preempt, got ' + sawStop);
+    const d = calls.find((c) => c[0] === 'uiDone');
+    assert(d && d[2].ok === false && d[2].stop === null, 'preempt is decided by python, not sent back');
   });
 
-  await scenario('▶ 전체 시작: 일시정지 카드부터 위에서 차례로', async () => {
-    Q.items = [{ id: 1, kind: 'daily', status: 'pause', label: '일일 숙제', chars: [1] },
-               { id: 2, kind: 'action', status: 'wait', label: '채집' }];
-    Q.qPlayAll();
+  await scenario('생활 스킬 부족은 화면이 정해 올린다', async () => {
+    Q.Q_KINDS.goal.run = async () => { Q.qSetStop('skill', { what: '은 광석', level: 5 }); return false; };
+    handlers.run({ id: 5, item: { id: 5, label: '은괴', target: 3 } });
     await sleep(20);
-    assert(Q.items[0].kind === 'daily' && Q.items[0].status === 'run', 'daily runs first');
-    dailyWaiterFire({ type: 'done', results: [[1, 'OK']] });
-    await sleep(40);
-    assert(actionRuns === 1, 'then action');
-    assert(Q.items.length === 0, 'all done & removed');
+    const d = calls.find((c) => c[0] === 'uiDone');
+    assert(d && d[2].stop && d[2].stop.reason === 'skill' && d[2].stop.what === '은 광석', 'skill stop sent');
   });
 
-  await scenario('돌던 숙제 카드를 빼면 종료(stop true), 큐 멈춤', async () => {
-    Q.items = [{ id: 1, kind: 'daily', status: 'wait', label: '일일 숙제', chars: [1] },
-               { id: 2, kind: 'action', status: 'wait', label: '채집' }];
-    Q.qTick();
-    await sleep(20);
-    Q.qRemove(1);
-    await sleep(30);
-    assert(calls.some((c) => c[0] === 'daily.stop' && c[1] === true), 'daily ended');
-    assert(actionRuns === 0, 'queue stops after removing running card');
-    assert(calls.some((c) => c[0] === 'record' && c[2] === 'removed'), 'recorded removed');
+  await scenario('지금 바로 = queue.add(now), 숙제 시작은 일시정지 카드를 바꿈', async () => {
+    Q.qStartNow({ kind: 'daily', label: '일일 숙제' }, true);
+    await sleep(5);
+    assert(calls.some((c) => c[0] === 'add' && c[1] === 'daily' && c[2] === 'now' && c[3] === true), 'add now replace');
   });
 
-  await scenario('⏸ 큐 일시정지: 숙제 일시정지 (밀림 아님)', async () => {
-    Q.items = [{ id: 1, kind: 'daily', status: 'wait', label: '일일 숙제', chars: [1] }];
-    Q.qTick();
-    await sleep(20);
-    Q.qPause();
-    await sleep(30);
-    assert(Q.items[0].status === 'pause', 'pause, got ' + Q.items[0].status);
-    assert(!Q.running, 'stopped');
+  await scenario('mm:queue 상태를 그대로 받는다', async () => {
+    handlers.change({ items: [{ id: 1, kind: 'daily', status: 'pause', label: '일일 숙제', chars: [1] }], running: false });
+    assert(Q.items.length === 1 && Q.items[0].status === 'pause', 'items applied');
   });
   process.exit(failed ? 1 : 0);
 })();

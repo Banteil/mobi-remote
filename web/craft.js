@@ -282,7 +282,7 @@ async function makePlan(name, label) {
   }
 
   // 가공만 레시피 이름과 산출물 이름이 다르다. 큐는 산출물 기준으로 판단한다.
-  const it = qAdd({
+  const it = await qAdd({
     via: p.kind === 'alter' ? '가공' : p.kind === 'gather' ? '채집' : '제작',
     name: p.product || p.name,
     label: p.productName || p.displayName,
@@ -312,14 +312,13 @@ async function qEstimate(it, keepNote) {
   qNote(it, '예상 비용 계산 중…');
   try {
     const r = await mm.goal.next(it.name, (it.startHave || 0) + it.target);
-    if (!qItems.includes(it)) return;         // 그새 지워졌다
+    if (!qFind(it.id)) return;         // 그새 지워졌다
     if (r.error) { qNote(it, fallback); return; }
-    it.wings = r.estimate ? r.estimate.wings : 0;
-    it.partial = !!(r.estimate && r.estimate.partial);
-    qNote(it, r.step && r.step.kind === 'blocked'
-      ? '막힘 — ' + (r.step.message || r.step.reason || '')
-      : fallback);
-    saveQueue();
+    mm.queue.patch(it.id, {
+      wings: r.estimate ? r.estimate.wings : 0,
+      partial: !!(r.estimate && r.estimate.partial),
+      note: r.step && r.step.kind === 'blocked' ? '막힘 — ' + (r.step.message || r.step.reason || '') : fallback,
+    });
   } catch (_) { qNote(it, fallback); }
 }
 /* ── 가공 ───────────────────────────────────────── */

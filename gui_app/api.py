@@ -37,6 +37,7 @@ from mabi.store import Favorites, Playlists
 
 from .chars_api import CharsApi
 from .daily_api import DailyApi
+from .queue_api import QueueApi
 from .dye_service import DyeService
 from .dye_tab import exclude_from_capture
 from .legacy_shapes import Shapes
@@ -105,7 +106,7 @@ def _opts_kw(opts) -> dict:
     return kw
 
 
-class Api(DailyApi, CharsApi):
+class Api(DailyApi, CharsApi, QueueApi):
     def __init__(self, paths):
         self.paths = paths
         self.win = None
@@ -118,6 +119,7 @@ class Api(DailyApi, CharsApi):
         self.cli.on_call = self.calllog.record
         self.qc = QueryCache(self.cli, paths.data / "cache")
         self.cd = craft.configure(paths.data, paths.resources / "data")
+        self._init_queue()  # 작업 큐 (queue_api) — 카드 목록을 읽어 둔다
         self.shapes = Shapes(self.qc, self.cd)
         self.compat = Compat(self.cli, paths.data / "compat.json", LEGACY_SEED if LEGACY_SEED.exists() else None)
         self.playlists = Playlists(paths.data / "playlists.json")
@@ -606,17 +608,7 @@ class Api(DailyApi, CharsApi):
         self.cd.recipebook.save_user(recipes)
         return {"ok": True, **totals, **self.cd.recipebook.stats()}
 
-    # ---------------------------------------------------------------- 작업 큐 (목록만 저장. 순서·진행은 화면이 정한다)
-    def queue_load(self):
-        return craft_queue.load(self.cd.queue_file)
-
-    def queue_save(self, state):
-        return craft_queue.save(self.cd.queue_file, state if isinstance(state, dict) else {})
-
-    def queue_record(self, entry):
-        craft_queue.record(self.cd.history_file, entry if isinstance(entry, dict) else {})
-        return {"ok": True}
-
+    # ---------------------------------------------------------------- 작업 큐 기록 (큐 자체는 queue_api)
     def queue_history(self, limit=300):
         return craft_queue.history(self.cd.history_file, int(limit or 300))
 

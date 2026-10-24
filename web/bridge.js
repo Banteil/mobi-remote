@@ -95,7 +95,15 @@
     cursorNudge: c('cursor.nudge'),
     win: { narrow: c('win.narrow') },
     book: { stats: c('book.stats'), harvest: c('book.harvest') },
-    queue: { load: c('queue.load'), save: c('queue.save'), record: c('queue.record'), history: c('queue.history') },
+    // 작업 큐 — 주인은 파이썬 (mabi/workqueue.py). 화면은 상태를 받아 그리고 버튼만 보낸다
+    queue: {
+      state: c('queue.state'), add: c('queue.add'), remove: c('queue.remove'), move: c('queue.move'),
+      playOne: c('queue.playOne'), pauseOne: c('queue.pauseOne'), pause: c('queue.pause'), halt: c('queue.halt'),
+      playAll: c('queue.playAll'), tidy: c('queue.tidy'), clear: c('queue.clear'), edit: c('queue.edit'),
+      patch: c('queue.patch'), uiDone: c('queue.uiDone'), history: c('queue.history'),
+      onChange: (cb) => on('mm:queue', cb), onRun: (cb) => on('mm:queue-run', cb), onStop: (cb) => on('mm:queue-stop', cb),
+      onDone: (cb) => on('mm:queue-done', cb), onToast: (cb) => on('mm:queue-toast', cb),
+    },
     fav: { all: c('fav.all'), toggle: c('fav.toggle'), clear: c('fav.clear') },
     version: { info: c('version.info'), check: c('version.check'), accept: c('version.accept') },
     routines: { list: c('routines.list'), run: c('routines.run') },
@@ -104,15 +112,12 @@
 
     // 일일 숙제 (파이썬판에서 새로 생긴 것)
     daily: {
-      state: c('daily.state'), start: c('daily.start'), stop: c('daily.stop'), pauseCancel: c('daily.pauseCancel'),
+      state: c('daily.state'), stop: c('daily.stop'), pauseCancel: c('daily.pauseCancel'),
       settings: c('daily.settings'), saveSettings: c('daily.saveSettings'),
       shot: c('daily.shot'),
       openFolder: c('daily.openFolder'),
-      displayCheck: c('daily.displayCheck'), displayFix: c('daily.displayFix'),
-      displayWait: c('daily.displayWait'), displayWaitCancel: c('daily.displayWaitCancel'),
-      displayRestore: c('daily.displayRestore'),
       onDisplay: (cb) => on('mm:display', cb),
-      abyssSettings: c('daily.abyssSettings'), abyssStart: c('daily.abyssStart'), abyssStop: c('daily.abyssStop'),
+      abyssSettings: c('daily.abyssSettings'), abyssStop: c('daily.abyssStop'),
       onAbyss: (cb) => on('mm:abyss', cb),
       onEvent: (cb) => on('mm:daily', cb),
       onLog: (cb) => on('mm:daily-log', cb),

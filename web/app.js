@@ -1600,7 +1600,7 @@ function wire() {
     // 반복 루프에도 중단 신호를 같이 보낸다.
     collectAll.aborted = true;
     fillAltering.aborted = true;
-    if (qRunning) qSetStop('pause');  // 명령은 아래 mm.cancel 이 끊는다
+    if (qRunning) mm.queue.pause();  // 명령은 아래 mm.cancel 이 끊는다
     player.stopping = true;
     await mm.cancel();
     say('취소 요청을 보냈습니다.');

@@ -72,20 +72,30 @@ class DailyApi:
             t.join(5)
         return bool(t and t.is_alive())
 
-    def daily_start(self, opts: dict | None = None) -> dict:
+    def _busy_reason(self) -> str | None:
+        """숙제·어비스·캐릭터 자동 설정 중 하나가 돌고 있으면 그 이유 (게임 조작이 겹치면 안 된다)."""
         if self._alive(self._daily_thread):
-            return {"error": "이미 실행 중입니다"}
+            return "일일 숙제가 도는 중입니다"
         if getattr(self, "_scan_thread", None) and self._scan_thread.is_alive():
-            return {"error": "캐릭터 자동 설정이 도는 중입니다"}
+            return "캐릭터 자동 설정이 도는 중입니다"
         if self._alive(self._abyss_thread):
-            return {"error": "어비스 반복이 도는 중입니다"}
-        o = opts or {}
+            return "어비스 반복이 도는 중입니다"
+        return None
+
+    _daily_result: tuple = ("failed", "")
+
+    def _daily_launch(self, run_opts: RunOptions, on_event=None, on_resume=None) -> threading.Thread:
+        """숙제를 작업 스레드에서 돌리고 그 스레드를 돌려준다 (작업 큐가 join 으로 기다린다).
+        결과는 self._daily_result = ('done', results) | ('failed', 메시지). 진행은 'mm:daily' 로 화면에.
+        F12·일시정지로 멈췄으면 F12 를 다시 누를 때 on_resume() (진행 기록으로 끊긴 자리부터 이어 한다)."""
         self._daily_hook_log()
-        run_opts = RunOptions(chars=o.get("chars") or None, only=o.get("only") or None, force=bool(o.get("force")),
-                              display=o.get("display") is not False, interface_ready=bool(o.get("interface_ready")),
-                              restore=o.get("restore") is not False, extra={"from": "web"})
         self.daily_pauseCancel()
-        runner = Runner(self.paths, on_event=lambda e: self._emit("mm:daily", e), force_exit=False)
+        on_event = on_event or (lambda e: None)
+
+        def event(e):
+            self._emit("mm:daily", e)
+            on_event(e)
+        runner = Runner(self.paths, on_event=event, force_exit=False)
         self._daily_runner = runner
         self._daily_end = False
 
@@ -95,19 +105,21 @@ class DailyApi:
             except Exception as e:  # 설정 오류, 게임 창 없음 등
                 log.exception("일일 숙제 실행 실패")
                 msg = str(e) if isinstance(e, (ValueError, RuntimeError)) else f"{type(e).__name__}: {e}"
+                self._daily_result = ("failed", msg)
                 self._emit("mm:daily", {"type": "failed", "message": msg})
                 return
-            # F12·일시정지 버튼으로 멈췄으면 '일시정지' — F12 를 다시 누르면 이어 한다 (진행 기록으로 끊긴 자리부터).
+            self._daily_result = ("done", results)
+            # F12·일시정지 버튼으로 멈췄으면 '일시정지' — F12 를 다시 누르면 이어 한다.
             # 큐에서 숙제 카드를 지워 멈춘 것(_daily_end)은 종료
             if any(s == "STOP" for _, s, _ in results or []) and not self._daily_end:
                 log.info("일시정지 — F12 를 다시 누르면 이어 합니다")
                 self._emit("mm:daily", {"type": "paused"})
-                self._daily_wait_resume()
+                self._daily_wait_resume(on_resume)
             elif not any(s == "STOP" for _, s, _ in results or []):
                 self._bring_front()  # 끝까지 돌았다 → 결과 창(화면이 'done' 에 띄움)이 게임 위로 보이게
         self._daily_thread = threading.Thread(target=work, name="daily", daemon=True)
         self._daily_thread.start()
-        return {"ok": True}
+        return self._daily_thread
 
     def _bring_front(self) -> None:
         """리모콘 창을 게임 위로. 다른 프로세스(게임)가 맨 앞이면 Windows 가 SetForegroundWindow 를 막아 작업 표시줄만
@@ -137,7 +149,8 @@ class DailyApi:
     # ---- 일시정지 중 F12 → 이어 하기 ----
     _pause_wait: threading.Event | None = None
 
-    def _daily_wait_resume(self) -> None:
+    def _daily_wait_resume(self, on_resume=None) -> None:
+        """일시정지한 숙제를 F12 로 이어 하기. 다른 작업이 돌기 시작하면 작업 큐가 끈다 (daily_pauseCancel)."""
         from mabi.inputs import key_pressed, vk_of
         self.daily_pauseCancel()
         stop = self._pause_wait = threading.Event()
@@ -150,7 +163,8 @@ class DailyApi:
                 if key_pressed(vk):
                     stop.set()
                     log.info("F12 → 이어 하기")
-                    self._emit("mm:daily", {"type": "resume"})
+                    if on_resume:
+                        on_resume()
                     return
                 time.sleep(0.05)
         threading.Thread(target=work, name="daily-resume", daemon=True).start()
@@ -160,7 +174,7 @@ class DailyApi:
             self._pause_wait.set()
         return {"ok": True}
 
-    # ---- 게임 화면 설정 (숙제 시작 전에 화면이 확인한다) ----
+    # ---- 게임 화면 설정 (숙제·어비스 시작 전에 작업 큐가 확인·맞춤 — queue_api._q_display) ----
     _display_thread: threading.Thread | None = None
 
     def daily_displayCheck(self, opts: dict | None = None) -> dict:  # noqa: N802
@@ -186,62 +200,24 @@ class DailyApi:
             log.exception("화면 설정 확인 실패")
             return {"ok": False, "running": False, "problems": [f"확인 실패: {e}"], "target": target}
 
-    _display_wait: threading.Event | None = None
-
-    def daily_displayWait(self) -> dict:  # noqa: N802
-        """사람이 직접 맞추는 동안 기다린다. 중단 키(F12)를 누르면 'mm:display' {resume} — 화면이 다시 확인하고 시작한다.
-        숙제 시작 버튼을 눌러도 같다 (그때는 이 기다림을 끝낸다). 15분이 지나면 그만 기다린다."""
-        from mabi.inputs import key_pressed, vk_of
-        self.daily_displayWaitCancel()
-        stop = self._display_wait = threading.Event()
-        vk = vk_of(load_config(self.paths)["game"]["stop_key"])
-
-        def work():
-            key_pressed(vk)  # '이전 호출 이후 눌림' 비트 초기화
-            end = time.monotonic() + 15 * 60
-            while not stop.is_set() and time.monotonic() < end:
-                if key_pressed(vk):
-                    stop.set()
-                    self._emit("mm:display", {"resume": True})
-                    return
-                time.sleep(0.05)
-        threading.Thread(target=work, name="display-wait", daemon=True).start()
-        return {"ok": True}
-
-    def daily_displayWaitCancel(self) -> dict:  # noqa: N802
-        if self._display_wait:
-            self._display_wait.set()
-        return {"ok": True}
-
-    def daily_displayFix(self) -> dict:  # noqa: N802
-        """게임이 켜져 있으면 게임 안 환경 설정에서, 실패하면 게임을 끄고 설정 파일로, 꺼져 있으면 파일로 맞춘다.
-        끝나면 'mm:display' {done, ok, message, running}."""
-        if self._display_thread and self._display_thread.is_alive():
-            return {"error": "이미 맞추는 중입니다"}
-        if self._daily_thread and self._daily_thread.is_alive():
-            return {"error": "일일 숙제가 도는 중입니다"}
-
-        def work():
-            from mabi.bot import Bot
-            from mabi.tasks import display
-            bot = None
-            try:
-                self._daily_hook_log()
-                cfg = load_config(self.paths)
-                bot = Bot(cfg, self.paths, force_exit=False)
-                msg = display.ensure(bot, cfg, self.paths.data / "backup", remember=self.paths.data / display.RESTORE_FILE)
-                log.info(f"화면 설정: {msg}")
-                running = display.game_running(bot.window)
-                self._emit("mm:display", {"done": True, "ok": True, "message": msg, "running": running})
-            except Exception as e:
-                log.exception("화면 설정 맞추기 실패")
-                self._emit("mm:display", {"done": True, "ok": False, "message": f"{e}"})
-            finally:
-                if bot:
-                    bot.stopper.close()
-        self._display_thread = threading.Thread(target=work, name="display", daemon=True)
-        self._display_thread.start()
-        return {"ok": True}
+    def _display_fix_sync(self) -> dict:
+        """화면 설정 맞추기 (막는다). {ok, message, running}."""
+        from mabi.bot import Bot
+        from mabi.tasks import display
+        bot = None
+        try:
+            self._daily_hook_log()
+            cfg = load_config(self.paths)
+            bot = Bot(cfg, self.paths, force_exit=False)
+            msg = display.ensure(bot, cfg, self.paths.data / "backup", remember=self.paths.data / display.RESTORE_FILE)
+            log.info(f"화면 설정: {msg}")
+            return {"ok": True, "message": msg, "running": display.game_running(bot.window)}
+        except Exception as e:
+            log.exception("화면 설정 맞추기 실패")
+            return {"ok": False, "message": f"{e}"}
+        finally:
+            if bot:
+                bot.stopper.close()
 
     def daily_displayRestore(self) -> dict:  # noqa: N802
         """작업 큐가 다 끝났을 때 한 번: 숙제·어비스 동안 맞춰 둔 인터페이스와 화면 모드·해상도를 원래대로.
@@ -293,13 +269,19 @@ class DailyApi:
                 "difficulties": abyss.DIFFICULTIES,
                 "running": bool(self._abyss_thread and self._abyss_thread.is_alive())}
 
-    def daily_abyssStart(self, v: dict) -> dict:  # noqa: N802
-        """고른 던전·난이도·횟수·시간을 config.toml [abyss] 에 저장하고 반복을 시작한다.
-        진행은 'mm:abyss' {type: abyss|done|failed, clears, deaths, ...}, 로그는 일일 숙제 로그 칸으로."""
-        if self._alive(self._abyss_thread):
-            return {"error": "이미 어비스 반복 중입니다"}
-        if self._alive(self._daily_thread):
-            return {"error": "일일 숙제가 도는 중입니다"}
+    _abyss_result: dict = {}
+
+    def _abyss_launch(self, v: dict, on_event=None) -> threading.Thread:
+        """고른 던전·난이도·횟수·시간을 config.toml [abyss] 에 저장하고 반복을 작업 스레드에서 시작한다 (작업 큐가 join).
+        진행은 'mm:abyss' {type: start|abyss|done|failed, clears, deaths, ...}, 결과는 self._abyss_result (끝 이벤트와 같은 값)."""
+        on_event = on_event or (lambda e: None)
+
+        def event(e):
+            self._emit("mm:abyss", e)
+            on_event(e)
+            if e.get("type") in ("done", "failed"):
+                self._abyss_result = e
+        self._abyss_result = {"type": "failed", "message": "시작하지 못함"}
         # 일시정지해 둔 숙제의 'F12 로 이어 하기' 감시를 끈다 — 안 그러면 어비스를 멈추는 F12 가 숙제도 깨운다 (2026-10-24)
         self.daily_pauseCancel()
         doc = self._doc()
@@ -314,6 +296,7 @@ class DailyApi:
         a["revive"] = v.get("revive") is not False
         a["fit_display"] = bool(v.get("fit_display"))
         userconfig.save(self.paths, doc)
+        event({"type": "start"})
 
         def work():
             from mabi.bot import Bot, StopRequested
@@ -336,22 +319,21 @@ class DailyApi:
                         log.info(display.prepare_interface(bot, prof.DailyState(self.paths.state)))
                     except Exception as e:
                         log.warning(f"인터페이스 PC·80% 로 맞추지 못함 — 그대로 진행: {e}")
-                res = abyss.repeat(bot, cfg, int(a["runs"]), float(a["minutes"]),
-                                   on_event=lambda e: self._emit("mm:abyss", e), character=ch)
-                self._emit("mm:abyss", {"type": "done", **res})
+                res = abyss.repeat(bot, cfg, int(a["runs"]), float(a["minutes"]), on_event=event, character=ch)
+                event({"type": "done", **res})
             except StopRequested:
                 log.info("어비스 반복: 사용자 중단")
-                self._emit("mm:abyss", {"type": "done", "stopped": True})
+                event({"type": "done", "stopped": True})
             except Exception as e:
                 log.exception("어비스 반복 실패")
-                self._emit("mm:abyss", {"type": "failed", "message": str(e)})
+                event({"type": "failed", "message": str(e)})
             finally:
                 self._abyss_bot = None
                 if bot:
                     bot.stopper.close()
         self._abyss_thread = threading.Thread(target=work, name="abyss", daemon=True)
         self._abyss_thread.start()
-        return {"ok": True}
+        return self._abyss_thread
 
     def daily_abyssStop(self) -> dict:  # noqa: N802
         if self._abyss_bot:

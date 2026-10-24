@@ -129,7 +129,7 @@ async function runGoalItem(it) {
     done++;
     it.spent = spent;
     it.steps = done;
-    paintQueue();
+    saveQueue();
   }
 
   setBusy(false);
@@ -141,54 +141,40 @@ async function runGoalItem(it) {
 /* ── 작업 큐 ────────────────────────────────────── */
 
 /**
- * 목표를 줄 세워 두고 하나씩 민다.
+ * 카드를 줄 세워 두고 위에서부터 하나씩 민다. 캐릭터는 하나고 게임 조작도 한 번에 하나라 동시에 돌릴 수 없어서 큐다.
  *
- * 캐릭터는 하나고 CLI 호출도 하나씩이라 **동시에 돌릴 수가 없다.** 그래서 큐다.
- * 예전에는 목표를 누르면 그 자리에서 끝까지 돌았고, 그동안 다른 목표를 걸 수 없었다.
- * 이제는 걸어 두기만 하면 순서대로 진행되고, 진행 중에도 뒤에 더 붙이거나 순서를 바꿀 수 있다.
+ * 큐의 주인은 파이썬이다 (mabi/workqueue.py). 순서·상태·멈춤·저장·기록을 거기서 하고, 화면은 'mm:queue' 로 받은
+ * 상태를 그리고 버튼을 보내기만 한다. 그래서 화면을 다시 띄워도 숙제·어비스는 끊기지 않고, F12 를 받는 곳도 하나다.
+ * 아직 화면에 있는 일(제작 목표·한 번 하는 행동)은 파이썬이 'mm:queue-run' 으로 넘겨 주면 여기서 돌리고
+ * queue.uiDone 으로 답한다.
  *
  * 진행 상황은 상태바가 아니라 **그 항목의 카드**에 적는다. 여러 개가 줄 서 있으면
  * "제작 중"이라는 한 줄만으로는 어느 것 이야기인지 알 수 없다.
  */
-let qItems = [];
+let qItems = [];      // 파이썬이 준 카드 목록 (보기용 — 고치려면 mm.queue.* 로)
 let qRunning = false;
-let qSeq = 1;
+/** 화면이 돌리고 있는 카드 (goal·action). 진행 수량·메모를 파이썬에 올린다 */
+let qUiItem = null;
 
 /**
- * 큐를 세우는 이유 — 하나만 둔다. 돌고 있는 카드가 끝나면 qTick 이 이걸 보고 그 카드를 어떻게 둘지 정한다.
- * 예전에는 qAbort·qRestart·qSkillHalt·카드의 pauseAfter·preempted 가 따로 놀아 순서가 꼬였다 (2026-10-24 F12·▶ 문제).
- *
- *   stopped : 작업이 스스로 멈춤 (숙제 F12·어비스 멈추기) → 일시정지
- *   preempt : '지금 바로' 에 밀림 → 대기로 돌리고 큐를 곧바로 다시 돌린다
- *   pause   : 사람이 멈춤 (⏸·■·취소) → 일시정지
- *   remove  : 돌던 카드를 뺐거나 큐를 비움
- *   skill   : 생활 스킬 레벨 부족 { what, level } → 중단 (기다려도 안 풀린다)
- * 둘이 겹치면 센 쪽 (뒤로 갈수록 셈). 예: 밀리던 숙제가 STOP 으로 끝나도 '밀림' 그대로.
+ * 화면이 돌리는 카드를 세우는 이유. 파이썬이 'mm:queue-stop' 으로 알려 준다 (돌고 있는 일에만 의미가 있다).
+ * 목표 루프는 걸음 사이에 이걸 본다. 생활 스킬 레벨 부족(skill)은 여기서 정해 uiDone 으로 올린다.
+ * 둘이 겹치면 센 쪽 — 순서는 파이썬 workqueue.STOP_RANK 와 같다.
  */
 let qStop = null;
 const Q_STOP_RANK = { stopped: 0, preempt: 1, pause: 2, remove: 3, skill: 4 };
 
-/** 세우는 이유를 적어 둔다 (돌고 있는 작업에는 알리지 않음 — 작업이 스스로 멈췄을 때). */
 function qSetStop(reason, extra) {
   if (!qStop || Q_STOP_RANK[reason] > Q_STOP_RANK[qStop.reason]) qStop = Object.assign({ reason }, extra);
 }
 
-/** 큐를 세운다: 이유를 적고, 돌고 있는 카드 종류에 알린다 (숙제는 일시정지·종료, 어비스는 멈춤). 목표·행동은 걸음 사이에 qStop 을 본다. */
-function qRequestStop(reason, extra) {
-  qSetStop(reason, extra);
-  const cur = qItems.find((x) => x.status === 'run');
-  const k = cur && qKind(cur);
-  if (k && k.stop) k.stop(reason);
-}
-
 /**
- * 카드 종류. 종류마다 다른 것은 여기에만 둔다 (daily·abyss 는 daily.js 가 더한다).
- *   run(it)      → 끝까지 갔으면 true
- *   amount(x)    → 수량·내용 한 줄 (카드·기록)
+ * 카드 종류. 종류마다 다른 화면 쪽 처리 (daily·abyss 는 daily.js 가 더한다 — 실행은 파이썬).
+ *   run(it)      → 화면이 돌리는 종류만. 끝까지 갔으면 true
+ *   amount(x)    → 수량·내용 한 줄 (카드)
  *   card(x)      → 카드의 수량 칸 HTML (없으면 amount 한 줄)
  *   editable     → ✎ (목표 수량 바꾸기)
  *   doneToast(x) → 끝났을 때 토스트 [제목, 내용] (없으면 안 띄움)
- *   stop(reason) → 큐가 설 때 돌고 있는 작업에 알림
  */
 const Q_KINDS = {
   goal: {
@@ -228,34 +214,61 @@ const Q_TIP = {
 const Q_STATE = Object.fromEntries(['wait', 'run', 'pause', 'done', 'fail'].map((k) =>
   [k, { label: (mm.labels.queue_state || {})[k] || k, cls: 'q-' + k, tip: Q_TIP[k] }]));
 
+function applyQueue(s) {
+  if (!s) return;
+  const wasRunning = qRunning;
+  qItems = Array.isArray(s.items) ? s.items : [];
+  qRunning = !!s.running;
+  paintQueue();
+  // 큐가 서면 화면을 한 번 새로 고친다. 수량이 많이 바뀌어 있다.
+  if (wasRunning && !qRunning) refreshActive().catch(() => {});
+}
+
 async function loadQueue() {
-  let saved = null;
-  try { saved = await mm.queue.load(); } catch (_) { return; }
-  qItems = (saved && Array.isArray(saved.items) ? saved.items : []).map((x) => Object.assign({}, x, {
-    // 앱을 껐다 켜면 "진행 중"이던 것은 더 이상 진행 중이 아니다
-    status: x.status === 'run' ? 'wait' : x.status,
-  }));
-  for (const x of qItems) qSeq = Math.max(qSeq, (Number(x.id) || 0) + 1);
-  paintQueue();
+  try { applyQueue(await mm.queue.state()); } catch (_) { /* 큐를 못 읽어도 화면은 뜬다 */ }
 }
 
+mm.queue.onChange(applyQueue);
+mm.queue.onToast((m) => { if (m) toast(m.title, m.text || '', m.kind || 'ok'); });
+mm.queue.onStop((m) => { if (m && m.reason) qSetStop(m.reason); });
+mm.queue.onDone((m) => {
+  const it = m && m.item;
+  if (!it) return;
+  const t = qKind(it).doneToast && qKind(it).doneToast(it);  // 일일 숙제는 결과 보고서 창이 따로 뜬다
+  if (t) toast(t[0], t[1], 'ok');
+});
+
+/** 화면이 돌리는 카드 (goal·action). 끝나면 진행 수량과 함께 답한다. */
+mm.queue.onRun(async (m) => {
+  if (!m || !m.item) return;
+  const it = m.item;
+  qStop = null;
+  qUiItem = it;
+  let ok = false;
+  try { ok = await qKind(it).run(it); }
+  catch (err) { it.note = '오류 — ' + (err && err.message); }
+  qUiItem = null;
+  const stop = qStop && qStop.reason === 'skill' ? qStop : null;
+  qStop = null;
+  mm.queue.uiDone(m.id, { ok: !!ok, patch: qPick(it), stop: stop }).catch(() => {});
+});
+
+/** 화면이 돌리는 카드의 진행 값 (파이썬에 올릴 것) */
+const Q_SYNC = ['note', 'base', 'have', 'made', 'spent', 'steps', 'wings', 'partial'];
+function qPick(it) {
+  const o = {};
+  for (const k of Q_SYNC) if (it[k] !== undefined) o[k] = it[k];
+  return o;
+}
+
+/** 돌고 있는 화면 카드의 진행 값을 파이썬에 올린다 (예전 이름 그대로 — 저장은 파이썬이 한다). */
 function saveQueue() {
-  // 진행 중에도 자주 불린다. 실패해도 화면은 그대로 돈다.
-  mm.queue.save({ items: qItems }).catch(() => {});
+  if (qUiItem) mm.queue.patch(qUiItem.id, qPick(qUiItem)).catch(() => {});
 }
 
-function qAdd(spec) {
-  const it = Object.assign({
-    id: qSeq++,
-    status: 'wait',
-    note: '',
-    spent: 0,
-    steps: 0,
-  }, spec);
-  qItems.push(it);
-  paintQueue();
-  saveQueue();
-  // 담기만 하고 돌리지는 않는다. 날개가 나가는 일은 사람이 재생을 누른 뒤에 시작해야 한다.
+/** 목표 카드를 맨 아래에 담는다 (돌리지는 않는다 — 날개가 나가는 일은 사람이 재생을 누른 뒤에). */
+async function qAdd(spec) {
+  const it = await mm.queue.add(Object.assign({ spent: 0, steps: 0 }, spec), 'end');
   toast('큐에 담았습니다', it.label + ' 새로 ' + num(it.target) + '개 — 재생을 누르면 진행합니다.', 'ok');
   return it;
 }
@@ -264,35 +277,19 @@ function qFind(id) { return qItems.find((x) => String(x.id) === String(id)); }
 
 function qNote(it, text) {
   it.note = text;
-  paintQueue();
+  if (it === qUiItem) saveQueue();
+  else if (it.id !== undefined) mm.queue.patch(it.id, { note: text }).catch(() => {});
 }
 
-function qRemove(id) {
-  const it = qFind(id);
-  if (!it) return;
-  if (it.status === 'run') { qRequestStop('remove'); qNote(it, '멈추는 중…'); }
-  else if (it.kind === 'daily') mm.daily.pauseCancel();  // 일시정지 중인 숙제 카드를 지우면 종료 (F12 로 이어 하지 않음)
-  qItems = qItems.filter((x) => x !== it);
-  paintQueue();
-  saveQueue();
-}
+function qRemove(id) { mm.queue.remove(id); }
 
 /**
- * 지금 바로 시작 (일일 숙제 '숙제 시작' · 어비스 '반복 시작').
- *
- * 맨 위에 넣고 바로 돌린다. 돌고 있는 작업이 있으면 세워서 대기로 돌리고(뒤로 밀림), 이 작업이 끝나면
- * 이어서 한다. 큐 뒤에 담기만 하는 것은 '목표' 버튼 (제작·채집·가공 목표와 같은 방식).
+ * 지금 바로 시작 (숙제 시작 · 반복 시작 · 파란 버튼). 맨 위에 넣고 바로 돌린다.
+ * 돌고 있는 작업이 있으면 세워서 대기로 돌리고(뒤로 밀림), 이 작업이 끝나면 이어서 한다.
+ * replacePaused: 같은 종류의 일시정지 카드를 이걸로 바꾼다 (숙제 시작 = 새 숙제).
  */
-function qStartNow(it) {
-  qItems = qItems.filter((x) => x !== it);
-  it.status = 'wait';
-  qItems.unshift(it);
-  const cur = qItems.find((x) => x.status === 'run');
-  paintQueue();
-  saveQueue();
-  if (!cur) { qTick(); return; }
-  qRequestStop('preempt');  // 숙제는 일시정지·어비스는 멈춤 (제작·채집 목표는 이번 걸음을 마치고)
-  qNote(cur, '뒤로 미루는 중…');
+function qStartNow(spec, replacePaused) {
+  return mm.queue.add(spec, 'now', !!replacePaused);
 }
 
 /* ── 한 번 하는 행동 (제작·채집·가공·수령·연주) ──
@@ -300,7 +297,7 @@ function qStartNow(it) {
  * 숙제·어비스가 도는 중에 버튼을 눌러도 게임 조작이 겹치지 않게 모두 큐를 거친다. 날개가 드는 것은 넣기 전에 묻는다. */
 async function actSpec(spec) {
   if (spec.command && !(await confirmCost(spec.command, { label: spec.label, note: spec.note, skipConfirm: spec.skipConfirm }))) return null;
-  return Object.assign({ id: qSeq++, kind: 'action', status: 'wait', note: '' }, spec);
+  return Object.assign({ kind: 'action', note: '' }, spec);
 }
 
 async function actNow(spec) {
@@ -314,9 +311,7 @@ async function actNow(spec) {
 async function actGoal(spec) {
   const it = await actSpec(spec);
   if (!it) return;
-  qItems.push(it);
-  paintQueue();
-  saveQueue();
+  await mm.queue.add(it, 'end');
   toast('큐에 담았습니다', it.label + ' — 재생을 누르면 진행합니다.', 'ok');
 }
 
@@ -331,51 +326,13 @@ async function runActionItem(it) {
   return !!(r && r.ok);
 }
 
-/** 이 항목부터 돌린다. 대기 줄의 맨 앞으로 올리고 큐를 깨운다. */
-function qPlayOne(id) {
-  const it = qFind(id);
-  if (!it) return;
-  if (it.status === 'run') return;
-  // 이미 끝난 것을 다시 거는 것이면 기준점을 새로 잡는다.
-  // 일시정지였다면 그대로 둬야 하던 자리에서 이어간다.
-  if (it.status === 'done' || it.status === 'fail') {
-    delete it.base;
-    delete it.made;
-    delete it.doneRuns;  // 어비스 카드
-    delete it.doneSecs;
-    it.spent = 0;
-    it.steps = 0;
-    it.note = '';
-  }
-  it.status = 'wait';
-  // 진행 중인 항목 바로 뒤, 다른 대기 항목보다는 앞에 둔다
-  qItems = qItems.filter((x) => x !== it);
-  const at = qItems.findIndex((x) => x.status === 'run');
-  qItems.splice(at < 0 ? 0 : at + 1, 0, it);
-  paintQueue();
-  saveQueue();
-  qTick();
-}
+/** 이 항목부터 돌린다 (끝난 것이면 다시 걸기). */
+function qPlayOne(id) { mm.queue.playOne(id); }
 
-/**
- * 진행 중인 이 항목에서 큐를 일시정지한다 (카드의 ⏸ — 돌고 있는 카드에만 있다).
- *
- * 지금 걸음을 마치고 멈춘다. 카드는 일시정지로 남아 ▶ 를 누르면 하던 자리에서 이어 간다 (기준점을 다시 잡지 않는다).
- */
-function qPauseOne(id) {
-  const it = qFind(id);
-  if (!it) return;
-  if (it.status === 'run') { qRequestStop('pause'); qNote(it, '이번 걸음을 마치고 멈춥니다…'); }
-}
+/** 진행 중인 이 항목에서 큐를 일시정지한다 (카드의 ⏸ — 이번 걸음을 마치고). ▶ 로 하던 자리에서 이어 간다. */
+function qPauseOne(id) { mm.queue.pauseOne(id); }
 
-function qMove(id, delta) {
-  const i = qItems.findIndex((x) => String(x.id) === String(id));
-  const j = i + delta;
-  if (i < 0 || j < 0 || j >= qItems.length) return;
-  const t = qItems[i]; qItems[i] = qItems[j]; qItems[j] = t;
-  paintQueue();
-  saveQueue();
-}
+function qMove(id, delta) { mm.queue.move(id, delta); }
 
 async function qEdit(id) {
   const it = qFind(id);
@@ -384,24 +341,12 @@ async function qEdit(id) {
     '진행 중인 항목도 바꿀 수 있습니다. 다음 걸음부터 새 수량으로 판단하며, ' +
     '이미 만든 만큼은 그대로 인정합니다.');
   if (!n) return;
-  it.target = n;
-  if (it.status === 'done' || it.status === 'fail') it.status = 'wait';
-  paintQueue();
-  saveQueue();
-  qTick();
+  if (qUiItem && String(qUiItem.id) === String(id)) qUiItem.target = n;  // 돌고 있는 목표 루프는 다음 걸음부터
+  mm.queue.edit(id, n);
 }
 
-/**
- * 중단된 항목을 치운다.
- *
- * 완료는 끝나는 즉시 스스로 빠지므로, 여기 남는 것은 막혔거나 실패한 것들이다.
- * 이유를 읽고 나면 더 볼 일이 없으니 한 번에 치운다.
- */
-function qTidy() {
-  qItems = qItems.filter((x) => ['wait', 'run', 'pause'].indexOf(x.status) >= 0);
-  paintQueue();
-  saveQueue();
-}
+/** 중단된 항목을 치운다. 완료는 끝나는 즉시 스스로 빠지므로, 남는 것은 막혔거나 실패한 것들이다. */
+function qTidy() { mm.queue.tidy(); }
 
 /** 전부 지운다. 되돌릴 수 없으니 한 번 물어본다. */
 async function qClear() {
@@ -410,140 +355,30 @@ async function qClear() {
     '<p>담아 둔 <b>' + qItems.length + '건</b>을 전부 지웁니다.</p>' +
     '<p class="hint">진행 중인 것이 있으면 이번 걸음을 마치고 멈춥니다. 이미 쓴 정령의 날개는 돌아오지 않습니다.</p>',
     '전부 지우기');
-  if (!ok) return;
-  if (qItems.some((x) => x.kind === 'daily' && x.status !== 'run')) mm.daily.pauseCancel();  // 일시정지한 숙제는 종료
-  qRequestStop('remove');
-  qItems = [];
-  paintQueue();
-  saveQueue();
+  if (ok) mm.queue.clear();
 }
 
-/** 재생 ▶ (전체 시작). 일시정지한 카드도 대기로 되돌려 위에서부터 차례로 한다.
- * ('보류' — 건너뛰기 — 는 헷갈려서 없앴다. 멈춘 것은 모두 일시정지, 2026-10-24) */
-function qPlayAll() {
-  for (const x of qItems) if (x.status === 'pause') x.status = 'wait';
-  paintQueue();
-  saveQueue();
-  qTick();
-}
+/** 재생 ▶ (전체 시작). 일시정지한 카드도 대기로 되돌려 위에서부터 차례로 한다. */
+function qPlayAll() { mm.queue.playAll(); }
 
-/** 부드럽게 멈춘다. 항목 상태는 그대로라 재생을 누르면 이어진다. */
+/** 부드럽게 멈춘다 (이번 걸음을 마치고). 카드는 일시정지 — 재생을 누르면 이어진다. */
 function qPause() {
   if (!qRunning) return;
-  qRequestStop('pause');
+  mm.queue.pause();
   say('이번 걸음을 마치고 멈춥니다.');
 }
 
-/**
- * 지금 명령까지 끊고 멈춘다.
- *
- * ⏸ 와 다른 점은 걸음이 끝나길 기다리지 않고 돌고 있는 CLI 호출에 취소를 보내는 것. 카드는 똑같이 일시정지.
- */
-async function qHalt() {
-  qRequestStop('pause');
-  try { await mm.cancel(); } catch (_) {}
+/** 지금 명령까지 끊고 멈춘다 (돌고 있는 CLI 호출에 취소를 보낸다). 카드는 똑같이 일시정지. */
+function qHalt() {
+  mm.queue.halt();
   say('멈추는 중입니다.');
 }
 
-/**
- * 대기 중인 것을 위에서부터 하나씩 민다.
- *
- * 한 항목이 실패해도 큐를 통째로 세우지 않는다. "재료를 직접 구해 오세요"로 막힌 것과
- * 그 뒤에 줄 서 있는 다른 목표는 서로 상관이 없다. 실패한 카드는 이유를 달고 남는다.
- */
-async function qTick() {
-  if (qRunning) return;
-  if (busy) return;              // 다른 명령이 도는 중이면 끼어들지 않는다
-  qRunning = true;
-  qStop = null;
-  paintQueue();
-
-  let drained = false;  // 할 것이 없어서 끝났나 (멈춤·일시정지가 아니라) → 화면 설정 되돌리기
-  let restart = false;  // '지금 바로' 에 밀려 섰다 → 곧바로 다시 돈다
-  try {
-    while (!qStop) {
-      const it = qItems.find((x) => x.status === 'wait');
-      if (!it) { drained = !qItems.some((x) => x.status === 'pause'); break; }  // 일시정지한 카드가 남았으면 아직 끝이 아니다
-      it.status = 'run';
-      it.startedAt = Date.now();
-      qNote(it, '시작');
-      saveQueue();
-
-      const kind = qKind(it);
-      let ok = false;
-      try { ok = await kind.run(it); }
-      catch (err) { qNote(it, '오류 — ' + (err && err.message)); }
-
-      // 도중에 지워졌으면 상태를 되살리지 않는다
-      if (!qItems.includes(it)) { qRecord(it, 'removed'); continue; }
-
-      // 다 만든 카드는 치운다. 남겨 두면 할 일 목록에 "할 일이 아닌 것"이 쌓이고,
-      // 정작 다음에 뭘 할 차례인지가 안 보인다. 기록은 토스트와 파일 로그에 남는다.
-      if (ok) {
-        qRecord(it, 'done');
-        qItems = qItems.filter((x) => x !== it);
-        const t = kind.doneToast && kind.doneToast(it);  // 일일 숙제는 결과 보고서 창이 따로 뜬다
-        if (t) toast(t[0], t[1], 'ok');
-        paintQueue();
-        saveQueue();
-        continue;
-      }
-
-      const why = qStop && qStop.reason;
-      if (!why) {
-        it.status = 'fail';
-      } else if (why === 'preempt') {
-        // 지금 바로 시작에 밀린 것: 대기로 되돌려 앞 작업이 끝나면 이어서 한다
-        it.status = 'wait';
-        restart = true;
-        qNote(it, '뒤로 밀림 — 앞 작업이 끝나면 이어서');
-      } else if (why === 'skill') {
-        // 스킬 레벨은 시간이 지난다고 오르지 않는다. 대기로 되돌리면 재생을 누를 때마다
-        // 같은 거절을 다시 받으므로, 중단으로 못 박고 이유를 카드에 적는다.
-        it.status = 'fail';
-        qNote(it, '생활 스킬 레벨 부족 — ' + qStop.what +
-          (qStop.level ? ' (필요 Lv.' + qStop.level + ')' : '') + ' · 날개는 쓰이지 않았습니다.');
-        toast('생활 스킬 레벨이 모자랍니다',
-          qStop.what + ' 을(를) 캘 수 없어 작업 큐를 세웠습니다.' +
-          (qStop.level ? ' 필요 레벨 ' + qStop.level + '.' : ''), 'bad');
-      } else {
-        // 사람이 멈춘 것(⏸·■·F12)은 실패가 아니다 — 일시정지로 두고, ▶ 로 하던 자리에서 이어 간다.
-        it.status = 'pause';
-        qNote(it, it.kind === 'daily' ? '일시정지 · ' + stopKey() + ' 나 ▶ 로 재개' : '일시정지 · ▶ 로 재개');
-      }
-      qRecord(it, it.status === 'fail' ? 'fail' : it.status === 'pause' ? 'pause' : 'stop');
-      paintQueue();
-      saveQueue();
-    }
-  } finally {
-    qRunning = false;
-    qStop = null;
-    paintQueue();
-    if (restart) setTimeout(qTick, 0);  // 지금 바로 시작한 작업으로
-    else if (drained && typeof qDisplayEnd === 'function') qDisplayEnd();  // 큐 한 번이 끝남 → 맞춘 화면 설정 되돌리기
-    // 큐가 비면 화면을 한 번 새로 고친다. 수량이 많이 바뀌어 있다.
-    try { await refreshActive(); } catch (_) {}
-  }
-}
-
-
-/* ── 작업 기록 ── 끝난 항목(완료·실패·일시정지·뺌)을 한 줄씩 파일에 남기고 '기록' 창에서 본다 */
+/* ── 작업 기록 ── 끝난 항목(완료·실패·일시정지·뺌)을 파이썬이 한 줄씩 파일에 남기고, '기록' 창에서 본다 */
 const QH_RESULT = {
   done: ['완료', 'pill-ok'], fail: ['실패', 'pill-bad'], pause: ['일시정지', 'pill-warn'],
   stop: ['멈춤', 'pill-muted'], removed: ['뺌', 'pill-muted'],
 };
-
-/** 카드 한 장의 수량·내용 한 줄 (기록용) */
-function qDetail(x) {
-  return qKind(x).amount(x);
-}
-
-function qRecord(it, result) {
-  mm.queue.record({
-    start: it.startedAt || Date.now(), end: Date.now(), kind: it.kind || 'goal', label: it.label, result,
-    detail: qDetail(it), note: it.note || '',
-  }).catch(() => {});
-}
 
 async function showQueueHistory() {
   const rows = await mm.queue.history(300).catch(() => []);
