@@ -613,6 +613,13 @@ class Api(DailyApi, CharsApi):
     def queue_save(self, state):
         return craft_queue.save(self.cd.queue_file, state if isinstance(state, dict) else {})
 
+    def queue_record(self, entry):
+        craft_queue.record(self.cd.history_file, entry if isinstance(entry, dict) else {})
+        return {"ok": True}
+
+    def queue_history(self, limit=300):
+        return craft_queue.history(self.cd.history_file, int(limit or 300))
+
     # ---------------------------------------------------------------- 즐겨찾기 (키는 태그 붙은 원문 nameRaw)
     def _fav_load(self) -> dict:
         d = self.favorites.load()
@@ -659,6 +666,14 @@ class Api(DailyApi, CharsApi):
         except Exception:
             # 게임이 꺼져 있으면 받아오기만 실패한다 → 캐시된 명령 목록으로 검사
             res = self.compat.check(refresh=False)
+        # 기준선이 옛 리모콘 것(seed)뿐이고 문제가 없으면 이 판 형식으로 한 번 저장한다 — 안 그러면 '설명·응답 형식은
+        # 비교하지 못했습니다' 참고 알림이 켤 때마다 뜬다 (2026-10-24)
+        if not res.get("first_run") and not self.compat.file.exists() and res["level"] in ("ok", "info"):
+            try:
+                self.compat.save(note="옛 리모콘 기준선과 차이 없음 — 이 판 형식으로 옮김")
+                res = {**res, "level": "ok", "changes": []}
+            except Exception:
+                pass
         lv = LEVELS.index(res["level"]) if res["level"] in LEVELS else 1
         return {"level": lv, "levelName": LEVELS[lv], "ok": lv < 2, "firstRun": bool(res.get("first_run")),
                 "changes": res.get("changes") or [], "baseline": self.compat.baseline() if not res.get("first_run") else None,

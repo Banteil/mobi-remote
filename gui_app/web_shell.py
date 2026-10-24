@@ -13,7 +13,7 @@ import logging
 import traceback
 from pathlib import Path
 
-from PySide6.QtCore import QFile, QIODevice, QObject, QRunnable, QThreadPool, QUrl, Signal, Slot
+from PySide6.QtCore import QFile, QIODevice, QObject, QRunnable, Qt, QThreadPool, QUrl, Signal, Slot
 from PySide6.QtGui import QIcon
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineScript, QWebEngineSettings
@@ -115,6 +115,7 @@ class WebWindow(QMainWindow):
         api.attach(self)
 
         view = QWebEngineView(self)
+        view.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)  # 웹 브라우저 메뉴(뒤로·새로 고침·소스 보기) 숨김
         page = Page(view)
         view.setPage(page)
         s = page.settings()

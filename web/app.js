@@ -186,15 +186,9 @@ let busy = false;
 /** 마지막으로 확인된 연결 상태. 꺼져 있으면 5초짜리 호출을 피한다. */
 let online = true;
 
-async function runAction(command, body, opts) {
-  const o = opts || {};
-  if (busy) {
-    toast('실행 중', '이전 명령이 끝난 뒤 다시 시도하세요.', 'bad');
-    return null;
-  }
-
+/** 날개가 드는 명령이면 비용을 보여 주고 묻는다. 해도 되면 cost 정보, 아니면 null. */
+async function confirmCost(command, o) {
   const cost = await mm.costOf(command, o.times || 1);
-
   if (cost.costed && !o.skipConfirm) {
     const enough = cost.enough;
     const cur = cost.currency || '정령의 날개';
@@ -216,6 +210,17 @@ async function runAction(command, body, opts) {
   } else if (o.confirmText && !o.skipConfirm) {
     if (!(await confirmModal('확인', '<p>' + esc(o.confirmText) + '</p>'))) return null;
   }
+  return cost;
+}
+
+async function runAction(command, body, opts) {
+  const o = opts || {};
+  if (busy) {
+    toast('실행 중', '이전 명령이 끝난 뒤 다시 시도하세요.', 'bad');
+    return null;
+  }
+  const cost = await confirmCost(command, o);
+  if (!cost) return null;
 
   busy = true;
   setBusy(true, (o.label || command) + ' 실행 중…');
@@ -1101,11 +1106,10 @@ async function doCraft(name, per) {
     '1회당 ' + per + '개 · 재료가 모자라면 날개 소모 없이 거부'
   );
   if (!times) return;
-  await runAction('execute_crafting', { displayName: name, craftCount: times },
-    { label: name + ' 제작 x' + times, times: 1,
-      note: '이동 → 제작 → 결과 수령까지 한 번에 진행되며, 몇 분 걸릴 수 있습니다. ' +
-            'craftCount가 몇이든 호출은 1회라 날개는 5만 듭니다.' });
-  loadCraft(true);
+  actNow({ act: 'craft', command: 'execute_crafting', body: { displayName: name, craftCount: times },
+    label: name + ' 제작 x' + times, detail: '제작 ' + times + '회',
+    note: '이동 → 제작 → 결과 수령까지 한 번에 진행되며, 몇 분 걸릴 수 있습니다. ' +
+          'craftCount가 몇이든 호출은 1회라 날개는 5만 듭니다.' });
 }
 
 
@@ -1400,9 +1404,11 @@ function facilitySlotsHtml(w) {
       '</span>' +
       '<span class="slots">' + cells.join('') + '</span>' +
       (over ? '<span class="sub mark-warn">+' + over + '</span>' : '') +
-      (f.completed.length
-        ? '<button class="btn btn-tiny btn-primary" data-collect="' + esc(f.completed[0].name) + '">수령</button>'
-        : '') +
+      // 수령·목표는 세로로 쌓고, 완료분이 없어도 같은 폭을 비워 둔다 (시설마다 줄이 들쭉날쭉하지 않게)
+      '<span class="fac-act">' + (f.completed.length
+        ? '<button class="btn btn-tiny btn-primary" data-collect="' + esc(f.completed[0].name) + '">수령</button>' +
+          '<button class="btn btn-tiny" data-collect-goal="' + esc(f.completed[0].name) + '" title="작업 큐 맨 아래에 담기">목표</button>'
+        : '') + '</span>' +
       '</div>';
   }).join('') + '</div>';
 }
@@ -1510,7 +1516,8 @@ async function loadAlter(refresh) {
   $('#alter-works-count').textContent = '완료 ' + w.completedCount + ' · 진행 중 ' + w.inProgressCount;
   $('#alter-works-act').innerHTML = w.completedCount > 0
     ? '<button class="btn btn-tiny btn-primary" id="collect-all">완료분 전체 수령 (' +
-      (w.facilities || []).filter((f) => f.completed.length).length + '개 시설)</button>'
+      (w.facilities || []).filter((f) => f.completed.length).length + '개 시설)</button> ' +
+      '<button class="btn btn-tiny" id="collect-all-goal" title="작업 큐 맨 아래에 담기">목표</button>'
     : '';
 
   $('#alter-works').innerHTML =
@@ -1966,9 +1973,16 @@ let qAbort = false;
 /** 생활 스킬 레벨이 모자라 멈춘 것인가. { what, level, message } */
 let qSkillHalt = null;
 let qSeq = 1;
+/** 지금 바로 시작(qStartNow)으로 돌던 것을 세웠다 — 큐가 멈추면 곧바로 다시 돌린다 */
+let qRestart = false;
 
+const Q_TIP = {
+  wait: '대기 — 큐가 돌면 위에서부터 차례로 진행합니다',
+  pause: '일시정지 — 멈춘 자리에서 기다립니다. 카드의 ▶ 나 아래 ▶(전체 시작)로 이어 합니다',
+  done: '완료', fail: '중단 — 이유를 읽고 ▶ 로 다시 걸거나 정리로 치웁니다', run: '진행 중',
+};
 const Q_STATE = Object.fromEntries(['wait', 'run', 'pause', 'done', 'fail'].map((k) =>
-  [k, { label: (mm.labels.queue_state || {})[k] || k, cls: 'q-' + k }]));
+  [k, { label: (mm.labels.queue_state || {})[k] || k, cls: 'q-' + k, tip: Q_TIP[k] }]));
 
 async function loadQueue() {
   let saved = null;
@@ -2019,16 +2033,75 @@ function qRemove(id) {
   saveQueue();
 }
 
+/**
+ * 지금 바로 시작 (일일 숙제 '숙제 시작' · 어비스 '반복 시작').
+ *
+ * 맨 위에 넣고 바로 돌린다. 돌고 있는 작업이 있으면 세워서 대기로 돌리고(뒤로 밀림), 이 작업이 끝나면
+ * 이어서 한다. 큐 뒤에 담기만 하는 것은 '목표' 버튼 (제작·채집·가공 목표와 같은 방식).
+ */
+function qStartNow(it) {
+  qItems = qItems.filter((x) => x !== it);
+  it.status = 'wait';
+  qItems.unshift(it);
+  const cur = qItems.find((x) => x.status === 'run');
+  paintQueue();
+  saveQueue();
+  if (!cur) { qTick(); return; }
+  cur.preempted = true;
+  qRestart = true;
+  qAbort = true;
+  qPauseDaily();  // 숙제는 일시정지·어비스는 멈춤 (제작·채집 목표는 이번 걸음을 마치고)
+  qNote(cur, '뒤로 미루는 중…');
+}
+
+/* ── 한 번 하는 행동 (제작·채집·가공·수령·연주) ──
+ * 파란 버튼 = 지금 바로 (qStartNow — 돌던 작업은 뒤로 밀렸다가 이어서), '목표' 버튼 = 큐 맨 아래에 담기.
+ * 숙제·어비스가 도는 중에 버튼을 눌러도 게임 조작이 겹치지 않게 모두 큐를 거친다. 날개가 드는 것은 넣기 전에 묻는다. */
+async function actSpec(spec) {
+  if (spec.command && !(await confirmCost(spec.command, { label: spec.label, note: spec.note, skipConfirm: spec.skipConfirm }))) return null;
+  return Object.assign({ id: qSeq++, kind: 'action', status: 'wait', note: '' }, spec);
+}
+
+async function actNow(spec) {
+  const it = await actSpec(spec);
+  if (!it) return;
+  const cur = qItems.find((x) => x.status === 'run');
+  if (cur) toast('먼저 합니다', it.label + ' — 진행 중이던 "' + cur.label + '" 은 끝나면 이어서', 'ok');
+  qStartNow(it);
+}
+
+async function actGoal(spec) {
+  const it = await actSpec(spec);
+  if (!it) return;
+  qItems.push(it);
+  paintQueue();
+  saveQueue();
+  toast('큐에 담았습니다', it.label + ' — 재생을 누르면 진행합니다.', 'ok');
+}
+
+const ACT_REFRESH = { craft: () => loadCraft(true), alter: () => loadAlter(true), collect: () => loadAlter(true) };
+
+/** 큐가 부른다. 행동 하나를 하고 성공했으면 true. */
+async function runActionItem(it) {
+  if (it.act === 'collectAll') { await collectAll(); return true; }
+  const r = await runAction(it.command, it.body, { label: it.label, skipConfirm: true });
+  if (ACT_REFRESH[it.act]) ACT_REFRESH[it.act]();
+  if (!r || !r.ok) qNote(it, '실패 — ' + ((r && r.ko && r.ko.text) || (r && (r.message || r.error)) || '알 수 없음'));
+  return !!(r && r.ok);
+}
+
 /** 이 항목부터 돌린다. 대기 줄의 맨 앞으로 올리고 큐를 깨운다. */
 function qPlayOne(id) {
   const it = qFind(id);
   if (!it) return;
   if (it.status === 'run') return;
   // 이미 끝난 것을 다시 거는 것이면 기준점을 새로 잡는다.
-  // 보류였다면 그대로 둬야 하던 자리에서 이어간다.
+  // 일시정지였다면 그대로 둬야 하던 자리에서 이어간다.
   if (it.status === 'done' || it.status === 'fail') {
     delete it.base;
     delete it.made;
+    delete it.doneRuns;  // 어비스 카드
+    delete it.doneSecs;
     it.spent = 0;
     it.steps = 0;
     it.note = '';
@@ -2044,16 +2117,14 @@ function qPlayOne(id) {
 }
 
 /**
- * 이 항목을 보류한다.
+ * 진행 중인 이 항목에서 큐를 일시정지한다 (카드의 ⏸ — 돌고 있는 카드에만 있다).
  *
- * 진행 중이면 지금 걸음을 마치고 빠진다. 보류된 항목은 큐가 지나칠 뿐 지워지지는 않아서,
- * ▶ 를 누르면 하던 자리에서 이어간다 (기준점을 다시 잡지 않는다).
+ * 지금 걸음을 마치고 멈춘다. 카드는 일시정지로 남아 ▶ 를 누르면 하던 자리에서 이어 간다 (기준점을 다시 잡지 않는다).
  */
 function qPauseOne(id) {
   const it = qFind(id);
   if (!it) return;
-  if (it.status === 'run') { it.pauseAfter = true; qAbort = true; qPauseDaily(); qNote(it, '이번 걸음을 마치고 멈춥니다…'); return; }
-  if (it.status === 'wait') { it.status = 'pause'; paintQueue(); saveQueue(); }
+  if (it.status === 'run') { it.pauseAfter = true; qAbort = true; qPauseDaily(); qNote(it, '이번 걸음을 마치고 멈춥니다…'); }
 }
 
 function qMove(id, delta) {
@@ -2067,7 +2138,7 @@ function qMove(id, delta) {
 
 async function qEdit(id) {
   const it = qFind(id);
-  if (!it || it.kind === 'daily') return;
+  if (!it || it.kind === 'daily' || it.kind === 'abyss' || it.kind === 'action') return;
   const n = await promptNumber('목표 수량 바꾸기', '"' + it.label + '" 를 새로 몇 개?', it.target,
     '진행 중인 항목도 바꿀 수 있습니다. 다음 걸음부터 새 수량으로 판단하며, ' +
     '이미 만든 만큼은 그대로 인정합니다.');
@@ -2106,6 +2177,15 @@ async function qClear() {
   saveQueue();
 }
 
+/** 재생 ▶ (전체 시작). 일시정지한 카드도 대기로 되돌려 위에서부터 차례로 한다.
+ * ('보류' — 건너뛰기 — 는 헷갈려서 없앴다. 멈춘 것은 모두 일시정지, 2026-10-24) */
+function qPlayAll() {
+  for (const x of qItems) if (x.status === 'pause') x.status = 'wait';
+  paintQueue();
+  saveQueue();
+  qTick();
+}
+
 /** 부드럽게 멈춘다. 항목 상태는 그대로라 재생을 누르면 이어진다. */
 function qPause() {
   if (!qRunning) return;
@@ -2117,8 +2197,7 @@ function qPause() {
 /**
  * 지금 명령까지 끊고 멈춘다.
  *
- * 일시정지와 다른 점은 둘이다. 돌고 있는 CLI 호출에 취소를 보내고, 진행하던 항목을
- * **보류**로 둔다. 재생을 눌러도 그 항목은 건너뛰므로, 잘못 건 목표를 세울 때 쓴다.
+ * ⏸ 와 다른 점은 걸음이 끝나길 기다리지 않고 돌고 있는 CLI 호출에 취소를 보내는 것. 카드는 똑같이 일시정지.
  */
 async function qHalt() {
   const it = qItems.find((x) => x.status === 'run');
@@ -2142,26 +2221,34 @@ async function qTick() {
   qAbort = false;
   paintQueue();
 
+  let drained = false;  // 할 것이 없어서 끝났나 (멈춤·일시정지가 아니라) → 화면 설정 되돌리기
   try {
     while (!qAbort) {
       const it = qItems.find((x) => x.status === 'wait');
-      if (!it) break;                 // 보류(pause)는 여기서 걸리지 않으므로 자연히 건너뛴다
+      if (!it) { drained = !qItems.some((x) => x.status === 'pause'); break; }  // 일시정지한 카드가 남았으면 아직 끝이 아니다
       it.status = 'run';
+      it.startedAt = Date.now();
       qNote(it, '시작');
       saveQueue();
 
       let ok = false;
-      try { ok = it.kind === 'daily' ? await runDailyItem(it) : await runGoalItem(it); }
+      try {
+        ok = it.kind === 'daily' ? await runDailyItem(it) : it.kind === 'abyss' ? await runAbyssItem(it)
+          : it.kind === 'action' ? await runActionItem(it) : await runGoalItem(it);
+      }
       catch (err) { qNote(it, '오류 — ' + (err && err.message)); }
 
       // 도중에 지워졌으면 상태를 되살리지 않는다
-      if (!qItems.includes(it)) continue;
+      if (!qItems.includes(it)) { qRecord(it, 'removed'); continue; }
 
       // 다 만든 카드는 치운다. 남겨 두면 할 일 목록에 "할 일이 아닌 것"이 쌓이고,
       // 정작 다음에 뭘 할 차례인지가 안 보인다. 기록은 토스트와 파일 로그에 남는다.
       if (ok) {
+        qRecord(it, 'done');
         qItems = qItems.filter((x) => x !== it);
-        if (it.kind !== 'daily') {  // 일일 숙제는 결과 보고서 창이 따로 뜬다
+        if (it.kind === 'abyss') toast('어비스 반복 끝', it.label + ' · ' + abyssAmount(it), 'ok');
+        else if (it.kind === 'action') { /* runAction 이 결과 토스트를 띄운다 */ }
+        else if (it.kind !== 'daily') {  // 일일 숙제는 결과 보고서 창이 따로 뜬다
           toast('목표 달성', it.label + ' 새로 ' + num(it.target) + '개' +
             (it.spent ? ' · 날개 ' + num(it.spent) : ''), 'ok');
         }
@@ -2170,8 +2257,19 @@ async function qTick() {
         continue;
       }
 
-      // 사람이 멈춘 것은 실패가 아니다. 이 항목만 보류하라고 했으면 보류로,
-      // 큐 전체를 멈춘 것이면 대기로 되돌린다 — 어느 쪽이든 하던 자리에서 이어갈 수 있다.
+      // 지금 바로 시작에 밀린 것: 대기로 되돌려 앞 작업이 끝나면 이어서 한다
+      if (it.preempted) {
+        delete it.preempted;
+        delete it.pauseAfter;
+        it.status = 'wait';
+        qNote(it, '뒤로 밀림 — 앞 작업이 끝나면 이어서');
+        qRecord(it, 'stop');
+        paintQueue();
+        saveQueue();
+        continue;
+      }
+
+      // 사람이 멈춘 것(⏸·■·F12)은 실패가 아니다 — 일시정지로 두고, ▶ 로 하던 자리에서 이어 간다.
       if (qSkillHalt) {
         // 스킬 레벨은 시간이 지난다고 오르지 않는다. 대기로 되돌리면 재생을 누를 때마다
         // 같은 거절을 다시 받으므로, 중단으로 못 박고 이유를 카드에 적는다.
@@ -2183,12 +2281,13 @@ async function qTick() {
           (qSkillHalt.level ? ' 필요 레벨 ' + qSkillHalt.level + '.' : ''), 'bad');
       } else if (it.pauseAfter) {
         it.status = 'pause';
-        qNote(it, it.kind === 'daily' ? '일시정지 · ' + stopKey() + '로 재개' : '보류');
+        qNote(it, it.kind === 'daily' ? '일시정지 · ' + stopKey() + ' 나 ▶ 로 재개' : '일시정지 · ▶ 로 재개');
       } else if (qAbort) {
-        it.status = 'wait';
-        qNote(it, '멈춤');
+        it.status = 'pause';
+        qNote(it, '일시정지 · ▶ 로 재개');
       } else it.status = 'fail';
       delete it.pauseAfter;
+      qRecord(it, it.status === 'fail' ? 'fail' : it.status === 'pause' ? 'pause' : 'stop');
       paintQueue();
       saveQueue();
     }
@@ -2197,11 +2296,62 @@ async function qTick() {
     qAbort = false;
     qSkillHalt = null;
     paintQueue();
+    if (qRestart) { qRestart = false; setTimeout(qTick, 0); }  // 지금 바로 시작한 작업으로
+    else if (drained && typeof qDisplayEnd === 'function') qDisplayEnd();  // 큐 한 번이 끝남 → 맞춘 화면 설정 되돌리기
     // 큐가 비면 화면을 한 번 새로 고친다. 수량이 많이 바뀌어 있다.
     try { await refreshActive(); } catch (_) {}
   }
 }
 
+
+/* ── 작업 기록 ── 끝난 항목(완료·실패·일시정지·뺌)을 한 줄씩 파일에 남기고 '기록' 창에서 본다 */
+const QH_RESULT = {
+  done: ['완료', 'pill-ok'], fail: ['실패', 'pill-bad'], pause: ['일시정지', 'pill-warn'],
+  stop: ['멈춤', 'pill-muted'], removed: ['뺌', 'pill-muted'],
+};
+
+/** 카드 한 장의 수량·내용 한 줄 (기록용) */
+function qDetail(x) {
+  if (x.kind === 'daily') return (x.chars || []).length + '명 · ' + (x.only ? '숙제 ' + x.only.length + '개' : '전체') + (x.force ? ' · 다시' : '');
+  if (x.kind === 'abyss') return abyssAmount(x);
+  if (x.kind === 'action') return x.detail || '';
+  return '목표 ' + num(x.target) + '개' + (x.made ? ' · 만든 ' + num(x.made) : '') + (x.spent ? ' · 날개 ' + num(x.spent) : '') +
+    (x.via ? ' · ' + x.via : '');
+}
+
+function qRecord(it, result) {
+  mm.queue.record({
+    start: it.startedAt || Date.now(), end: Date.now(), kind: it.kind || 'goal', label: it.label, result,
+    detail: qDetail(it), note: it.note || '',
+  }).catch(() => {});
+}
+
+async function showQueueHistory() {
+  const rows = await mm.queue.history(300).catch(() => []);
+  const pad = (n) => String(n).padStart(2, '0');
+  const hm = (t) => { const d = new Date(t); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+  const day = (t) => { const d = new Date(t); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+  const took = (r) => {
+    const m = Math.round((r.end - r.start) / 60000);
+    return m >= 60 ? Math.floor(m / 60) + '시간 ' + (m % 60) + '분' : m + '분';
+  };
+  let last = '';
+  const html = (rows || []).map((r) => {
+    const [txt, cls] = QH_RESULT[r.result] || [r.result, 'pill-muted'];
+    const d = day(r.end);
+    const head = d !== last ? '<div class="qh-day">' + d + '</div>' : '';
+    last = d;
+    return head + '<div class="qh-row">' +
+      '<span class="qh-time" title="걸린 시간 ' + took(r) + '">' + hm(r.start) + ' ~ ' + hm(r.end) + '</span>' +
+      '<span class="pill ' + cls + '">' + txt + '</span>' +
+      '<span class="qh-label">' + esc(r.label || '') + '</span>' +
+      '<span class="qh-detail">' + esc(r.detail || '') + (r.note ? '<span class="qh-note">' + esc(r.note) + '</span>' : '') + '</span>' +
+      '</div>';
+  }).join('');
+  $('#q-hist-body').innerHTML = html || '<p class="muted">아직 기록이 없습니다. 작업 큐에서 끝난 작업이 여기에 남습니다.</p>';
+  $('#q-hist-n').textContent = rows && rows.length ? '최근 ' + rows.length + '건' : '';
+  $('#q-hist').classList.remove('hidden');
+}
 
 function paintQueue() {
   const list = $('#q-list');
@@ -2216,11 +2366,12 @@ function paintQueue() {
   $('#q-state').textContent = running ? '진행 중' : (waiting ? '대기 ' + waiting : '');
   $('#q-state').className = 'q-state' + (running ? ' on' : '');
 
-  $('#q-play').disabled = qRunning || !waiting;
+  $('#q-play').disabled = qRunning || !(waiting || qItems.some((x) => x.status === 'pause'));  // 일시정지만 있어도 ▶ = 이어 하기
   $('#q-pause').disabled = !qRunning;
   $('#q-halt').disabled = !qRunning;
   $('#q-tidy').disabled = !qItems.some((x) => x.status === 'done' || x.status === 'fail');
   $('#q-clear').disabled = !qItems.length;
+  if (typeof dlRefresh === 'function') dlRefresh();  // 일일 숙제 탭 버튼 (일시정지 카드)
 
   if (!qItems.length) {
     list.innerHTML = '<p class="q-empty">비어 있음</p>';
@@ -2235,17 +2386,17 @@ function paintQueue() {
     // 진행 중에는 ⏸ 만, 끝난 것에는 ▶(다시 걸기)만 낸다. 지금 누를 수 없는 버튼을
     // 흐리게 늘어놓는 것보다 아예 없는 편이 무엇을 할 수 있는지 분명하다.
     const btns =
-      (run ? '<button class="q-btn" data-q-pause="' + x.id + '" title="이번 걸음을 마치고 보류">⏸</button>' : '') +
+      (run ? '<button class="q-btn" data-q-pause="' + x.id + '" title="이번 걸음을 마치고 일시정지">⏸</button>' : '') +
       (!run ? '<button class="q-btn" data-q-play="' + x.id + '" title="' + (ended ? '다시 걸기' : '이것부터 진행') + '">▶</button>' : '') +
-      (x.status === 'wait' ? '<button class="q-btn" data-q-pause="' + x.id + '" title="보류">⏸</button>' : '') +
-      (x.kind === 'daily' ? '' : '<button class="q-btn" data-q-edit="' + x.id + '" title="수량 바꾸기">✎</button>') +
+      (x.kind === 'daily' || x.kind === 'abyss' || x.kind === 'action' ? ''
+        : '<button class="q-btn" data-q-edit="' + x.id + '" title="수량 바꾸기">✎</button>') +
       '<button class="q-btn" data-q-del="' + x.id + '" title="큐에서 빼기">✕</button>';
 
     // 이름은 길면 잘린다. 잘린 것을 확인할 길이 title 말고 없다.
     const nowHave = x.have !== undefined ? x.have : x.startHave;
 
     return '<div class="q-item ' + st.cls + '">' +
-      '<div class="q-top"><span class="q-badge">' + st.label + '</span>' +
+      '<div class="q-top"><span class="q-badge" title="' + esc(st.tip || '') + '">' + st.label + '</span>' +
       '<b title="' + esc(x.label) + '">' + esc(x.label) + '</b>' +
       '<span class="spacer"></span>' + btns +
       '</div>' +
@@ -2254,6 +2405,10 @@ function paintQueue() {
       (x.kind === 'daily'
         ? '<div class="q-amt">' + (x.chars || []).length + '명 · ' +
           (x.only ? '숙제 ' + x.only.length + '개' : '전체') + (x.force ? ' · 다시' : '') + '</div>'
+        : x.kind === 'abyss'
+        ? '<div class="q-amt">' + esc(abyssAmount(x)) + '</div>'
+        : x.kind === 'action'
+        ? '<div class="q-amt">' + esc(x.detail || '') + '</div>'
         : '<div class="q-amt">목표 <b>' + num(x.target) + '</b>개' +
           (nowHave !== undefined ? ' · 현재 <b>' + num(nowHave) + '</b>개' : '') +
           (x.made ? ' <span class="muted">(만든 ' + num(x.made) + ')</span>' : '') +
@@ -2412,10 +2567,9 @@ function renderGather() {
   $('#gather-table tbody').innerHTML = favTableBody('gather', sortRows('gather', rows), 3, row, false).html;
 }
 
-async function doGather(name) {
-  await runAction('execute_gathering', { displayName: name },
-    { label: name + ' 채집',
-      note: '1회 최대 100개' });
+function doGather(name) {
+  actNow({ act: 'gather', command: 'execute_gathering', body: { displayName: name },
+    label: name + ' 채집', detail: '1회 (최대 100개)', note: '1회 최대 100개' });
 }
 
 /* ── 소지품 ─────────────────────────────────────── */
@@ -2649,7 +2803,8 @@ function renderMusic() {
     ? rows.map((x) =>
         '<div class="mission"><span class="t">' + esc(scoreLabel(x.title)) + '</span>' +
         '<button class="btn btn-tiny" data-pl-add="' + esc(x.title) + '" title="재생목록에 담기">+</button> ' +
-        '<button class="btn btn-tiny btn-primary" data-play="' + esc(x.title) + '">연주</button></div>').join('')
+        '<button class="btn btn-tiny btn-primary" data-play="' + esc(x.title) + '">연주</button>' +
+        '<button class="btn btn-tiny" data-play-goal="' + esc(x.title) + '" title="작업 큐 맨 아래에 담기">목표</button></div>').join('')
     : '<span class="muted">결과 없음</span>';
 }
 
@@ -4004,10 +4159,12 @@ function wire() {
     setDyeTol(+t.dataset.dyeTol, t.value);
   });
 
-  $('#q-play').addEventListener('click', () => qTick());
+  $('#q-play').addEventListener('click', qPlayAll);
   $('#q-pause').addEventListener('click', qPause);
   $('#q-halt').addEventListener('click', qHalt);
   $('#q-tidy').addEventListener('click', qTidy);
+  $('#q-history').addEventListener('click', showQueueHistory);
+  $('#q-hist-close').addEventListener('click', () => $('#q-hist').classList.add('hidden'));
   $('#q-clear').addEventListener('click', qClear);
 
   $('#btn-options').addEventListener('click', openOptions);
@@ -4220,31 +4377,23 @@ function wire() {
     if (t.dataset.gather) return void doGather(t.dataset.gather);
     if (t.dataset.fill) return void fillAltering(t.dataset.fill, t.dataset.fillLabel);
     if (t.dataset.alter) {
-      return void (async () => {
-        const name = t.dataset.alter;
-        const r = await runAction('execute_altering', { displayName: name },
-          { label: name + ' 가공',
-            note: '칸이 꽉 차면 날개만 나갑니다 — 여유 칸 확인' });
-
-        loadAlter(true);
-      })();
+      return void actNow({ act: 'alter', command: 'execute_altering', body: { displayName: t.dataset.alter },
+        label: t.dataset.alter + ' 가공', detail: '가공 1회 등록', note: '칸이 꽉 차면 날개만 나갑니다 — 여유 칸 확인' });
     }
-    if (t.dataset.collect) {
-      return void (async () => {
-        // 시설 하나만 수령해도 이동 때문에 6~10초가 걸린다. 누른 버튼에서 진행을 보여 준다.
-        const restore = btnBusy(t, '수령 중…');
-        await runAction('complete_altering_work', { displayName: t.dataset.collect },
-          { label: '가공 수령', skipConfirm: true });
-        restore();
-        loadAlter(true);
-      })();
+    if (t.dataset.collect || t.dataset.collectGoal) {
+      const name = t.dataset.collect || t.dataset.collectGoal;
+      return void (t.dataset.collect ? actNow : actGoal)({ act: 'collect', command: 'complete_altering_work',
+        body: { displayName: name }, label: name + ' 수령', detail: '가공 완료분 수령', skipConfirm: true });
     }
     if (t.dataset.roomLevel) {
       return void (async () => {
         if (await askFacilityLevel(t.dataset.roomLevel, parseInt(t.dataset.roomLv, 10))) loadAlter(true);
       })();
     }
-    if (t.id === 'collect-all') return void collectAll();
+    if (t.id === 'collect-all' || t.id === 'collect-all-goal') {
+      return void (t.id === 'collect-all' ? actNow : actGoal)({ act: 'collectAll', label: '가공 완료분 전체 수령',
+        detail: '완료된 시설 모두', skipConfirm: true });
+    }
     if (t.id === 'cli-detect') {
       return void (async () => {
         const done = btnBusy(t, '찾는 중…');
@@ -4304,9 +4453,10 @@ function wire() {
         await refreshPlaylists();
       })();
     }
-    if (t.dataset.play) {
-      return void runAction('play_music_score', { title: t.dataset.play },
-        { label: '연주: ' + scoreLabel(t.dataset.play), skipConfirm: true });
+    if (t.dataset.play || t.dataset.playGoal) {
+      const title = t.dataset.play || t.dataset.playGoal;
+      return void (t.dataset.play ? actNow : actGoal)({ act: 'play', command: 'play_music_score', body: { title },
+        label: '연주: ' + scoreLabel(title), detail: '연주 1곡', skipConfirm: true });
     }
     // 일어서기처럼 전용 명령을 쓰는 항목. 목록에서는 다른 행동과 같은 자리에 있다.
     if (t.dataset.socialRun) {

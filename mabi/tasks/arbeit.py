@@ -25,6 +25,9 @@ from .content import CannotProceed, open_arbeit_tab
 
 PROGRESS, APPLY = gd.text("arbeit_progress"), gd.text("arbeit_apply")  # 카드 버튼 '진행하기' · '지원하기'
 HAVE = gd.text("arbeit_have_item")  # CLI 조건 '… 보유 3/10'
+# 퀘스트 창 아래 탭 줄(지도·퀘스트·아르바이트·이벤트) 윗선. 버튼이 이 줄에 반쯤 걸쳐 보일 때 그 자리를 누르면 버튼 대신
+# '이벤트' 탭이 눌린다 (2026-10-24: 지원하기를 눌렀다고 보고 수락 대화를 180초 기다리다 FAIL — tribute.TAB_BAR_Y 와 같은 일)
+BUTTON_MAX_Y = 950 - 30  # OCR 글자 가운데 기준 (버튼 높이 약 60)
 
 
 def in_dialog(bot: Bot, frame=None) -> bool:
@@ -87,7 +90,9 @@ def ungatherable(bot: Bot, job: dict) -> list[str]:
 
 
 def _buttons(bot: Bot) -> list[tuple[str, int, int]]:
-    return ocr.find_texts(bot.frame(), gd.region("arbeit_panel"))  # 퀘스트 창 오른쪽 목록
+    """퀘스트 창 오른쪽 목록의 글자. 탭 줄에 걸친 '진행하기'·'지원하기' 는 뺀다 (목록을 내리면 다시 보인다)."""
+    items = ocr.find_texts(bot.frame(), gd.region("arbeit_panel"))
+    return [i for i in items if i[2] <= BUTTON_MAX_Y or _norm(i[0]) not in (PROGRESS, APPLY)]
 
 
 def _scroll_panel(bot: Bot, notches: int) -> None:
@@ -291,7 +296,8 @@ def _work(bot: Bot, title: str) -> str:
     a, ui = bot.cfg["arbeit"], bot.ui
     end = time.monotonic() + a["job_timeout"]
     idle_since, pushes, deliver_tries, last_sig, card_clicks = None, 0, 0, None, 0
-    gathering, gather_end, howto_tries, last_check = False, 0.0, 0, 0.0
+    gathering, gather_end, howto_tries, last_check, gather_sig = False, 0.0, 0, 0.0, None
+    hard_end = time.monotonic() + a.get("job_max", 1800)
     while time.monotonic() < end:
         bot.sleep(1.0, 1.4)
         # 채집하러 간 뒤: 조건이 채워지면 바로 완료하러 간다 (게임은 필요한 만큼만 캐고 멈춘다)
@@ -302,8 +308,17 @@ def _work(bot: Bot, title: str) -> str:
                 if _finished(bot, title):
                     return "done"
                 continue  # 추적 칸이 잠깐 비었다 (이동·로딩 중) — 끝난 게 아니다
+            # 개수가 늘고 있으면 기다린다. 국경 수비대 물자 보급처럼 100개짜리를 두세 가지 캐는 일은 10분 넘게 걸려
+            # 정해진 시간(5분)으로 끊으면 82/100 에서 '물품 부족' 으로 건너뛰었다 (2026-10-24) → 늘지 않은 채
+            # gather_timeout 이 지나야 포기하고, 늘어나는 동안은 일 전체 제한(job_timeout)도 job_max 까지 늘린다
+            sig = missing_items(job)
+            if sig != gather_sig:
+                gather_sig = sig
+                gather_end = time.monotonic() + a["gather_timeout"]
+                end = min(max(end, gather_end + 60), hard_end)
             if not missing_items(job):
                 gathering = False
+                end = min(max(end, time.monotonic() + a["job_timeout"]), hard_end)  # 전달·제작 등 남은 걸음에 시간을 새로
                 _note(bot, title, "arb_gathered", "채집 끝 → 완료하러 이동")
                 # 게임이 알아서 전달하러 가기도 한다 (2026-10-22: 40m 앞에서 '진행하기' 를 다시 누르려다 못 찾고
                 # 막힘으로 끝냄) → 이동 중이면 그대로 두고, 멈춰 있을 때만 누른다. 못 눌러도 아래 '멈춤' 처리가 다시 민다
@@ -316,7 +331,7 @@ def _work(bot: Bot, title: str) -> str:
                 idle_since = None
                 continue
             if time.monotonic() > gather_end:
-                bot.log.warning(f"아르바이트 '{title}': 채집이 끝나지 않음 ({', '.join(missing_items(job))}) → {bot.snapshot('arbeit_gather').name}")
+                bot.log.warning(f"아르바이트 '{title}': 채집이 {a['gather_timeout']}초째 늘지 않음 ({', '.join(missing_items(job))}) → {bot.snapshot('arbeit_gather').name}")
                 _leave(bot)
                 return "short"
         frame = bot.frame()
@@ -338,7 +353,8 @@ def _work(bot: Bot, title: str) -> str:
             bot.click(rows[0])
             bot.sleep(2, 2.5)
             _fast_travel(bot)
-            gathering, gather_end, last_check = True, time.monotonic() + a["gather_timeout"], time.monotonic()
+            gathering, gather_end, last_check, gather_sig = True, time.monotonic() + a["gather_timeout"], time.monotonic(), None
+            end = min(max(end, gather_end + 60), hard_end)
             idle_since = None
             continue
         if (m := find(a["item_missing"])):
@@ -478,8 +494,9 @@ def _work(bot: Bot, title: str) -> str:
     return "stuck"
 
 
-def _apply_top(bot: Bot) -> bool:
-    """맨 위 '지원하기' → 이동 → 수락 대화. 수락 대화까지 오면 True (수락은 _work 가 한다)."""
+def _apply_top(bot: Bot) -> bool | None:
+    """맨 위 '지원하기' → 이동 → 수락 대화. 수락 대화까지 오면 True, 지원할 일이 없으면 False,
+    눌렀는데 수락 대화가 안 오면 None."""
     _settle(bot)
     open_arbeit_tab(bot)
     b = _find_card_button(bot, None, APPLY)
@@ -490,7 +507,13 @@ def _apply_top(bot: Bot) -> bool:
     a = bot.cfg["arbeit"]
     bot.sleep(2, 2.5)
     _fast_travel(bot)
-    bot.wait(a["accept"], timeout=a["travel_timeout"], interval=1.5)
+    try:
+        bot.wait(a["accept"], timeout=a["travel_timeout"], interval=1.5)
+    except StepTimeout:
+        # 수락 대화가 안 왔다 — 숙제 전체를 FAIL 로 끊지 않고 여기까지 한 것으로 마무리한다
+        bot.log.warning(f"아르바이트: 지원하기 뒤 수락 대화가 안 나타남 → {bot.snapshot('arbeit_apply').name}")
+        _leave(bot)
+        return None
     bot.key("space")
     bot.sleep(1.5, 2)
     for _ in range(10):  # 수락 뒤 이어지는 대사를 넘긴다
@@ -522,6 +545,12 @@ def run(bot: Bot, cfg: dict) -> str:
     book = _book(bot) or {}
     # 오늘 앞 실행에서 물품 부족으로 건너뛴 일은 다시 가 보지 않는다 (사람 몫). 막혔던 일은 다시 해 본다
     skipped.update(book.get("skipped") or {})
+    # 다만 그 사이 물품이 다 모였으면 (채집을 시간으로 끊었는데 게임이 마저 캔 경우) 다시 해 본다
+    for j in accepted(bot):
+        for t in [t for t in skipped if _same(t, j["title"])]:
+            if not missing_items(j):
+                bot.log.info(f"아르바이트 '{t}': 건너뛴 일인데 물품이 다 모임 → 다시 진행")
+                skipped.pop(t)
     if book.get("current"):
         bot.log.info(f"아르바이트 지난 기록: '{book['current']}' {book.get('stage', '')} ({book.get('at', '')}) → 이어서")
 
@@ -549,7 +578,11 @@ def run(bot: Bot, cfg: dict) -> str:
         if job is None:
             # 할 수 있는 수락한 일이 없으면 새 일에 지원한다
             before = {j["title"] for j in accepted(bot)}
-            if not _apply_top(bot):
+            applied = _apply_top(bot)
+            if applied is None:
+                stuck.append("(지원 후 수락 대화 없음)")
+                break
+            if not applied:
                 break
             # 수락 직후 후속 대화가 남아 있을 수 있다 → _work 가 정리하며 진행한다.
             # 추적 칸은 대화·이동이 끝나야 떠서 CLI 에 늦게 나온다 (2026-10-23: 2~3초만 보고 '수락 확인 실패' 로 FAIL)

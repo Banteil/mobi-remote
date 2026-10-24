@@ -12,6 +12,8 @@ from ..bot import Bot, StepTimeout
 from .content import CannotProceed, enter_from_dungeon_window, travel
 
 QUEST_TITLE = gd.text("tribute_quest")
+CARD_H = 450  # 퀘스트 카드 하나의 높이 (1920 기준, 제목 → '진행하기' 약 400px)
+TAB_BAR_Y = 950  # 퀘스트 창 아래 탭 줄(지도·퀘스트·아르바이트·이벤트) 윗선. 이 아래로 걸친 버튼은 누르면 탭이 눌린다
 
 
 def quest_visible(bot: Bot) -> bool:
@@ -28,8 +30,12 @@ def open_quest(bot: Bot, c: dict) -> None:
     bot.sleep(1, 1.5)
     for _ in range(4):
         card = bot.find(c["quest_card"])
-        # 같은 카드의 '진행하기' = 제목 아래에서 가장 가까운 주황색 버튼
-        go = sorted((b for b in bot.find_all(c["quest_go"]) if card and b.y > card.y), key=lambda b: b.y)
+        # 같은 카드의 '진행하기' = 제목 아래 카드 안(CARD_H 이내)에서 가장 가까운 주황색 버튼.
+        # 주말에는 '주말에는 어비스!' 같은 이벤트 카드도 주황 '진행하기' 라, 고난도 카드 버튼이 화면 밖이면
+        # 아래 카드 버튼을 눌러 이벤트 탭이 열렸다 (2026-10-24 16:37 — 7분 동안 던전 입구를 기다림).
+        # 버튼이 아래 탭 줄에 걸쳐 반쯤 보이면 그 자리를 누를 때 '이벤트' 탭이 눌린다 (16:48) → 다 보이는 것만, 아니면 내린다
+        go = sorted((b for b in bot.find_all(c["quest_go"])
+                     if card and 0 < b.y - card.y < CARD_H and b.y + b.h <= TAB_BAR_Y), key=lambda b: b.y)
         if go:
             bot.click(go[0])
             return
@@ -37,6 +43,19 @@ def open_quest(bot: Bot, c: dict) -> None:
         bot.scroll(*c["list_scroll_at"], -3)
         bot.sleep(1, 1.3)
     raise RuntimeError(f"고난도 퀘스트의 '진행하기' 버튼을 찾지 못함 → {bot.snapshot('tribute_go').name}")
+
+
+def _travel_started(bot: Bot, c: dict, wait: float = 12) -> bool:
+    """'진행하기' 뒤 자동 이동이 시작됐나 (또는 이미 던전 창). 엉뚱한 버튼을 눌렀으면 몇 분씩 기다리지 않게."""
+    if not bot.state.available():
+        return True  # CLI 가 없으면 판단할 수 없다 — 예전처럼 도착을 기다린다
+    end = time.monotonic() + wait
+    while time.monotonic() < end:
+        act = bot.state.activity() or {}
+        if act.get("IsAutoTraveling") or bot.exists(c["dungeon_tab"]):
+            return True
+        bot.sleep(1.5)
+    return False
 
 
 def verify(bot: Bot, cfg: dict) -> bool:
@@ -73,8 +92,16 @@ def run(bot: Bot, cfg: dict) -> str:
     count = start
     while count >= c["cost"] and len(results) < c["max_runs"] and quest_visible(bot):
         bot.step("tr_open", f"{len(results) + 1}회차 — 고난도 퀘스트 진행하기 (공물 {count}개)", tribute=count)
-        open_quest(bot, c)
-        bot.step("travel", "심층 던전 입구로 이동")
+        for attempt in range(2):
+            open_quest(bot, c)
+            bot.step("travel", "심층 던전 입구로 이동")
+            if _travel_started(bot, c):
+                break
+            shot = bot.snapshot('tribute_go').name
+            if attempt:
+                raise RuntimeError(f"'진행하기' 를 눌렀는데 던전으로 이동하지 않음 → {shot}")
+            bot.log.warning(f"'진행하기' 뒤 이동이 시작되지 않음 → 퀘스트 창을 다시 열어 봄 ({shot})")
+            bot.to_main()
         travel(bot, arrive=[c["dungeon_tab"]], timeout=c["travel_timeout"])
         # 탭이 보인 직후엔 난이도 버튼이 아직 덜 그려졌을 수 있다 (2026-10-22 오탐) → 몇 초 기다려 본다
         try:

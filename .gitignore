@@ -14,6 +14,7 @@ paths.json
 knowledge.json
 /recipe-book.json
 queue.json
+queue-history.jsonl
 favorites.json
 playlists.json
 dye-presets.json

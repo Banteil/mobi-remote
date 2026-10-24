@@ -73,6 +73,11 @@ class RunOptions:
     current: bool = False               # 캐릭터 전환 없이 지금 캐릭터로
     force: bool = False                 # 오늘 끝낸 숙제도 다시
     dry_run: bool = False
+    # 인터페이스 PC·80% 맞추기. 작업 큐는 한 번 도는 동안 처음 한 번만 맞추고(interface_ready = 이미 맞춤),
+    # 되돌리기는 큐가 다 끝났을 때 한 번 한다 (restore=False — daily_api.daily_displayRestore)
+    display: bool = True
+    interface_ready: bool = False
+    restore: bool = True
     extra: dict = field(default_factory=dict)  # 리포트에 남길 실행 정보
 
 
@@ -143,6 +148,7 @@ class Runner:
             log.warning("관리자 권한이 아닙니다. 게임이 관리자 권한으로 실행 중이면 입력이 무시됩니다.")
 
         bot = self.bot = Bot(cfg, paths, dry_run=opts.dry_run, force_exit=self.force_exit)
+        bot.auto_clear = True  # 기다리는 화면이 오래 안 나오면 대화·퀘스트 클리어 창 등을 넘겨 본다
         if self._stop_requested:
             bot.stopper.request()
         bot.daily = state
@@ -178,7 +184,7 @@ class Runner:
             if not any(s == "STOP" for _, s, _ in results):
                 state.clear_progress()  # 끝까지 돌았다. 중단·충돌이면 남겨 두고 다음에 거기서부터
                 # 모든 캐릭터가 끝났다 → 시작할 때 기억해 둔 인터페이스 설정으로 되돌린다 (일시정지면 이어 할 때까지 둔다)
-                if state.data.get(display.RESTORE_KEY) and not opts.dry_run:
+                if opts.restore and state.data.get(display.RESTORE_KEY) and not opts.dry_run:
                     try:
                         msg = display.restore_interface(bot, state)
                         if msg:
@@ -187,7 +193,7 @@ class Runner:
                         log.warning(f"인터페이스 설정을 되돌리지 못함 — 다음 숙제가 끝날 때 다시 시도: {e}")
                 # 화면 모드·해상도도 숙제 시작 전 맞추기에서 기억해 둔 값으로. 인터페이스 다음에 한다
                 # ('전체화면' 으로 되돌리면 그 뒤로는 화면을 볼 수 없다)
-                if (paths.data / display.RESTORE_FILE).is_file() and not opts.dry_run:
+                if opts.restore and (paths.data / display.RESTORE_FILE).is_file() and not opts.dry_run:
                     try:
                         msg = display.restore_screen(bot, paths.data / display.RESTORE_FILE)
                         if msg:
@@ -235,7 +241,7 @@ class Runner:
     def _prepare_interface(self, bot, state, opts, after_login: bool = False) -> bool:
         """이번 실행에서 처음이면 지금 인터페이스 설정을 기억하고 PC·80% 로 맞춘다 (템플릿·좌표가 모두 이 기준).
         끝나면 되돌린다. 게임 안(CLI 로 확인)이거나 방금 접속했을 때만 — 환경 설정은 게임 안에서만 열린다. 맞췄으면 True."""
-        if self._interface_ready or opts.dry_run:
+        if self._interface_ready or opts.dry_run or not opts.display or opts.interface_ready:
             return False
         if not after_login and bot.state.query("get_my_info") is None:
             return False

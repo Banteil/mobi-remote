@@ -5,7 +5,10 @@
   → 우연한 만남 매칭 (모두 모이면 자동 입장) → 들어가면 숏컷 자동 진행·자동 전투가 저절로 켜진다
   → 클리어하면 '던전 클리어 / 화면을 터치해 주세요' → 보상 화면(나가기 ESC / 다시 하기 Space / 다른 던전 가기)
   → '다시 하기' = 같은 던전·난이도로 다시 매칭 → 4초 세고 입장
-죽으면 오른쪽 맨 위 나가기 버튼 → '던전에서 퇴장하시겠습니까?' 나가기(Space) → 처음부터 다시 입장한다.
+쓰러지면 '행동불능' + '남은 부활 횟수 N/3' 과 오른쪽 아래 '여신상에서 부활'(R) / '여기서 부활'(아이템 1개) 이 뜬다.
+'여기서 부활' 을 누르고 그 판을 이어 한다 (2026-10-24 확인 — 누르면 IsDead 가 false, IsReviving 이 true 로 남는다).
+부활 횟수를 다 썼거나 함께하기에서 전멸해 '여기서 부활' 이 막히면 망설이지 않고 나간다 (사용자 규칙):
+오른쪽 맨 위 나가기 버튼 → '던전에서 퇴장하시겠습니까?' 나가기(Space) → 처음부터 다시 입장한다.
 어비스 안은 CLI 가 던전으로 치지 않는다 (Dungeon.State 가 NotInDungeon). 그래서 안에 있는지는 나가기 버튼으로,
 끝났는지는 get_activity 의 IsAbyssResultSequencePlaying 과 클리어 화면으로 본다.
 """
@@ -101,6 +104,7 @@ def wait_entered(bot: Bot, timeout: float) -> bool:
     while not inside(bot):
         if time.monotonic() > end:
             return False
+        bot.clear_blockers(ocr=True)  # 매칭 중에 퀘스트 클리어 창 등이 뜨면 입장을 막는다 (2026-10-24 06:07)
         bot.sleep(3)
     return True
 
@@ -131,22 +135,78 @@ def leave(bot: Bot) -> None:
         bot.sleep(2)
 
 
-def play(bot: Bot, run_timeout: float) -> str:
+def _revives_left(bot: Bot, frame) -> int | None:
+    """사망 화면 가운데 '남은 부활 횟수 N/3' 의 N. 못 읽으면 None. 함께하기 전멸('전멸하였습니다')이면 0.
+    글자 칸만 잘라 읽으면 검출이 안 돼 '행동불능' 줄까지 넓게 읽는다."""
+    import re
+    texts = [t for t, _, _ in find_texts(frame, gd.region("abyss_revive_left"))]
+    if any(gd.text("abyss_wiped") in t for t in texts):
+        return 0  # 전멸이면 '여기서 부활' 버튼 자체가 없다 (2026-10-24 확인)
+    for t in texts:
+        m = re.search(r"(\d+)\s*/\s*\d+", t)
+        if m:
+            return int(m.group(1))
+    return None
+
+
+def revive_here(bot: Bot) -> bool:
+    """사망 화면에서 '여기서 부활' 을 누른다. 부활했으면 True.
+    부활 횟수가 0 이거나 버튼이 없거나 막혀 있으면(켜진 버튼은 주황) 누르지 않고 False → 나간다."""
+    for _ in range(3):  # 사망 화면 버튼은 쓰러지고 1~2초 뒤에 뜬다
+        frame = bot.frame()
+        if any(gd.text("abyss_wiped") in t for t, _, _ in find_texts(frame, gd.region("abyss_revive_left"))):
+            bot.log.warning(f"함께하기 전멸 ('여기서 부활' 없음) → 나감 ({bot.snapshot('abyss_dead').name})")
+            return False
+        hit = next(((x, y) for t, x, y in find_texts(frame, gd.region("abyss_revive_button"))
+                    if gd.text("abyss_revive_here") in t), None)  # '여기서' — '부활' 은 '부할' 로 자주 읽힌다
+        if hit:
+            break
+        bot.sleep(1.5, 2)
+    else:
+        bot.log.warning(f"'여기서 부활' 버튼이 없음 → 나감 ({bot.snapshot('abyss_dead').name})")
+        return False
+    left = _revives_left(bot, frame)
+    x, y = hit
+    patch = frame[y - 14:y + 14, max(0, x - 70):x + 70].reshape(-1, 3).astype(int)  # BGR
+    orange = ((patch[:, 2] > 200) & (patch[:, 1] > 110) & (patch[:, 1] < 210) & (patch[:, 0] < 110)).mean()
+    if left == 0 or orange < 0.15:
+        why = "부활 횟수를 다 씀" if left == 0 else "'여기서 부활' 이 막힘 (함께하기 전멸 등)"
+        bot.log.warning(f"{why} → 나감 ({bot.snapshot('abyss_dead').name})")
+        return False
+    bot.click(hit)
+    end = time.monotonic() + 10
+    while time.monotonic() < end:
+        bot.sleep(1.5)
+        if not (bot.state.activity() or {}).get("IsDead"):
+            bot.log.info(f"여기서 부활{f' (남은 부활 {left - 1}번)' if left else ''}")
+            return True
+    bot.log.warning(f"'여기서 부활' 을 눌렀는데 일어나지 않음 → 나감 ({bot.snapshot('abyss_dead').name})")
+    return False
+
+
+def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: None) -> str:
     """어비스 안에서 끝날 때까지 지켜본다. 'clear' | 'dead' | 'timeout'.
+    쓰러지면 revive 일 때 '여기서 부활' 하고 이어 한다 (못 하면 'dead' → 나가서 처음부터).
     배고프면 그때마다 음식을 먹는다 (어비스 반복은 일일 숙제의 하루 횟수 제한 없이)."""
     end = time.monotonic() + run_timeout
     while True:
         bot.sleep(3)
         act = bot.state.activity() or {}
         if act.get("IsDead"):
+            if revive and revive_here(bot):
+                on_revive()
+                continue
             return "dead"
         if act.get("IsAbyssResultSequencePlaying"):
             return "clear"
         if inside(bot):
-            bot.eat_if_hungry()
+            if not bot.clear_blockers():  # 판 중에 깨진 퀘스트의 클리어 창·대화
+                bot.eat_if_hungry()
         elif (bot.exists(bot.ui["dungeon_retry"]) or bot.exists(bot.ui["reward_exit"])
               or touch_prompt_visible(bot)):
             return "clear"  # 클리어 연출로 HUD 가 사라졌다 (CLI 를 못 읽었을 때)
+        else:
+            bot.clear_blockers()
         if time.monotonic() > end:
             return "timeout"
 
@@ -189,6 +249,8 @@ def to_reward(bot: Bot) -> None:
             raise StepTimeout(f"어비스 보상 화면이 나오지 않음 → {bot.snapshot('abyss_reward').name}")
         if bot.vision.has(ui["scene_skip"]) and bot.click_if(ui["scene_skip"]):
             pass
+        elif bot.clear_blockers(skip=(ui["dungeon_touch"],)):
+            pass  # 클리어와 함께 깨진 퀘스트의 클리어 창·대화 (주말 어비스 3판 등)
         elif touch_prompt_visible(bot) or bot.exists(ui["dungeon_touch"]):
             # 뒤에서 할 때는 클릭 대신 키로 넘겨 본다 (클릭은 게임을 잠깐 앞으로 가져와야 한다)
             if bot.background and keyed < 2:
@@ -210,7 +272,7 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
     behind = bool(a.get("background", True))
     user_window = ctypes.windll.user32.GetForegroundWindow()  # 입장 뒤 되돌려 줄 창 (리모콘 등)
     t0 = time.monotonic()
-    stat = {"clears": 0, "deaths": 0, "retries": 0}
+    stat = {"clears": 0, "deaths": 0, "retries": 0, "revives": 0}
 
     def done() -> bool:
         return (runs and stat["clears"] >= runs) or (minutes and time.monotonic() - t0 >= minutes * 60)
@@ -223,6 +285,7 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
     # 어디서 시작하나: 어비스 안이면 그 판부터, 클리어·보상 화면이면 보상부터 (2026-10-23 클리어 화면에서 시작해
     # 입장부터 하려다 ESC 가 듣지 않아 멈췄다), 아니면 메뉴에서 입장
     stage = "entry"
+    bot.auto_clear = True
     if character:
         _switch_character(bot, cfg, character)
     bot.background = behind
@@ -256,13 +319,14 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
         if stage == "reward":
             r = "clear"
         else:
-            n = stat["clears"] + stat["deaths"] + stat["retries"] + 1
+            n = stat["clears"] + stat["deaths"] + stat["retries"] + 1  # 부활은 같은 판
             bot.step("abyss_play", f"{n}번째 판 진행 중")
             emit(stage="play")
-            r = play(bot, a["run_timeout"])
+            r = play(bot, a["run_timeout"], bool(a.get("revive", True)),
+                     on_revive=lambda: (stat.__setitem__("revives", stat["revives"] + 1), emit(stage="play")))
         if r == "dead":
             stat["deaths"] += 1
-            bot.log.warning(f"사망 → 나가서 처음부터 다시 입장 (사망 {stat['deaths']}번)")
+            bot.log.warning(f"쓰러짐 → 나가서 처음부터 다시 입장 (나간 판 {stat['deaths']}번)")
             leave(bot)
             stage = "entry"
         elif r == "timeout":
@@ -274,7 +338,7 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
             to_reward(bot)
             stat["clears"] += 1
             secs = round(time.monotonic() - t0)
-            bot.log.info(f"클리어 {stat['clears']}판 (사망 {stat['deaths']} · 경과 {secs // 60}분 {secs % 60}초)")
+            bot.log.info(f"클리어 {stat['clears']}판 (부활 {stat['revives']} · 사망으로 나감 {stat['deaths']} · 경과 {secs // 60}분 {secs % 60}초)")
             emit(stage="clear")
             if done():
                 bot.key("esc")  # 보상 화면 '나가기'

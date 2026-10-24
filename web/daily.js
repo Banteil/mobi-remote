@@ -23,6 +23,7 @@ async function loadDaily() {
   paintDailyTable();
   paintDailyRunning(dl.st.running);
   paintDailySettings();
+  $('#dl-fit').checked = dl.settings.fit_display !== false;
 }
 
 function stateOf(v) {
@@ -66,12 +67,26 @@ function setCell(slot, task, status, tip) {
   td.title = tip || '';
 }
 
+/* 버튼 세 상태: 쉬는 중(숙제 시작) · 실행 중(일시정지) · 일시정지(이어 하기). 그만두려면 작업 큐에서 카드를 뺀다.
+ * 일시정지는 큐의 숙제 카드가 일시정지(pause)인 것으로 안다 — 큐 그림이 바뀔 때마다 다시 칠한다 (app.js paintQueue → dlRefresh) */
+function dlPausedCard() {
+  return qItems.find((x) => x.kind === 'daily' && x.status === 'pause');
+}
+
 function paintDailyRunning(on) {
+  dl.running = on;
+  const paused = !on && !!dlPausedCard();
+  $('#dl-start').textContent = paused ? '이어 하기 (' + stopKey() + ')' : '숙제 시작';
   $('#dl-start').classList.toggle('hidden', on);
   $('#dl-stop').classList.toggle('hidden', !on);
   const p = $('#dl-state');
-  p.textContent = on ? '실행 중' : '대기';
-  p.className = 'pill ' + (on ? 'pill-ok' : 'pill-muted');
+  p.textContent = on ? '실행 중' : '일시정지';
+  p.className = 'pill ' + (on ? 'pill-ok' : 'pill-warn');
+  p.classList.toggle('hidden', !on && !paused);
+}
+
+function dlRefresh() {
+  paintDailyRunning(!!dl.running);
 }
 
 mm.daily.onEvent((e) => {
@@ -94,9 +109,10 @@ mm.daily.onEvent((e) => {
     p.className = 'pill pill-warn';
     say('일시정지 — ' + stopKey() + '를 누르면 이어 합니다');
   } else if (e.type === 'resume') {
-    // 일시정지 중 F12 → 큐의 숙제 카드를 다시 돌린다 (카드를 지웠으면 = 종료, 아무것도 안 함)
+    // 일시정지 중 F12 → 큐의 숙제 카드를 다시 돌린다 (카드를 지웠으면 = 종료, 아무것도 안 함).
+    // 다른 작업이 돌고 있으면 그 F12 는 그 작업의 것이다 — 숙제를 깨우지 않는다
     const card = qItems.find((x) => x.kind === 'daily');
-    if (card) qPlayOne(card.id);
+    if (card && !qItems.some((x) => x.status === 'run')) qPlayOne(card.id);
   } else if (e.type === 'failed') {
     paintDailyRunning(false);
     toast('일일 숙제를 시작하지 못했습니다', e.message, 'bad');
@@ -122,69 +138,127 @@ mm.daily.onLog((m) => {
 
 /* 숙제 시작 전 게임 화면 설정 확인. 기준과 다르면 묻지 않고 자동으로 맞춘 뒤 그대로 이어서 시작한다. */
 function paintDisplayState(text) {
+  if (!text) { dlRefresh(); return; }
   const p = $('#dl-state');
-  p.textContent = text || '대기';
-  p.className = 'pill ' + (text ? 'pill-warn' : 'pill-muted');
+  p.textContent = text;
+  p.className = 'pill pill-warn';
 }
 
-async function startDaily() {
+/* 일일 숙제는 작업 큐(app.js)의 한 항목으로 돈다. 두 가지로 넣는다 (어비스와 같다):
+ *  '숙제 시작' = 지금 바로 — 맨 위에 넣고 바로 시작한다. 돌던 작업은 뒤로 밀렸다가 끝나면 이어서 (qStartNow)
+ *  '목표'     = 큐 맨 아래에 담기만 한다 (재생을 눌러야 진행) — 제작·채집 목표와 같은 방식
+ * 게임 캐릭터는 하나라 둘이 동시에 돌면 안 되는데, 큐가 하나씩만 돌리므로 막힌다. */
+function dailySpec() {
   const chars = [...dl.pickedChars];
   const only = dl.st.order.filter((t) => dl.pickedTasks.has(t));
-  if (!chars.length || !only.length) { toast('캐릭터와 숙제를 하나 이상 고르세요', '', 'bad'); return; }
+  if (!chars.length || !only.length) { toast('캐릭터와 숙제를 하나 이상 고르세요', '', 'bad'); return null; }
+  return {
+    id: qSeq++, kind: 'daily', status: 'wait', note: '', label: '일일 숙제',
+    chars: chars, only: only.length === dl.st.order.length ? null : only, force: $('#dl-force').checked,
+    fit: $('#dl-fit').checked,
+  };
+}
+
+function startDaily() {
+  if (qItems.some((x) => x.kind === 'daily' && x.status === 'run')) { toast('이미 실행 중입니다', '', 'bad'); return; }
+  const it = dailySpec();
+  if (!it) return;
+  qItems = qItems.filter((x) => !(x.kind === 'daily' && x.status === 'pause'));  // 멈춰 둔 숙제 카드는 새 것으로 바꾼다
+  const cur = qItems.find((x) => x.status === 'run');
+  toast('일일 숙제 시작', stopKey() + ' = 일시정지 · 다시 누르면 재개' +
+    (cur ? ' · 진행 중이던 "' + cur.label + '" 은 뒤로 미룹니다' : ''), 'ok');
+  qStartNow(it);
+}
+
+function queueDaily() {
+  const it = dailySpec();
+  if (!it) return;
+  qItems.push(it);
+  paintQueue();
+  saveQueue();
+  toast('큐에 담았습니다', '일일 숙제 — ' + it.chars.length + '명 · ' + (it.only ? '숙제 ' + it.only.length + '개' : '전체') +
+    ' · 재생을 누르면 진행합니다.', 'ok');
+}
+
+/* 숙제를 시작하기 전 게임 화면 설정 확인. 기준과 다르면 묻지 않고 자동으로 맞춘 뒤 이어서 시작한다
+ * (끝나면 원래대로 되돌린다). '숙제 시작' 이든 '목표' 로 담은 카드든 큐가 숙제를 꺼낼 때 한다. */
+let dlDisplayWaiter = null;
+
+/* 작업 큐 한 번 도는 동안의 화면 설정 — 처음 한 번만 확인·맞추고(screen), 인터페이스도 한 번만(iface).
+ * 큐가 다 끝나면(app.js qTick) 맞춘 적이 있을 때 한 번 되돌린다 (qDisplayEnd). 일시정지·멈춤은 끝이 아니다. */
+const qDisplay = { screen: false, iface: false, used: false };
+
+function qDisplayEnd() {
+  if (!qDisplay.used) return;
+  qDisplay.screen = qDisplay.iface = qDisplay.used = false;
+  mm.daily.displayRestore().catch(() => {});
+}
+
+mm.daily.onDisplay((m) => {
+  if (m && m.restored && m.message) toast(m.ok ? '화면 설정을 되돌렸습니다' : '화면 설정을 되돌리지 못했습니다', m.message, m.ok ? 'ok' : 'bad');
+});
+
+async function ensureDisplay(it) {
+  if (it.fit === false) return true;  // 이 카드는 화면 설정을 건드리지 않는다
+  qDisplay.used = true;
+  if (qDisplay.screen) return true;  // 이번 큐에서 이미 확인·맞춤
   mm.daily.displayWaitCancel();
   paintDisplayState('화면 설정 확인 중');
   // 고른 숙제가 오늘 다 끝났으면 화면 설정은 보지 않는다 (ok) — 숙제는 '오늘 완료' 만 알린다
-  const d = await mm.daily.displayCheck({ chars, only, force: $('#dl-force').checked });
-  if (d && d.ok) { paintDisplayState(''); await runDaily(chars, only); return; }
-  // 기준과 다르면 묻지 않고 자동으로 맞춘 뒤 이어서 시작한다 (끝나면 원래대로 되돌린다)
+  // only 가 없으면 전체 (파이썬이 그렇게 받는다) — 일일 숙제 탭을 안 열었으면 dl.st 가 아직 없다
+  const d = await mm.daily.displayCheck({ chars: it.chars, only: it.only, force: it.force });
+  if (d && d.ok) { paintDisplayState(''); qDisplay.screen = !d.idle; return true; }
   say('화면 설정 맞추는 중: ' + ((d && d.problems) || ['확인 실패']).join(', '));
-  dl.pendingStart = { chars, only };
   paintDisplayState('화면 설정 맞추는 중');
+  qNote(it, '화면 설정 맞추는 중');
+  const done = new Promise((res) => { dlDisplayWaiter = res; });
   const r = await mm.daily.displayFix();
-  if (r && r.error) { dl.pendingStart = null; paintDisplayState(''); toast('맞추지 못했습니다', r.error, 'bad'); }
+  if (r && r.error) {
+    dlDisplayWaiter = null;
+    paintDisplayState('');
+    toast('맞추지 못했습니다', r.error, 'bad');
+    qNote(it, '화면 설정 실패 — ' + r.error);
+    return false;
+  }
+  const m = await done;
+  paintDisplayState('');
+  if (!m.ok) { toast('화면 설정을 맞추지 못했습니다', m.message, 'bad'); qNote(it, '화면 설정 실패 — ' + (m.message || '')); return false; }
+  toast(m.running === false ? '화면 설정을 파일로 맞췄습니다' : '화면 설정을 맞췄습니다', m.message, 'ok');
+  qDisplay.screen = m.running !== false;
+  return true;
 }
 
 mm.daily.onDisplay((m) => {
   if (!m) return;
-  if (m.resume) { startDaily(); return; }  // 직접 맞춘 뒤 F12
+  const w = dlDisplayWaiter;
+  if (m.resume) {  // 직접 맞춘 뒤 F12
+    if (w) { dlDisplayWaiter = null; w({ ok: true, done: true }); } else startDaily();
+    return;
+  }
   if (!m.done) return;
-  const p = dl.pendingStart;
-  dl.pendingStart = null;
+  if (w) { dlDisplayWaiter = null; w(m); return; }
   paintDisplayState('');
-  if (!m.ok) { toast('화면 설정을 맞추지 못했습니다', m.message, 'bad'); return; }
-  if (!m.running) { toast('화면 설정을 파일로 맞췄습니다', m.message, 'ok'); return; }
-  toast('화면 설정을 맞췄습니다', m.message, 'ok');
-  if (p) runDaily(p.chars, p.only);  // 자동이면 그대로 이어서 시작
+  if (!m.ok) toast('화면 설정을 맞추지 못했습니다', m.message, 'bad');
 });
-
-/* 일일 숙제는 작업 큐(app.js)의 한 항목으로 돈다. 숙제 시작 = 큐 맨 앞에 넣고 큐를 돌린다 → 끝나면 뒤에 담아 둔
- * 채집·가공 목표가 이어서 진행된다. 게임 캐릭터는 하나라 둘이 동시에 돌면 안 되는데, 큐가 하나씩만 돌리므로 막힌다. */
-function runDaily(chars, only) {
-  if (qItems.some((x) => x.kind === 'daily' && x.status === 'run')) { toast('이미 실행 중입니다', '', 'bad'); return; }
-  qItems = qItems.filter((x) => x.kind !== 'daily');  // 전에 멈춰 둔 숙제 카드는 새 것으로 바꾼다
-  const it = {
-    id: qSeq++, kind: 'daily', status: 'wait', note: '', label: '일일 숙제',
-    chars: chars, only: only.length === dl.st.order.length ? null : only, force: $('#dl-force').checked,
-  };
-  qItems.unshift(it);
-  const after = qItems.filter((x) => x !== it && x.status === 'wait').length;
-  toast('일일 숙제 시작', stopKey() + ' = 일시정지 · 다시 누르면 재개' +
-    (qRunning ? ' · 하던 작업 다음에 시작' : after ? ' · 끝나면 큐 ' + after + '건 이어서' : ''), 'ok');
-  qPlayOne(it.id);
-}
 
 let dlWaiter = null;
 
 /** 큐가 부른다. 숙제를 시작하고 끝날 때까지 기다린다. 끝까지 돌았으면 true (실패한 숙제가 있어도 — 결과는 보고서로 본다). */
 async function runDailyItem(it) {
-  const r = await mm.daily.start({ chars: it.chars, only: it.only, force: it.force });
+  if (!(await ensureDisplay(it))) return false;
+  const fit = it.fit !== false;
+  const r = await mm.daily.start({
+    chars: it.chars, only: it.only, force: it.force,
+    display: fit, interface_ready: qDisplay.iface, restore: false,  // 되돌리기는 큐가 끝날 때 한 번 (qDisplayEnd)
+  });
+  if (fit && !(r && r.error)) qDisplay.iface = true;
   if (r && r.error) { qNote(it, '시작 못 함 — ' + r.error); return false; }
   paintDailyRunning(true);
   const e = await new Promise((res) => { dlWaiter = res; });
   dlWaiter = null;
   if (e.type === 'failed') { qNote(it, '실패 — ' + (e.message || '')); return false; }
   const res = e.results || [];
-  if (res.some((x) => x[1] === 'STOP')) {  // 일시정지(F12·버튼): 카드를 보류로 두고 뒤 작업도 세운다. F12 로 이어 함
+  if (res.some((x) => x[1] === 'STOP')) {  // 일시정지(F12·버튼): 카드를 일시정지로 두고 뒤 작업도 세운다. F12 로 이어 함
     it.pauseAfter = true;
     qAbort = true;
     return false;
@@ -192,15 +266,17 @@ async function runDailyItem(it) {
   return true;
 }
 
-/** 큐의 ⏸·■ → 숙제 일시정지 (F12 나 ▶ 로 이어 함). */
+/** 큐의 ⏸·■ → 숙제 일시정지 (F12 나 ▶ 로 이어 함). 어비스는 멈춤 (▶ 로 다시). */
 function qPauseDaily() {
   if (qItems.some((x) => x.kind === 'daily' && x.status === 'run')) mm.daily.stop(false);
+  if (qItems.some((x) => x.kind === 'abyss' && x.status === 'run')) mm.daily.abyssStop();
 }
 
-/** 큐에서 숙제 카드를 빼거나 큐를 비우면 숙제는 종료 (F12 로 이어 하지 않음). */
+/** 큐에서 숙제 카드를 빼거나 큐를 비우면 숙제는 종료 (F12 로 이어 하지 않음). 어비스 카드면 멈춤. */
 function qStopDaily() {
   if (qItems.some((x) => x.kind === 'daily' && x.status === 'run')) mm.daily.stop(true);
   else mm.daily.pauseCancel();
+  if (qItems.some((x) => x.kind === 'abyss' && x.status === 'run')) mm.daily.abyssStop();
 }
 
 /* ── 설정 ── */
@@ -345,6 +421,8 @@ async function loadAbyss() {
     '<option value="' + c.slot + '"' + (c.slot === a.slot ? ' selected' : '') + '>' + c.slot + '. ' + esc(c.name) + '</option>').join('');
   $('#ab-runs').value = a.runs;
   $('#ab-minutes').value = a.minutes;
+  $('#ab-revive').checked = a.revive !== false;
+  $('#ab-fit').checked = !!a.fit_display;
   paintAbyssRunning(a.running);
 }
 
@@ -353,23 +431,93 @@ function paintAbyssRunning(on) {
   $('#ab-stop').classList.toggle('hidden', !on);
 }
 
-async function startAbyss() {
-  const r = await mm.daily.abyssStart({
-    slot: Number($('#ab-char').value) || 0, dungeon: $('#ab-dungeon').value, difficulty: $('#ab-difficulty').value,
+/* 어비스 반복도 작업 큐의 한 항목으로 돈다 (일일 숙제와 같은 방식). '반복 시작' = 큐 맨 앞에 넣고 돌리기,
+ * '목표' = 제작·채집 목표와 같은 방식 — 판 수를 물어 큐 뒤에 담기만 한다 (재생을 눌러야 진행)
+ * → 'A 캐릭터 3판 → B 캐릭터 3판' 처럼 미리 걸어 둘 수 있다. */
+function abyssSpec() {
+  const sel = $('#ab-char');
+  const slot = Number(sel.value) || 0;
+  const name = slot ? sel.options[sel.selectedIndex].textContent.replace(/^\d+\.\s*/, '') : '';
+  return {
+    kind: 'abyss', status: 'wait', note: '', label: '어비스 · ' + (name || '지금 캐릭터'),
+    slot, dungeon: $('#ab-dungeon').value, difficulty: $('#ab-difficulty').value,
     runs: Number($('#ab-runs').value) || 0, minutes: Number($('#ab-minutes').value) || 0,
+    revive: $('#ab-revive').checked, fit: $('#ab-fit').checked,
+  };
+}
+
+function abyssAmount(x) {
+  const lim = [x.runs ? x.runs + '판' + (x.doneRuns ? ' (' + x.doneRuns + '판 함)' : '') : '',
+    x.minutes ? x.minutes + '분' : ''].filter(Boolean).join(' · ');
+  return x.dungeon + ' ' + x.difficulty + ' · ' + (lim || '멈출 때까지') + (x.revive === false ? ' · 쓰러지면 나감' : '') +
+    (x.fit ? ' · 화면 맞춤' : '');
+}
+
+function startAbyss() {
+  if (qItems.some((x) => x.kind === 'abyss' && x.status === 'run')) { toast('이미 어비스 반복 중입니다', '', 'bad'); return; }
+  const it = Object.assign({ id: qSeq++ }, abyssSpec());
+  const cur = qItems.find((x) => x.status === 'run');
+  toast('어비스 반복 시작', stopKey() + ' = 멈춤' + (cur ? ' · 진행 중이던 "' + cur.label + '" 은 뒤로 미룹니다' : ''), 'ok');
+  qStartNow(it);
+}
+
+async function queueAbyss() {
+  const spec = abyssSpec();
+  const runs = await promptNumber('목표 판 수',
+    '"' + spec.label + '" 로 ' + spec.dungeon + ' ' + spec.difficulty + ' 를 몇 판 돌까요?',
+    spec.runs || 3,
+    '작업 큐에 담기만 하고, 재생을 눌러야 실제로 진행합니다. 캐릭터·던전·난이도·분 제한·부활은 지금 고른 대로 담습니다.');
+  if (!runs) return;
+  const it = Object.assign({ id: qSeq++ }, spec, { runs });
+  qItems.push(it);
+  paintQueue();
+  saveQueue();
+  toast('큐에 담았습니다', it.label + ' — ' + abyssAmount(it) + ' · 재생을 누르면 진행합니다.', 'ok');
+}
+
+let abWaiter = null;
+
+/** 큐가 부른다. 반복을 시작하고 끝날 때까지 기다린다. 정한 판·분을 채웠으면 true.
+ * 멈췄다(F12·지금 바로 시작에 밀림) 다시 돌 때는 이미 돈 판·시간을 빼고 남은 만큼만 (it.doneRuns · it.doneSecs). */
+async function runAbyssItem(it) {
+  const runs = it.runs ? Math.max(1, it.runs - (it.doneRuns || 0)) : 0;
+  const minutes = it.minutes ? Math.max(1, Math.ceil(it.minutes - (it.doneSecs || 0) / 60)) : 0;
+  it.lastClears = 0;
+  it.lastSecs = 0;
+  const fit = !!it.fit;
+  if (fit && !(await ensureDisplay(it))) return false;
+  const r = await mm.daily.abyssStart({
+    slot: it.slot, dungeon: it.dungeon, difficulty: it.difficulty, runs, minutes, revive: it.revive !== false,
+    fit_display: fit, interface: fit && !qDisplay.iface,
   });
-  if (r && r.error) { toast('시작하지 못했습니다', r.error, 'bad'); return; }
+  if (fit && !(r && r.error)) qDisplay.iface = true;
+  if (r && r.error) { qNote(it, '시작 못 함 — ' + r.error); return false; }
   paintAbyssRunning(true);
   $('#ab-msg').textContent = '시작';
-  toast('어비스 반복 시작', stopKey() + ' = 멈춤', 'ok');
+  const e = await new Promise((res) => { abWaiter = res; });
+  abWaiter = null;
+  it.doneRuns = (it.doneRuns || 0) + (it.lastClears || 0);
+  it.doneSecs = (it.doneSecs || 0) + (it.lastSecs || 0);
+  if (e.type === 'failed') { qNote(it, '실패 — ' + (e.message || '')); return false; }
+  if (e.stopped) {  // F12·멈추기: 카드를 일시정지로 두고 뒤 작업도 세운다 (▶ 로 다시)
+    it.pauseAfter = true;
+    qAbort = true;
+    return false;
+  }
+  return true;
 }
 
 mm.daily.onAbyss((e) => {
   if (!e) return;
   const t = e.seconds != null ? ' · ' + Math.floor(e.seconds / 60) + '분' : '';
-  if (e.clears != null) $('#ab-stat').textContent = '클리어 ' + e.clears + ' · 사망 ' + e.deaths + t;
+  const stat = e.clears != null ? '클리어 ' + e.clears + (e.revives ? ' · 부활 ' + e.revives : '') + ' · 사망으로 나감 ' + e.deaths + t : '';
+  if (stat) $('#ab-stat').textContent = stat;
+  const qi = qItems.find((x) => x.kind === 'abyss' && x.status === 'run');
+  if (qi && e.clears != null) { qi.lastClears = e.clears; qi.lastSecs = e.seconds || 0; }
   if (e.type === 'abyss') {
-    $('#ab-msg').textContent = { match: '매칭 중', play: '진행 중', clear: '클리어' }[e.stage] || '';
+    const msg = { match: '매칭 중', play: '진행 중', clear: '클리어' }[e.stage] || '';
+    $('#ab-msg').textContent = msg;
+    if (qi) qNote(qi, msg + (stat ? ' · ' + stat : ''));
   } else if (e.type === 'done') {
     paintAbyssRunning(false);
     $('#ab-msg').textContent = e.stopped ? '멈춤' : '끝';
@@ -378,6 +526,7 @@ mm.daily.onAbyss((e) => {
     $('#ab-msg').textContent = '';
     toast('어비스 반복이 멈췄습니다', e.message, 'bad');
   }
+  if ((e.type === 'done' || e.type === 'failed') && abWaiter) abWaiter(e);
 });
 
 /* ── 배선 ── */
@@ -385,8 +534,15 @@ mm.daily.onAbyss((e) => {
 LOADERS.daily = loadDaily;
 LOADERS.abyss = loadAbyss;
 
-$('#dl-start').addEventListener('click', startDaily);
+$('#dl-start').addEventListener('click', () => {
+  const card = dlPausedCard();
+  if (card) { qStartNow(card); return; }  // 일시정지 중이면 이어 하기 — 지금 바로 (F12 와 같다)
+  startDaily();
+});
+$('#dl-queue').addEventListener('click', queueDaily);
+$('#dl-fit').addEventListener('change', () => mm.daily.saveSettings({ fit_display: $('#dl-fit').checked }));
 $('#ab-start').addEventListener('click', startAbyss);
+$('#ab-queue').addEventListener('click', queueAbyss);
 $('#ab-stop').addEventListener('click', () => mm.daily.abyssStop());
 $('#dl-report-btn').addEventListener('click', showTodayReport);
 $('#dl-rp-close').addEventListener('click', () => $('#dl-report').classList.add('hidden'));

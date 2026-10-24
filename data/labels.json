@@ -4,7 +4,7 @@
     "고친 뒤에는 프로그램을 다시 켜야 반영된다."
   ],
 
-  "queue_state": {"wait": "대기", "run": "진행 중", "pause": "보류", "done": "완료", "fail": "중단"},
+  "queue_state": {"wait": "대기", "run": "진행 중", "pause": "일시정지", "done": "완료", "fail": "중단"},
   "source": {"GATHER": "채집", "ALTER": "가공", "CRAFT": "제작", "NONE": "자동불가"},
   "location": {"inventory": "가방", "account_storage": "계정창고", "character_storage": "캐릭창고"},
   "floors": {"1": "1층 3구역", "2": "2층 3구역"}

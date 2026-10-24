@@ -75,6 +75,10 @@ class Bot:
         # 클릭은 그렇게 안 되므로 누를 때만 잠깐 앞으로 가져왔다가 원래 창을 되돌린다 (어비스 반복 중에 쓴다)
         self.background = False
         self._posted = False  # 뒤에서 키를 보낸 적이 있다 (앞으로 가져올 때 포커스를 한 번 거쳐 준다)
+        # 기다리는 게 오래 안 나오면 막는 화면(대화·연출·퀘스트 클리어 확인·화면 터치)을 넘겨 본다 (tasks.content.clear_blockers).
+        # 혼자 오래 도는 일(일일 숙제·어비스 반복)만 켠다 — runner·abyss.repeat 가 설정
+        self.auto_clear = False
+        self._clearing = False
 
     def step(self, step: str, text: str = "", **data) -> None:
         """숙제 안의 단계를 오늘 기록에 남긴다 (끊긴 뒤 다시 시작하면 bot.resume 으로 돌아온다).
@@ -151,16 +155,36 @@ class Bot:
     def wait_any(self, names: list[str], timeout: float = 10, interval: float = 0.4) -> Match:
         for n in names:
             self._require_template(n)
-        end = time.monotonic() + timeout
+        start = time.monotonic()
+        end, checked = start + timeout, start
         while True:
             frame = self.frame()
             for n in names:
                 m = self.vision.find(frame, n)
                 if m:
                     return m
-            if time.monotonic() > end:
+            now = time.monotonic()
+            if now > end:
                 raise StepTimeout(f"{timeout:.0f}s 안에 {names} 중 아무것도 나타나지 않음")
+            if self.auto_clear and now - start > 4 and now - checked > 3:
+                checked = now
+                self.clear_blockers(skip=names, ocr=now - start > 8)
             self.sleep(interval)
+
+    def clear_blockers(self, skip=(), ocr: bool = False) -> str | None:
+        """막는 화면 하나를 넘긴다 (tasks.content.clear_blockers). 넘겼으면 로그에 남긴다."""
+        if self._clearing:
+            return None
+        from .tasks.content import clear_blockers
+        self._clearing = True
+        try:
+            what = clear_blockers(self, skip, ocr)
+        finally:
+            self._clearing = False
+        if what:
+            self.log.info(f"막는 화면 넘김: {what}")
+            self.sleep(1.0, 1.4)
+        return what
 
     def wait(self, name: str, timeout: float = 10, interval: float = 0.4) -> Match:
         return self.wait_any([name], timeout, interval)
@@ -216,6 +240,11 @@ class Bot:
         self.ensure_focus()
         self.input.click(*self.screen.to_screen(x, y))
         self.pause()
+
+    def hover_off(self, x: int = 300, y: int = 540) -> None:
+        """커서를 버튼이 없는 자리(왼쪽 가운데)로 치운다. 누른 버튼 위에 커서가 남아 있으면 마우스를 올린 효과로
+        그림이 커져 템플릿이 안 맞는다 (2026-10-24 퀘스트 창 아르바이트 탭 0.85)."""
+        self.input.move(*self.screen.to_screen(x, y))
 
     def scroll(self, x: int, y: int, notches: int) -> None:
         """기준 좌표 (x, y) 에서 휠. notches > 0 위로, < 0 아래로."""
@@ -389,7 +418,9 @@ class Bot:
         self.shot_dir.mkdir(parents=True, exist_ok=True)
         path = self.shot_dir / f"{datetime.now():%Y%m%d_%H%M%S}_{tag}.png"
         try:
-            ok, buf = cv2.imencode(".png", self.screen.grab())
+            # 뒤에서 돌 때는 게임 창만 (화면을 찍으면 위에 있는 다른 창이 찍힌다 — 2026-10-23 어비스 실패 사진)
+            img = self.screen.grab_behind() if self.background else None
+            ok, buf = cv2.imencode(".png", img if img is not None else self.screen.grab())
         except RuntimeError:  # 게임 창이 없음 (꺼짐) — 실패 기록 중에 또 터지지 않게
             return path.with_name(path.stem + "_게임꺼짐")
         if ok:

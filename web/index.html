@@ -356,10 +356,12 @@
     <div class="toolbar">
       <span id="dl-date" class="muted"></span>
       <span class="spacer"></span>
+      <label class="chk" title="테두리 없는 전체화면 · 16:9 · 인터페이스 PC 80% 로 맞추고, 작업 큐가 다 끝나면 원래대로 되돌립니다 (큐 한 번에 한 번만)"><input type="checkbox" id="dl-fit"> 화면 설정 맞추기</label>
       <label class="chk"><input type="checkbox" id="dl-force"> 오늘 끝낸 숙제도 다시</label>
-      <span id="dl-state" class="pill pill-muted">대기</span>
+      <span id="dl-state" class="pill pill-muted hidden"></span>
       <button class="btn" id="dl-report-btn" title="오늘 지금까지의 결과를 보고서로 봅니다">결과 보기</button>
-      <button class="btn btn-primary" id="dl-start">숙제 시작</button>
+      <button class="btn" id="dl-queue" title="고른 캐릭터·숙제를 작업 큐 맨 아래에 담습니다 (재생을 눌러야 진행)">목표</button>
+      <button class="btn btn-primary" id="dl-start" title="지금 바로 시작 — 진행 중인 작업이 있으면 뒤로 미루고 먼저 합니다">숙제 시작</button>
       <button class="btn btn-warn hidden" id="dl-stop">일시정지 (F12)</button>
     </div>
     <p class="hint">실행 중에는 게임 화면을 가리지 마세요.</p>
@@ -394,10 +396,13 @@
         <span class="muted ab-gap">던전</span><select id="ab-dungeon"></select><select id="ab-difficulty"></select>
         <span class="muted ab-gap">멈출 때</span><input type="number" id="ab-runs" min="0" class="num-in"> 판
         <input type="number" id="ab-minutes" min="0" class="num-in"> 분
+        <label class="chk ab-gap" title="부활 횟수를 다 썼거나 막혔으면 나가서 처음부터 다시 들어갑니다"><input type="checkbox" id="ab-revive"> 쓰러지면 여기서 부활</label>
+        <label class="chk ab-gap" title="테두리 없는 전체화면 · 16:9 · 인터페이스 PC 80% 로 맞추고, 작업 큐가 다 끝나면 원래대로 되돌립니다 (큐 한 번에 한 번만)"><input type="checkbox" id="ab-fit"> 화면 설정 맞추기</label>
         <span class="muted">(0 = 제한 없음 · F12 로 멈춤)</span>
         <span class="spacer"></span><span id="ab-msg" class="muted"></span>
         <button class="btn btn-warn hidden" id="ab-stop">멈추기 (F12)</button>
-        <button class="btn btn-primary" id="ab-start">반복 시작</button>
+        <button class="btn" id="ab-queue" title="판 수를 정해 작업 큐에 담습니다 (재생을 눌러야 진행) — 캐릭터마다 차례로 돌릴 수 있습니다">목표</button>
+        <button class="btn btn-primary" id="ab-start" title="지금 바로 시작 — 진행 중인 작업이 있으면 뒤로 미루고 먼저 합니다">반복 시작</button>
       </div>
     </div>
     <div class="card card-wide">
@@ -419,10 +424,11 @@
   <button class="q-tag" id="q-tag" title="펼치기">작업 큐<span id="q-tag-n"></span></button>
   <div id="q-list" class="q-list"></div>
   <div class="q-foot">
-    <button class="q-fbtn" id="q-play" title="대기 중인 것부터 차례로 진행">▶</button>
+    <button class="q-fbtn" id="q-play" title="전체 시작 — 위에서부터 차례로 진행 (일시정지한 카드도 이어서)">▶</button>
     <button class="q-fbtn" id="q-pause" title="지금 걸음을 마치고 멈춤 — 재생하면 이어집니다">⏸</button>
-    <button class="q-fbtn" id="q-halt" title="지금 명령까지 끊고 멈춤 — 진행하던 항목은 보류됩니다">■</button>
+    <button class="q-fbtn" id="q-halt" title="지금 명령까지 끊고 일시정지 — ▶ 로 이어 합니다">■</button>
     <span class="spacer"></span>
+    <button class="q-fbtn" id="q-history" title="지금까지 진행한 작업 (끝난 시각 · 결과)">기록</button>
     <button class="q-fbtn" id="q-tidy" title="중단된 항목 치우기 (완료는 스스로 빠집니다)">정리</button>
     <button class="q-fbtn" id="q-clear" title="전부 지우기">전체 삭제</button>
   </div>
@@ -534,7 +540,7 @@
         <h3>일일 숙제</h3>
         <dl class="kv dl-kv">
           <dt>일시정지 키</dt><dd><select id="opt-stop-key"></select><div class="hint">숙제 중 누르면 일시정지, 다시 누르면 재개</div></dd>
-          <dt>게임 조작 시</dt><dd><label><input type="checkbox" id="opt-pause-touch"> 일시정지</label><div class="hint">숙제 중 게임 창을 클릭하거나 키를 누르면</div></dd>
+          <dt>게임 조작 시</dt><dd><label><input type="checkbox" id="opt-pause-touch"> 일시정지</label><div class="hint">숙제 중 게임 창에서 키보드를 누르면 (마우스 클릭은 멈추지 않음)</div></dd>
           <dt>데이터 폴더</dt><dd><input id="dl-p-data" class="mono w-path" placeholder="비우면 기본"></dd>
           <dt>로그 폴더</dt><dd><input id="dl-p-logs" class="mono w-path" placeholder="비우면 기본"></dd>
           <dt>스크린샷 폴더</dt><dd><input id="dl-p-shots" class="mono w-path" placeholder="비우면 기본"></dd>
@@ -631,6 +637,16 @@
 </div>
 
 <!-- 일일 숙제 결과 보고 (끝나면 뜬다) -->
+<div id="q-hist" class="modal hidden">
+  <div class="modal-box modal-wide">
+    <div class="modal-head"><h3>작업 기록</h3><span id="q-hist-n" class="muted"></span></div>
+    <div class="modal-scroll"><div id="q-hist-body" class="qh-body"></div></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="q-hist-close">닫기</button>
+    </div>
+  </div>
+</div>
+
 <div id="dl-report" class="modal hidden">
   <div class="modal-box modal-wide">
     <div class="modal-head"><h3 id="dl-rp-title">일일 숙제 결과</h3></div>

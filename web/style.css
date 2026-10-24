@@ -517,7 +517,9 @@ select.sort { min-width: 0; max-width: 170px; padding: 5px 8px; font-size: 12px;
   display: flex; align-items: center; gap: 6px;
   width: 84px; flex: none; color: var(--fg-dim);
 }
-.slots { display: flex; gap: 4px; flex-wrap: wrap; }
+.slots { display: flex; gap: 4px; flex-wrap: wrap; flex: 1; }
+.fac-act { display: flex; flex-direction: column; gap: 4px; width: 46px; flex: none; }
+.fac-act .btn { width: 100%; }
 
 .slot {
   width: 62px; height: 28px; flex: none;
@@ -552,6 +554,18 @@ select.sort { min-width: 0; max-width: 170px; padding: 5px 8px; font-size: 12px;
 }
 /* 창 안에서는 카드 바깥 여백이 두 번 들어가 보이므로 줄인다 */
 .modal-scroll .card:last-child { margin-bottom: 0; }
+
+/* ── 작업 기록 창 ─────────────────────────────────── */
+.qh-day { margin: 14px 0 6px; font-weight: 600; color: var(--fg-dim); }
+.qh-day:first-child { margin-top: 0; }
+.qh-row {
+  display: grid; grid-template-columns: 110px 64px minmax(160px, 1fr) 2fr; gap: 10px; align-items: baseline;
+  padding: 6px 4px; border-bottom: 1px solid var(--line);
+}
+.qh-time { font-variant-numeric: tabular-nums; color: var(--fg-dim); }
+.qh-label { font-weight: 600; overflow-wrap: anywhere; }
+.qh-detail { color: var(--fg-dim); overflow-wrap: anywhere; }
+.qh-detail .qh-note { display: block; color: var(--fg); }
 
 /* ── 버전 카드 ──────────────────────────────────── */
 /* 왼쪽 dl(.kv)과 오른쪽 커넥터 정보의 첫 줄 높이를 맞춘다.
@@ -705,8 +719,8 @@ tr.sec .muted { font-weight: 400; letter-spacing: 0; margin-left: 4px; }
 }
 .q-fbtn {
   background: var(--bg-3); border: 1px solid var(--line-2); color: var(--fg-dim);
-  border-radius: 5px; padding: 3px 9px; cursor: pointer;
-  font-size: 12px; line-height: 1.5;
+  border-radius: 5px; padding: 3px 7px; cursor: pointer;
+  font-size: 12px; line-height: 1.5; white-space: nowrap;  /* 버튼이 늘어 좁아져도 글자를 세로로 꺾지 않는다 */
 }
 .q-fbtn:hover:not(:disabled) { background: var(--hover); color: var(--fg); }
 .q-fbtn:disabled { opacity: .35; cursor: default; }

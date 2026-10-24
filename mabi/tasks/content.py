@@ -37,6 +37,7 @@ def open_arbeit_tab(bot: Bot) -> None:
     """퀘스트 창(J)을 열고 아르바이트 탭으로."""
     ui = bot.ui
     bot.to_main()
+    bot.hover_off()  # 지난번에 누른 탭 위에 커서가 남아 있으면 탭 그림이 커져 안 맞는다
     bot.key("j")
     try:
         bot.click(ui["questwin_tab_arbeit"], timeout=5)
@@ -404,10 +405,42 @@ def play_dungeon(bot: Bot, clear_timeout: float, extra_loot: int = 0, again: str
 
 
 def touch_prompt_visible(bot: Bot) -> bool:
-    from ..ocr import read_ko, read_text
-    d = bot.cfg["dungeon"]
+    return has_word(gd.text("clear_touch"), *_touch_texts(bot, bot.frame()))
+
+
+def clear_blockers(bot: Bot, skip=(), ocr: bool = False) -> str | None:
+    """다른 조작을 막는 화면을 하나 넘긴다 — 대화(대화 넘기기), 연출(장면 넘기기), 퀘스트 클리어 등의 초록 '확인',
+    '화면을 터치해 주세요'. 넘긴 것의 이름, 없으면 None. skip 에 든 템플릿은 건드리지 않는다 (지금 기다리는 것).
+    숙제·어비스처럼 오래 혼자 도는 동안 언제든 끼어들 수 있다: 주말 어비스 3판 퀘스트가 반복 도중 깨지며
+    클리어 창이 떠 매칭을 10분 막았다 (2026-10-24 06:07). Bot.wait_any 가 오래 못 찾을 때와 어비스 대기 중에 부른다.
+    ocr: '화면을 터치해 주세요' 를 글자로도 본다 (느려서 가끔만)."""
+    ui = bot.ui
     frame = bot.frame()
-    return has_word(gd.text("clear_touch"), read_ko(frame, d["touch_text_region"]), read_text(frame, d["touch_text_region"], white=220))
+    has = lambda n: n and n not in skip and bot.vision.has(n) and bot.vision.find(frame, n)  # noqa: E731
+    # 게임 종료·던전 퇴장을 묻는 창이 떠 있으면 아무것도 누르지 않는다 (Space·확인이 '예' 가 된다)
+    if any(n and bot.vision.has(n) and bot.vision.find(frame, n) for n in (ui.get("exit_dialog"), ui.get("abyss_exit_dialog"))):
+        return None
+    for key, what in (("dialog_skip", "대화 넘기기"), ("scene_skip", "장면 넘기기")):
+        if (m := has(ui.get(key))):
+            bot.click(m)
+            return what
+    if has(ui.get("confirm_green")):
+        bot.key("space")  # 퀘스트 클리어 확인 — Space 가 '확인'
+        return "확인"
+    if has(ui.get("dungeon_touch")) or (ocr and "dungeon_touch" not in skip and has_word(
+            gd.text("clear_touch"), *_touch_texts(bot, frame))):
+        if bot.background:
+            bot.key("space")  # 뒤에서는 키로 (클릭은 게임을 앞으로 가져와야 한다)
+        else:
+            bot.click(tuple(bot.cfg["dungeon"]["touch_xy"]))
+        return "화면 터치"
+    return None
+
+
+def _touch_texts(bot: Bot, frame) -> tuple[str, str]:
+    from ..ocr import read_ko, read_text
+    r = bot.cfg["dungeon"]["touch_text_region"]
+    return read_ko(frame, r), read_text(frame, r, white=220)
 
 
 def finish_dungeon(bot: Bot, extra_loot: int = 0, again: str | None = None) -> bool:

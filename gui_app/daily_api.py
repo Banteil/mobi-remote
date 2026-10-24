@@ -63,17 +63,26 @@ class DailyApi:
                 "running": bool(self._daily_thread and self._daily_thread.is_alive())}
 
     # ---- 실행 ----
+    @staticmethod
+    def _alive(t: threading.Thread | None) -> bool:
+        """돌고 있나. 작업 큐가 앞 작업의 끝 이벤트를 받자마자 다음 것을 시작하면 앞 스레드가 정리 중이라
+        아직 살아 있다 → 잠깐 기다려 본다."""
+        if t and t.is_alive():
+            t.join(5)
+        return bool(t and t.is_alive())
+
     def daily_start(self, opts: dict | None = None) -> dict:
-        if self._daily_thread and self._daily_thread.is_alive():
+        if self._alive(self._daily_thread):
             return {"error": "이미 실행 중입니다"}
         if getattr(self, "_scan_thread", None) and self._scan_thread.is_alive():
             return {"error": "캐릭터 자동 설정이 도는 중입니다"}
-        if self._abyss_thread and self._abyss_thread.is_alive():
+        if self._alive(self._abyss_thread):
             return {"error": "어비스 반복이 도는 중입니다"}
         o = opts or {}
         self._daily_hook_log()
         run_opts = RunOptions(chars=o.get("chars") or None, only=o.get("only") or None, force=bool(o.get("force")),
-                              extra={"from": "web"})
+                              display=o.get("display") is not False, interface_ready=bool(o.get("interface_ready")),
+                              restore=o.get("restore") is not False, extra={"from": "web"})
         self.daily_pauseCancel()
         runner = Runner(self.paths, on_event=lambda e: self._emit("mm:daily", e), force_exit=False)
         self._daily_runner = runner
@@ -233,6 +242,41 @@ class DailyApi:
         self._display_thread.start()
         return {"ok": True}
 
+    def daily_displayRestore(self) -> dict:  # noqa: N802
+        """작업 큐가 다 끝났을 때 한 번: 숙제·어비스 동안 맞춰 둔 인터페이스와 화면 모드·해상도를 원래대로.
+        기억해 둔 게 없으면 아무것도 안 한다. 끝나면 'mm:display' {restored, message}."""
+        if self._display_thread and self._display_thread.is_alive():
+            return {"error": "화면 설정 작업 중입니다"}
+        if self._alive(self._daily_thread) or self._alive(self._abyss_thread):
+            return {"error": "숙제·어비스가 도는 중입니다"}
+
+        def work():
+            from mabi.bot import Bot
+            from mabi.tasks import display
+            bot, msgs = None, []
+            try:
+                self._daily_hook_log()
+                cfg = load_config(self.paths)
+                bot = Bot(cfg, self.paths, force_exit=False)
+                state = prof.DailyState(self.paths.state)
+                if state.data.get(display.RESTORE_KEY) and bot.window.find():
+                    msgs.append(display.restore_interface(bot, state))
+                if (self.paths.data / display.RESTORE_FILE).is_file():
+                    msgs.append(display.restore_screen(bot, self.paths.data / display.RESTORE_FILE))
+                msg = " · ".join(m for m in msgs if m)
+                if msg:
+                    log.info(f"작업 큐 끝 → {msg}")
+                self._emit("mm:display", {"restored": True, "ok": True, "message": msg})
+            except Exception as e:
+                log.warning(f"화면 설정을 되돌리지 못함 — 다음 큐가 끝날 때 다시 시도: {e}")
+                self._emit("mm:display", {"restored": True, "ok": False, "message": str(e)})
+            finally:
+                if bot:
+                    bot.stopper.close()
+        self._display_thread = threading.Thread(target=work, name="display-restore", daemon=True)
+        self._display_thread.start()
+        return {"ok": True}
+
     # ---- 어비스 반복 (mabi.tasks.abyss) ----
     _abyss_thread: threading.Thread | None = None
     _abyss_bot = None
@@ -244,16 +288,19 @@ class DailyApi:
         return {"dungeon": a["dungeon"], "difficulty": a.get("difficulty") or "매우 어려움2", "runs": int(a.get("runs", 0)),
                 "slot": int(a.get("slot", 0)), "chars": [{"slot": c["slot"], "name": c["name"]} for c in prof.characters(profile)],
                 "minutes": float(a.get("minutes", 0)), "dungeons": ["허상의 정박지", "광기의 동굴", "흩어진 물길"],
+                "revive": bool(a.get("revive", True)), "fit_display": bool(a.get("fit_display", False)),
                 "difficulties": abyss.DIFFICULTIES,
                 "running": bool(self._abyss_thread and self._abyss_thread.is_alive())}
 
     def daily_abyssStart(self, v: dict) -> dict:  # noqa: N802
         """고른 던전·난이도·횟수·시간을 config.toml [abyss] 에 저장하고 반복을 시작한다.
         진행은 'mm:abyss' {type: abyss|done|failed, clears, deaths, ...}, 로그는 일일 숙제 로그 칸으로."""
-        if self._abyss_thread and self._abyss_thread.is_alive():
+        if self._alive(self._abyss_thread):
             return {"error": "이미 어비스 반복 중입니다"}
-        if self._daily_thread and self._daily_thread.is_alive():
+        if self._alive(self._daily_thread):
             return {"error": "일일 숙제가 도는 중입니다"}
+        # 일시정지해 둔 숙제의 'F12 로 이어 하기' 감시를 끈다 — 안 그러면 어비스를 멈추는 F12 가 숙제도 깨운다 (2026-10-24)
+        self.daily_pauseCancel()
         doc = self._doc()
         if "abyss" not in doc:
             doc["abyss"] = tomlkit.table()
@@ -263,6 +310,8 @@ class DailyApi:
         a["slot"] = max(0, int(v.get("slot") or 0))
         a["runs"] = max(0, int(v.get("runs") or 0))
         a["minutes"] = max(0, int(v.get("minutes") or 0))
+        a["revive"] = v.get("revive") is not False
+        a["fit_display"] = bool(v.get("fit_display"))
         self.paths.config.write_text(tomlkit.dumps(doc), encoding="utf-8")
 
         def work():
@@ -280,6 +329,12 @@ class DailyApi:
                 a = cfg["abyss"]  # 게임은 입장할 때만 앞으로 가져온다 (abyss.repeat)
                 profile = prof.load_profile(self.paths.profile) or {"slots": [], "names": {}}
                 ch = next((c for c in prof.characters(profile) if c["slot"] == int(a.get("slot", 0))), None)
+                if v.get("interface"):  # 화면 설정 맞추기 — 인터페이스 PC·80% (큐에서 이번 처음일 때만, 되돌리기는 큐 끝)
+                    from mabi.tasks import display
+                    try:
+                        log.info(display.prepare_interface(bot, prof.DailyState(self.paths.state)))
+                    except Exception as e:
+                        log.warning(f"인터페이스 PC·80% 로 맞추지 못함 — 그대로 진행: {e}")
                 res = abyss.repeat(bot, cfg, int(a["runs"]), float(a["minutes"]),
                                    on_event=lambda e: self._emit("mm:abyss", e), character=ch)
                 self._emit("mm:abyss", {"type": "done", **res})
@@ -332,6 +387,7 @@ class DailyApi:
             "field": str(s["field"]),
             "stop_key": str(doc["game"].get("stop_key", "f12")),
             "pause_on_touch": bool(doc["game"].get("pause_on_touch", True)),
+            "fit_display": bool(doc["run"].get("fit_display", True)),
             "paths": {k: over.get(k, "") for k in ("data", "logs", "shots")},
             "current": {"data": str(self.paths.data), "logs": str(self.paths.logs), "shots": str(self.paths.shots)},
         }
@@ -355,6 +411,8 @@ class DailyApi:
             doc["game"]["stop_key"] = k
         if "pause_on_touch" in v:
             doc["game"]["pause_on_touch"] = bool(v["pause_on_touch"])
+        if "fit_display" in v:
+            doc["run"]["fit_display"] = bool(v["fit_display"])
         self.paths.config.write_text(tomlkit.dumps(doc), encoding="utf-8")
         p = v.get("paths")
         if p is not None:

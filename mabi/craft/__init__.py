@@ -33,6 +33,7 @@ class CraftData:
                                      self.altertable)
         self.knowledge = Knowledge(self.data_dir / "knowledge.json", self.rules, self.recipebook, self.facilitymap)
         self.queue_file = self.data_dir / "queue.json"
+        self.history_file = self.data_dir / "queue-history.jsonl"
 
     def _import(self, src: Path) -> list[str]:
         """없는 학습 파일만 리모콘에서 복사한다. 실패해도 빈 상태로 계속 간다."""
