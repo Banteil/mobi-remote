@@ -42,7 +42,9 @@ const ctx = {
 };
 ctx.window = ctx; ctx.globalThis = ctx;
 vm.createContext(ctx);
-let src = fs.readFileSync(ROOT + 'app.js', 'utf8') + '\n' + fs.readFileSync(ROOT + 'daily.js', 'utf8');
+// index.html 의 script 순서대로 이어 붙여 읽는다 (같은 전역을 쓰는 여러 파일)
+const order = [...fs.readFileSync(ROOT + 'index.html', 'utf8').matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+let src = "'use strict';\n" + order.map((f) => fs.readFileSync(ROOT + f, 'utf8').replace(/^'use strict';/, '')).join('\n;\n');
 // const/let 은 vm 전역 객체에 안 붙는다 → 시나리오에서 쓰는 것만 밖으로 꺼낸다
 src += `
 ;globalThis.__q = {
@@ -52,7 +54,7 @@ src += `
   setBusy: (v) => { busy = v; },
   setDailyWaiter: (f) => { dlWaiter = f; },
 };`;
-try { vm.runInContext(src, ctx, { filename: 'app+daily.js' }); } catch (e) { console.error('load error', e); process.exit(1); }
+try { vm.runInContext(src, ctx, { filename: 'web/*.js' }); } catch (e) { console.error('load error', e); process.exit(1); }
 const Q = ctx.__q;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

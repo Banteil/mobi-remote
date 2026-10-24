@@ -120,7 +120,8 @@ Qt 위젯 화면(gui_app/*_tab.py)은 모양이 별로라, **레거시 리모콘
 ```
 gui.py              GUI 실행 (관리자 아니면 UAC 로 다시) → gui_app/web_main.py
 run.py              콘솔 실행 (일일 숙제만)
-web/                화면 (레거시 렌더러 + bridge.js, daily.js, chars.js)
+web/                화면 — app.js(공통·탭 틀) · craft.js · queue.js · music.js · dye-ui.js · daily.js · chars.js,
+                    main.js(시작, 마지막에 읽음) + bridge.js. 같은 전역을 써서 index.html 의 script 순서가 중요하다
 gui_app/            web_shell(QtWebEngine 껍데기) · web_main(진입점·트레이) · api(+legacy_shapes) · daily_api · chars_api · dye_service
                     (옛 Qt 탭 main.py, *_tab.py 는 남아 있음 — 정리 예정)
 mabi/               엔진: paths, runner, report, bot, vision, ocr, inputs, game_state, profile, whoami, connector, cache, query,
