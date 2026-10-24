@@ -39,7 +39,8 @@
     "abyss_together": "함께하기",
     "abyss_chance": "우연한만남",
     "abyss_revive_here": "여기서",
-    "abyss_wiped": "전멸"
+    "abyss_wiped": "전멸",
+    "confirm": "확인"
   },
 
   "regions": {
@@ -49,9 +50,11 @@
     "menu_right": [1360, 0, 560, 1080],
     "abyss_list": [1150, 60, 770, 520],
     "abyss_entry_top": [600, 20, 700, 80],
+    "abyss_entry_title": [30, 90, 800, 80],
     "abyss_difficulty": [40, 160, 700, 60],
     "abyss_entry_right": [1180, 560, 740, 500],
     "abyss_revive_button": [1200, 860, 720, 210],
-    "abyss_revive_left": [700, 180, 520, 180]
+    "abyss_revive_left": [700, 180, 520, 180],
+    "confirm_button": [660, 970, 600, 80]
   }
 }

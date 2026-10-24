@@ -445,8 +445,16 @@ def clear_blockers(bot: Bot, skip=(), ocr: bool = False) -> str | None:
                 return None
             bot.click(m)
             return what
-    if has(ui.get("confirm_green")):
-        bot.key("space")  # 퀘스트 클리어 확인 — Space 가 '확인'
+    m = has(ui.get("confirm_green"))
+    if not m and ocr and (hit := _confirm_text(frame)):
+        m = hit  # 템플릿과 모양이 다른 '확인' (어비스 도중 퀘스트 완료 창에서 한 번도 못 넘겼다 — 2026-10-24)
+    if m:
+        # 퀘스트 클리어 확인 — Space 가 '확인'. 뒤에서 보낸 Space 가 안 먹어 같은 창이 그대로면 누른다
+        if bot.background and time.monotonic() - getattr(bot, "_confirm_keyed", 0) < 10:
+            bot.click(m)
+        else:
+            bot.key("space")
+            bot._confirm_keyed = time.monotonic()
         return "확인"
     if has(ui.get("dungeon_touch")) or (ocr and "dungeon_touch" not in skip and has_word(
             gd.text("clear_touch"), *_touch_texts(bot, frame))):
@@ -456,6 +464,13 @@ def clear_blockers(bot: Bot, skip=(), ocr: bool = False) -> str | None:
             bot.click(tuple(bot.cfg["dungeon"]["touch_xy"]))
         return "화면 터치"
     return None
+
+
+def _confirm_text(frame) -> tuple[int, int] | None:
+    """화면 아래 가운데 초록 버튼 글자가 '확인' 이면 그 자리 (OCR)."""
+    from ..ocr import find_texts
+    return next(((x, y) for t, x, y in find_texts(frame, gd.region("confirm_button"))
+                 if "".join(t.split()) == gd.text("confirm")), None)
 
 
 def _touch_texts(bot: Bot, frame) -> tuple[str, str]:
@@ -490,9 +505,13 @@ def finish_dungeon(bot: Bot, extra_loot: int = 0, again: str | None = None) -> b
             bot.sleep(2, 3)  # 보상 연출
             if extra_loot:
                 do_extra_loot(bot, extra_loot)
-            if again and (a := bot.find(again)):
-                bot.click(a)
-                return True
+            if again:
+                # 보상 연출이 길면 버튼이 늦게 뜬다 — 한 번만 보고 나가면 다음 판을 지도에서 다시 찾아간다
+                try:
+                    bot.click(bot.wait(again, timeout=6, interval=0.5))
+                    return True
+                except StepTimeout:
+                    bot.log.warning(f"보상 화면에 '다시 하기' 가 안 보임 → 나가서 지도로 ({bot.snapshot('dungeon_no_retry').name})")
             bot.key("esc")   # 나가기
             break
         elif dungeon_state(bot) in ("InProgress", "Cleared"):

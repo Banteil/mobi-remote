@@ -45,12 +45,16 @@ def dungeon_once(bot: Bot, c: dict, again: bool = False, more: bool = False) -> 
     ui = bot.ui
     retry_btn = ui["dungeon_retry"] if more else None
     if again:
+        # 임무 화면이 안 열렸을 때만 지도로 간다. 입장 뒤의 시간 초과까지 여기서 잡으면 지도로 가서 한 판 더 들어간다
         try:
-            return enter_from_dungeon_window(bot, c["clear_timeout"], expect_cost=c["dungeon_cost"],
-                                             again=retry_btn, retry=True)
+            bot.wait_any([ui["dungeon_retry_enter"], ui["dungeon_mission_enter_silver"], ui["dungeon_mission_enter"]],
+                         timeout=15)
         except StepTimeout:
             bot.log.warning(f"다시 하기 후 임무 화면이 안 보임, 지도로 다시 이동 → {bot.snapshot('dungeon_again').name}")
             bot.to_main()
+        else:
+            return enter_from_dungeon_window(bot, c["clear_timeout"], expect_cost=c["dungeon_cost"],
+                                             again=retry_btn, retry=True)
     m = go_to_place(bot, c["dungeon"], arrive=[ui["dungeon_tab_normal"], ui["dungeon_tab_deep"]],
                     timeout=c["travel_timeout"])
     bot.sleep(1, 1.5)

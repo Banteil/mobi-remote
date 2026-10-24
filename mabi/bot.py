@@ -373,6 +373,13 @@ class Bot:
                 self.sleep(1.2, 1.6)
                 continue
             if not self.dismiss_popups(1):
+                from .tasks.content import _confirm_text
+                if _confirm_text(self.frame()):
+                    # 템플릿이 안 맞는 퀘스트 완료 창 — ESC 로는 안 닫혀 캐릭터 바꾸기 등이 멈췄다 (2026-10-24 사용자)
+                    self.log.info("퀘스트 완료 창 → 확인 (Space)")
+                    self.key("space")
+                    self.sleep(1.5, 2.0)
+                    continue
                 self.key("esc")
             self.sleep(0.8, 1.3)
         if not self.at_main():

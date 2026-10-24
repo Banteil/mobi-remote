@@ -64,12 +64,16 @@ def _chance_on(bot: Bot) -> tuple[bool, tuple[int, int]] | None:
 
 
 def _wait_settled(bot: Bot, timeout: float) -> bool:
-    """로딩·자동 이동이 끝나 메인 화면이 보일 때까지. 보이면 True."""
+    """로딩·자동 이동이 끝나 메인 화면이 보일 때까지. 보이면 True.
+    로딩이 끝났는데(CLI 가 답함) 메인 화면이 아니면 막는 창을 넘긴다 — 판을 마치고 나가거나 캐릭터를 바꾸려는 순간
+    퀘스트 완료 창이 뜨면 그대로 서 있었다 (2026-10-24 사용자)."""
     end = time.monotonic() + timeout
     while time.monotonic() < end:
-        act = (bot.state.activity() if bot.state.available() else None) or {}
-        if not act.get("IsAutoTraveling") and bot.at_main():
+        act = bot.state.activity() if bot.state.available() else None
+        if not (act or {}).get("IsAutoTraveling") and bot.at_main():
             return True
+        if act is not None:
+            bot.clear_blockers(ocr=True)
         bot.sleep(2, 2.5)
     return False
 
@@ -89,37 +93,92 @@ def _travel_to_entry(bot: Bot) -> None:
         raise CannotProceed(f"어비스 입구로 가지 못함 → {bot.snapshot('abyss_travel').name}")
 
 
-def open_entry(bot: Bot, dungeon: str, difficulty: str = "", _moved: bool = False) -> None:
-    """메인 화면 → 메뉴 → 어비스 → dungeon 입장 화면. '함께하기' · 난이도 · '우연한 만남' 을 맞춘다.
-    '함께하기' 를 먼저 고른다 — '혼자하기' 탭이면 입구에서 먼 캐릭터는 버튼이 '이동하기' 라 입장할 수 없는데,
-    '함께하기' 는 어디서든 매칭된다 (2026-10-24: 혼자하기 탭에서 '입장하기' 만 찾다 실패). 그래도 '이동하기' 면
-    입구로 간 뒤 한 번 더 연다."""
-    bot.to_main()
-    for _ in range(3):
+def _entry_button(bot: Bot) -> str:
+    """입장 화면 오른쪽 아래 버튼: 'enter'(입장하기) · 'move'(이동하기) · ''(둘 다 없음 — 매칭 중 등)."""
+    texts = [_norm(t) for t, _, _ in find_texts(bot.frame(), gd.region("abyss_entry_right"))]
+    if _norm(gd.text("abyss_enter")) in texts:
+        return "enter"
+    if _norm(gd.text("abyss_move")) in texts:
+        return "move"
+    return ""
+
+
+def where(bot: Bot, dungeon: str) -> str:
+    """지금 어느 화면인가 — 어디서 시작해도 그 자리부터 잇는다 (2026-10-24: 입장 화면을 띄운 채 시작하면
+    메인 화면만 기다리며 멍하니 있었다).
+      play     어비스 안 (나가기 버튼)              reward  클리어·보상 화면
+      main     필드 메인 화면                       menu    메뉴(ESC)가 열려 있음
+      entry    입장 화면 (위쪽 '혼자하기 / 함께하기' 탭)
+      matching 입장 화면인데 입장하기·이동하기 버튼이 없음 — 매칭 중으로 본다 (매칭 중 화면은 아직 못 봤다)
+      list     어비스 목록 (dungeon 이름이 오른쪽 목록에)
+      loading  CLI 가 답하지 않음 (로딩 중엔 get_activity 가 오류)   other  그 밖의 창 — ESC 로 닫으면 된다"""
+    if inside(bot):
+        return "play"
+    if after_clear(bot):
+        return "reward"
+    if bot.at_main():
+        return "main"
+    if bot.exists(bot.ui["menu_quit"]):
+        return "menu"
+    if _find_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top")):
+        return "entry" if _entry_button(bot) else "matching"
+    if _find_text(bot, dungeon, gd.region("abyss_list")):
+        return "list"
+    if bot.state.available() and bot.state.activity() is None:
+        return "loading"
+    return "other"
+
+
+def where_settled(bot: Bot, dungeon: str) -> str:
+    """where, 단 로딩 중이면 끝날 때까지 (상한 timing.loading)."""
+    end = time.monotonic() + bot.cfg["timing"]["loading"]
+    while (at := where(bot, dungeon)) == "loading" and time.monotonic() < end:
+        bot.sleep(2, 2.5)
+    return at
+
+
+def _open_list(bot: Bot, menu_open: bool = False) -> None:
+    """메인 화면 → 메뉴(ESC) → '어비스' → 어비스 목록. menu_open 이면 열린 메뉴에서 바로."""
+    for _ in range(0 if menu_open else 3):
+        bot.to_main()
         bot.key("esc")
         bot.sleep(1.5, 1.8)
         if _find_text(bot, gd.text("abyss_menu"), gd.region("menu_right")):
             break
-        bot.to_main()
     _click_text(bot, gd.text("abyss_menu"), gd.region("menu_right"), what="메뉴의 어비스")
     bot.sleep(1.0, 1.5)
-    _click_text(bot, dungeon, gd.region("abyss_list"), what=f"어비스 '{dungeon}'")
-    bot.sleep(1.0, 1.5)
-    # 입장 화면이 열렸나: 위쪽 '혼자하기 / 함께하기' 탭 글자로 본다 (버튼 글자는 탭·위치에 따라 바뀐다)
-    for _ in range(6):
-        if _find_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top")):
-            break
-        bot.sleep(1.0, 1.4)
-    else:
-        raise CannotProceed(f"'{dungeon}' 입장 화면이 열리지 않음 → {bot.snapshot('abyss').name}")
+
+
+def open_entry(bot: Bot, dungeon: str, difficulty: str = "", _moved: bool = False, at: str = "") -> None:
+    """dungeon 입장 화면을 열고 '함께하기' · 난이도 · '우연한 만남' 을 맞춘다. at(where 결과)이 입장 화면이나
+    어비스 목록이면 그 자리부터, 아니면 메인 화면 → 메뉴 → 어비스 → 목록에서 dungeon.
+    '함께하기' 를 먼저 고른다 — '혼자하기' 탭이면 입구에서 먼 캐릭터는 버튼이 '이동하기' 라 입장할 수 없는데,
+    '함께하기' 는 어디서든 매칭된다 (2026-10-24: 혼자하기 탭에서 '입장하기' 만 찾다 실패). 그래도 '이동하기' 면
+    입구로 간 뒤 한 번 더 연다."""
+    if at == "entry" and not _find_text(bot, dungeon, gd.region("abyss_entry_title")):
+        bot.log.info(f"다른 어비스의 입장 화면 → 닫고 '{dungeon}' 로")
+        at = ""
+    if at != "entry":
+        if at != "list":
+            _open_list(bot, menu_open=at == "menu")
+        _click_text(bot, dungeon, gd.region("abyss_list"), what=f"어비스 '{dungeon}'")
+        bot.sleep(1.0, 1.5)
+        # 입장 화면이 열렸나: 위쪽 '혼자하기 / 함께하기' 탭 글자로 본다 (버튼 글자는 탭·위치에 따라 바뀐다)
+        for _ in range(6):
+            if _find_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top")):
+                break
+            bot.sleep(1.0, 1.4)
+        else:
+            raise CannotProceed(f"'{dungeon}' 입장 화면이 열리지 않음 → {bot.snapshot('abyss').name}")
     _click_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top"), what="함께하기")
     if difficulty:
         _click_text(bot, difficulty, gd.region("abyss_difficulty"), what=f"난이도 '{difficulty}'")
     # 함께하기에서 '입장하기' 가 보일 때까지 ('이동하기' 면 입구로 가서 다시)
     for _ in range(5):
-        if _find_text(bot, gd.text("abyss_enter"), gd.region("abyss_entry_right")):
+        button = _entry_button(bot)
+        if button == "enter":
             break
-        if not _moved and _find_text(bot, gd.text("abyss_move"), gd.region("abyss_entry_right")):
+        if button == "move" and not _moved:
             _travel_to_entry(bot)
             return open_entry(bot, dungeon, difficulty, _moved=True)
         bot.sleep(1.0, 1.4)
@@ -171,6 +230,8 @@ def leave(bot: Bot) -> None:
     while inside(bot) or not bot.at_main():
         if time.monotonic() > end:
             raise StepTimeout("어비스에서 나온 뒤 메인 화면이 나오지 않음")
+        if not inside(bot) and bot.state.activity() is not None:
+            bot.clear_blockers(ocr=True)  # 나오면서 뜬 퀘스트 완료 창
         bot.sleep(2)
 
 
@@ -245,27 +306,33 @@ def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: No
               or touch_prompt_visible(bot)):
             return "clear"  # 클리어 연출로 HUD 가 사라졌다 (CLI 를 못 읽었을 때)
         else:
-            bot.clear_blockers()
+            bot.clear_blockers(ocr=True)  # 나가기 버튼을 가린 창 — 퀘스트 완료 창은 템플릿이 안 맞을 때가 있어 글자로도
         if time.monotonic() > end:
             return "timeout"
 
 
 def _switch_character(bot: Bot, cfg: dict, character: dict) -> None:
-    """고른 캐릭터로 접속한다. 이미 그 캐릭터면 그대로 (어비스 안이어도 이어서). 다른 캐릭터로 어비스 안이면 나간 뒤 바꾼다."""
+    """고른 캐릭터로 접속한다. 이미 그 캐릭터면 그대로 (어비스 안이어도 이어서). 다른 캐릭터로 어비스 안이면 나간 뒤 바꾼다.
+    이름은 메인 화면 왼쪽 위에서만 읽힌다 → 매칭 중이면 들어갈 때까지 기다려 안에서 읽고, 어비스 목록·입장 화면이나
+    다른 창이면 login.run 이 ESC 로 닫고 읽는다 (같은 캐릭터면 repeat 가 메뉴에서 다시 연다)."""
     from .login import current_name, name_matches
     from . import login
     bot.background = False
-    if inside(bot):
+    at = where_settled(bot, cfg["abyss"]["dungeon"])
+    if at == "matching":
+        bot.log.info("매칭 중에 시작 → 들어간 뒤 캐릭터 확인")
+        bot.step("abyss_match", "우연한 만남 매칭 중")
+        if wait_entered(bot, cfg["abyss"]["match_timeout"]):
+            at = "play"
+    if at == "play":
         if name_matches(current_name(bot), character.get("name", "")):
             return
         bot.log.info(f"다른 캐릭터로 어비스 안 → 나간 뒤 {character['name']} 로 접속")
         leave(bot)
-    elif after_clear(bot):
+    elif at == "reward":
         bot.key("esc")  # 보상 화면 '나가기' — 판은 이미 끝났다
         bot.sleep(3, 4)
         _wait_settled(bot, bot.cfg["timing"]["loading"])
-    elif not bot.at_main():
-        _wait_settled(bot, bot.cfg["timing"]["loading"])  # 로딩 중이면 끝나길 (ESC 메뉴가 안 뜬다)
     bot.character = character
     bot.log.info(login.run(bot, cfg, character))
 
@@ -302,6 +369,9 @@ def to_reward(bot: Bot) -> None:
                 bot.key("space")
             else:
                 bot.click(tuple(bot.cfg["dungeon"]["touch_xy"]))
+        else:
+            # 판을 마치는 순간 깨진 퀘스트(주말 어비스 3판 등)의 완료 창이 보상 화면을 가린다 — 글자로 '확인' 을 찾는다
+            bot.clear_blockers(skip=(ui["dungeon_touch"],), ocr=True)
         bot.sleep(1.5, 2.0)
     bot.sleep(1.5, 2.0)  # 보상 연출
 
@@ -326,25 +396,26 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
 
     goal = (f"{runs}판" if runs else "") + (" · " if runs and minutes else "") + (f"{minutes:g}분" if minutes else "")
     bot.log.info(f"어비스 반복 시작: {dungeon}{' / ' + difficulty if difficulty else ''} — {goal or '멈출 때까지'}")
-    # 어디서 시작하나: 어비스 안이면 그 판부터, 클리어·보상 화면이면 보상부터 (2026-10-23 클리어 화면에서 시작해
-    # 입장부터 하려다 ESC 가 듣지 않아 멈췄다), 아니면 메뉴에서 입장
-    stage = "entry"
+    # 어디서 시작하나 (where): 어비스 안이면 그 판부터, 클리어·보상 화면이면 보상부터 (2026-10-23 클리어 화면에서
+    # 시작해 입장부터 하려다 ESC 가 듣지 않아 멈췄다), 매칭 중이면 들어가길 기다리고, 입장 화면·어비스 목록이면
+    # 그 자리부터, 그 밖(메인·다른 창)은 메뉴에서 입장
     bot.auto_clear = True
     if character:
         _switch_character(bot, cfg, character)
     bot.background = behind
-    if inside(bot):
-        stage = "play"
-        bot.log.info("이미 어비스 안 → 이 판부터 이어서")
-    elif after_clear(bot):
-        stage = "reward"
-        bot.log.info("어비스 클리어 화면 → 보상부터")
+    at = where_settled(bot, dungeon)
+    stage = {"play": "play", "reward": "reward", "matching": "match"}.get(at, "entry")
+    if at != "main":
+        bot.log.info({"play": "이미 어비스 안 → 이 판부터 이어서", "reward": "어비스 클리어 화면 → 보상부터",
+                      "matching": "매칭 중 → 들어가길 기다림", "entry": "어비스 입장 화면 → 그 자리부터",
+                      "list": "어비스 목록 → 그 자리부터", "menu": "메뉴가 열려 있음 → 그 자리부터"}.get(at, f"알 수 없는 화면({at}) → 닫고 메뉴에서 입장"))
     while True:
         if stage == "entry":
             # 입장은 메뉴·목록·버튼을 눌러야 해서 게임을 앞에 두고 한다. 들어간 뒤로는 다시 뒤에서
             bot.step("abyss_open", f"어비스 입장 화면 ({dungeon})")
             bot.background = False
-            open_entry(bot, dungeon, difficulty)
+            open_entry(bot, dungeon, difficulty, at=at)
+            at = ""  # 처음 한 번만 — 다음 입장은 판이 끝난 자리(메인)에서
             _click_text(bot, gd.text("abyss_enter"), gd.region("abyss_entry_right"), what="입장하기")
             if behind:
                 bot.background = True

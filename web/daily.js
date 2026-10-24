@@ -330,7 +330,7 @@ function paintAbyssRunning(on) {
 }
 
 /* 어비스 반복도 작업 큐의 한 항목으로 돈다 (일일 숙제와 같은 방식). '반복 시작' = 큐 맨 앞에 넣고 돌리기,
- * '목표' = 제작·채집 목표와 같은 방식 — 판 수를 물어 큐 뒤에 담기만 한다 (재생을 눌러야 진행)
+ * '목표' = 탭에서 고른 그대로(판 수·분 제한 포함) 큐 뒤에 담기만 한다 (재생을 눌러야 진행)
  * → 'A 캐릭터 3판 → B 캐릭터 3판' 처럼 미리 걸어 둘 수 있다. */
 function abyssSpec() {
   const sel = $('#ab-char');
@@ -360,13 +360,7 @@ function startAbyss() {
 }
 
 async function queueAbyss() {
-  const spec = abyssSpec();
-  const runs = await promptNumber('목표 판 수',
-    '"' + spec.label + '" 로 ' + spec.dungeon + ' ' + spec.difficulty + ' 를 몇 판 돌까요?',
-    spec.runs || 3,
-    '작업 큐에 담기만 하고, 재생을 눌러야 실제로 진행합니다. 캐릭터·던전·난이도·분 제한·부활은 지금 고른 대로 담습니다.');
-  if (!runs) return;
-  const it = Object.assign({}, spec, { runs });
+  const it = abyssSpec();  // 탭에서 고른 그대로 (0판·0분 = 멈출 때까지)
   await mm.queue.add(it, 'end');
   toast('큐에 담았습니다', it.label + ' — ' + abyssAmount(it) + ' · 재생을 누르면 진행합니다.', 'ok');
 }
