@@ -60,6 +60,37 @@ class QuestWindowTest(unittest.TestCase):
         self.assertFalse(content.questwin_text_ok(975))
 
 
+class SceneSkipTest(unittest.TestCase):
+    """뒤에서 도는 동안 '장면 넘기기' 는 바로 누르지 않는다 (클릭하면 게임이 앞으로 나온다) — SCENE_WAIT 뒤에만."""
+
+    def bot(self, background, foreground=False):
+        b = mock.Mock()
+        b.ui = {"scene_skip": "scene_skip", "dialog_skip": "dialog_skip"}
+        b.background = background
+        b.window.is_foreground.return_value = foreground
+        b._scene_seen = None
+        b.vision.has.return_value = True
+        b.vision.find.side_effect = lambda f, n: Match(n, 0, 0, 10, 10, 0.9) if n == "scene_skip" else None
+        return b
+
+    def test_front_clicks_right_away(self):
+        b = self.bot(background=False)
+        self.assertEqual(content.clear_blockers(b), "장면 넘기기")
+        b.click.assert_called_once()
+
+    def test_behind_waits_then_clicks(self):
+        clock = Clock()
+        with mock.patch.object(content.time, "monotonic", clock):
+            b = self.bot(background=True)
+            self.assertIsNone(content.clear_blockers(b))
+            clock.t += 10
+            self.assertIsNone(content.clear_blockers(b))
+            b.click.assert_not_called()
+            clock.t += content.SCENE_WAIT
+            self.assertEqual(content.clear_blockers(b), "장면 넘기기")
+            b.click.assert_called_once()
+
+
 class ArbeitTest(unittest.TestCase):
     def test_buttons_filter_keeps_titles(self):
         items = [("국경 수비대 물자 보급", 1400, 880), ("지원하기", 1756, 975), ("진행하기", 1756, 671)]

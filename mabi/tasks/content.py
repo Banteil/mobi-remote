@@ -424,6 +424,9 @@ def touch_prompt_visible(bot: Bot) -> bool:
     return has_word(gd.text("clear_touch"), *_touch_texts(bot, bot.frame()))
 
 
+SCENE_WAIT = 20  # 뒤에서 도는 동안 '장면 넘기기' 를 누르지 않고 연출이 끝나길 기다리는 최대 초
+
+
 def clear_blockers(bot: Bot, skip=(), ocr: bool = False) -> str | None:
     """다른 조작을 막는 화면을 하나 넘긴다 — 대화(대화 넘기기), 연출(장면 넘기기), 퀘스트 클리어 등의 초록 '확인',
     '화면을 터치해 주세요'. 넘긴 것의 이름, 없으면 None. skip 에 든 템플릿은 건드리지 않는다 (지금 기다리는 것).
@@ -438,8 +441,17 @@ def clear_blockers(bot: Bot, skip=(), ocr: bool = False) -> str | None:
         return None
     for key, what in (("dialog_skip", "대화 넘기기"), ("scene_skip", "장면 넘기기")):
         if (m := has(ui.get(key))):
+            if key == "scene_skip" and bot.background and not bot.window.is_foreground():
+                # 클릭은 게임을 앞으로 가져와야 들어간다 → 뒤에서 도는 동안(어비스)은 연출이 스스로 끝나길 기다리고,
+                # 한참(SCENE_WAIT) 지나도 그대로일 때만 누른다 (판마다 게임이 앞으로 튀어나왔다 — 2026-10-24)
+                first = getattr(bot, "_scene_seen", None) or time.monotonic()
+                bot._scene_seen = first
+                if time.monotonic() - first < SCENE_WAIT:
+                    return None
+            bot._scene_seen = None
             bot.click(m)
             return what
+    bot._scene_seen = None
     if has(ui.get("confirm_green")):
         bot.key("space")  # 퀘스트 클리어 확인 — Space 가 '확인'
         return "확인"
