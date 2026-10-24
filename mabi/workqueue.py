@@ -73,9 +73,13 @@ class WorkQueue:
         for x in items:
             if x.get("status") == "run":  # 앱이 꺼진 동안 진행됐을 리가 없다
                 x["status"] = "wait"
+            elif x.get("status") == "pause":
+                # 일시정지는 '돌던 동작을 잠깐 멈춤' — 껐다 켜면 돌던 동작이 없으니 차례를 기다리는 카드다.
+                # 하던 자리(숙제 진행 기록·어비스 한 판 수·목표 기준점)는 그대로라 ▶ 로 이어 한다 (2026-10-24 사용자 결정)
+                x["status"] = "wait"
+                x["note"] = "대기 — 하던 자리에서 이어서"
             self._seq = max(self._seq, int(x.get("id") or 0) + 1)
         self.items = items
-        self._one_pause()
 
     def _one_pause(self) -> None:
         """일시정지는 맨 위 한 장만. 그 아래 일시정지 카드는 대기로 (하던 자리 기록은 그대로라 이어서 한다)."""

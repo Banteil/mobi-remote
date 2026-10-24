@@ -188,15 +188,15 @@ class WorkQueueTest(unittest.TestCase):
         self.long.finish()
         self.assertTrue(wait_for(lambda: self.quick.ran == ["a"] and not self.q.running))
 
-    def test_two_paused_on_load_become_one(self):
-        self.q.add({"kind": "daily", "label": "숙제"})
-        self.q.add({"kind": "action", "label": "어비스"})
-        for x in self.q.items:
-            x["status"] = "pause"
-        from mabi.craft import queue as store
-        store.save(self.dir / "queue.json", {"items": self.q.items})
+    def test_paused_becomes_wait_on_restart(self):
+        # 껐다 켜면 일시정지는 대기로 (돌던 동작이 없다). 하던 자리 값은 그대로
+        self.q.add({"kind": "abyss", "label": "어비스", "doneRuns": 2})
+        self.q.items[0]["status"] = "pause"
+        self.q._changed()
         q2 = self.make()
-        self.assertEqual([x["status"] for x in q2.items], ["pause", "wait"])
+        self.assertEqual(q2.items[0]["status"], "wait")
+        self.assertEqual(q2.items[0]["doneRuns"], 2)
+        self.assertIsNone(q2.top_paused())
 
 
 if __name__ == "__main__":
