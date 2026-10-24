@@ -61,14 +61,13 @@ class QuestWindowTest(unittest.TestCase):
 
 
 class SceneSkipTest(unittest.TestCase):
-    """뒤에서 도는 동안 '장면 넘기기' 는 바로 누르지 않는다 (클릭하면 게임이 앞으로 나온다) — SCENE_WAIT 뒤에만."""
+    """뒤에서 도는 동안 '장면 넘기기' 는 누르지 않는다 (클릭하면 게임이 앞으로 나온다). 앞에서는 바로 누른다."""
 
     def bot(self, background, foreground=False):
         b = mock.Mock()
         b.ui = {"scene_skip": "scene_skip", "dialog_skip": "dialog_skip"}
         b.background = background
         b.window.is_foreground.return_value = foreground
-        b._scene_seen = None
         b.vision.has.return_value = True
         b.vision.find.side_effect = lambda f, n: Match(n, 0, 0, 10, 10, 0.9) if n == "scene_skip" else None
         return b
@@ -78,17 +77,15 @@ class SceneSkipTest(unittest.TestCase):
         self.assertEqual(content.clear_blockers(b), "장면 넘기기")
         b.click.assert_called_once()
 
-    def test_behind_waits_then_clicks(self):
-        clock = Clock()
-        with mock.patch.object(content.time, "monotonic", clock):
-            b = self.bot(background=True)
+    def test_behind_never_grabs(self):
+        b = self.bot(background=True)
+        for _ in range(5):
             self.assertIsNone(content.clear_blockers(b))
-            clock.t += 10
-            self.assertIsNone(content.clear_blockers(b))
-            b.click.assert_not_called()
-            clock.t += content.SCENE_WAIT
-            self.assertEqual(content.clear_blockers(b), "장면 넘기기")
-            b.click.assert_called_once()
+        b.click.assert_not_called()
+
+    def test_background_task_but_game_in_front_clicks(self):
+        b = self.bot(background=True, foreground=True)  # 사람이 게임을 앞에 두고 보고 있으면 눌러도 된다
+        self.assertEqual(content.clear_blockers(b), "장면 넘기기")
 
 
 class ArbeitTest(unittest.TestCase):

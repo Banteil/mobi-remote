@@ -424,9 +424,6 @@ def touch_prompt_visible(bot: Bot) -> bool:
     return has_word(gd.text("clear_touch"), *_touch_texts(bot, bot.frame()))
 
 
-SCENE_WAIT = 20  # 뒤에서 도는 동안 '장면 넘기기' 를 누르지 않고 연출이 끝나길 기다리는 최대 초
-
-
 def clear_blockers(bot: Bot, skip=(), ocr: bool = False) -> str | None:
     """다른 조작을 막는 화면을 하나 넘긴다 — 대화(대화 넘기기), 연출(장면 넘기기), 퀘스트 클리어 등의 초록 '확인',
     '화면을 터치해 주세요'. 넘긴 것의 이름, 없으면 None. skip 에 든 템플릿은 건드리지 않는다 (지금 기다리는 것).
@@ -442,16 +439,12 @@ def clear_blockers(bot: Bot, skip=(), ocr: bool = False) -> str | None:
     for key, what in (("dialog_skip", "대화 넘기기"), ("scene_skip", "장면 넘기기")):
         if (m := has(ui.get(key))):
             if key == "scene_skip" and bot.background and not bot.window.is_foreground():
-                # 클릭은 게임을 앞으로 가져와야 들어간다 → 뒤에서 도는 동안(어비스)은 연출이 스스로 끝나길 기다리고,
-                # 한참(SCENE_WAIT) 지나도 그대로일 때만 누른다 (판마다 게임이 앞으로 튀어나왔다 — 2026-10-24)
-                first = getattr(bot, "_scene_seen", None) or time.monotonic()
-                bot._scene_seen = first
-                if time.monotonic() - first < SCENE_WAIT:
-                    return None
-            bot._scene_seen = None
+                # 클릭은 게임을 앞으로 가져와야 들어간다. 뒤에서 도는 작업(어비스)은 화면을 잡지 않는 게 우선이라
+                # 누르지 않고 연출이 스스로 끝나길 기다린다 — 판마다 게임이 앞으로 튀어나와 다른 일을 못 했다
+                # (2026-10-24 사용자). 안 끝나는 경우는 어비스의 한 판 시간 초과(run_timeout)가 마지막 안전장치
+                return None
             bot.click(m)
             return what
-    bot._scene_seen = None
     if has(ui.get("confirm_green")):
         bot.key("space")  # 퀘스트 클리어 확인 — Space 가 '확인'
         return "확인"

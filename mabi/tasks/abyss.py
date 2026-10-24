@@ -278,23 +278,28 @@ def after_clear(bot: Bot) -> bool:
                 or bot.exists(ui["reward_exit"]) or touch_prompt_visible(bot))
 
 
+def _behind(bot: Bot) -> bool:
+    """뒤에서 도는 중인가 (사람이 다른 일을 하는 중) — 그러면 클릭(게임을 앞으로 가져옴) 대신 키·기다림으로.
+    어비스는 뒤에서 도는 작업이라 화면을 잡지 않는 게 우선이다 (2026-10-24 사용자)."""
+    return bool(bot.background) and not bot.window.is_foreground()
+
+
 def to_reward(bot: Bot) -> None:
-    """클리어 화면을 넘겨 보상 화면(나가기 / 다시 하기)까지."""
+    """클리어 화면을 넘겨 보상 화면(나가기 / 다시 하기)까지. 뒤에서는 클릭하지 않는다 (장면 넘기기는 기다리고,
+    '화면을 터치해 주세요' 는 Space)."""
     ui = bot.ui
     end = time.monotonic() + 120
-    keyed = 0
     while not bot.exists(ui["dungeon_retry"]):
         if time.monotonic() > end:
             raise StepTimeout(f"어비스 보상 화면이 나오지 않음 → {bot.snapshot('abyss_reward').name}")
-        if bot.vision.has(ui["scene_skip"]) and bot.click_if(ui["scene_skip"]):
-            pass
+        if bot.vision.has(ui["scene_skip"]) and bot.exists(ui["scene_skip"]):
+            if not _behind(bot):
+                bot.click_if(ui["scene_skip"])
         elif bot.clear_blockers(skip=(ui["dungeon_touch"],)):
             pass  # 클리어와 함께 깨진 퀘스트의 클리어 창·대화 (주말 어비스 3판 등)
         elif touch_prompt_visible(bot) or bot.exists(ui["dungeon_touch"]):
-            # 뒤에서 할 때는 클릭 대신 키로 넘겨 본다 (클릭은 게임을 잠깐 앞으로 가져와야 한다)
-            if bot.background and keyed < 2:
+            if _behind(bot):
                 bot.key("space")
-                keyed += 1
             else:
                 bot.click(tuple(bot.cfg["dungeon"]["touch_xy"]))
         bot.sleep(1.5, 2.0)
@@ -391,8 +396,13 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
                 break
             bot.key("space")  # 다시 하기 (Space) → 같은 던전·난이도로 다시 매칭
             bot.sleep(2, 3)
-            if bot.exists(bot.ui["dungeon_retry"]):  # 키가 안 들었으면 누른다
-                bot.click(bot.ui["dungeon_retry"])
+            for _ in range(2):  # 키가 안 들었으면 — 뒤에서는 키를 한 번 더, 앞에서는 누른다
+                if not bot.exists(bot.ui["dungeon_retry"]):
+                    break
+                if _behind(bot):
+                    bot.key("space")
+                else:
+                    bot.click(bot.ui["dungeon_retry"])
                 bot.sleep(2, 3)
             stage = "match"
         if done():
