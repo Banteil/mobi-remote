@@ -14,7 +14,7 @@
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable
 
 FONT = ("Pretendard", "Malgun Gothic")   # JS: "Pretendard","Malgun Gothic",system-ui

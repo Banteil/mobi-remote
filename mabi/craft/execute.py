@@ -32,12 +32,6 @@ class ExecResult:
     ko: dict | None = None         # errors.describe 결과 (실패일 때)
     facility_level: dict | None = None  # 이번에 칸 수·레벨이 새로 확정됐으면 {facility, level, slots}
 
-    @property
-    def required_level(self):
-        """insufficient_living_skill_level 일 때 게임이 알려 준 필요 레벨 (있으면)."""
-        return self.data.get("requiredLevel") if isinstance(self.data, dict) else None
-
-
 def recipe_learn_kind(command: str, body) -> str | None:
     """레시피를 배울 수 있는 명령인가. 제작은 1회일 때만, 가공은 큐에 올리는 순간 재료가 빠진다."""
     if command == "execute_crafting":

@@ -1537,7 +1537,6 @@ function wire() {
   $('#dye-preset').addEventListener('change', async (e) => {
     dyeUI.prefs = await mm.dye.select(e.target.value);
     paintDyeSlots();
-    dyeUI.sig = null;
   });
   $('#dye-new').addEventListener('click', async () => {
     const name = await promptText('새 색 조합', '이름을 정하세요', '내 색');

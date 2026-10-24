@@ -32,11 +32,6 @@ def _read(f: Path) -> dict | None:
         return None  # 없거나 깨졌으면 없는 것으로 친다. 앱은 계속 돌아야 한다
 
 
-def fits_into(a: dict, b: dict) -> bool:
-    """a 가 b 의 부분집합이고 겹치는 값이 전부 같은가"""
-    return all(k in b and b[k] == a[k] for k in a)
-
-
 def compatible(a: dict, b: dict) -> bool:
     """겹치는 재료의 요구량이 전부 같은가. 겹치는 것이 없으면 True"""
     return all(k not in b or b[k] == a[k] for k in a)

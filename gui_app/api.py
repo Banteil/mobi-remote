@@ -30,7 +30,6 @@ from mabi.connector import ACTION_COMMANDS, EXE_NAME, Connector
 from mabi.craft import goal, plan
 from mabi.craft import queue as craft_queue
 from mabi.craft.execute import execute
-from mabi.craft.recipebook import merge_rows
 from mabi.dye.presets import PresetStore
 from mabi.nudge import CursorNudge
 from mabi.store import Favorites, Playlists
@@ -324,22 +323,12 @@ class Api(DailyApi, CharsApi, QueueApi):
     def kn_get(self):
         return self.cd.knowledge.load()
 
-    def kn_setSlots(self, facility, slots):  # noqa: N802
-        return self.cd.knowledge.set_facility_slots(facility, slots)
-
     def kn_setLevel(self, facility, level):  # noqa: N802
         return self.cd.knowledge.set_facility_level(facility, level)
 
     def kn_rules(self):
         """레벨별 칸 수 표. 화면이 레벨 선택지를 만들 때 쓴다."""
         return {"altering": self.cd.rules.altering_facility(), "fallback": self.cd.rules.is_fallback()}
-
-    def kn_markFull(self, facility, used):  # noqa: N802
-        return self.cd.knowledge.learn_facility_full(facility, used)
-
-    def kn_forgetRecipe(self, name):  # noqa: N802
-        """관측은 틀릴 수 있다 — 잘못 배운 레시피는 사용자가 지울 수 있어야 한다."""
-        return self.cd.knowledge.forget_recipe(name)
 
     # ---------------------------------------------------------------- 목표·계획 (전부 무료 조회)
     def goal_next(self, name, target):
@@ -465,11 +454,6 @@ class Api(DailyApi, CharsApi, QueueApi):
         r = self._loc(True)
         return {"canceled": False, "ok": r["found"], "path": r["path"], "source": r["source"]}
 
-    def cli_clearPath(self):  # noqa: N802
-        self._save_settings({"cliPath": "", "cli_path": ""})
-        r = self._loc(True)
-        return {"path": r["path"], "source": r["source"], "found": r["found"]}
-
     # ---------------------------------------------------------------- 염색 도우미 (CLI 와 무관 — 화면 픽셀만 읽는다)
     def dye_prefs(self):
         return self.dye.load()
@@ -497,19 +481,6 @@ class Api(DailyApi, CharsApi, QueueApi):
 
     def dye_stop(self):
         return self.dyes.stop() if self.dyes else {"ok": True}
-
-    # 레거시는 화면(렌더러)이 캡처·검출하고 이걸로 덧창을 그렸다. 이제 DyeService 가 직접 그리므로 빈 자리만 둔다
-    def dye_source(self):
-        return None
-
-    def dye_protect(self, on=False):
-        return None
-
-    def dye_draw(self, payload=None):
-        return None
-
-    def dye_hide(self):
-        return None
 
     def _grab(self, with_overlay: bool):
         """주 모니터 한 장. 레거시는 리모콘 창을 잠깐 숨겼지만(Electron 캡처는 제외가 안 들었다) mss(BitBlt)에는
@@ -590,27 +561,6 @@ class Api(DailyApi, CharsApi, QueueApi):
                 w.resize(max(nxt, w.minimumWidth()), w.height())
             return w.width()
         return self._on_gui(go)
-
-    # ---------------------------------------------------------------- 레시피 장부 (조회뿐이라 공짜)
-    def book_stats(self):
-        return self.cd.recipebook.stats()
-
-    def book_harvest(self):
-        """게임이 알려 준 재료(만들 수 없는 레시피의 MissingIngredients)를 긁어모은다."""
-        recipes = copy.deepcopy(self.cd.recipebook.load()["recipes"])  # 캐시를 건드리지 않는다
-        known = self.cd.knowledge.load().get("recipes") or {}
-        totals = {"rows": 0, "named": 0, "lines": 0, "newNames": 0, "newVariants": 0, "completed": 0}
-        for command, via, ok_key, per_key in (("get_craftable_items", "craft", "Craftable", "ProducedPerCraft"),
-                                              ("get_alterable_items", "alter", "Alterable", "ProducedPerWork")):
-            r = self.cli.run(command)
-            if not r.ok:
-                return {"error": r.error or "query_failed", "message": r.message}
-            rows = (r.data or {}).get("items") or [] if isinstance(r.data, dict) else []
-            s = merge_rows(recipes, rows, via, ok_key, per_key, known)
-            for k in totals:
-                totals[k] += s.get(k, 0)
-        self.cd.recipebook.save_user(recipes)
-        return {"ok": True, **totals, **self.cd.recipebook.stats()}
 
     # ---------------------------------------------------------------- 작업 큐 기록 (큐 자체는 queue_api)
     def queue_history(self, limit=300):
@@ -815,12 +765,6 @@ class Api(DailyApi, CharsApi, QueueApi):
             return True
         except OSError:
             return False
-
-    # ---------------------------------------------------------------- 외부 링크
-    def openExternal(self, url):  # noqa: N802
-        if isinstance(url, str) and re.match(r"^https?://", url):
-            webbrowser.open(url)
-        return None
 
 
 def _base36(n: int) -> str:

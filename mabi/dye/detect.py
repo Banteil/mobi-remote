@@ -74,11 +74,6 @@ def rgb_to_hex(r, g, b) -> str:
     return "#" + "".join(f"{max(0, min(255, int(v))):02X}" for v in (r, g, b))
 
 
-def delta_e(a, b) -> float:
-    """CIE76. 2 이하 거의 구분 못 함, 5 이하 비슷, 10 넘으면 다른 색."""
-    return math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2)
-
-
 @dataclass
 class Target:
     hex: str

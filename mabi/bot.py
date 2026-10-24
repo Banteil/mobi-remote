@@ -189,13 +189,6 @@ class Bot:
     def wait(self, name: str, timeout: float = 10, interval: float = 0.4) -> Match:
         return self.wait_any([name], timeout, interval)
 
-    def wait_gone(self, name: str, timeout: float = 10, interval: float = 0.4) -> None:
-        end = time.monotonic() + timeout
-        while self.exists(name):
-            if time.monotonic() > end:
-                raise StepTimeout(f"{timeout:.0f}s 동안 '{name}' 이 사라지지 않음")
-            self.sleep(interval)
-
     def read_counter(self, name: str) -> int | None:
         """재화 현재값 (예: 'silver', 'tribute'). CLI 조회가 안 되면 HUD 숫자를 판독한다."""
         if self.state.available():

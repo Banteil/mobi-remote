@@ -37,7 +37,3 @@ class FacilityMap:
 
     def size(self) -> int:
         return len(self.load()["recipes"])
-
-    def is_broken(self) -> bool:
-        self.load()
-        return self._broken

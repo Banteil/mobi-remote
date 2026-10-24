@@ -243,7 +243,6 @@ craft_make = "craft_make"             # 설비 앞 제작 창의 '제작하기' 
 craft_short_toast = "toast_no_material"  # 제작 버튼을 눌렀는데 재료가 모자라면 화면 위에 뜨는 '재료가 부족합니다.'
 craft_transfer = "craft_transfer_title"  # '재료를 전송하시겠습니까?' (모자란 재료를 보관함에서) → 확인(Space)
 alter_button = "alter_button"         # 가공 시설 창의 '가공하기' — 가공이 필요한 일은 시간이 걸려 건너뜀
-craft_material_area = [1200, 620, 720, 170]  # '제작하러 가기' 화면의 필요한 재료 칸 [x, y, w, h]
 item_missing = "item_missing"         # '퀘스트를 위해 필요한 아이템이 없습니다.' 창 제목
 item_row_from_title = [170, 147]      # 그 제목 템플릿 왼쪽 위 → 첫 물품 줄 가운데 (누르면 '구하는 방법' 이 열린다)
 howto_title = "howto_title"           # '구하는 방법' 창 제목

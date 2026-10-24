@@ -69,10 +69,6 @@ class GameRules:
                 return lv
         return None
 
-    def min_slots(self) -> int:
-        """레벨 1의 칸 수. 아무것도 모를 때의 안전한 기본값."""
-        return self.slots_for_level(1)
-
     def max_level(self) -> int:
         return int(self.altering_facility()["maxLevel"])
 

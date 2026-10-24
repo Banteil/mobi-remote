@@ -5,12 +5,10 @@
 config.toml(숙제 설정, 주석을 살리려고 tomlkit)에 저장한다.
 """
 import base64
-import ctypes
 import json
 import logging
 import os
 import threading
-import time
 
 import tomlkit
 

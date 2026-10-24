@@ -216,22 +216,6 @@ class Knowledge:
             e["updatedAt"] = now_iso()
             return self.save(state)
 
-    def facility_level_auto(self, facility: str, state: dict | None = None) -> bool:
-        """막혀서 자동으로 정해진 레벨인가 (화면에 "직접 지정"과 구분해 적을 때)"""
-        e = (state or self.load())["facilities"].get(facility)
-        return bool(e and e.get("autoLevel"))
-
-    def set_facility_slots(self, facility: str, slots) -> dict:
-        """사용자가 칸 수를 직접 지정한다 (레벨 기능 전의 방식)."""
-        with self._lock:
-            state = self.load()
-            e = self._facility_entry(state, facility)
-            ok = _gt(slots, 0)
-            e["maxSlots"] = slots if ok else None
-            e["manual"] = ok
-            e["updatedAt"] = now_iso()
-            return self.save(state)
-
     def facility_slots(self, facility: str, state: dict | None = None) -> dict:
         """이 시설의 칸 수. 사용자 레벨 > 직접 입력 칸 수 > 꽉 참 관측 > 기본값(최고 레벨).
         {slots, source, level, levelSet?}"""
@@ -435,16 +419,6 @@ class Knowledge:
     def recipe(self, name, state: dict | None = None) -> dict | None:
         return (state or self.load())["recipes"].get(name)
 
-    def recipe_materials(self, name, state: dict | None = None, have: Callable | None = None) -> list[str]:
-        """이 레시피에 드는 재료 이름 전부 (개수는 모를 수 있다). 자동으로 못 구하는 재료를 미리 알리는 데 쓴다."""
-        mine = self.recipe(name, state)
-        if recipe_is_complete(mine):
-            return list(mine["ingredients"])
-        b = self.book.pick(name, have)
-        if b:
-            return list(b["ingredients"])
-        return list(mine["ingredients"]) if mine and mine.get("ingredients") else []
-
     def recipe_ingredients(self, name, state: dict | None = None, have: Callable | None = None) -> dict | None:
         """1회분 재료를 가장 믿을 만한 곳에서. 직접 만들어 알아낸 값 > 레시피 장부 > partial.
         장부에는 이름만 아는 재료(개수 None)가 섞여 있어, 계산엔 개수를 아는 것만 넘기고 이름은 따로 준다.
@@ -463,13 +437,6 @@ class Knowledge:
             return {"ingredients": mine["ingredients"], "complete": False, "source": "partial", "variants": 1}
         return None
 
-    def forget_recipe(self, name) -> dict:
-        """잘못 배운 것을 지운다. 관측은 틀릴 수 있다."""
-        with self._lock:
-            state = self.load()
-            state["recipes"].pop(name, None)
-            return self.save(state)
-
     # ---------------------------------------------------------------- 레시피 → 산출물
     # 응답 어디에도 "이 레시피가 무엇을 만드는가" 필드가 없다 (가공 91종 중 8종이 산출물(원료) 꼴).
     # 괄호를 벗겨 추측하되, 수령 보상으로 실제로 보면 그쪽으로 확정한다.
@@ -477,10 +444,6 @@ class Knowledge:
         s = state or self.load()
         e = (s.get("recipeProduct") or {}).get(recipe_name)
         return e["item"] if e else guess_product(recipe_name)
-
-    def product_is_observed(self, recipe_name, state: dict | None = None) -> bool:
-        s = state or self.load()
-        return bool((s.get("recipeProduct") or {}).get(recipe_name))
 
     def learn_product(self, recipe_name, item) -> dict:
         if not recipe_name or not item:

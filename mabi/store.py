@@ -5,7 +5,6 @@
 import json
 import os
 import shutil
-import time
 from pathlib import Path
 
 REMOTE = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "mobi-remote"
@@ -53,14 +52,6 @@ class Playlists(JsonStore):
         self.save(d)
         return item
 
-    def create(self, name: str) -> dict:
-        d = self.load()
-        item = {"id": "pl" + format(int(time.time() * 1000), "x"), "name": (name or "새 재생목록")[:40],
-                "tracks": [], "loop": False, "shuffle": False}
-        d.setdefault("lists", []).append(item)
-        self.save(d)
-        return item
-
     def remove(self, pid: str) -> None:
         d = self.load()
         d["lists"] = [x for x in d.get("lists", []) if x["id"] != pid]
@@ -69,14 +60,8 @@ class Playlists(JsonStore):
     def rename(self, pid, name):
         return self._edit(pid, lambda x: x.update(name=name[:40]))
 
-    def set_flags(self, pid, **flags):
-        return self._edit(pid, lambda x: x.update({k: bool(v) for k, v in flags.items()}))
-
     def add(self, pid, title):
         return self._edit(pid, lambda x: title in x["tracks"] or x["tracks"].append(title))
-
-    def remove_track(self, pid, i):
-        return self._edit(pid, lambda x: 0 <= i < len(x["tracks"]) and x["tracks"].pop(i))
 
     def move(self, pid, i, delta):
         def mv(x):
@@ -95,14 +80,3 @@ class Favorites(JsonStore):
 
     def get(self, kind: str) -> set[str]:
         return set(self.load().get(kind, []))
-
-    def toggle(self, kind: str, key: str) -> bool:
-        d = self.load()
-        cur = d.setdefault(kind, [])
-        on = key not in cur
-        if on:
-            cur.append(key)
-        else:
-            cur.remove(key)
-        self.save(d)
-        return on

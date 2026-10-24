@@ -41,7 +41,3 @@ class GameState:
     def activity(self) -> dict | None:
         data = self.query("get_activity")
         return data if isinstance(data, dict) else None
-
-    def daily_missions(self) -> list[dict] | None:
-        data = self.query("get_daily_missions")
-        return data if isinstance(data, list) else None

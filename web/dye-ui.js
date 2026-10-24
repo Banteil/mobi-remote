@@ -6,35 +6,16 @@
 /**
  * 게임 화면을 읽어 원하는 색이 팔레트 어디에 있는지 짚어 준다.
  *
- * ── 리모콘의 다른 기능과 다른 점 ────────────────────────────
  * 커넥터를 전혀 쓰지 않는다. 화면 픽셀만 읽고 게임에는 아무것도 보내지 않으며,
  * 찍는 것은 사람이 찍는다. 정령의 날개도 들지 않는다.
- *
- * ── 왜 여기(렌더러)에서 계산하나 ────────────────────────────
- * 화면 한 장이 8MB 다. 메인으로 넘겨 계산하면 초당 몇 장도 못 보낸다.
- * 그래서 픽셀이 있는 이 자리에서 dye.js 로 계산하고, 결과(점 세 개)만 메인에 넘긴다.
- *
- * ── 언제 다시 훑나 ──────────────────────────────────────────
- * 소용돌이는 사용자가 끌거나 돌리거나 확대할 때만 바뀐다. 그래서 초당 몇 번씩 전부
- * 훑지 않고, **격자 몇백 점으로 지문을 떠서 달라졌을 때만** 다시 찾는다 (1ms 미만).
+ * 화면 읽기·판정은 파이썬(gui_app/dye_service.py · mabi/dye)이 하고, 여기는 프리셋 편집과
+ * 한 바퀴마다 오는 결과('mm:dye-state')를 그리기만 한다.
  */
 
 const dyeUI = {
   on: false,
-  stream: null,
-  timer: null,
-  video: null,
-  canvas: null,
-  ctx: null,
-  box: null,         // 찾아 둔 팔레트 (캡처 좌표)
-  lead: null,        // 찾아 둔 색 선택 UI — 자리는 붙박이라 한 번만 찾는다
-  bands: null,       // 파트별로 색을 고를 수 있는 가로 범위 (염색 타입이 다르면 갈린다)
-  doneSeen: 0,       // 확정 화면을 몇 바퀴 이어서 봤나
-  sig: null,         // 마지막 지문
-  scale: 1,          // 캡처 → 화면 좌표 배율
-  origin: { x: 0, y: 0 },
+  box: null,        // 파이썬이 찾아 둔 팔레트 (상태 표시용)
   prefs: null,
-  misses: 0,
 };
 
 function dyeCurrent() {
@@ -192,12 +173,14 @@ async function stopDye() {
 function onDyeState(m) {
   if (!m) return;
   if (m.stopped) {
-    if (dyeUI.on) { dyeUI.on = false; paintDyeState(); paintDyePreview(null); }
+    if (dyeUI.on) { dyeUI.on = false; dyeUI.box = null; paintDyeState(); paintDyePreview(null); }
     return;
   }
   if (m.error) { say('염색 검출 오류: ' + m.error); return; }
   paintDyePreview(m.payload);
   paintDyeInfo(m.info && m.info.box ? m.info : null);
+  const box = (m.info && m.info.box) || null;
+  if (!box !== !dyeUI.box) { dyeUI.box = box; paintDyeState(); }  // '팔레트 찾음' ↔ '기다리는 중'
   if (m.done) {
     dyeUI.on = false;
     paintDyeState();
@@ -572,7 +555,6 @@ async function setDyeColor(slot, hex) {
   colors[slot] = hex;
   dyeUI.prefs = await mm.dye.update(cur.id, { colors: colors });
   paintDyeSlots();
-  dyeUI.sig = null;   // 목표가 바뀌었으니 다음 바퀴에 다시 찾는다
 }
 
 async function setDyeTol(slot, v) {
@@ -581,5 +563,4 @@ async function setDyeTol(slot, v) {
   const tol = (cur.tol || [5, 5, 5]).slice();
   tol[slot] = Number(v);
   dyeUI.prefs = await mm.dye.update(cur.id, { tol: tol });
-  dyeUI.sig = null;
 }

@@ -32,25 +32,6 @@ def fingerprint(info: dict | None) -> dict | None:
             "decor": v("DecorScore")}
 
 
-def similarity(a: dict, b: dict) -> float:
-    """0..1. 서버가 다르면 0."""
-    if a.get("realm") and b.get("realm") and a["realm"] != b["realm"]:
-        return 0.0
-    got = total = 0.0
-    for k, w in EXACT:
-        if k == "title" and not (a.get(k) or b.get(k)):
-            continue  # 둘 다 타이틀이 없으면 판단 재료가 아니다
-        total += w
-        got += w if a.get(k) == b.get(k) else 0
-    for k, w, tol in NUMERIC:
-        x, y = a.get(k), b.get(k)
-        if x is None or y is None:
-            continue
-        total += w
-        got += w * max(0.0, 1 - abs(x - y) / max(1, abs(y)) / tol)
-    return got / total if total else 0.0
-
-
 class Characters:
     """data/characters.json: {"slots": {"1": {"fp": {...}, "seen": "..."}}}"""
 
@@ -86,35 +67,3 @@ class Characters:
             e = d["slots"].setdefault(str(slot), {})
             e["card"] = {"level": level, "job": job}
             self._save(d)
-
-    def consistent(self, slot: int, fp: dict) -> bool:
-        """이 슬롯 카드에서 읽어 둔 직업·레벨과 지금 값이 맞는지 (모르면 True). 접속 직후 커넥터가 이전 캐릭터
-        정보를 잠깐 돌려주거나 엉뚱한 캐릭터로 들어갔을 때 그 값을 이 슬롯으로 기억하지 않으려고."""
-        card = (self.load()["slots"].get(str(slot)) or {}).get("card") or {}
-        if card.get("job") and fp.get("job") and card["job"] != fp["job"]:
-            return False
-        return not (card.get("level") and fp.get("level") and int(card["level"]) > int(fp["level"]))
-
-    def forget(self, slot: int) -> None:
-        with self._lock:
-            d = self.load()
-            if d["slots"].pop(str(slot), None) is not None:
-                self._save(d)
-
-    def identify(self, fp: dict | None, slots: list[int] | None = None) -> dict:
-        """{slot, score, sure, ranks:[(slot, score)]}. slots 를 주면 그 슬롯들 안에서만 고른다."""
-        if not fp:
-            return {"slot": None, "score": 0, "sure": False, "ranks": []}
-        known = self.load()["slots"]
-        ranks = sorted(((int(s), round(similarity(fp, e["fp"]), 3)) for s, e in known.items()
-                        if e.get("fp") and (slots is None or int(s) in slots)), key=lambda r: -r[1])
-        if not ranks:
-            return {"slot": None, "score": 0, "sure": False, "ranks": []}
-        best = ranks[0]
-        if best[1] < MIN_SCORE:
-            return {"slot": None, "score": best[1], "sure": False, "ranks": ranks}
-        gap = best[1] - (ranks[1][1] if len(ranks) > 1 else 0)
-        # 생활력·매력·데코는 계정 공용일 수 있어 직업이 다르면 확실하다고 하지 않는다
-        same_job = (known[str(best[0])]["fp"].get("job") or "") == (fp.get("job") or "")
-        return {"slot": best[0], "score": best[1], "sure": best[1] >= SURE_SCORE and gap >= SURE_GAP and same_job,
-                "ranks": ranks}

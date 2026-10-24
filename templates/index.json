@@ -7,14 +7,6 @@
       32
     ]
   },
-  "alchemy_auto_on": {
-    "roi": [
-      318,
-      785,
-      195,
-      32
-    ]
-  },
   "alchemy_gem_card": {
     "roi": [
       450,
@@ -222,18 +214,7 @@
   },
   "field_recommend": {},
   "field_recommend_thumb": {},
-  "food_label_snack": {},
-  "food_tab_on": {
-    "roi": [
-      1495,
-      150,
-      58,
-      34
-    ]
-  },
-  "food_use": {},
   "guide_card_blackhole": {},
-  "guide_card_weekday": {},
   "guide_daily_blackhole": {},
   "guide_daily_weekday": {},
   "guide_go": {},
@@ -281,44 +262,12 @@
       44
     ]
   },
-  "map_label_fiod": {
-    "roi": [
-      396,
-      605,
-      94,
-      22
-    ]
-  },
-  "map_label_pale": {
-    "roi": [
-      710,
-      808,
-      98,
-      42
-    ]
-  },
-  "map_label_runda": {
-    "roi": [
-      734,
-      718,
-      76,
-      22
-    ]
-  },
   "map_open": {
     "roi": [
       1374,
       1012,
       60,
       36
-    ]
-  },
-  "map_ulla": {
-    "roi": [
-      34,
-      30,
-      150,
-      30
     ]
   },
   "menu_quit": {
@@ -581,9 +530,6 @@
     "threshold": 0.75
   },
   "craft_make": {
-    "threshold": 0.75
-  },
-  "npc_report": {
     "threshold": 0.75
   },
   "npc_space_option": {

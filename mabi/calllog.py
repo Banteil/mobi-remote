@@ -5,7 +5,6 @@ logs\\connector-YYYY-MM-DD.log 한 줄씩. 14일 지나면 지우고, 5MB 를 �
 """
 import json
 import threading
-import time
 from collections import deque
 from datetime import datetime, timedelta
 from pathlib import Path

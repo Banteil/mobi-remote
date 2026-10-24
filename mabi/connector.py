@@ -163,10 +163,6 @@ class Connector:
         self._located = Located(EXE_NAME, "PATH (탐색 실패)", False, tried)
         return self._located
 
-    def candidate_report(self) -> list[tuple[str, str, bool]]:
-        """어디를 어떤 순서로 봤는지 (커넥터를 못 찾을 때 진단용). 탐색과 같은 생성기를 쓴다."""
-        return [(p, s, os.path.exists(p)) for p, s in candidates(self._configured())]
-
     # ---- 호출 ----
     @staticmethod
     def encode_body(body) -> str | None:

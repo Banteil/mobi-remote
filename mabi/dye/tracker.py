@@ -73,10 +73,6 @@ class DyeTracker:
         # 켜자마자는 아무것도 안 그린다 (JS 도 첫 draw 전까지 오버레이가 숨어 있다)
         self.last = DyeState("waiting", hidden=True)
 
-    @property
-    def phase(self) -> str:
-        return "done" if self.done else ("active" if self.box else "waiting")
-
     def set_targets(self, colors, tols=None) -> None:
         """현재 프리셋의 색 세 칸. 빈 칸·잘못된 값은 계산에서 빠지지만 칸 번호(=표시 색)는 그대로 둔다.
         리모콘(app.js:3086)은 남은 것끼리 번호를 다시 매겨 1번이 비면 2번 색이 1번 색으로 그려졌다.

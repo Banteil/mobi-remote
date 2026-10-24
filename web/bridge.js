@@ -70,8 +70,7 @@
 
     log: { tail: c('log.tail'), files: c('log.files'), open: c('log.open') },
     knowledge: {
-      get: c('kn.get'), setSlots: c('kn.setSlots'), setLevel: c('kn.setLevel'), rules: c('kn.rules'),
-      markFull: c('kn.markFull'), forgetRecipe: c('kn.forgetRecipe'),
+      get: c('kn.get'), setLevel: c('kn.setLevel'), rules: c('kn.rules'),
     },
     cfg: { get: c('cfg.get'), sort: c('cfg.sort'), theme: c('cfg.theme'), set: c('cfg.set') },
     goal: { next: c('goal.next') },
@@ -81,7 +80,7 @@
     },
     planCraft: c('plan.craft'),
     planNeeds: c('plan.needs'),
-    cli: { locate: c('cli.locate'), choose: c('cli.choose'), clearPath: c('cli.clearPath') },
+    cli: { locate: c('cli.locate'), choose: c('cli.choose') },
     dye: {
       prefs: c('dye.prefs'), add: c('dye.add'), update: c('dye.update'), remove: c('dye.remove'), select: c('dye.select'),
       // 레거시는 화면(렌더러)이 캡처·검출을 했다. 이제 파이썬이 하고 결과만 mm:dye-state 로 보낸다
@@ -94,7 +93,6 @@
     },
     cursorNudge: c('cursor.nudge'),
     win: { narrow: c('win.narrow') },
-    book: { stats: c('book.stats'), harvest: c('book.harvest') },
     // 작업 큐 — 주인은 파이썬 (mabi/workqueue.py). 화면은 상태를 받아 그리고 버튼만 보낸다
     queue: {
       state: c('queue.state'), add: c('queue.add'), remove: c('queue.remove'), move: c('queue.move'),
@@ -107,7 +105,6 @@
     fav: { all: c('fav.all'), toggle: c('fav.toggle'), clear: c('fav.clear') },
     version: { info: c('version.info'), check: c('version.check'), accept: c('version.accept') },
     cache: { list: c('cache.list'), clear: c('cache.clear') },
-    openExternal: c('openExternal'),
 
     // 일일 숙제 (파이썬판에서 새로 생긴 것)
     daily: {

@@ -52,8 +52,3 @@ def segments(s) -> list[tuple[str, str | None]]:
     push(s[last:])
     return [tuple(x) for x in out] or [("", None)]
 
-
-def to_html(s) -> str:
-    """Qt 서식 글자(QLabel 등)용. 글자는 이스케이프한다."""
-    import html
-    return "".join(f'<span style="color:{c}">{html.escape(t)}</span>' if c else html.escape(t) for t, c in segments(s))
