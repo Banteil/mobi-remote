@@ -114,7 +114,8 @@ class DailyApi:
             if any(s == "STOP" for _, s, _ in results or []) and not self._daily_end:
                 log.info("일시정지 — F12 를 다시 누르면 이어 합니다")
                 self._emit("mm:daily", {"type": "paused"})
-                self._daily_wait_resume(on_resume)
+                if on_resume:
+                    self._daily_wait_resume(on_resume)
             elif not any(s == "STOP" for _, s, _ in results or []):
                 self._bring_front()  # 끝까지 돌았다 → 결과 창(화면이 'done' 에 띄움)이 게임 위로 보이게
         self._daily_thread = threading.Thread(target=work, name="daily", daemon=True)

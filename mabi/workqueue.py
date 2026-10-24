@@ -89,11 +89,14 @@ class RemoteKind(Kind):
 class WorkQueue:
     def __init__(self, file: Path, history_file: Path, emit: Callable[[str, object], None],
                  kinds: dict[str, Kind], default_kind: str = "goal",
-                 on_start: Callable[[], None] | None = None, on_drained: Callable[["WorkQueue"], None] | None = None):
-        """on_start() 큐가 돌기 시작할 때 · on_drained(q) 할 일이 다 끝났을 때 (일시정지 카드도 없음)."""
+                 on_start: Callable[[], None] | None = None, on_drained: Callable[["WorkQueue"], None] | None = None,
+                 on_idle: Callable[["WorkQueue"], None] | None = None):
+        """on_start() 큐가 돌기 시작할 때 · on_drained(q) 할 일이 다 끝났을 때 (일시정지 카드도 없음) ·
+        on_idle(q) 큐가 쉬게 됐을 때 (멈췄거나 다 끝남 — 일시정지 카드의 F12 이어 하기를 켜는 등)."""
         self.file, self.history_file, self.emit = file, history_file, emit
         self.kinds, self.default_kind = kinds, default_kind
         self.on_start, self.on_drained = on_start or (lambda: None), on_drained or (lambda q: None)
+        self.on_idle = on_idle or (lambda q: None)
         self.lock = threading.RLock()
         self.items: list[dict] = []
         self.running = False
@@ -385,3 +388,8 @@ class WorkQueue:
                 except Exception:  # noqa: BLE001
                     log.exception("작업 큐 끝 처리 실패")
                 self.session = {}
+            if not restart:
+                try:
+                    self.on_idle(self)
+                except Exception:  # noqa: BLE001
+                    log.exception("작업 큐 쉼 처리 실패")
