@@ -190,12 +190,19 @@ function needsHtml(p) {
   const dur = (s) => s == null ? '?' :
     s >= 3600 ? Math.floor(s / 3600) + '시간' + (s % 3600 ? ' ' + Math.round((s % 3600) / 60) + '분' : '') :
     s >= 60 ? Math.round(s / 60) + '분' : s + '초';
+  const fac = (f) => esc(String(f || '').replace(' 가공 시설', '').replace(' 제작대', ''));
   const out = [];
+  const c = p.calls || {};
+
+  // 레시피 표로 끝까지 센 값이라 날개도 미리 안다 (채집·가공·제작 호출마다 5)
+  out.push('<p><b>정령의 날개 ' + num(p.wings || 0) + '</b> <span class="muted">— 채집 ' + (c.gather || 0) +
+    '번 · 가공 ' + (c.alter || 0) + '번 · 제작 ' + (c.craft || 0) + '번</span></p>');
 
   if (p.blocked && p.blocked.length) {
-    out.push('<p class="mark-warn">시설 레벨이 모자랍니다 — ' +
-      p.blocked.map((b) => esc(b.product) + ' ' + esc(b.facility.replace(' 가공 시설', '')) +
-        ' Lv.' + b.needLevel + ' (지금 ' + (b.haveLevel == null ? '모름' : 'Lv.' + b.haveLevel) + ')').join(', ') + '</p>');
+    out.push('<p class="mark-warn">지금은 못 돌리는 단계 — ' +
+      p.blocked.map((b) => esc(b.recipe) + ' (' + fac(b.facility) + ' Lv.' + b.needLevel +
+        (b.haveLevel != null ? ', 지금 Lv.' + b.haveLevel : '') +
+        (b.skill ? ' · ' + esc(b.skill) + ' Lv.' + b.skillLevel : '') + ')').join(', ') + '</p>');
   }
 
   if (p.gather && p.gather.length) {
@@ -211,26 +218,38 @@ function needsHtml(p) {
   }
 
   if (p.missing && p.missing.length) {
-    out.push('<p class="mark-warn">채집으로도 못 구하는 것 — ' +
-      p.missing.map((m) => esc(m.name) + ' ' + m.need).join(', ') + '</p>');
+    const why = { quest: '퀘스트 아이템', tool: '채집 도구 없음' };
+    out.push('<p class="mark-warn">직접 구해야 하는 것 — ' +
+      p.missing.map((m) => esc(m.name) + ' ' + num(m.need) +
+        (why[m.reason] ? ' <span class="muted">(' + why[m.reason] + ')</span>' : '')).join(', ') + '</p>');
   }
 
   if (p.steps && p.steps.length) {
-    out.push('<h4 class="mt10">가공 차례 <small>' + p.totalRuns + '회</small></h4>');
+    // 재료 단계가 깊은 것부터 — 이 차례로 만들면 재료가 먼저 생긴다
+    out.push('<h4 class="mt10">만드는 차례 <small>' + p.totalRuns + '회</small></h4>');
     out.push('<ol class="plan-steps">' + p.steps.map((s) =>
-      '<li>' + esc(s.recipe) + ' <b>x' + s.runs + '</b> <span class="muted">' +
-      esc(s.facility.replace(' 가공 시설', '')) + ' Lv.' + s.level + ' · ' + dur(s.sec) + '</span>' +
-      (s.ambiguous ? ' <span class="muted">갈래 둘 · 첫 줄</span>' : '') + '</li>').join('') + '</ol>');
+      '<li>' + (s.via === 'alter' ? '가공 ' : '제작 ') + esc(s.recipe) + ' <b>x' + s.runs + '</b>' +
+      (s.via === 'craft' && s.calls > 1 ? ' <span class="muted">(' + s.calls + '번에 나눠)</span>' : '') +
+      ' <span class="muted">' + fac(s.facility) + ' Lv.' + s.level +
+      (s.skill ? ' · ' + esc(s.skill) + ' Lv.' + s.skillLevel : '') +
+      (s.via === 'alter' ? ' · ' + dur(s.sec) : '') + '</span>' +
+      (s.ambiguous ? ' <span class="muted">같은 이름 · 첫 줄</span>' : '') + '</li>').join('') + '</ol>');
+  }
+
+  if (p.fromStock && p.fromStock.length) {
+    out.push('<p class="hint">가진 것에서 쓰는 것 — ' +
+      p.fromStock.map((x) => esc(x.name) + ' ' + num(x.use)).join(', ') + '</p>');
   }
 
   const t = p.time || {};
-  out.push('<p class="hint">가공에 걸리는 시간 — 한 칸으로 줄줄이 돌리면 ' + dur(t.serial) +
-    (t.parallel != null ? ', 칸을 나눠 쓰면 대략 ' + dur(t.parallel) : '') + '</p>');
+  if (t.serial) {
+    out.push('<p class="hint">가공에 걸리는 시간 — 한 칸으로 줄줄이 돌리면 ' + dur(t.serial) +
+      (t.parallel != null ? ', 칸을 나눠 쓰면 대략 ' + dur(t.parallel) : '') + '</p>');
+  }
 
   if (p.ambiguous && p.ambiguous.length) {
-    out.push('<p class="hint"><b>갈래 둘 · 첫 줄</b>로 표시된 것은 게임이 두 조합을 ' +
-      '<b>같은 이름</b>으로 내놓는 레시피입니다. 시키면 언제나 <b>낮은 레벨 쪽</b>이 도는 것을 ' +
-      '확인했으므로, 계획도 그쪽으로 세웠습니다 — ' + p.ambiguous.map(esc).join(', ') + '</p>');
+    out.push('<p class="hint"><b>같은 이름 · 첫 줄</b>로 표시된 것은 게임에 같은 이름의 레시피가 여럿인 것입니다. ' +
+      '시키면 언제나 목록의 첫 줄이 돌아서 계획도 그쪽으로 세웠습니다 — ' + p.ambiguous.map(esc).join(', ') + '</p>');
   }
   return out.join('');
 }
@@ -245,20 +264,13 @@ async function makePlan(name, label) {
   );
   if (!target) return;
 
-  // 가공 재료표에 있는 것이면 사슬 끝까지 미리 보여 준다. 전부 무료 조회라 공짜다.
-  //
-  // 표는 **산출물 이름**으로 적혀 있고 게임은 "철괴(광석)" 처럼 재료를 괄호로 붙여
-  // 부른다. 어느 쪽인지 미리 알 수 없으므로 둘 다 넣어 보고 되는 쪽을 쓴다.
+  // 레시피 표(게임 데이터)로 사슬 끝까지 미리 보여 준다. 전부 무료 조회라 공짜다.
+  // 레시피 이름(철괴(광석))이든 산출물 이름이든 받는다.
   say('필요량 계산 중…');
   let deep = null;
   const bare = String(name).replace(/<[^>]*>/g, '').trim();
-  const par = /^(.*?)\s*\((.+)\)$/.exec(bare);
-  for (const cand of [bare, par && par[1].trim()]) {
-    if (!cand) continue;
-    try { deep = await mm.planNeeds(cand, target, { refresh: true }); } catch (_) { deep = null; }
-    if (deep && deep.ok) break;
-    deep = null;
-  }
+  try { deep = await mm.planNeeds(bare, target, { refresh: true }); } catch (_) { deep = null; }
+  if (deep && !deep.ok) deep = null;
   if (deep) {
     const go = await confirmModal(
       esc(label || name) + ' ' + target + '개 — 필요량',
@@ -612,7 +624,7 @@ function paintAlterFacilities() {
 /**
  * 필요 시설 레벨로 고르는 칸을 채운다.
  *
- * 레벨은 게임이 알려주지 않아 가공 재료표에서 온다. 표에 없는 레시피는 레벨을 모르므로
+ * 레벨은 게임이 알려주지 않아 레시피 표에서 온다. 표에 없는 레시피는 레벨을 모르므로
  * 따로 묶어 둔다 — 안 보이게 숨기면 "없어진 줄" 알게 된다.
  */
 function paintAlterLevels() {

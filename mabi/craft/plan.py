@@ -3,14 +3,16 @@
 N 은 보유량을 뺀 수가 아니라 "새로 만들 개수"다 (못 400개를 들고 600개 더 만들려면 1000을 적어야 했던 문제).
 제작과 가공은 같은 모양이고(Craftable/ProducedPerCraft ↔ Alterable/ProducedPerWork), 다른 점은 가공은 레시피 이름이
 산출물 이름이 아니라는 것 — 보유량은 산출물 이름으로 세야 한다.
-Required 는 1회 제작당 소모량이다 (실측: 못 1회 = 철괴 2 → 못 10). 총량 = Required × ceil(목표 / 산출량).
-게임은 제작 불가능한 레시피에만, 그것도 가방 기준 모자란 재료만 MissingIngredients 로 준다.
+Required 는 1회 제작당 소모량이다 (실측: 못 1회 = 철괴 2 → 못 10). 총량 = 1회분 × ceil(목표 / 산출량).
+
+재료는 레시피 표(recipes.json — 게임 데이터)에서 온다. 게임은 만들 수 없는 레시피에만, 그것도 가방 기준 모자란 재료만
+MissingIngredients 로 주므로, 표에 없는 레시피(패치로 새로 생긴 것)만 그 부족분과 직접 만들어 알아낸 값으로 센다.
 """
 import math
 
 from .. import gamedata as gd, richtext
 from ..cache import QueryCache
-from . import needs
+from . import goal, needs
 
 SOURCE = gd.labels()["source"]
 GATHER_PER_CALL = 100
@@ -33,7 +35,8 @@ def _items(res) -> list:
 
 
 def make_plan(cd, qc: QueryCache, display_name: str, target: int, **kw) -> dict:
-    """제작 목표 계획. kw 는 QueryCache.get 인자 (refresh, offline, max_age). error 가 있으면 계산 실패."""
+    """제작 목표 계획 (한 겹 — 이 레시피에 무엇이 몇 개 드는가). kw 는 QueryCache.get 인자.
+    error 가 있으면 계산 실패. 사슬 끝까지는 deep_plan."""
     kn = cd.knowledge
     craft = qc.get("get_craftable_items", **kw)
     gather = qc.get("get_gatherable_items", **kw)
@@ -62,18 +65,21 @@ def make_plan(cd, qc: QueryCache, display_name: str, target: int, **kw) -> dict:
     is_alter = kind == "alter"
     ok_key = "Alterable" if is_alter else "Craftable"
     per_key = "ProducedPerWork" if is_alter else "ProducedPerCraft"
-    product = kn.product_of(recipe["DisplayName"]) if is_alter else recipe["DisplayName"]
+    row = cd.recipes.first(recipe["DisplayName"], kind)
+    product = (row and row.get("product")) or (kn.product_of(recipe["DisplayName"]) if is_alter else recipe["DisplayName"])
 
     gatherable = {x.get("DisplayName") for x in _items(gather)}
-    alterable = {x.get("DisplayName") for x in alter_recipes}
-    craftable = {x.get("DisplayName") for x in recipes}
     owned = sum_by_name(items.get("data") if isinstance(items.get("data"), list) else [], "DisplayName", "Count")
 
     def classify(name):
-        return SOURCE["GATHER"] if name in gatherable else SOURCE["ALTER"] if name in alterable \
-            else SOURCE["CRAFT"] if name in craftable else SOURCE["NONE"]
+        if name in gatherable:
+            return SOURCE["GATHER"]
+        m = cd.recipes.selectable_makers(name)
+        if m:
+            return SOURCE["ALTER"] if m[0]["via"] == "alter" else SOURCE["CRAFT"]
+        return SOURCE["NONE"]
 
-    per = recipe.get(per_key) or 1
+    per = recipe.get(per_key) or (row and row.get("per")) or 1
     have = owned.get(product) or owned.get(richtext.strip(product)) or 0
     short = max(0, target)  # 새로 만들 개수. 보유량은 빼지 않는다
     runs = math.ceil(short / per)
@@ -82,6 +88,9 @@ def make_plan(cd, qc: QueryCache, display_name: str, target: int, **kw) -> dict:
             "displayName": richtext.strip(recipe["DisplayName"]), "productName": richtext.strip(product),
             "target": target, "have": have, "producedPerCraft": per, "runs": runs,
             "craftableNow": bool(recipe.get(ok_key)), "reason": recipe.get("Reason"), "cached": craft.get("cached")}
+    if row:
+        base.update(facility=row.get("facility"), facilityLevel=row.get("level"), skill=row.get("skill"),
+                    skillLevel=row.get("skillLevel"), sec=row.get("sec"), recipeVariants=row.get("twins", 1))
     if short == 0:
         return {**base, "done": True, "ingredients": [], "blockers": []}
 
@@ -97,25 +106,31 @@ def make_plan(cd, qc: QueryCache, display_name: str, target: int, **kw) -> dict:
     def is_blocker(i):
         return i["lack"] > 0 and i["source"] == SOURCE["NONE"]
 
-    # 만들 수 있는 상태면 게임이 재료를 안 알려준다. 전에 만들어 알아낸 값이나 레시피 장부에 기댄다
+    def result(ing, extra):
+        blockers = [i for i in ing if is_blocker(i)]
+        return {**base, "ingredients": ing, "blockers": blockers,
+                "autoFixable": [i for i in ing if i["lack"] > 0 and i["source"] != SOURCE["NONE"]],
+                "ok": not blockers, **extra}
+
+    # 레시피 표 — 게임 데이터 그대로라 재료가 빠짐없다
+    if row:
+        return result(expand(row["ingredients"], "table"),
+                      {"recipeSource": "table", "recipeComplete": True,
+                       "note": "재료는 게임 데이터의 레시피 표에서 가져왔습니다."
+                               + (f" 같은 이름의 레시피가 {row['twins']}가지라, 시키면 실제로 도는 첫 줄로 셌습니다."
+                                  if row.get("twins", 1) > 1 else "")})
+
+    # 표에 없는 레시피 (패치로 새로 생긴 것). 만들 수 있는 상태면 게임이 재료를 안 알려준다
     if recipe.get(ok_key):
-        got = kn.recipe_ingredients(recipe["DisplayName"], have=lambda n: owned.get(n) or 0)
+        got = kn.recipe_ingredients(recipe["DisplayName"])
         if got:
-            ing = expand(got["ingredients"], got["source"])
-            note = "게임은 지금 만들 수 있는 것의 재료를 알려주지 않습니다. " + \
-                ("이 숫자는 전에 이것을 만들어 봤을 때 알아낸 값입니다." if got["source"] == "observed"
-                 else "이 숫자는 레시피 표에서 가져왔습니다") + \
-                (" — 재료가 더 있을 수 있습니다." if got["source"] != "observed" and not got["complete"]
-                 else "." if got["source"] != "observed" else "") + \
-                (f" 이 이름은 재료 조합이 {got['variants']}가지라, 지금 재고에 가까운 쪽을 보여 줍니다."
-                 if (got.get("variants") or 0) > 1 else "")
-            return {**base, "learnedRecipe": True, "recipeSource": got["source"], "recipeComplete": got["complete"],
-                    "recipeVariants": got["variants"], "ingredients": ing,
-                    "blockers": [i for i in ing if is_blocker(i)],
-                    "autoFixable": [i for i in ing if i["lack"] > 0 and i["source"] != SOURCE["NONE"]],
-                    "ok": all(not is_blocker(i) for i in ing), "note": note}
+            return result(expand(got["ingredients"], got["source"]),
+                          {"learnedRecipe": True, "recipeSource": got["source"], "recipeComplete": got["complete"],
+                           "note": "레시피 표에 없는 레시피입니다. "
+                                   + ("이 숫자는 전에 이것을 만들어 봤을 때 알아낸 값입니다." if got["source"] == "observed"
+                                      else "이 숫자는 게임이 전에 알려 준 부족분이라 재료가 더 있을 수 있습니다.")})
         return {**base, "unknownIngredients": True, "ingredients": [], "blockers": [],
-                "note": "지금은 만들 수 있는 상태라 게임이 재료 목록을 주지 않습니다. "
+                "note": "레시피 표에 없고 지금은 만들 수 있는 상태라 게임이 재료 목록을 주지 않습니다. "
                         f"{runs}회분 재료가 되는지는 미리 알 수 없습니다. "
                         "한 번 만들어 보면 재료를 알아내서, 다음부터는 미리 계산합니다."}
 
@@ -128,11 +143,7 @@ def make_plan(cd, qc: QueryCache, display_name: str, target: int, **kw) -> dict:
             if k not in per1:
                 per1[k] = v
                 filled = True
-    ingredients = expand(per1, "game")
-    blockers = [i for i in ingredients if is_blocker(i)]
-    out = {**base, "ingredients": ingredients, "blockers": blockers,
-           "autoFixable": [i for i in ingredients if i["lack"] > 0 and i["source"] != SOURCE["NONE"]],
-           "ok": not blockers}
+    out = result(expand(per1, "game"), {})
     if filled:
         out["filledFromKnowledge"] = True
         out["recipeConfidence"] = learned["confidence"]
@@ -157,22 +168,13 @@ def gather_plan(row: dict, target: int, items: dict, cached) -> dict:
 
 
 def deep_plan(cd, qc: QueryCache, target: str, count: int, **kw) -> dict:
-    """사슬 끝까지 세우는 계획. 게임에서 사실만 모아 needs.plan 에 넘긴다 (조회만이라 무료)."""
-    if not cd.altertable.has(target):
-        return {"ok": False, "error": "not_in_table", "target": target}
-    items = qc.get("get_items", **kw)
-    gather = qc.get("get_gatherable_items", **kw)
-    alter = qc.get("get_alterable_items", **kw)
-    owned = sum_by_name(items.get("data") if isinstance(items.get("data"), list) else [], "DisplayName", "Count")
-    gatherable = {richtext.strip(x.get("DisplayName")) for x in _items(gather)}
-    recipe_names = {richtext.strip(x.get("DisplayName")) for x in _items(alter)}
-    levels, slots = {}, {}
-    for fac in cd.facilitymap.facilities():
-        s = cd.knowledge.facility_slots(fac)
-        if s and s.get("level"):
-            levels[fac] = s["level"]
-        if s and s.get("slots"):
-            slots[fac] = s["slots"]
-    r = needs.plan(cd.altertable, target, count, {"owned": owned, "levels": levels, "gatherable": gatherable,
-                                                  "slots": slots, "recipeNames": recipe_names})
-    return {**r, "cached": bool(items.get("cached") and gather.get("cached") and alter.get("cached"))}
+    """사슬 끝까지 세우는 계획 — 무엇을 몇 번 캐고, 몇 번 가공·제작하고, 날개가 얼마 드는지 (조회만이라 무료).
+    target 은 산출물 이름이든 레시피 이름이든 된다. count 는 새로 만들 개수 (들고 있는 목표품은 셈에 넣지 않는다).
+    레시피 이름(철괴(광석))으로 받아도 산출물(철괴)로 세운다 — 작업 큐는 산출물로 돌면서 가장 싼 길을 고르므로,
+    미리 보는 계획도 같은 길이어야 한다."""
+    snap = goal.snapshot(cd, qc, refresh=bool(kw.get("refresh")), offline=bool(kw.get("offline")))
+    if snap.get("error"):
+        return {"ok": False, "error": snap["error"], "message": snap.get("message")}
+    product, _ = needs.target_of(cd.recipes, target, snap["gather"])
+    r = goal.full_plan(snap, product or target, count, fresh=True)
+    return {**r, "cached": snap.get("cached", False)}

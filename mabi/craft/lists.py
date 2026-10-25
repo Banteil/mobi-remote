@@ -1,31 +1,22 @@
 """레시피 수확(harvest_recipes — 화면 목록을 볼 때마다)과 가공 작업 현황(altering_works — 목표 판단용).
 
-게임은 지금 만들 수 없는 레시피에만 재료를 알려 주므로, 검색으로 좁히기 전의 전체 목록으로 수확한다.
-학습·수확 실패는 조회를 막지 않는다.
+레시피는 게임 데이터에서 뽑은 표(recipes.json)가 전부 갖고 있다. 수확은 표에 없는 레시피(패치로 새로 생긴 것)만
+게임이 흘린 부족분으로 배워 둔다. 학습 실패는 조회를 막지 않는다.
 kw 는 QueryCache.get 인자 (refresh, offline, max_age).
 """
 from ..query import _fail
 
 
 def harvest_recipes(cd, rows: list, kind: str, ok_key: str, per_key: str) -> None:
-    """아는 레시피는 게임 숫자와 대조해 confidence 를 올리고, 모르는 레시피는 장부에 담는다."""
+    """표에 없는 레시피만 게임이 알려 준 부족분으로 배운다 (부족분뿐이라 partial — 1회 만들어 보면 완성된다)."""
     kn = cd.knowledge
-    known = None
     for r in rows:
-        if r.get(ok_key) or not r.get("MissingIngredients"):
-            continue
-        if known is None:
-            known = kn.load().get("recipes") or {}
-        if not known.get(r.get("DisplayName")):
+        if r.get(ok_key) or not r.get("MissingIngredients") or cd.recipes.has(r.get("DisplayName")):
             continue
         try:
             kn.learn_recipe_from_missing(r["DisplayName"], kind, r["MissingIngredients"], r.get(per_key))
         except Exception:
-            pass  # 검증 실패가 조회를 막으면 안 된다
-    try:
-        cd.recipebook.harvest_rows(rows, kind, ok_key, per_key, known or kn.load().get("recipes") or {})
-    except Exception:
-        pass  # 수확 실패도 조회를 막지 않는다
+            pass  # 학습 실패가 조회를 막으면 안 된다
 
 
 def altering_works(cd, qc, **kw) -> dict:

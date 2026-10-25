@@ -8,7 +8,7 @@ PySide6 GUI(`gui.py`, `gui_app/`)로 옮기고, 일일 숙제 엔진(`mabi/`)과
 - **프로세스 하나, 관리자 권한 하나.** 입력(SendInput)이 관리자 게임에 닿으려면 관리자여야 한다.
   리모콘이 관리자에서 화면 캡처가 죽던 문제(getUserMedia)는 파이썬 캡처(mss)에는 없다 → 커서 헬퍼 같은 별도 관리자 프로세스가 필요 없다.
 - **숙제·염색·커넥터가 같은 기반을 쓴다**: 창 찾기, 캡처, 입력, OCR(winrt), CLI 호출, 경로(`mabi/paths.py`), 로그, 설정.
-- **리모콘의 학습 데이터는 그대로 읽는다**: `%LOCALAPPDATA%\mobi-remote\` 의 knowledge.json, recipe-book.json, favorites.json,
+- **리모콘의 학습 데이터는 그대로 읽는다**: `%LOCALAPPDATA%\mobi-remote\` 의 knowledge.json, favorites.json,
   playlists.json, queue.json, dye-presets.json, settings.json 을 첫 실행 때 가져온다(복사, 원본은 건드리지 않음).
 - 화면 문구는 기능에 필요한 것만. 이유는 코드 주석에.
 

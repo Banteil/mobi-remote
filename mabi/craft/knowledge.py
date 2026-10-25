@@ -10,13 +10,12 @@ import json
 import math
 import re
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
 
 from .. import gamedata as gd
-from .facilitymap import FacilityMap
 from .gamerules import GameRules, js_round
-from .recipebook import RecipeBook, now_iso
+from .recipes import RecipeTable
 
 # 한 번의 제작 호출로 만들 수 있는 최대 횟수. 종류를 따지지 않고 10 (실측: 못·탁월한 회복 물약·자동회복 물약)
 CRAFT_LIMIT = 10
@@ -25,6 +24,11 @@ CRAFT_LIMIT = 10
 
 _COST = re.compile(r"([^\s]+(?:\s[^\s]+)*?)\s+(\d+)\s+spent(?:,\s*(\d+)\s+left)?", re.I)
 _PAREN_TAIL = re.compile(r"\s*\([^()]*\)$")
+
+
+def now_iso() -> str:
+    """JS new Date().toISOString() 과 같은 꼴 (UTC, 밀리초, Z)"""
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def empty() -> dict:
@@ -125,8 +129,8 @@ def parse_cost(data) -> dict | None:
 
 
 class Knowledge:
-    def __init__(self, file: Path, rules: GameRules, book: RecipeBook, fmap: FacilityMap):
-        self.file, self.rules, self.book, self.fmap = file, rules, book, fmap
+    def __init__(self, file: Path, rules: GameRules, table: RecipeTable):
+        self.file, self.rules, self.table = file, rules, table
         self._lock = threading.RLock()  # 읽고-고치고-쓰기 사이에 다른 스레드가 끼지 않게
 
     # ---------------------------------------------------------------- 파일
@@ -264,9 +268,9 @@ class Knowledge:
             return self.save(state)
 
     def facility_of(self, item_name, state: dict | None = None) -> str | None:
-        """이 레시피의 시설. 큐에서 본 값이 먼저, 없으면 facility-map.json (처음 돌리는 레시피도 미리 검사하려고)."""
+        """이 레시피의 시설. 큐에서 본 값이 먼저, 없으면 레시피 표 (처음 돌리는 레시피도 미리 검사하려고)."""
         s = state or self.load()
-        return s["itemFacility"].get(item_name) or self.fmap.facility_of(item_name) or None
+        return s["itemFacility"].get(item_name) or self.table.facility_of(item_name) or None
 
     def room_report(self, works_data) -> list[dict]:
         """시설마다 몇 칸이 남았는지. 완료된 작업도 칸을 차지한다 (수령해야 비워진다). 여유 많은 순."""
@@ -419,28 +423,27 @@ class Knowledge:
     def recipe(self, name, state: dict | None = None) -> dict | None:
         return (state or self.load())["recipes"].get(name)
 
-    def recipe_ingredients(self, name, state: dict | None = None, have: Callable | None = None) -> dict | None:
-        """1회분 재료를 가장 믿을 만한 곳에서. 직접 만들어 알아낸 값 > 레시피 장부 > partial.
-        장부에는 이름만 아는 재료(개수 None)가 섞여 있어, 계산엔 개수를 아는 것만 넘기고 이름은 따로 준다.
-        {ingredients, complete, source, variants, unknownAmounts?} 또는 None"""
+    def recipe_ingredients(self, name, state: dict | None = None) -> dict | None:
+        """1회분 재료를 가장 믿을 만한 곳에서. 레시피 표(게임 데이터) > 직접 만들어 알아낸 값 > partial.
+        표에서는 시키면 실제로 도는 줄(같은 이름의 첫 줄)을 준다. {ingredients, complete, source, variants} 또는 None"""
+        row = self.table.first(name)
+        if row and row.get("ingredients"):
+            return {"ingredients": dict(row["ingredients"]), "complete": True, "source": "table",
+                    "variants": row.get("twins", 1)}
         mine = self.recipe(name, state)
         if recipe_is_complete(mine):
             return {"ingredients": mine["ingredients"], "complete": True, "source": "observed", "variants": 1}
-        b = self.book.pick(name, have)
-        if b:
-            known = {k: v for k, v in b["ingredients"].items() if v is not None}
-            unknown = [k for k, v in b["ingredients"].items() if v is None]
-            if known:
-                return {"ingredients": known, "unknownAmounts": unknown,
-                        "complete": bool(b["complete"]) and not unknown, "source": "book", "variants": b["count"]}
         if mine and mine.get("ingredients"):
             return {"ingredients": mine["ingredients"], "complete": False, "source": "partial", "variants": 1}
         return None
 
     # ---------------------------------------------------------------- 레시피 → 산출물
     # 응답 어디에도 "이 레시피가 무엇을 만드는가" 필드가 없다 (가공 91종 중 8종이 산출물(원료) 꼴).
-    # 괄호를 벗겨 추측하되, 수령 보상으로 실제로 보면 그쪽으로 확정한다.
+    # 레시피 표에 있으면 그것이 사실이다. 없으면 괄호를 벗겨 추측하되, 수령 보상으로 실제로 보면 그쪽으로 확정한다.
     def product_of(self, recipe_name, state: dict | None = None) -> str:
+        known = self.table.product_of(recipe_name)
+        if known:
+            return known
         s = state or self.load()
         e = (s.get("recipeProduct") or {}).get(recipe_name)
         return e["item"] if e else guess_product(recipe_name)

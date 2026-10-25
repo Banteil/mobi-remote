@@ -33,7 +33,8 @@ COMMON = {
     # 비용
     "not_enough_currency": ("재화가 부족합니다", "정령의 날개 잔량을 확인하세요."),
     "cost_payment_failed": ("비용 지불에 실패했습니다", ""),
-    "insufficient_transfer_cost": ("이동 비용이 부족합니다", "정령의 날개 잔량을 확인하세요."),
+    "insufficient_transfer_cost": ("보관함 재료를 꺼낼 비용이 부족합니다",
+                                   "분해된 장비 부품이 모자랍니다. 장비를 분해해 채우거나 재료를 가방으로 옮긴 뒤 다시 시도하세요."),
     # 자격 / 해금
     "insufficient_living_skill_level": ("생활 스킬 레벨이 부족합니다", "해당 생활 스킬을 더 올려야 합니다."),
     "insufficient_facility_level": ("시설 레벨이 부족합니다", ""),

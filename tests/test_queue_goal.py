@@ -108,6 +108,15 @@ class GoalKindTest(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(q.stop, {"reason": "skill", "what": "은 광석", "level": 5})
 
+    def test_transfer_cost_stops_queue(self):
+        # 계획은 장비 부품이 있다고 보고 세운다. 게임이 모자란다고 하면 그 자리에서 큐를 세운다
+        api = FakeApi([(0, {"kind": "craft", "name": "못", "batch": 3})],
+                      exec_results=[{"ok": False, "error": "insufficient_transfer_cost"}])
+        ok, q = self.run_goal(api)
+        self.assertFalse(ok)
+        self.assertEqual(q.stop, {"reason": "transfer", "what": "못"})
+        self.assertEqual(len(api.calls), 1)
+
     def test_invalid_count_keeps_going(self):
         api = FakeApi([(0, {"kind": "craft", "name": "못", "batch": 99}), (0, {"kind": "craft", "name": "못", "batch": 10}),
                        (10, {"kind": "done"})], exec_results=[{"ok": False, "error": "invalid_count"}, {"ok": True}])

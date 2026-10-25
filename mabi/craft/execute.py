@@ -2,7 +2,7 @@
 
 - 가공 등록 전에 그 시설 칸을 센다. 칸이 없는데 보내면 게임이 이동까지 시킨 뒤 막으면서 날개 5를 가져간다(실측) —
   그래서 커넥터에 넘기기 전에 facility_full 로 끊는다.
-- 1회 제작·가공은 전후 인벤을 비교해 레시피를 역산한다 (게임은 만들 수 있는 레시피의 재료를 끝내 안 알려준다).
+- 레시피 표(recipes.json)에 없는 레시피만 1회 제작·가공 전후 인벤을 비교해 재료를 역산한다 (패치로 새로 생긴 것).
 - 가공이 blocked/queue_full 로 막히고 큐가 그대로면 그 개수가 곧 칸 수 → 레벨까지 확정된다.
   queue_full 은 2026-10-15 판부터 execute_altering 이 시작 전·후 모두 직접 알려 주는 칸 없음 신호다.
 - 수령 시설에 완료된 것이 한 종류뿐이면 받은 보상이 곧 그 레시피의 산출물이다.
@@ -102,8 +102,8 @@ def execute(cd, cli: Connector, qc: QueryCache, command: str, body=None, timeout
     cost = cli.cost_of(command)
     name = body.get("displayName") if isinstance(body, dict) else None
 
-    # 레시피를 배울 명령이면 먼저 인벤을 찍어 둔다 (get_items 는 무료)
-    learn_kind = recipe_learn_kind(command, body)
+    # 레시피를 배울 명령이면 먼저 인벤을 찍어 둔다 (get_items 는 무료). 표에 있는 레시피는 배울 것이 없다
+    learn_kind = recipe_learn_kind(command, body) if not cd.recipes.has(name) else None
     snap_before = item_snapshot(cd, cli) if learn_kind else None
 
     # 가공이면 그 시설 큐를 미리 센다 — 막힌 뒤에도 큐가 그대로인지 봐야 칸 수를 배울 수 있다

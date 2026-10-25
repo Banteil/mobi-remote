@@ -250,7 +250,7 @@ class Shapes:
         return self.q_craft({**o, "search": g(o, "name"), "detail": True, "limit": 20})
 
     def q_alter(self, o):
-        kn, alt = self.cd.knowledge, self.cd.altertable
+        kn, tbl = self.cd.knowledge, self.cd.recipes
         res = self._get("get_alterable_items", o)
         if not _truthy(res.get("data")):
             return _fail(res)
@@ -264,7 +264,14 @@ class Shapes:
         craft_lists.harvest_recipes(self.cd, allrows, "alter", "Alterable", "ProducedPerWork")
 
         state = kn.load()
-        seen: dict = {}  # 같은 이름이 몇 번째로 나왔는지 (갈래를 차례로 맞추려고)
+        # 같은 이름이 전체 목록에서 몇 번째 줄인가. 게임 목록 순서 = 레시피 표 순서라 차례로 맞추면 제 갈래다.
+        # 검색·필터로 줄이 빠져도 어긋나지 않게 걸러지기 전의 목록으로 센다
+        seen: dict = {}
+        nth_of: dict = {}
+        for r in allrows:
+            key = richtext.strip(g(r, "DisplayName"))
+            nth_of[id(r)] = seen.get(key, 0)
+            seen[key] = nth_of[id(r)] + 1
         lim = g(o, "limit")
         items = []
         for r in (rows[:int(_num(lim))] if _truthy(lim) else rows):
@@ -272,20 +279,16 @@ class Shapes:
             row = name_fields(dn)
             row["ok"] = _truthy(g(r, "Alterable"))
             row["per"] = g(r, "ProducedPerWork")
-            # 어느 시설인지. 관측값이 없으면 facility-map.json
+            # 어느 시설인지. 큐에서 본 값이 먼저, 없으면 레시피 표
             row["facility"] = kn.facility_of(dn, state)
-            # 레벨·시간은 게임이 안 알려줘 가공 재료표에서 온다. 같은 이름의 줄이 여럿이면 줄마다 제 갈래를 찾는다
-            key = richtext.strip(dn)
-            nth = seen.get(key, 0)
-            seen[key] = nth + 1
-            miss = [richtext.strip(g(m, "DisplayName")) for m in _arr(_or(g(r, "MissingIngredients"), []))]
-            hit = alt.match_row(dn, miss, nth)
-            if hit and _truthy(hit.get("variant")):
-                v = hit["variant"]
+            # 레벨·시간은 게임이 안 알려줘 레시피 표에서 온다
+            v = tbl.row_at(dn, nth_of.get(id(r), 0), "alter")
+            if v:
                 row["level"] = g(v, "level")
                 row["sec"] = g(v, "sec")
-                row["variant"] = hit["index"]
-                row["variants"] = len(alt.get(hit["product"])["variants"])
+                row["variant"] = v["nth"]
+                row["variants"] = v["twins"]
+                row["product"] = v["product"]
                 if not _truthy(row["facility"]):
                     row["facility"] = g(v, "facility")
             if not _truthy(g(r, "Alterable")):

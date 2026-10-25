@@ -1,198 +1,255 @@
-""""이걸 N개 만들려면 지금 무엇을 얼마나 해야 하나" — 사슬 끝까지 (리모콘 src/needs.js).
+""""이걸 N개 만들려면 무엇을 얼마나 해야 하나" — 레시피 표로 사슬 끝까지 미리 계산한다 (리모콘 src/needs.js 를 넓힌 것).
 
-plan.make_plan 은 게임이 알려 준 한 겹만 본다. 가공 재료표가 있으니 여기서는 끝까지 편다.
-- 소지품을 주머니(pool) 하나에 담고 층마다 먼저 꺼낸다. 한 번 가공에 남는 것(철괴 3개)도 주머니로 돌린다.
-- 갈래가 여럿이면 후보마다 계획을 세워 채집 횟수가 적은 쪽을 고른다 (어느 쪽이 싼지는 지금 재고에 달렸다).
-- 다만 고를 수 있는 갈래만 후보 — 같은 이름으로 오는 갈래는 시켜도 첫 줄만 돈다.
+예전에는 게임이 알려 주는 부족분을 보고 한 겹씩 내려갔다. 이제 게임 레시피 표(recipes.json)가 있어서
+제작과 가공을 한 사슬로 놓고 처음부터 끝까지 센다.
+
+- 총량으로 센다: 같은 재료를 여러 레시피가 쓰면 수요를 다 모은 뒤 한 번에 나눈다. 따로 올림하면 산출 단위(3개, 10개)
+  만큼씩 남는 것이 생긴다. 그래서 "쓰는 쪽 → 재료" 차례(위상 순서)로 한 번만 훑는다.
+- 소지품(가방+보관함)과 이미 가공 중인 것(incoming)을 먼저 쓴다. 한 번 만들고 남는 것도 다음 수요가 쓴다.
+- 채집할 수 있는 것은 채집한다 (호출당 100개, 칸도 시간도 안 든다).
+- 만드는 법이 여럿이면(철괴(광석) / 철괴(철 광석)) 조합마다 계산해 호출 수(= 날개)가 가장 적은 쪽을 고른다.
+  같은 이름의 둘째 줄부터는 시켜도 첫 줄이 돌아서 후보가 아니다 (recipes.py).
+- 시설 레벨이 모자라거나 게임이 다른 이유(생활 스킬·데코 점수)로 거절한 레시피는 다른 길이 있으면 피하고,
+  없으면 계산은 끝까지 하되 blocked 로 알린다 — 무엇이 필요한지는 보여 줘야 한다.
 """
 import math
-from collections import deque
 
-from .altertable import AlterTable
+from .recipes import RecipeTable, bare
 
 GATHER_PER_CALL = 100  # 채집 한 번에 최대 100개
+CRAFT_LIMIT = 10       # 제작 한 번에 묶을 수 있는 횟수 (knowledge 가 배운 값이 있으면 그쪽)
+WINGS_PER_CALL = 5     # 채집·제작·가공 호출마다 정령의 날개 5 (수령은 무료)
+MAX_COMBOS = 64
 
 
-def _to_map(owned) -> dict:
-    return dict(owned) if owned else {}
+def _resolve(table: RecipeTable, product: str, ctx: dict, choice: dict) -> dict:
+    """이 아이템을 어떻게 구하나. {how: gather|make|missing, row?, blocked?, reason?}"""
+    gatherable = ctx.get("gatherable") or {}
+    if product in gatherable:
+        if gatherable[product]:
+            return {"how": "gather"}
+        if not table.selectable_makers(product):
+            return {"how": "missing", "reason": "tool"}  # 채집 대상인데 도구가 없다
+    makers = table.selectable_makers(product)
+    if not makers:
+        return {"how": "missing", "reason": "quest" if product in (ctx.get("questItems") or ()) else "none"}
+    if product in choice:
+        row = makers[min(choice[product], len(makers) - 1)]
+    else:
+        ok = [r for r in makers if not _block_of(r, ctx)]
+        row = ok[0] if ok else makers[0]
+    return {"how": "make", "row": row, "blocked": _block_of(row, ctx)}
 
 
-def _run(alt: AlterTable, target, count, ctx: dict, choice: dict | None) -> dict:
-    """한 가지 갈래 선택안으로 계획을 끝까지 세운다. choice = {산출물: 갈래번호} (미리 정한 것만)."""
-    pool = _to_map(ctx.get("owned"))
-    levels = ctx.get("levels") or {}
-    gatherable = ctx.get("gatherable") or set()
-    steps: dict[str, dict] = {}   # 산출물 → {product, index, runs}
-    short: dict[str, int] = {}    # 더 못 만드는 것 → 모자란 개수
-    blocked: list[dict] = []      # 레벨이 모자라 못 돌리는 것
-    chosen: dict[str, int] = {}
+def _block_of(row: dict, ctx: dict) -> dict | None:
+    """이 레시피를 지금 못 돌리는 이유. 재료 부족은 이유가 아니다 (그건 계산이 채운다)."""
+    reason = (ctx.get("refused") or {}).get(row["name"])
+    if reason:
+        return {"reason": reason}
+    if row["via"] == "alter":
+        have = (ctx.get("levels") or {}).get(row.get("facility"))
+        if have is not None and row.get("level") is not None and have < row["level"]:
+            return {"reason": "insufficient_facility_level", "haveLevel": have}
+    return None
 
-    # 너비 우선. 깊이 우선이면 같은 재료를 여러 번 훑어 남는 것을 못 나눠 쓴다
-    queue = deque([(target, count)])
-    guard = 0
-    while queue:
-        guard += 1
-        if guard > 20000:
-            break  # 표가 이상해도 앱은 멈추지 않는다
-        name, qty = queue.popleft()
 
-        have = pool.get(name) or 0
-        if have > 0:
-            use = min(have, qty)
-            pool[name] = have - use
-            qty -= use
-        if qty <= 0:
+def _graph(table, target, ctx, choice) -> tuple[dict, list]:
+    """목표에서 닿는 아이템마다 구하는 법을 정하고, 쓰는 쪽이 재료보다 먼저 오는 차례를 만든다."""
+    how: dict[str, dict] = {}
+    post: list[str] = []
+    state: dict[str, int] = {}  # 1 = 보는 중, 2 = 끝
+
+    def visit(p):
+        if state.get(p):
+            return  # 끝났거나 순환 — 표에는 순환이 없지만 앱은 멈추지 않는다
+        state[p] = 1
+        how[p] = h = _resolve(table, p, ctx, choice)
+        if h["how"] == "make":
+            for ing in h["row"]["ingredients"]:
+                visit(ing)
+        state[p] = 2
+        post.append(p)
+
+    visit(target)
+    return how, post[::-1]  # 후위 순서를 뒤집으면 쓰는 쪽이 먼저다
+
+
+def _run(table: RecipeTable, target: str, count: int, ctx: dict, choice: dict) -> dict:
+    how, order = _graph(table, target, ctx, choice)
+    pool = dict(ctx.get("owned") or {})
+    for k, v in (ctx.get("incoming") or {}).items():
+        pool[k] = pool.get(k, 0) + v
+    if ctx.get("fresh"):
+        pool.pop(target, None)  # "새로 N개" — 들고 있는 목표품은 셈에 넣지 않는다
+    demand = {target: count}
+    used: dict[str, int] = {}
+    steps, gather, missing, blocked = [], [], [], []
+    limit = ctx.get("craftLimit") or (lambda _r: CRAFT_LIMIT)
+
+    for p in order:
+        need = demand.get(p, 0)
+        if need <= 0:
             continue
-
-        info = alt.variants_for(name, levels)
-        if not info:
-            short[name] = short.get(name, 0) + qty
+        take = min(pool.get(p, 0), need)
+        if take:
+            pool[p] -= take
+            used[p] = used.get(p, 0) + take
+            need -= take
+        if need <= 0:
             continue
-        pick = alt.selectable(name, ctx.get("recipeNames"))
-        if choice is not None and name in choice:
-            idx = choice[name]
-        elif pick:
-            ok_ones = [i for i in pick if i in info["runnable"]]
-            idx = ok_ones[0] if ok_ones else pick[0]
-        elif info["runnable"]:
-            idx = info["runnable"][0]
-        else:
-            # 레벨이 모자란다. 무엇이 필요한지는 알려줘야 하니 계산은 계속하고 표시만 남긴다
-            idx = info["all"][0]
-            v = info["entry"]["variants"][idx]
-            if not any(b["product"] == name for b in blocked):
-                blocked.append({"product": name, "facility": v.get("facility"), "needLevel": v.get("level"),
-                                "haveLevel": levels.get(v.get("facility"))})
-        chosen[name] = idx
-
-        v = info["entry"]["variants"][idx]
-        per = info["entry"].get("per") or 1
-        runs = math.ceil(qty / per)
-        st = steps.get(name) or {"product": name, "index": idx, "runs": 0}
-        st["runs"] += runs
-        st["index"] = idx
-        steps[name] = st
-
-        made = runs * per
-        if made > qty:
-            pool[name] = (pool.get(name) or 0) + (made - qty)
-        for ing, cnt in v["ingredients"].items():
-            queue.append((ing, cnt * runs))
-
-    gather, missing = [], []
-    owned0 = _to_map(ctx.get("owned"))
-    for name, need in short.items():
-        row = {"name": name, "need": need,
-               "have": ctx["ownedOf"](name) if ctx.get("ownedOf") else (owned0.get(name) or 0)}
-        if name in gatherable:
-            row["calls"] = math.ceil(need / GATHER_PER_CALL)
-            gather.append(row)
-        else:
-            missing.append(row)
-    gather.sort(key=lambda r: -r["need"])
-    missing.sort(key=lambda r: -r["need"])
-    return {"steps": steps, "short": short, "gather": gather, "missing": missing, "blocked": blocked,
-            "chosen": chosen, "pool": pool}
+        h = how[p]
+        if h["how"] == "gather":
+            gather.append({"name": p, "need": need})
+            continue
+        if h["how"] == "missing":
+            missing.append({"name": p, "need": need, "reason": h["reason"]})
+            continue
+        r = h["row"]
+        per = r.get("per") or 1
+        runs = math.ceil(need / per)
+        pool[p] = pool.get(p, 0) + runs * per - need  # 남는 것은 다음 수요가 쓴다
+        for ing, amt in r["ingredients"].items():
+            demand[ing] = demand.get(ing, 0) + amt * runs
+        lim = max(1, limit(r["name"])) if r["via"] == "craft" else 1
+        steps.append({"via": r["via"], "recipe": r["name"], "product": p, "runs": runs, "per": per,
+                      "produced": runs * per, "calls": math.ceil(runs / lim), "limit": lim,
+                      "facility": r.get("facility"), "level": r.get("level"), "skill": r.get("skill"),
+                      "skillLevel": r.get("skillLevel"), "sec": r.get("sec"), "ingredients": dict(r["ingredients"]),
+                      "ambiguous": r.get("twins", 1) > 1, "options": len(table.selectable_makers(p))})
+        if h["blocked"]:
+            blocked.append({"recipe": r["name"], "product": p, "facility": r.get("facility"),
+                            "needLevel": r.get("level"), "skill": r.get("skill"), "skillLevel": r.get("skillLevel"),
+                            **h["blocked"]})
+    return {"how": how, "steps": steps, "gather": gather, "missing": missing, "blocked": blocked, "used": used}
 
 
-def order(alt: AlterTable, steps: dict) -> list[dict]:
-    """깊은 것부터 — 재료를 먼저 만들고 그다음 것을 만들도록."""
-    rank: dict[str, int] = {}
-
-    def depth(name, seen):
-        if name in rank:
-            return rank[name]
-        if name in seen:
-            return 0  # 순환 방어 (표에는 없다)
-        st = steps.get(name)
-        if not st:
-            return 0
-        e = alt.get(name)
-        v = e["variants"][st["index"]] if e and 0 <= st["index"] < len(e["variants"]) else None
-        d = 0
-        for ing in (v or {}).get("ingredients", {}):
-            if ing in steps:
-                d = max(d, depth(ing, seen | {name}) + 1)
-        rank[name] = d
-        return d
-
-    lst = list(steps.values())
-    for st in lst:
-        depth(st["product"], frozenset())
-    return sorted(lst, key=lambda s: rank.get(s["product"]) or 0)
+def _cost(r: dict) -> tuple:
+    """못 구하는 것·막힌 것이 적은 쪽, 그다음 호출 수(= 날개)가 적은 쪽, 그다음 가공 시간이 짧은 쪽"""
+    calls = sum(math.ceil(g["need"] / GATHER_PER_CALL) for g in r["gather"]) + sum(s["calls"] for s in r["steps"])
+    sec = sum((s["sec"] or 0) * s["runs"] for s in r["steps"] if s["via"] == "alter")
+    return (len(r["missing"]) + len(r["blocked"]), calls, sec)
 
 
-def plan(alt: AlterTable, target, count, ctx: dict | None = None) -> dict:
+def _depths(steps: list) -> dict:
+    """재료 단계 깊이. 맨 아래(만든 재료를 안 쓰는 것)가 0 — 이 차례로 만들면 재료가 먼저 생긴다."""
+    by = {s["product"]: s for s in steps}
+    memo: dict[str, int] = {}
+
+    def depth(p, seen=frozenset()):
+        if p in memo:
+            return memo[p]
+        if p in seen or p not in by:
+            return -1
+        memo[p] = 1 + max((depth(i, seen | {p}) for i in by[p]["ingredients"]), default=-1)
+        return memo[p]
+
+    for p in by:
+        depth(p)
+    return memo
+
+
+def target_of(table: RecipeTable, name: str, gatherable=None) -> tuple[str | None, str | None]:
+    """화면이 넘긴 이름 → (산출물, 레시피 이름). 산출물 이름이든 레시피 이름(철괴(광석))이든 받는다."""
+    n = bare(name)
+    if table.has(n):
+        return table.first(n).get("product") or n, n
+    if table.is_product(n) or (gatherable and n in gatherable):
+        return n, None
+    return None, None
+
+
+def plan(table: RecipeTable, target: str, count: int, ctx: dict | None = None) -> dict:
     """목표 하나를 끝까지 계획한다.
-    ctx: owned {이름: 개수}(가방+창고), levels {시설: 레벨}, gatherable set, slots {시설: 칸수}(병렬 시간),
-         recipeNames set(게임이 실제로 쓰는 가공 레시피 이름 — 괄호 이름을 지어내지 않으려고)"""
-    c = ctx or {}
-    if not alt.has(target):
+    ctx: owned {이름: 개수}(가방+보관함), incoming {산출물: 개수}(가공 중·수령 전),
+         gatherable {이름: 도구 있음?}, levels {가공 시설: 레벨}(아는 것만), refused {레시피: 게임이 거절한 이유},
+         craftLimit(레시피) → 한 번에 묶는 횟수, slots {가공 시설: 칸 수}, fresh(목표품 보유분을 안 씀)"""
+    c = dict(ctx or {})
+    product, recipe = target_of(table, target, c.get("gatherable"))
+    if not product:
         return {"ok": False, "error": "not_in_table", "target": target}
     if not (isinstance(count, (int, float)) and count > 0):
         return {"ok": False, "error": "bad_count", "target": target}
+    count = int(count)
+    choice: dict[str, int] = {}
+    if recipe:  # 레시피 이름으로 받았으면 그 레시피로 만든다
+        idx = next((i for i, r in enumerate(table.selectable_makers(product)) if r["name"] == recipe), None)
+        if idx is not None:
+            choice[product] = idx
+    c.setdefault("questItems", {q for r in table.load() for q in r.get("quest") or ()})
 
-    multi = [n for n in alt.names() if len(alt.get(n)["variants"]) > 1]
-    first = _run(alt, target, count, c, None)
-    used = [n for n in multi if n in first["steps"]]
-
-    best = first
-    if used and len(used) <= 4:
-        combos: list[dict] = []
-
-        def build(i, acc):
-            if i == len(used):
-                combos.append(dict(acc))
-                return
-            n = used[i]
-            info = alt.variants_for(n, c.get("levels"))
-            sel = alt.selectable(n, c.get("recipeNames"))
-            ok = [j for j in sel if j in info["runnable"]]
-            for idx in (ok or sel or info["all"]):
-                acc[n] = idx
-                build(i + 1, acc)
-            acc.pop(n, None)
-
-        build(0, {})
-
-        def cost(r):  # 채집 횟수가 적은 쪽, 같으면 가공 횟수가 적은 쪽
-            return (sum(g["calls"] for g in r["gather"]), 1e9 if r["missing"] else 0,
-                    sum(s["runs"] for s in r["steps"].values()))
-
-        for combo in combos[:32]:
-            r = _run(alt, target, count, c, combo)
-            A, B = cost(r), cost(best)
-            if A[1] < B[1] or (A[1] == B[1] and (A[0] < B[0] or (A[0] == B[0] and A[2] < B[2]))):
+    best = _run(table, product, count, c, choice)
+    # 만드는 법이 여럿인 아이템만 조합을 바꿔 본다 (보통 0~3개라 금방 끝난다)
+    multi = [p for p, h in best["how"].items()
+             if h["how"] == "make" and p not in choice and len(table.selectable_makers(p)) > 1]
+    if multi:
+        combos = [dict(choice)]
+        for p in multi[:6]:
+            n = len(table.selectable_makers(p))
+            combos = [{**cb, p: i} for cb in combos for i in range(n)][:MAX_COMBOS]
+        for cb in combos:
+            r = _run(table, product, count, c, cb)
+            if _cost(r) < _cost(best):
                 best = r
 
-    lst = []
-    for st in order(alt, best["steps"]):
-        e = alt.get(st["product"])
-        v = e["variants"][st["index"]]
-        rn = alt.recipe_name_of(st["product"], st["index"], c.get("recipeNames"))
-        lst.append({"product": st["product"], "recipe": rn["name"],
-                    # 같은 이름으로 오는 갈래는 시켜도 어느 쪽이 돌지 모르니 화면에 그대로 알린다
-                    "ambiguous": rn["ambiguous"], "runs": st["runs"], "per": e.get("per"),
-                    "produced": st["runs"] * (e.get("per") or 0), "facility": v.get("facility"),
-                    "level": v.get("level"), "sec": v.get("sec"), "ingredients": v["ingredients"]})
+    depth = _depths(best["steps"])
+    for s in best["steps"]:
+        s["depth"] = depth.get(s["product"], 0)
+    # 만드는 차례: 재료 단계가 깊은 것부터, 같은 깊이는 가공(시간이 걸린다) → 제작, 같은 시설끼리 붙여서
+    steps = sorted(best["steps"], key=lambda s: (s["depth"], 0 if s["via"] == "alter" else 1, s["facility"] or ""))
 
-    serial = sum((s["sec"] or 0) * s["runs"] for s in lst)
-    # 시설마다 칸 수로 나눈 병렬 시간. 단계 사이 앞뒤 관계는 안 따지므로 아래쪽 어림값이다
+    owned = c.get("owned") or {}
+    gather = sorted(({**g, "have": owned.get(g["name"], 0), "calls": math.ceil(g["need"] / GATHER_PER_CALL)}
+                     for g in best["gather"]), key=lambda g: -g["need"])
+    missing = sorted(({**m, "have": owned.get(m["name"], 0)} for m in best["missing"]), key=lambda m: -m["need"])
+
+    calls = {"gather": sum(g["calls"] for g in gather),
+             "alter": sum(s["calls"] for s in steps if s["via"] == "alter"),
+             "craft": sum(s["calls"] for s in steps if s["via"] == "craft")}
+    total_calls = sum(calls.values())
+
+    serial = sum((s["sec"] or 0) * s["runs"] for s in steps if s["via"] == "alter")
     parallel = None
     if c.get("slots"):
         by_fac: dict = {}
-        for s in lst:
-            by_fac[s["facility"]] = by_fac.get(s["facility"], 0) + (s["sec"] or 0) * s["runs"]
-        parallel = 0
-        for fac, sec in by_fac.items():
-            n = max(1, c["slots"].get(fac) or 1)
-            parallel = max(parallel, math.ceil(sec / n))
+        for s in steps:
+            if s["via"] == "alter":
+                by_fac[s["facility"]] = by_fac.get(s["facility"], 0) + (s["sec"] or 0) * s["runs"]
+        # 시설마다 칸 수로 나눈 시간 중 가장 긴 것. 단계 사이 앞뒤 관계는 안 따지므로 아래쪽 어림값이다
+        parallel = max((math.ceil(sec / max(1, c["slots"].get(f) or 1)) for f, sec in by_fac.items()), default=0)
 
     facilities: dict = {}
-    for s in lst:
-        facilities[s["facility"]] = max(facilities.get(s["facility"]) or 0, s["level"] or 0)
+    skills: dict = {}
+    for s in steps:
+        if s["facility"]:
+            facilities[s["facility"]] = max(facilities.get(s["facility"]) or 0, s["level"] or 0)
+        if s.get("skill"):
+            skills[s["skill"]] = max(skills.get(s["skill"]) or 0, s.get("skillLevel") or 0)
 
-    return {"ok": True, "ambiguous": [s["product"] for s in lst if s["ambiguous"]], "target": target,
-            "count": count, "steps": lst, "totalRuns": sum(s["runs"] for s in lst), "gather": best["gather"],
-            "missing": best["missing"], "blocked": best["blocked"], "facilities": facilities,
-            "time": {"serial": serial, "parallel": parallel}}
+    top = next((s for s in steps if s["product"] == product), None)
+    return {"ok": True, "target": product, "recipe": recipe or (top["recipe"] if top else None),
+            "count": count, "have": owned.get(product, 0),
+            "steps": steps, "totalRuns": sum(s["runs"] for s in steps),
+            "gather": gather, "missing": missing, "blocked": best["blocked"],
+            "fromStock": [{"name": k, "use": v} for k, v in best["used"].items()],
+            "ambiguous": [s["product"] for s in steps if s["ambiguous"]],
+            "facilities": facilities, "skills": skills,
+            "calls": {**calls, "total": total_calls}, "wings": total_calls * WINGS_PER_CALL,
+            "time": {"serial": serial, "parallel": parallel},
+            "route": route(steps, gather)}
+
+
+def route(steps: list, gather: list) -> list[dict]:
+    """사람이 읽는 진행 차례. 채집을 먼저 몰아서 하고, 그다음 재료 단계 차례로 같은 시설 일을 묶는다.
+    실제 진행(goal.next_step)은 이 차례를 따르되, 가공은 시간이 걸리므로 재료가 되는 대로 먼저 걸어 둔다."""
+    out = []
+    if gather:
+        out.append({"kind": "gather", "items": [{"name": g["name"], "need": g["need"], "calls": g["calls"]}
+                                                for g in gather]})
+    for s in steps:
+        last = out[-1] if out else None
+        if last and last["kind"] == s["via"] and last.get("facility") == s["facility"] and last.get("depth") == s["depth"]:
+            last["items"].append({"recipe": s["recipe"], "runs": s["runs"], "calls": s["calls"]})
+        else:
+            out.append({"kind": s["via"], "facility": s["facility"], "depth": s["depth"],
+                        "items": [{"recipe": s["recipe"], "runs": s["runs"], "calls": s["calls"]}]})
+    return out
