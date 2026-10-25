@@ -261,6 +261,8 @@ class ManualInputWatcher:
 
     WH_KEYBOARD_LL = 13
     KEYDOWN = (0x100, 0x104)  # WM_KEYDOWN, WM_SYSKEYDOWN
+    # Shift·Ctrl 만 누른 것은 조작이 아니다 — Shift+F12(지금 작업 중단)·Ctrl+F12(전체 중단)를 누르면 먼저 눌린다
+    MODIFIERS = {0x10, 0x11, 0xA0, 0xA1, 0xA2, 0xA3}
 
     def __init__(self, game_hwnd, on_hit, ignore_vk: int = 0):
         import threading
@@ -286,7 +288,7 @@ class ManualInputWatcher:
             if code == 0 and wparam in self.KEYDOWN:
                 k = ctypes.cast(lparam, ctypes.POINTER(_KBDLL)).contents
                 g = self._game()
-                if not k.flags & 0x10 and k.vkCode != self.ignore_vk and g and _u32.GetForegroundWindow() == g:
+                if not k.flags & 0x10 and k.vkCode != self.ignore_vk and k.vkCode not in self.MODIFIERS and g and _u32.GetForegroundWindow() == g:
                     self.on_hit("키보드")
             return _u32.CallNextHookEx(None, code, wparam, lparam)
 

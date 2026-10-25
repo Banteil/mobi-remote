@@ -8,12 +8,14 @@
 화면 설정 맞추기는 큐 한 번에 한 번 (q.session), 큐가 다 끝나면 한 번 되돌린다.
 변화는 'mm:queue' {items, running} 로 화면에 보낸다.
 """
+import json
 import logging
 import math
 import threading
 import time
 
 from mabi import gamedata as gd
+from mabi import queue_report
 from mabi.runner import RunOptions, load_config
 from mabi.workqueue import Kind, WorkQueue
 
@@ -24,14 +26,73 @@ def _num(n) -> str:
     return f"{int(n or 0):,}"
 
 
+FAILED = ("FAIL", "ERROR", "CHECK", "HEAVY", "SKIP")
+
+
+def daily_progress(p: dict | None, e: dict) -> dict | None:
+    """숙제 실행기 이벤트(runner._emit)로 카드의 진행 기록(it['prog'])을 고친다. 바뀐 게 없으면 None.
+    n: 캐릭터 수 · i: 지금 몇 번째 · tasks: 캐릭터당 숙제 수 · ci: 이 캐릭터에서 몇 번째 숙제
+    done: 끝난 숙제 칸 (이미 끝나 건너뛴 것 포함 — 막대가 끝까지 찬다) · fail: 실패 칸 · seen: 나온 슬롯"""
+    t = e.get("type")
+    if t == "start":
+        return {"n": len(e.get("characters") or []), "tasks": len(e.get("order") or []), "labels": e.get("labels") or {},
+                "i": 0, "name": "", "task": "", "ci": 0, "step": "", "done": 0, "fail": 0, "seen": []}
+    if not p:
+        return None
+    p = {**p, "seen": list(p.get("seen") or [])}
+    slot = e.get("slot")
+    if slot is not None and slot not in p["seen"] and t in ("character", "task_end"):
+        p["seen"].append(slot)
+    if t == "character":
+        p.update(i=len(p["seen"]) if slot is not None else p["i"] + 1, name=e.get("name") or "", task="", ci=0, step="")
+    elif t == "task_start":
+        tid = e.get("task")
+        p.update(task="접속" if tid == "login" else p["labels"].get(tid) or e.get("label") or tid, step="")
+        if tid != "login":
+            p["ci"] += 1
+    elif t == "step":
+        p["step"] = e.get("text") or e.get("step") or ""
+    elif t == "task_end":
+        if e.get("task") == "login":
+            return None if e.get("status") == "OK" else {**p, "fail": p["fail"] + 1}
+        p["done"] += 1
+        if e.get("status") in FAILED:
+            p["fail"] += 1
+    else:
+        return None
+    return p
+
+
 class DailyKind(Kind):
+    own_loot = True  # 캐릭터마다 runner 가 잰다 ('loot' 이벤트)
+
     def __init__(self, api):
         self.api = api
+        self._results: list | None = None  # 이번 실행의 숙제별 결과 (결과 창)
+
+    def tasks(self, it):
+        # DONE = 이 큐가 돌기 전에 오늘 이미 끝나 있어 건너뛴 캐릭터 — 이번 큐가 한 일이 아니라 결과 창에서 뺀다
+        r, self._results = self._results, None
+        return [list(x) for x in r if x[1] != "DONE"] if r else None
 
     @staticmethod
     def detail(it) -> str:
         only = it.get("only")
         return f"{len(it.get('chars') or [])}명 · " + (f"숙제 {len(only)}개" if only else "전체") + (" · 다시" if it.get("force") else "")
+
+    def view(self, it):
+        v = super().view(it)
+        p = it.get("prog")
+        if not p:
+            return v
+        if p.get("name"):
+            v["now"] = f"[{p['i']}/{p['n']}] {p['name']}" + (f" · {p['task']}" if p.get("task") else "") + \
+                (f" ({p['ci']}/{p['tasks']})" if p.get("ci") and p.get("task") != "접속" else "")
+        v["step"] = p.get("step") or ""
+        v["stat"] = f"실패 {p['fail']}" if p.get("fail") else ""
+        if p.get("n") and p.get("tasks"):
+            v["bar"] = [p["done"], p["n"] * p["tasks"]]
+        return v
 
     def run(self, q, it):
         api = self.api
@@ -47,13 +108,24 @@ class DailyKind(Kind):
                           extra={"from": "queue"})
 
         def on_event(e):
+            fields = {}
+            if (p := daily_progress(it.get("prog"), e)) is not None:
+                fields["prog"] = p
+            if e.get("type") == "start":
+                fields["note"] = ""  # 진행은 카드의 진행 줄(view)로 보인다
             if e.get("type") == "task_start" and e.get("label"):
-                q.note(it, e["label"])
+                fields["at"] = e["label"]  # 멈추면 '… 에서 멈춤' 으로 쓴다
+            if fields:
+                q.patch(it["id"], fields)
+            if e.get("type") == "loot" and q.report:
+                q.report.add_loot(it, {k: e.get(k) for k in ("who", "gained", "used", "cur")})
+        self._results = None
         t = api._daily_launch(opts, on_event=on_event)
         if fit:
             q.session["iface"] = True
         t.join()
         kind, val = api._daily_result
+        self._results = val if kind == "done" else None
         if kind == "failed":
             q.note(it, f"실패 — {val}")
             return False
@@ -64,7 +136,7 @@ class DailyKind(Kind):
 
     def stop(self, reason):
         # 카드를 뺐으면 종료, 아니면 일시정지 (진행 기록으로 끊긴 자리부터 이어 한다)
-        self.api.daily_stop(reason == "remove")
+        self.api.daily_stop(reason in ("remove", "skip"))
 
 
 class AbyssKind(Kind):
@@ -81,6 +153,26 @@ class AbyssKind(Kind):
         return (f"{x.get('dungeon')} {x.get('difficulty')} · {lim or '멈출 때까지'}" + (" · 쓰러지면 나감" if x.get("revive") is False else "")
                 + (" · 화면 맞춤" if x.get("fit") else ""))
 
+    def where(self, it) -> str:
+        return f"{it['doneRuns']}판 한 뒤" if it.get("doneRuns") else ""
+
+    def view(self, it):
+        v = super().view(it)
+        p = it.get("prog") or {}
+        clears = int(it.get("doneRuns") or 0) + int(p.get("clears") or 0)
+        secs = float(it.get("doneSecs") or 0) + float(p.get("secs") or 0)
+        runs, minutes = int(it.get("runs") or 0), float(it.get("minutes") or 0)
+        if not p and not clears:
+            return v
+        v["now"] = " · ".join(s for s in [
+            self.STAGE.get(p.get("stage"), ""),
+            f"{clears}/{runs}판" if runs else f"클리어 {clears}",
+            f"{int(secs) // 60}분" + (f"/{minutes:g}분" if minutes else "")] if s)
+        v["stat"] = " · ".join(s for s in [f"부활 {p['revives']}" if p.get("revives") else "",
+                                           f"사망으로 나감 {p['deaths']}" if p.get("deaths") else ""] if s)
+        v["bar"] = [clears, runs] if runs else [int(secs), int(minutes * 60)] if minutes else None
+        return v
+
     def run(self, q, it):
         api = self.api
         # 멈췄다 다시 돌 때는 이미 돈 판·시간을 빼고 남은 만큼만
@@ -94,14 +186,18 @@ class AbyssKind(Kind):
             return False
         last = {"clears": 0, "secs": 0}
 
+        q.patch(it["id"], {"prog": {}, "note": ""})  # 이번에 돈 몫만 (앞서 돈 판·시간은 doneRuns·doneSecs)
+
         def on_event(e):
             if e.get("clears") is not None:
                 last.update(clears=e["clears"], secs=e.get("seconds") or 0)
-            if e.get("type") == "abyss":
-                stat = (f"클리어 {e['clears']}" + (f" · 부활 {e['revives']}" if e.get("revives") else "")
-                        + f" · 사망으로 나감 {e.get('deaths', 0)}"
-                        + (f" · {int(e['seconds']) // 60}분" if e.get("seconds") is not None else "")) if e.get("clears") is not None else ""
-                q.note(it, self.STAGE.get(e.get("stage"), "") + (f" · {stat}" if stat else ""))
+            if e.get("type") == "abyss":  # 진행은 카드의 진행 줄(view)로 보인다
+                p = dict(it.get("prog") or {})
+                p["stage"] = e.get("stage") or p.get("stage")
+                if e.get("clears") is not None:
+                    p.update(clears=e["clears"], revives=e.get("revives") or 0, deaths=e.get("deaths") or 0,
+                             secs=e.get("seconds") or 0)
+                q.patch(it["id"], {"prog": p})
         t = api._abyss_launch({"slot": it.get("slot"), "dungeon": it.get("dungeon"), "difficulty": it.get("difficulty"),
                                "runs": runs, "minutes": minutes, "revive": it.get("revive") is not False,
                                "fit_display": fit, "interface": fit and not q.session.get("iface")}, on_event)
@@ -109,7 +205,7 @@ class AbyssKind(Kind):
             q.session["iface"] = True
         t.join()
         q.patch(it["id"], {"doneRuns": int(it.get("doneRuns") or 0) + last["clears"],
-                           "doneSecs": float(it.get("doneSecs") or 0) + last["secs"]})
+                           "doneSecs": float(it.get("doneSecs") or 0) + last["secs"], "prog": {}})
         r = api._abyss_result
         if r.get("type") == "failed":
             q.note(it, f"실패 — {r.get('message', '')}")
@@ -144,6 +240,12 @@ class GoalKind(Kind):
         return (f"목표 {_num(x.get('target'))}개" + (f" · 만든 {_num(x['made'])}" if x.get("made") else "")
                 + (f" · 날개 {_num(x['spent'])}" if x.get("spent") else "") + (f" · {x['via']}" if x.get("via") else ""))
 
+    def view(self, it):
+        v = super().view(it)
+        if it.get("target"):
+            v["bar"] = [min(int(it.get("made") or 0), int(it["target"])), int(it["target"])]
+        return v
+
     def run(self, q, it):
         api, name = self.api, it.get("name")
         if it.get("base") is None:
@@ -158,7 +260,7 @@ class GoalKind(Kind):
                 break
             r = api.goal_next(name, (it.get("base") or 0) + int(it.get("target") or 0))  # 수량은 도중에 바뀔 수 있다 (✎)
             if r.get("error"):
-                q.note(it, f"중단 — {r.get('message') or r.get('error')}")
+                q.note(it, f"실패 — {r.get('message') or r.get('error')}")
                 break
             st = r.get("step") or {}
             have = r.get("have") or 0
@@ -235,6 +337,12 @@ class GoalKind(Kind):
             api._q_toast("생활 스킬 레벨이 모자랍니다",
                          f"{st.get('name')} 을(를) 캘 수 없어 작업 큐를 세웠습니다."
                          + (f" 필요 레벨 {data['requiredLevel']}." if data.get("requiredLevel") else ""), "bad")
+        if r.get("error") == "insufficient_transfer_cost":
+            # 계획은 보관함 반출 비용(분해된 장비 부품)이 늘 있다고 보고 세운다. 게임이 모자란다고 하면 여기서 멈춘다 —
+            # 장비 부품은 기다린다고 생기지 않고, 다음 카드도 같은 보관함 재료를 쓸 가능성이 크다
+            q.set_stop("transfer", {"what": st.get("name")})
+            api._q_toast("분해된 장비 부품이 모자랍니다",
+                         f"{st.get('name')} 의 재료를 보관함에서 꺼낼 수 없어 작업 큐를 세웠습니다.", "bad")
         return None
 
 
@@ -269,16 +377,58 @@ class QueueApi:
         self.queue = WorkQueue(self.cd.queue_file, self.cd.history_file, emit,
                                {"daily": DailyKind(self), "abyss": AbyssKind(self), "goal": GoalKind(self),
                                 "action": ActionKind(self)},
-                               on_drained=self._q_drained, pause_note=self._q_pause_note)
+                               on_drained=self._q_drained, pause_note=self._q_pause_note,
+                               snap=self._q_snap, on_report=self._q_report)
         threading.Thread(target=self._q_hotkey, name="queue-f12", daemon=True).start()
+
+    # ---- 결과 창: 큐가 다 비면 (다 끝남·전체 중단·마지막 카드 뺌) mabi/workqueue 가 보고서를 넘긴다
+    def _q_snap(self):
+        def query(cmd):
+            r = self.cli.run(cmd, timeout=15)
+            return r.data if r.ok else None
+        return queue_report.snapshot(query)
+
+    @property
+    def _q_report_file(self):
+        return self.paths.data / "queue-report.json"
+
+    def _q_report(self, rep: dict) -> None:
+        try:
+            self._q_report_file.write_text(json.dumps(rep, ensure_ascii=False, indent=1), encoding="utf-8")
+        except OSError:
+            log.exception("작업 큐 결과 저장 실패")
+        log.info(f"작업 큐 끝 — 결과 창 ({len(rep['cards'])}건)")
+        self._emit("mm:queue-report", rep)
+        self._bring_front()  # 결과 창이 게임 위로 보이게
+
+    def queue_lastReport(self) -> dict | None:  # noqa: N802
+        """지난 결과 창 다시 보기."""
+        try:
+            return json.loads(self._q_report_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
 
     def _q_pause_note(self) -> str:
         key = str(load_config(self.paths)["game"].get("stop_key", "f12")).upper()
         return f"일시정지 · {key} 나 ▶ 로 재개"
 
     def _q_stop_key(self) -> None:
-        """일시정지 키를 눌렀다: 돌고 있으면 일시정지, 쉬고 있으면 맨 위 일시정지 카드 이어 하기."""
+        """일시정지 키를 눌렀다: 돌고 있으면 일시정지, 쉬고 있으면 맨 위 일시정지 카드 이어 하기.
+        Ctrl+키 = 전체 중단 (큐를 비운다 → 결과 창), Shift+키 = 지금 작업만 중단 (빼고 다음 카드로)."""
+        from mabi.inputs import key_pressed
         q = self.queue
+        if key_pressed(0x11):  # Ctrl
+            if q.items:
+                log.info("Ctrl+F12 → 작업 큐 전체 중단")
+                q.clear()
+                self.cli.cancel()
+            return
+        if key_pressed(0x10):  # Shift
+            if q.current() or q.top_paused():
+                log.info("Shift+F12 → 지금 작업 중단, 다음 카드로")
+                q.skip_current()
+                self.cli.cancel()
+            return
         if q.running:
             log.info("F12 → 작업 큐 일시정지")
             q.request_stop("pause")

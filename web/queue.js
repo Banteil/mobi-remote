@@ -55,7 +55,7 @@ function qKind(x) { return Q_KINDS[x.kind || 'goal'] || Q_KINDS.goal; }
 const Q_TIP = {
   wait: '대기 — 큐가 돌면 위에서부터 차례로 진행합니다',
   pause: '일시정지 — 멈춘 자리에서 기다립니다. 카드의 ▶ 나 아래 ▶(전체 시작)로 이어 합니다',
-  done: '완료', fail: '중단 — 이유를 읽고 ▶ 로 다시 걸거나 정리로 치웁니다', run: '진행 중',
+  done: '완료', fail: '실패 — 이유를 읽고 ▶ 로 다시 걸거나 정리로 치웁니다', run: '진행 중',
 };
 const Q_STATE = Object.fromEntries(['wait', 'run', 'pause', 'done', 'fail'].map((k) =>
   [k, { label: (mm.labels.queue_state || {})[k] || k, cls: 'q-' + k, tip: Q_TIP[k] }]));
@@ -177,7 +177,7 @@ async function qEdit(id) {
   mm.queue.edit(id, n);  // 돌고 있는 목표는 다음 걸음부터 새 수량으로
 }
 
-/** 중단된 항목을 치운다. 완료는 끝나는 즉시 스스로 빠지므로, 남는 것은 막혔거나 실패한 것들이다. */
+/** 실패한 항목을 치운다. 완료는 끝나는 즉시 스스로 빠지므로, 남는 것은 막혔거나 실패한 것들이다. */
 function qTidy() { mm.queue.tidy(); }
 
 /** 전부 지운다. 되돌릴 수 없으니 한 번 물어본다. */
@@ -204,6 +204,109 @@ function qPause() {
 function qHalt() {
   mm.queue.halt();
   say('멈추는 중입니다.');
+}
+
+/* ── 큐 결과 창 ──
+ * 큐를 시작한 뒤 남은 카드가 없어지면(다 끝남 · 전체 중단 Ctrl+F12 · 마지막 카드 뺌) 파이썬이 보고서를 보낸다
+ * (mabi/queue_report.py). 요약 탭 = 카드별 결과 + 모두 합친 얻은 것·쓴 것·재화, 카드 탭 = 그 카드의 세부 (숙제는 캐릭터별). */
+const QR_RESULT = {
+  done: ['완료', 'pill-ok'], fail: ['실패', 'pill-bad'], pause: ['일시정지', 'pill-warn'],
+  stop: ['중단', 'pill-muted'], preempt: ['밀림', 'pill-muted'], run: ['진행 중', 'pill-muted'],
+};
+let qrData = null;
+let qrTab = 'sum';
+
+function qrPill(r) {
+  const [t, k] = QR_RESULT[r] || [r, 'pill-muted'];
+  return '<span class="pill ' + k + '">' + t + '</span>';
+}
+
+function qrTook(secs) {
+  const m = Math.round((secs || 0) / 60);
+  return m >= 60 ? Math.floor(m / 60) + '시간 ' + (m % 60) + '분' : m ? m + '분' : (secs || 0) + '초';
+}
+
+/** 얻은 것 · 쓴 것 · 재화 (x: {gained, used, cur}). compact: 캐릭터 칸 안에 작게 */
+function lootHtml(x, compact) {
+  const list = (m, sign) => Object.entries(m || {}).sort((a, b) => b[1] - a[1])
+    .map(([k, n]) => '<span class="qr-item">' + esc(k) + ' <b>' + sign + num(n) + '</b></span>').join('');
+  const cur = Object.entries(x.cur || {}).sort((a, b) => b[1] - a[1])
+    .map(([k, n]) => '<span class="qr-item ' + (n > 0 ? 'qr-up' : 'qr-down') + '">' + esc(k) + ' <b>' + (n > 0 ? '+' : '−') + num(Math.abs(n)) + '</b></span>').join('');
+  const rows = [['얻은 것', list(x.gained, '+')], ['재화', cur], ['쓴 것', list(x.used, '−')]].filter((r) => r[1]);
+  if (!rows.length) return compact ? '' : '<p class="muted">가방·재화 변화가 없습니다.</p>';
+  return '<div class="qr-loot' + (compact ? ' compact' : '') + '">' +
+    rows.map(([t, h]) => '<div class="qr-lrow"><span class="qr-lt">' + t + '</span><div class="qr-items">' + h + '</div></div>').join('') + '</div>';
+}
+
+function showQueueReport(rep) {
+  if (!rep || !(rep.cards || []).length) return;
+  qrData = rep;
+  qrTab = 'sum';
+  const hm = (t) => { const d = new Date(t); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+  $('#qr-title').textContent = rep.why === 'done' ? '작업 큐 결과 — 모두 완료' : '작업 큐 결과 — 중단됨';
+  $('#qr-time').textContent = rep.start && rep.end ? hm(rep.start) + ' ~ ' + hm(rep.end) + ' (' + qrTook((rep.end - rep.start) / 1000) + ')' : '';
+  paintQueueReport();
+  $('#q-report').classList.remove('hidden');
+}
+
+function paintQueueReport() {
+  const rep = qrData;
+  if (!rep) return;
+  $('#qr-tabs').innerHTML = [['sum', '요약', '']].concat(rep.cards.map((c) => [String(c.id), c.label, c.result]))
+    .map(([k, t, r]) => '<button class="qr-tab' + (k === qrTab ? ' on' : '') + '" data-qr-tab="' + esc(k) + '">' +
+      esc(t) + (r ? ' <i class="qr-dot qr-' + esc(r) + '"></i>' : '') + '</button>').join('');
+  $('#qr-shot').classList.add('hidden');
+  $('#qr-scroll').scrollTop = 0;
+  if (qrTab === 'sum') {
+    const n = {};
+    rep.cards.forEach((c) => { n[c.result] = (n[c.result] || 0) + 1; });
+    $('#qr-sum').innerHTML = Object.entries(n).map(([r, c]) => {
+      const [t, k] = QR_RESULT[r] || [r, 'pill-muted'];
+      return '<span class="pill ' + k + '">' + t + ' ' + c + '</span>';
+    }).join('');
+    $('#qr-body').innerHTML =
+      '<div class="dl-rp-char"><h4>한 일</h4>' + rep.cards.map((c) =>
+        '<div class="qr-card" data-qr-tab="' + c.id + '">' + qrPill(c.result) + '<b>' + esc(c.label) + '</b>' +
+        '<span class="qr-goal">' + esc((c.view && c.view.goal) || c.detail || '') + '</span>' +
+        '<span class="muted">' + qrTook(c.secs) + '</span></div>').join('') + '</div>' +
+      '<div class="dl-rp-char"><h4>모두 합친 결과</h4>' + lootHtml(rep.total || {}) + '</div>';
+    return;
+  }
+  const c = rep.cards.find((x) => String(x.id) === qrTab);
+  if (!c) return;
+  const v = c.view || {};
+  const bar = Array.isArray(v.bar) && v.bar[1] ? Math.round(v.bar[0] / v.bar[1] * 100) + '%' : '';
+  const head = '<div class="dl-rp-char"><h4>' + esc(c.label) + ' ' + qrPill(c.result) + '</h4>' +
+    '<div class="qr-kv">' +
+    [['내용', (v.goal || c.detail || '')], ['진행', [v.now, bar, v.stat].filter(Boolean).join(' · ')],
+      ['걸린 시간', qrTook(c.secs) + (c.runs > 1 ? ' · ' + c.runs + '번에 나눠 함' : '')], ['메모', c.note]]
+      .filter((r) => r[1]).map(([k, t]) => '<span>' + k + '</span><span>' + esc(t) + '</span>').join('') + '</div></div>';
+  if (c.kind === 'daily') {
+    const d = dailyReportHtml(c.tasks, c.loot);
+    $('#qr-sum').innerHTML = d.pills;
+    $('#qr-body').innerHTML = head + d.body;
+  } else {
+    $('#qr-sum').innerHTML = '';
+    const lt = (c.loot || []).length ? lootHtml(c.loot.reduce((a, x) => {
+      ['gained', 'used', 'cur'].forEach((k) => Object.entries(x[k] || {}).forEach(([n, q]) => { a[k][n] = (a[k][n] || 0) + q; }));
+      return a;
+    }, { gained: {}, used: {}, cur: {} })) : '<p class="muted">가방·재화 변화가 없습니다.</p>';
+    $('#qr-body').innerHTML = head + '<div class="dl-rp-char"><h4>얻은 것</h4>' + lt + '</div>';
+  }
+}
+
+mm.queue.onReport(showQueueReport);
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('#q-report [data-qr-tab]');
+  if (!t) return;
+  qrTab = t.dataset.qrTab;
+  paintQueueReport();
+});
+
+async function showLastQueueReport() {
+  const rep = await mm.queue.lastReport().catch(() => null);
+  if (rep) showQueueReport(rep);
+  else toast('아직 결과가 없습니다', '작업 큐를 한 번 다 돌리면(또는 전체 중단하면) 여기서 다시 볼 수 있습니다.', 'ok');
 }
 
 /* ── 작업 기록 ── 끝난 항목(완료·실패·일시정지·뺌)을 파이썬이 한 줄씩 파일에 남기고, '기록' 창에서 본다 */
@@ -238,6 +341,42 @@ async function showQueueHistory() {
   $('#q-hist-n').textContent = rows && rows.length ? '최근 ' + rows.length + '건' : '';
   $('#q-hist').classList.remove('hidden');
 }
+
+/**
+ * 카드의 진행 줄 — 지금 하는 일 · 단계 · 막대. 글은 파이썬이 만든다 (x.view, gui_app/queue_api.py 의 Kind.view).
+ * 화면 위 오버레이(gui_app/overlay.py)도 같은 view 를 그려 둘이 같은 말을 한다.
+ */
+function qProgress(x) {
+  const v = x.view || {};
+  const bar = Array.isArray(v.bar) && v.bar[1] > 0 ? v.bar : null;
+  const run = x.status === 'run';
+  if (!v.now && !v.step && !bar && !run) return '';
+  const pct = bar ? Math.min(100, Math.round(bar[0] / bar[1] * 100)) : 0;
+  const nums = bar && x.kind !== 'abyss' ? num(bar[0]) + '/' + num(bar[1]) : '';
+  return '<div class="q-prog">' +
+    (v.now || run
+      ? '<div class="q-now"><span>' + esc(v.now || '') + '</span>' +
+        (run && x.startedAt ? '<span class="q-el" data-since="' + x.startedAt + '">' + qElapsed(x.startedAt) + '</span>' : '') + '</div>'
+      : '') +
+    (v.step ? '<div class="q-step" title="' + esc(v.step) + '">' + esc(v.step) + '</div>' : '') +
+    // 너비는 그린 뒤 paintQueue 가 넣는다 — 인라인 style 은 CSP(style-src 'self')에 막힌다
+    (bar ? '<div class="q-barrow"><div class="q-bar"><i data-pct="' + pct + '"></i></div>' +
+      '<span>' + [nums, pct + '%', v.stat].filter(Boolean).map(esc).join(' · ') + '</span></div>'
+      : (v.stat ? '<div class="q-step">' + esc(v.stat) + '</div>' : '')) +
+    '</div>';
+}
+
+function qElapsed(since) {
+  const s = Math.max(0, Math.floor((Date.now() - since) / 1000));
+  const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, ss = s % 60;
+  const p = (n) => String(n).padStart(2, '0');
+  return (h ? h + ':' + p(m) : m) + ':' + p(ss);
+}
+
+// 진행 중 카드의 걸린 시간 (카드를 다시 그리지 않고 글자만)
+setInterval(() => {
+  document.querySelectorAll('#q-list .q-el').forEach((el) => { el.textContent = qElapsed(Number(el.dataset.since)); });
+}, 1000);
 
 function paintQueue() {
   const list = $('#q-list');
@@ -285,6 +424,7 @@ function paintQueue() {
       '<span class="spacer"></span>' + btns +
       '</div>' +
       (k.card ? k.card(x) : '<div class="q-amt">' + esc(k.amount(x)) + '</div>') +
+      qProgress(x) +
       (x.note ? '<div class="q-note">' + esc(x.note) + '</div>' : '') +
       (run
         ? ''
@@ -294,6 +434,7 @@ function paintQueue() {
           '</div>') +
       '</div>';
   }).join('');
+  list.querySelectorAll('.q-bar i[data-pct]').forEach((el) => { el.style.width = el.dataset.pct + '%'; });
 }
 /**
  * 자동으로 구할 수 없는 재료를 만났을 때.

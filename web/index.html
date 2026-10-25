@@ -63,6 +63,15 @@
   <button id="update-later" class="btn btn-tiny btn-ghost">나중에</button>
 </div>
 
+<div id="npcap-banner" class="banner hidden">
+  <span class="banner-mark">!</span>
+  <span id="npcap-text">Npcap 이 없어 패킷 감시가 꺼져 있습니다 — 설치하면 맵 이동·던전·대화 상태를 화면보다 빨리 압니다 (없어도 리모콘은 동작)</span>
+  <button class="btn btn-tiny btn-primary" data-npcap>Npcap 받기</button>
+  <button class="btn btn-tiny" data-packet-retry>설치했으면 다시 확인</button>
+  <button id="npcap-noask" class="btn btn-tiny btn-ghost">다시 묻지 않기</button>
+  <button id="npcap-later" class="btn btn-tiny btn-ghost">닫기</button>
+</div>
+
 
 <div id="work">
 <main id="content">
@@ -75,6 +84,7 @@
       <span class="spacer"></span>
       <span id="ch-scan-state" class="muted"></span>
       <button class="btn hidden" id="ch-scan-stop">중단</button>
+      <button class="btn" id="ch-reset-all" title="모든 캐릭터의 사냥터·은동전 던전·검은 구멍·일요일 요일 던전을 숙제 기본값으로 되돌립니다 (아르바이트는 그대로)">모두 기본값으로</button>
       <button class="btn btn-primary" id="ch-scan" title="게임의 캐릭터 선택 화면을 읽어 캐릭터 수·이름·그림을 채웁니다">자동 설정</button>
     </div>
     <div id="ch-grid" class="ch-grid"></div>
@@ -359,7 +369,6 @@
       <label class="chk" title="테두리 없는 전체화면 · 16:9 · 인터페이스 PC 80% 로 맞추고, 작업 큐가 다 끝나면 원래대로 되돌립니다 (큐 한 번에 한 번만)"><input type="checkbox" id="dl-fit"> 화면 설정 맞추기</label>
       <label class="chk"><input type="checkbox" id="dl-force"> 오늘 끝낸 숙제도 다시</label>
       <span id="dl-state" class="pill pill-muted hidden"></span>
-      <button class="btn" id="dl-report-btn" title="오늘 지금까지의 결과를 보고서로 봅니다">결과 보기</button>
       <button class="btn" id="dl-queue" title="고른 캐릭터·숙제를 작업 큐 맨 아래에 담습니다 (재생을 눌러야 진행)">목표</button>
       <button class="btn btn-primary" id="dl-start" title="지금 바로 시작 — 진행 중인 작업이 있으면 뒤로 미루고 먼저 합니다">숙제 시작</button>
       <button class="btn btn-warn hidden" id="dl-stop">일시정지 (F12)</button>
@@ -375,6 +384,7 @@
         <dl class="kv dl-kv">
           <dt>사냥터</dt><dd><select id="dl-field-runs"></select> 회 · <select id="dl-field"></select> <span class="muted" id="dl-follow-field"></span></dd>
           <dt>남은 은동전 던전</dt><dd><select id="dl-dungeon"></select> <select id="dl-floor"></select> <span class="muted" id="dl-follow-dungeon"></span></dd>
+          <dt>일요일 요일 던전</dt><dd><select id="dl-sunday"></select> <span class="muted" id="dl-follow-sunday"></span></dd>
         </dl>
         <div class="row"><span class="spacer"></span><span id="dl-save-msg" class="muted"></span>
           <button class="btn btn-primary" id="dl-save">저장</button></div>
@@ -428,8 +438,9 @@
     <button class="q-fbtn" id="q-pause" title="지금 걸음을 마치고 멈춤 — 재생하면 이어집니다">⏸</button>
     <button class="q-fbtn" id="q-halt" title="지금 명령까지 끊고 일시정지 — ▶ 로 이어 합니다">■</button>
     <span class="spacer"></span>
+    <button class="q-fbtn" id="q-report-btn" title="지난번 큐 결과 창 다시 보기 (한 일 · 얻은 것)">결과</button>
     <button class="q-fbtn" id="q-history" title="지금까지 진행한 작업 (끝난 시각 · 결과)">기록</button>
-    <button class="q-fbtn" id="q-tidy" title="중단된 항목 치우기 (완료는 스스로 빠집니다)">정리</button>
+    <button class="q-fbtn" id="q-tidy" title="실패한 항목 치우기 (완료는 스스로 빠집니다)">정리</button>
     <button class="q-fbtn" id="q-clear" title="전부 지우기">전체 삭제</button>
   </div>
 </aside>
@@ -537,6 +548,32 @@
       </div>
 
       <div class="card card-wide">
+        <h3>작업 큐 오버레이</h3>
+        <label class="chk"><input type="checkbox" id="ov-on"> 게임 화면 위에 작업 큐 진행 상황 띄우기</label>
+        <dl class="kv dl-kv mt10">
+          <dt>보일 때</dt><dd><select id="ov-when">
+            <option value="active">큐가 돌거나 일시정지일 때</option>
+            <option value="always">카드가 있으면 늘</option></select></dd>
+          <dt>배경</dt><dd><select id="ov-bg">
+            <option value="panel">반투명 판</option>
+            <option value="none">없음 (글자만, 테두리)</option></select>
+            <label class="ov-alpha">불투명도 <input type="range" id="ov-alpha" min="0" max="100" step="5"> <span id="ov-alpha-n"></span></label></dd>
+          <dt>글자 크기</dt><dd><select id="ov-size">
+            <option value="s">작게</option><option value="m">보통</option><option value="l">크게</option></select></dd>
+          <dt>위치</dt><dd><select id="ov-corner">
+            <option value="bl">왼쪽 아래</option><option value="br">오른쪽 아래</option>
+            <option value="tl">왼쪽 위</option><option value="tr">오른쪽 위</option></select>
+            가로 <input type="number" id="ov-dx" class="w-num" min="0" max="2000" step="10">
+            세로 <input type="number" id="ov-dy" class="w-num" min="0" max="2000" step="10"> 픽셀 떨어짐</dd>
+          <dt>다음 카드</dt><dd><select id="ov-next">
+            <option value="0">안 보임</option><option value="1">1장</option><option value="2">2장</option>
+            <option value="3">3장</option><option value="5">5장</option></select></dd>
+        </dl>
+        <p class="hint">봇이 화면을 찍을 때는 빠지므로 화면 인식에 걸리지 않습니다. 대신 Windows 스크린샷·녹화에도 안 찍힙니다.
+          클릭은 게임으로 그대로 통과합니다. 게임이 '전체화면'(독점)이면 보이지 않습니다.</p>
+      </div>
+
+      <div class="card card-wide">
         <h3>일일 숙제</h3>
         <dl class="kv dl-kv">
           <dt>일시정지 키</dt><dd><select id="opt-stop-key"></select><div class="hint">숙제 중 누르면 일시정지, 다시 누르면 재개</div></dd>
@@ -613,10 +650,12 @@
       <dt>남은 은동전</dt><dd><select id="ch-e-dungeon"></select> <select id="ch-e-floor"></select></dd>
       <dt>검은 구멍</dt><dd><label class="chk"><input type="checkbox" id="ch-e-bh"> 돌기</label></dd>
       <dt>아르바이트</dt><dd><label class="chk"><input type="checkbox" id="ch-e-arb"> 진행하기</label></dd>
+      <dt>일요일 요일 던전</dt><dd><select id="ch-e-sun"></select> <span class="hint">임무 게시판에서 고를 보상</span></dd>
     </dl>
     <p class="hint">공통 설정과 같은 값은 공통 설정을 따릅니다.</p>
     <div class="modal-actions">
       <button class="btn btn-ghost ch-left" id="ch-e-del">캐릭터 제외</button>
+      <button class="btn btn-ghost" id="ch-e-reset" title="사냥터·은동전 던전·검은 구멍·일요일 요일 던전을 숙제 기본값으로 채웁니다. 저장을 눌러야 반영됩니다 (아르바이트는 그대로)">기본값으로</button>
       <button class="btn" id="ch-e-cancel">취소</button>
       <button class="btn btn-primary" id="ch-e-save">저장</button>
     </div>
@@ -636,7 +675,7 @@
   </div>
 </div>
 
-<!-- 일일 숙제 결과 보고 (끝나면 뜬다) -->
+<!-- 작업 기록 (끝난 카드 한 줄씩) -->
 <div id="q-hist" class="modal hidden">
   <div class="modal-box modal-wide">
     <div class="modal-head"><h3>작업 기록</h3><span id="q-hist-n" class="muted"></span></div>
@@ -647,17 +686,19 @@
   </div>
 </div>
 
-<div id="dl-report" class="modal hidden">
+<!-- 작업 큐 결과 (큐가 다 비면 뜬다 — 다 끝남·전체 중단·마지막 카드 뺌). 요약 탭 + 카드마다 탭 -->
+<div id="q-report" class="modal hidden">
   <div class="modal-box modal-wide">
-    <div class="modal-head"><h3 id="dl-rp-title">일일 숙제 결과</h3></div>
-    <div id="dl-rp-sum" class="dl-rp-sum"></div>
-    <div id="dl-rp-scroll" class="dl-rp-scroll">
-      <div id="dl-rp-body" class="dl-rp-body"></div>
-      <img id="dl-rp-shot" class="dl-rp-shot hidden" alt="">
+    <div class="modal-head"><h3 id="qr-title">작업 큐 결과</h3><span id="qr-time" class="muted"></span></div>
+    <div id="qr-tabs" class="qr-tabs"></div>
+    <div id="qr-sum" class="dl-rp-sum"></div>
+    <div id="qr-scroll" class="dl-rp-scroll">
+      <div id="qr-body" class="dl-rp-body"></div>
+      <img id="qr-shot" class="dl-rp-shot hidden" alt="">
     </div>
     <div class="modal-actions">
-      <button class="btn" id="dl-rp-logs">로그 폴더</button>
-      <button class="btn btn-primary" id="dl-rp-close">닫기</button>
+      <button class="btn" id="qr-logs">로그 폴더</button>
+      <button class="btn btn-primary" id="qr-close">닫기</button>
     </div>
   </div>
 </div>

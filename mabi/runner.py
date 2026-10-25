@@ -19,7 +19,7 @@ from datetime import datetime
 from typing import Callable
 
 from . import profile as prof
-from . import tasks
+from . import queue_report, tasks
 from .bot import AuthBlocked, Bot, MissingTemplate, Overweight, StepTimeout, StopRequested
 from .paths import Paths
 from .report import RunReport
@@ -120,6 +120,21 @@ class Runner:
         if self.bot:
             self.bot.stopper.request()
 
+    # ---- 캐릭터마다 얻은 것 (작업 큐 결과 창) — 숙제를 시작할 때와 그 캐릭터를 끝낼 때 가방·재화를 찍어 뺀다
+    _loot: tuple | None = None
+
+    def _loot_open(self, bot: Bot, who: str) -> None:
+        self._loot = (who, queue_report.snapshot(bot.state.query)) if bot.state.available() else None
+
+    def _loot_close(self, bot: Bot) -> None:
+        if not self._loot:
+            return
+        who, before = self._loot
+        self._loot = None
+        x = queue_report.loot(before, queue_report.snapshot(bot.state.query), who)
+        if x:
+            self._emit("loot", **x)
+
     def _emit(self, type_: str, **kw) -> None:
         try:
             self.on_event({"type": type_, **kw})
@@ -157,6 +172,7 @@ class Runner:
         if self._stop_requested:
             bot.stopper.request()
         bot.daily = state
+        bot.on_step = lambda s, t: self._emit("step", slot=(bot.character or {}).get("slot"), task=bot.task_id, step=s, text=t or s)
         if cfg["game"].get("pause_on_touch", True) and not opts.dry_run:
             bot.stopper.watch_manual(lambda: bot.window.hwnd)
         results: list[tuple[str, str, str]] = []
@@ -185,7 +201,10 @@ class Runner:
             log.info(f"시작: 캐릭터 {len(characters)}명, 게임 날짜 {state.date}  (일시정지: {cfg['game']['stop_key'].upper()})")
             characters = self._arrange(cfg, opts, by_slot, characters, state)
             self._interface_ready = False
-            self._loop(cfg, opts, registry, by_slot, characters, state, bot, report, results)
+            try:
+                self._loop(cfg, opts, registry, by_slot, characters, state, bot, report, results)
+            finally:
+                self._loot_close(bot)  # 마지막 캐릭터 (중단으로 끝나도)
             if not any(s == "STOP" for _, s, _ in results):
                 state.clear_progress()  # 끝까지 돌았다. 중단·충돌이면 남겨 두고 다음에 거기서부터
                 # 모든 캐릭터가 끝났다 → 시작할 때 기억해 둔 인터페이스 설정으로 되돌린다 (일시정지면 이어 할 때까지 둔다)
@@ -248,7 +267,7 @@ class Runner:
         끝나면 되돌린다. 게임 안(CLI 로 확인)이거나 방금 접속했을 때만 — 환경 설정은 게임 안에서만 열린다. 맞췄으면 True."""
         if self._interface_ready or opts.dry_run or not opts.display or opts.interface_ready:
             return False
-        if not after_login and bot.state.query("get_my_info") is None:
+        if not after_login and not bot.in_game():
             return False
         self._interface_ready = True
         try:
@@ -317,7 +336,7 @@ class Runner:
         def step(slot, tid: str, label: str, fn) -> str:
             """숙제 하나 실행. 상태 문자열 반환."""
             log.info(f"▶ {label}")
-            bot.task_id, bot.resume = tid, None
+            bot.task_id, bot.resume, bot.verified = tid, None, False
             if slot is not None:
                 last = state.last_step(slot, tid)
                 # 끝까지 간 기록('end')이 아니면 그 단계에서 끊긴 것 → 숙제가 거기서부터 이어 한다
@@ -333,7 +352,7 @@ class Runner:
                 summary = fn()
                 status = "OK"
                 check = tasks.VERIFY.get(tid)
-                if check and tid not in bot.also_done:
+                if check and tid not in bot.also_done and not bot.verified:
                     try:
                         if not check(bot, cfg):
                             if tid in tasks.MANUAL_LEFT:  # 할 수 있는 건 다 함. 남은 건 사람이 직접 (다시 시작해도 넘김)
@@ -399,6 +418,7 @@ class Runner:
             if ch and cut and cut.get("slot") == slot and cut.get("task") in order and order[0] != cut["task"]:
                 order = [cut["task"], *[t for t in order if t != cut["task"]]]
                 log.info(f"[{who}] 끊긴 숙제 '{registry[cut['task']][0]}' 부터")
+            self._loot_close(bot)  # 앞 캐릭터가 얻은 것 (다른 캐릭터로 바꾸기 전에)
             bot.character = ch
             report.character(ch)
             self._emit("character", slot=slot, name=who)
@@ -425,6 +445,7 @@ class Runner:
                     self._emit("task_end", slot=slot, task=t, label=t, status="HEAVY", summary=heavy, seconds=0)
                 continue
             bot.watch_weight = True  # 숙제 중에만 가방 무게 감시
+            self._loot_open(bot, who)
             for tid in order:
                 label, fn = registry[tid]
                 if tid in bot.also_done:  # 다른 숙제 안에서 이미 끝냄 (사냥터 안 검은 구멍 등)
@@ -440,3 +461,15 @@ class Runner:
                     return
                 if status == "HEAVY":
                     break
+            else:
+                # 일일 미션 뒤에 한 숙제(아르바이트 → '따뜻한 손길')로 새로 깬 미션의 선물. 받을 게 있을 때만 창을 연다
+                if "daily_mission" in order and order[-1] != "daily_mission":
+                    try:
+                        got = tasks.daily_mission.claim_leftovers(bot, cfg)
+                        if got:
+                            log.info(f"  [{who}] 마지막에 남은 일일 미션 선물: {got}")
+                    except StopRequested:
+                        log.warning("사용자 중단")
+                        return
+                    except (StepTimeout, CannotProceed, MissingTemplate, RuntimeError) as e:
+                        log.warning(f"[{who}] 마지막 일일 미션 선물 받기 실패: {e}")

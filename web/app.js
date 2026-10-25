@@ -1231,6 +1231,51 @@ function paintCliPath(loc) {
       '<pre class="compat-detail">' + esc(loc.tried.join('\n')) + '</pre></details>';
 }
 
+/** 패킷 감시 상태. 없어도 리모콘은 화면·CLI 로 돌고, 있으면 상태를 더 빨리 안다 */
+function packetHtml(st) {
+  const npcap = ' <button class="btn btn-tiny" data-npcap>Npcap 받기</button>';
+  return ({
+    running: '<span class="mark-ok">✔ 켜짐</span>',
+    starting: '<span class="muted">켜는 중…</span>',
+    no_npcap: '<span class="mark-warn">Npcap 이 없습니다</span>' + npcap +
+      ' <button class="btn btn-tiny" data-packet-retry>다시 확인</button>' +
+      '<div class="hint">설치한 뒤 다시 확인을 누르면 켜집니다. 없어도 화면·CLI 로 돕니다.</div>',
+    no_table: '<span class="mark-warn">패킷 표·키가 없어 꺼져 있습니다</span>',
+    off: '<span class="muted">설정에서 꺼 둠</span>',
+  })[st] || '<span class="mark-warn">켜지 못했습니다 (로그 확인)</span>';
+}
+
+/** 켤 때 Npcap 이 없으면 위에 띠를 띄운다 (포터블판은 설치 화면이 없어 여기서 알린다). '다시 묻지 않기' 면 옵션 창에만 */
+async function wireNpcap() {
+  const hide = () => $('#npcap-banner').classList.add('hidden');
+  $('#npcap-later').addEventListener('click', hide);
+  $('#npcap-noask').addEventListener('click', async () => {
+    await mm.cfg.set('npcapNoAsk', true);
+    hide();
+    toast('다시 묻지 않습니다', '옵션 창 버전 칸의 패킷 감시 줄에서 언제든 받을 수 있습니다.', 'ok');
+  });
+  document.addEventListener('click', async (e) => {
+    if (e.target.closest('[data-npcap]')) { mm.version.npcap(); return; }
+    const b = e.target.closest('[data-packet-retry]');
+    if (!b) return;
+    b.disabled = true;
+    const r = await mm.version.packetRetry().catch(() => null);
+    b.disabled = false;
+    const st = r && r.status;
+    if (st === 'running' || st === 'starting') {
+      hide();
+      toast('패킷 감시를 켰습니다', '', 'ok');
+    } else {
+      toast('아직 Npcap 을 찾지 못했습니다', '설치를 마친 뒤 다시 눌러 주세요.', 'bad');
+    }
+    if (!$('#options').classList.contains('hidden')) loadCompat(false);
+  });
+  setTimeout(async () => {
+    const [cfg, info] = await Promise.all([mm.cfg.get(), mm.version.info()]).catch(() => [null, null]);
+    if (cfg && !cfg.npcapNoAsk && info && info.packet === 'no_npcap') $('#npcap-banner').classList.remove('hidden');
+  }, 5000);
+}
+
 async function loadCompat(refresh) {
   const [info, res] = await Promise.all([mm.version.info(), mm.version.check(!!refresh)]);
 
@@ -1242,7 +1287,9 @@ async function loadCompat(refresh) {
     ['모비 커넥터 리모콘', info.app, ''],
     ['MM CLI', info.cliVersion || '읽을 수 없음', info.cliFull || ''],
   ].map(([k, v, tip]) =>
-    '<dt>' + esc(k) + '</dt><dd' + (tip ? ' title="' + esc(tip) + '"' : '') + '>' + esc(v) + '</dd>').join('');
+    '<dt>' + esc(k) + '</dt><dd' + (tip ? ' title="' + esc(tip) + '"' : '') + '>' + esc(v) + '</dd>').join('') +
+    '<dt>새 판</dt><dd><button class="btn btn-tiny" id="upd-check">새 판 확인</button> <span class="muted" id="upd-msg"></span></dd>' +
+    '<dt>패킷 감시</dt><dd>' + packetHtml(info.packet) + '</dd>';
 
   const s = LEVEL_STYLE[res.levelName] || LEVEL_STYLE.info;
   const baseAt = res.baseline && res.baseline.verifiedAt
@@ -1322,6 +1369,25 @@ async function paintOptionSettings() {
   if (el) el.checked = cfg.askFacilityLevelMismatch !== false;
   const tray = $('#opt-close-to-tray');
   if (tray) tray.checked = cfg.closeToTray === true;
+  paintOverlayOptions(await mm.cfg.overlay().catch(() => null));
+}
+
+/* 작업 큐 오버레이 (gui_app/queue_overlay.py) — 바꾸는 즉시 저장하고 오버레이에 반영한다 */
+const OV_KEYS = ['when', 'bg', 'size', 'corner', 'dx', 'dy', 'next', 'alpha'];
+const OV_NUM = ['dx', 'dy', 'next', 'alpha'];
+
+function paintOverlayOptions(o) {
+  if (!o) return;
+  $('#ov-on').checked = !!o.on;
+  OV_KEYS.forEach((k) => { $('#ov-' + k).value = String(o[k]); });
+  $('#ov-alpha-n').textContent = o.alpha + '%';
+  $('.ov-alpha').classList.toggle('hidden', o.bg !== 'panel');
+}
+
+async function saveOverlayOptions() {
+  const v = { on: $('#ov-on').checked };
+  OV_KEYS.forEach((k) => { v[k] = OV_NUM.includes(k) ? Number($('#ov-' + k).value) : $('#ov-' + k).value; });
+  paintOverlayOptions(await mm.cfg.overlay(v));
 }
 
 /* ── 콘솔 ───────────────────────────────────────── */
@@ -1577,6 +1643,7 @@ function wire() {
   $('#q-halt').addEventListener('click', qHalt);
   $('#q-tidy').addEventListener('click', qTidy);
   $('#q-history').addEventListener('click', showQueueHistory);
+  $('#q-report-btn').addEventListener('click', showLastQueueReport);
   $('#q-hist-close').addEventListener('click', () => $('#q-hist').classList.add('hidden'));
   $('#q-clear').addEventListener('click', qClear);
 
@@ -1607,6 +1674,9 @@ function wire() {
       ? '창을 닫으면 트레이에 남습니다.'
       : '창을 닫으면 프로그램도 함께 끝납니다.', 'ok');
   });
+
+  ['on', ...OV_KEYS].forEach((k) => $('#ov-' + k).addEventListener('change', saveOverlayOptions));
+  $('#ov-alpha').addEventListener('input', (e) => { $('#ov-alpha-n').textContent = e.target.value + '%'; });
 
   $('#btn-refresh').addEventListener('click', refreshActive);
   $('#btn-stop').addEventListener('click', () =>
@@ -1661,6 +1731,7 @@ function wire() {
 
 
   wireUpdate();
+  wireNpcap();
 
   $('#offline-retry').addEventListener('click', async () => {
     // 커넥터를 못 찾은 상태에서는 '다시 확인'이 아무 소용이 없다. 찾기부터 시킨다.

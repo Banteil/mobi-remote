@@ -45,12 +45,11 @@ def open_quest(bot: Bot, c: dict) -> None:
 
 def _travel_started(bot: Bot, c: dict, wait: float = 12) -> bool:
     """'진행하기' 뒤 자동 이동이 시작됐나 (또는 이미 던전 창). 엉뚱한 버튼을 눌렀으면 몇 분씩 기다리지 않게."""
-    if not bot.state.available():
-        return True  # CLI 가 없으면 판단할 수 없다 — 예전처럼 도착을 기다린다
+    if not bot.packets.ok and not bot.state.available():
+        return True  # 패킷도 CLI 도 없으면 판단할 수 없다 — 예전처럼 도착을 기다린다
     end = time.monotonic() + wait
     while time.monotonic() < end:
-        act = bot.state.activity() or {}
-        if act.get("IsAutoTraveling") or bot.exists(c["dungeon_tab"]):
+        if bot.auto_traveling() or bot.exists(c["dungeon_tab"]):
             return True
         bot.sleep(1.5)
     return False

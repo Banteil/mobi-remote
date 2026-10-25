@@ -17,6 +17,9 @@ from mabi import profile as prof
 from mabi import userconfig
 from mabi import tasks
 from mabi.runner import RunOptions, Runner, load_config
+from mabi.tasks.weekday import SUNDAY_CHOICES
+
+from .chars_api import CharsApi
 
 log = logging.getLogger("mabi")
 
@@ -126,8 +129,7 @@ class DailyApi:
             if any(s == "STOP" for _, s, _ in results or []) and not self._daily_end:
                 log.info("일시정지 — F12 를 다시 누르면 이어 합니다")
                 self._emit("mm:daily", {"type": "paused"})
-            elif not any(s == "STOP" for _, s, _ in results or []):
-                self._bring_front()  # 끝까지 돌았다 → 결과 창(화면이 'done' 에 띄움)이 게임 위로 보이게
+            # 결과 창은 작업 큐가 다 끝났을 때 큐 전체 결과로 띄운다 (queue_api._q_report)
         self._daily_thread = threading.Thread(target=work, name="daily", daemon=True)
         self._daily_thread.start()
         return self._daily_thread
@@ -338,11 +340,13 @@ class DailyApi:
 
         def follow(*keys) -> int:  # 이 기본값을 따르는 캐릭터 수 (그 항목을 캐릭터별로 따로 정하지 않음)
             return sum(not any(k in by.get(str(c["slot"]), {}) for k in keys) for c in chars)
+        sun_by = doc["weekday_dungeon"].get("sunday_by_slot", {})
         return {
             "chars": [{**c, **{k: v for k, v in dict(by.get(str(c["slot"]), {})).items()
                                if k in ("field_runs", "dungeon", "floor")}} for c in chars],
             "follow": {"field": follow("field", "field_runs"), "dungeon": follow("dungeon", "floor"),
-                       "total": len(chars)},
+                       "sunday": sum(str(c["slot"]) not in sun_by for c in chars), "total": len(chars)},
+            "sunday": CharsApi._sunday(doc), "sundays": list(SUNDAY_CHOICES),
             "silver": {"field_runs": int(s["field_runs"]), "dungeon": str(s["dungeon"]), "floor": int(s["floor"])},
             "dungeons": [n for n, p in doc["places"].items() if int(p["index"]) < 2],
             "fields": [n for n, p in doc["places"].items() if int(p["index"]) == 2],
@@ -366,6 +370,8 @@ class DailyApi:
             s["dungeon"] = sv["dungeon"]
         if v.get("field"):
             s["field"] = v["field"]
+        if v.get("sunday") in SUNDAY_CHOICES:
+            doc["weekday_dungeon"]["sunday"] = v["sunday"]
         if v.get("stop_key"):
             k = str(v["stop_key"]).lower()
             if k not in [f"f{i}" for i in range(1, 13)]:  # 게임이 쓰는 글자·Home/End 키와 겹치지 않게 F 키만

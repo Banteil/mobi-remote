@@ -40,11 +40,13 @@ from .queue_api import QueueApi
 from .dye_service import DyeService
 from .dye_tab import exclude_from_capture
 from .legacy_shapes import Shapes
+from .queue_overlay import OverlayService
+from .queue_overlay import clean as clean_overlay
 
 log = logging.getLogger("mabi")
 
 APP_NAME = "모비 커넥터 리모콘"
-APP_VERSION = "3.3.3"
+APP_VERSION = "3.4.0"
 
 
 def _ver(v: str) -> tuple:
@@ -65,7 +67,7 @@ DEFAULTS = {
 }
 # 화면이 바꿀 수 있는 설정. 아무 키나 받으면 무엇이 어디서 바뀌는지 알 수 없게 된다
 CFG_KEYS = {"askFacilityLevelMismatch": bool, "alterWorksFolded": bool, "queueFolded": bool,
-            "dyeNudge": bool, "closeToTray": bool}
+            "dyeNudge": bool, "closeToTray": bool, "npcapNoAsk": bool}
 # 별표를 달 수 있는 목록 (레거시 favorites.js). 악보는 재생목록이 곧 즐겨찾기라 없다
 FAV_LISTS = ("craft", "alter", "gather", "items", "facial", "behaviour")
 
@@ -125,6 +127,7 @@ class Api(DailyApi, CharsApi, QueueApi):
         self.favorites = Favorites(paths.data / "favorites.json")
         self.dye = PresetStore(paths.data)
         self.dyes: DyeService | None = None  # QObject 라 화면 스레드에서 만든다 (attach)
+        self.qov: OverlayService | None = None  # 작업 큐 오버레이 — 이것도 attach 에서
         self._nudge_err: str | None = None
         self.nudge = CursorNudge(on_error=self._on_nudge_error)
 
@@ -135,6 +138,9 @@ class Api(DailyApi, CharsApi, QueueApi):
         self._gui = _GuiCall()
         self.dyes = DyeService(self.dye, self._emit)
         self.dyes.win = win
+        from mabi.runner import load_config
+        self.qov = OverlayService(load_config(self.paths)["game"]["window_title"], self.settings.get("overlay"),
+                                  self.queue.snapshot())
 
     def initial(self) -> dict:
         """첫 페인트 전에 페이지에 심을 값 (window.__MM_INIT__). 테마가 늦게 오면 화면이 번쩍인다."""
@@ -149,6 +155,8 @@ class Api(DailyApi, CharsApi, QueueApi):
             pass
         if self.dyes:
             self.dyes.stop()
+        if self.qov:
+            self.qov.close()
         if self._daily_runner:
             self._daily_runner.stop()
         if self._scan_bot:
@@ -156,6 +164,8 @@ class Api(DailyApi, CharsApi, QueueApi):
         self.cli.cancel()
 
     def _emit(self, channel: str, payload=None) -> None:
+        if channel == "mm:queue" and getattr(self, "qov", None):  # __init__ 중(큐를 읽는 동안)엔 아직 없다
+            self.qov.push(payload)  # 작업 큐 오버레이도 같은 상태로
         if self.win is not None:
             self.win.backend.emit_event(channel, payload)
 
@@ -201,6 +211,16 @@ class Api(DailyApi, CharsApi, QueueApi):
         if key == "closeToTray":
             patch["close_to_tray"] = value  # 파이썬 창(main.py)이 읽는 이름
         return self._save_settings(patch)
+
+    def cfg_overlay(self, v=None):
+        """작업 큐 오버레이 설정. v 가 없으면 지금 값만 (정해진 키·범위만 남겨 저장한다)."""
+        if v is None:
+            return clean_overlay(self.cfg_get().get("overlay"))
+        cfg = clean_overlay({**clean_overlay(self.cfg_get().get("overlay")), **(v if isinstance(v, dict) else {})})
+        self._save_settings({"overlay": cfg})
+        if self.qov:
+            self.qov.configure(cfg)
+        return cfg
 
     def cfg_sort(self, tab, key):
         cur = self.cfg_get()
@@ -602,7 +622,46 @@ class Api(DailyApi, CharsApi, QueueApi):
         loc = self._loc()
         pv = cli_version(loc["path"]).get("productVersion")
         # 화면에는 0.1.0 만. 빌드 해시(+0487c3…)는 넥슨이 재빌드할 때마다 바뀌어 사용자에게는 잡음이다
-        return {"app": APP_VERSION, "cliVersion": semver(pv) if pv else None, "cliFull": pv, "cliPath": loc}
+        return {"app": APP_VERSION, "cliVersion": semver(pv) if pv else None, "cliFull": pv, "cliPath": loc,
+                "packet": self._packet_status()}
+
+    NPCAP_PAGE = "https://npcap.com/#download"
+
+    def _packet_status(self) -> str:
+        """패킷 감시 상태: running / starting / no_npcap / no_table / error / off(설정에서 끔).
+        Npcap 은 무료판이 재배포·무인 설치를 허락하지 않아 설치 파일에 넣지 못한다 — 없으면 받는 곳을 알려 준다."""
+        from mabi import packet_monitor
+        from mabi.runner import load_config
+        try:
+            if not load_config(self.paths)["game"].get("packet_watch", True):
+                return "off"
+            if not (packet_monitor.NPCAP_DIR / "wpcap.dll").exists():
+                return "no_npcap"
+            st = packet_monitor.shared(self.paths.logs).status
+            return "starting" if st == "off" else st  # 감시는 켜 두었는데 아직 첫 장치를 여는 중
+        except Exception as e:  # noqa: BLE001 — 상태 표시는 덤이다
+            log.debug(f"패킷 감시 상태 읽기 실패: {e}")
+            return "error"
+
+    def version_npcap(self):
+        webbrowser.open(self.NPCAP_PAGE)
+        return True
+
+    def version_packetRetry(self):  # noqa: N802
+        """Npcap 을 깐 뒤 리모콘을 다시 켜지 않고 감시를 켠다. 감시 스레드는 Npcap 이 없으면 바로 끝나 있으므로
+        다시 시작하면 된다 (봇들도 같은 감시 하나를 같이 쓴다 — packet_monitor.shared). 몇 초 기다려 상태를 돌려준다."""
+        from mabi import packet_monitor
+        st = self._packet_status()
+        if st not in ("no_npcap", "error") or not (packet_monitor.NPCAP_DIR / "wpcap.dll").exists():
+            return {"status": st}
+        pm = packet_monitor.shared(self.paths.logs)
+        pm.status = "off"
+        pm.start()
+        for _ in range(25):
+            if pm.status != "off":
+                break
+            time.sleep(0.2)
+        return {"status": self._packet_status()}
 
     def version_check(self, refresh=False):
         """레거시 version.check() 모양 {level(숫자), levelName, ok, firstRun, changes, baseline, current}.

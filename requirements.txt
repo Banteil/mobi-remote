@@ -15,6 +15,8 @@ pythonnet==3.2.1
 pywebview==6.2.1
 shiboken6==6.12.0
 tomlkit==0.15.2
+# 게임 패킷 본문 압축 해제 (mabi/packet_monitor.py)
+brotli==1.2.1
 typing_extensions==4.16.0
 winrt-runtime==3.2.1
 winrt-Windows.Foundation==3.2.1

@@ -10,6 +10,8 @@
   승급 직후 다음 단계 '모두 승급'(훨씬 비쌈)이 바로 나오므로 한 번만 누르고 ESC 로 빠져나온다.
   ESC 를 몇 번 누르면 일일 미션 창으로 돌아온다.
 """
+import time
+
 from ..bot import Bot, StepTimeout
 from ..ocr import read_ko, read_text
 from .content import has_word, wait_until
@@ -38,6 +40,22 @@ def _pending(bot: Bot, keyword: str) -> dict | None:
     return next((m for m in missions(bot) if _is(m, keyword) and not m.get("IsCompleted")), None)
 
 
+def _wait_done(bot: Bot, keyword: str, timeout: float, mark: int, what: str, interval: float = 3) -> None:
+    """미션이 끝날 때까지. 패킷 '미션 완료' 알림이 오면 CLI 로 그 미션이 맞는지 본다 (같은 때 다른 미션이 끝날 수 있다).
+    패킷 감시가 없으면 CLI 를 interval 마다."""
+    if not bot.packets.ok:
+        wait_until(bot, lambda: not _pending(bot, keyword), timeout, interval=interval, what=what)
+        return
+    end = time.monotonic() + timeout
+    while _pending(bot, keyword):
+        left = end - time.monotonic()
+        if left <= 0:
+            raise StepTimeout(f"{timeout:.0f}s 안에 {what} 충족 안 됨")
+        seen = bot.packets.wait("dm.completed", min(left, 15), after=mark)  # 15초마다 CLI 로도 (감시가 놓쳤을 때)
+        if seen:
+            mark = seen.seq
+
+
 def _back_to_window(bot: Bot, c: dict) -> None:
     """ESC 로 일일 미션 창까지 돌아온다."""
     for _ in range(6):
@@ -60,19 +78,84 @@ def _scroll_list(bot: Bot, c: dict, notches: int) -> None:
     bot.sleep(0.8, 1.0)
 
 
+def _list_views(bot: Bot, c: dict):
+    """목록 맨 위부터 조금씩 내려가며 한 화면씩 넘겨준다. 더 내려가지 않으면 (맨 아래) 끝.
+    한 번에 많이 내리면 가운데 줄을 건너뛴다 (2026-10-25, 선물 7개를 못 보고 넘어감)."""
+    x, y, w, h = c["list_area"]
+    _scroll_list(bot, c, 15)
+    before = None
+    for _ in range(c["list_steps"]):
+        yield
+        now = bot.frame()[y:y + h, x:x + w].astype("int16")
+        if before is not None and abs(now - before).mean() < 2:
+            return
+        before = now
+        _scroll_list(bot, c, -c["list_step"])
+
+
+def _ensure_window(bot: Bot, c: dict) -> None:
+    """선물을 받은 뒤 획득 연출 등이 창을 덮었으면 잠깐 기다리고, 그래도 아니면 창을 다시 연다."""
+    for _ in range(3):
+        if bot.exists(c["title"]):
+            return
+        bot.sleep(0.8, 1.0)
+    open_window(bot, c)
+
+
+def _gift_taken(bot: Bot, mark: int, left: int) -> bool:
+    """방금 누른 '선물 받기'가 받아졌나. 패킷(받기 성공) → CLI(못 받은 수가 줄었나) 순서로 본다."""
+    if bot.packets.ok:
+        seen = bot.packets.wait(("dm.reward_ok", "dm.reward_fail"), 4, after=mark)
+        if seen is not None:
+            return seen.key == "dm.reward_ok"
+    try:
+        wait_until(bot, lambda: len(unclaimed(bot)) < left, 4, interval=1, what="선물 받기")
+        return True
+    except StepTimeout:
+        return False
+
+
+def _gift_buttons(bot: Bot, c: dict) -> list:
+    """보이는 '선물 받기'. 창이 열리거나 스크롤이 멈추는 연출 중에는 점수가 0.74 까지 떨어지므로
+    (2026-10-25 1초 간격 기록) 한 장만 보고 없다고 하지 않고 조금 뒤 다시 본다."""
+    for i in range(3):
+        buttons = bot.find_all(c["gift"])
+        if buttons or i == 2:
+            return buttons
+        bot.sleep(0.4, 0.5)
+    return []
+
+
 def claim_gifts(bot: Bot, c: dict) -> int:
-    """보이는 '선물 받기'를 모두 누르고, 없으면 목록을 내려가며 반복한다. 누른 횟수 반환."""
+    """CLI 가 '다 했는데 선물 안 받음'이라고 하는 미션이 없어질 때까지, 목록을 위에서부터 훑으며
+    보이는 '선물 받기'를 하나씩 누르고 받아졌는지 확인한다. 받은 개수 반환."""
     n = 0
-    _scroll_list(bot, c, 15)  # 맨 위부터
-    for _ in range(c["list_pages"] + 1):
-        for _ in range(12):
-            buttons = bot.find_all(c["gift"])
-            if not buttons:
+    for r in range(c["gift_rounds"]):
+        left = len(unclaimed(bot))
+        if not left:
+            break
+        if r:
+            # 다시 훑을 때는 창을 새로 연다 — 새로 열면 선물을 받을 카드가 맨 위로 모인다 (2026-10-25 실측).
+            # 연금술에서 ESC 로 돌아온 창에서 맨 윗줄 선물 2개를 세 번 훑고도 못 찾은 적이 있다
+            bot.log.info(f"못 받은 선물 {left}개 → 미션 창을 다시 열어 찾음")
+            open_window(bot, c)
+        else:
+            _ensure_window(bot, c)
+        for _ in _list_views(bot, c):
+            while left:
+                buttons = _gift_buttons(bot, c)
+                if not buttons:
+                    break
+                mark = bot.packets.mark()
+                bot.click(buttons[0])
+                if not _gift_taken(bot, mark, left):
+                    bot.log.info("'선물 받기'를 눌렀는데 받아지지 않음")
+                    break
+                n, left = n + 1, left - 1
+                bot.sleep(0.6, 0.9)
+                _ensure_window(bot, c)
+            if not left:
                 break
-            bot.click(buttons[0])
-            n += 1
-            bot.sleep(1.0, 1.3)
-        _scroll_list(bot, c, -10)
     _scroll_list(bot, c, 15)
     return n
 
@@ -81,28 +164,31 @@ def claim_milestones(bot: Bot, c: dict) -> int:
     """상단 누적 보상 중 받을 수 있는 것(라벨이 크고 노란 상태)을 누른다."""
     n = 0
     y0, y1 = c["milestone_label_y"]
+    _ensure_window(bot, c)
+    _scroll_list(bot, c, 15)
     for x in c["milestone_x"]:
         crop = bot.frame()[y0:y1, x - 25:x + 25].reshape(-1, 3).astype(int)
         yellow = ((crop[:, 2] > 200) & (crop[:, 1] > 150) & (crop[:, 0] < 120)).mean()
         if yellow > 0.08:
+            mark = bot.packets.mark()
             bot.click((x, c["milestone_icon_y"]))
-            n += 1
+            if not bot.packets.ok or bot.packets.wait("dm.milestone_ok", 4, after=mark):
+                n += 1
             bot.sleep(1.2, 1.5)
+            _ensure_window(bot, c)
     return n
 
 
 def find_go_button(bot: Bot, c: dict, keyword: str):
     """제목에 keyword 가 들어간 카드의 '진행하기' 버튼. 목록을 내려가며 찾는다.
     OCR 이 받침을 틀리기도 하므로 (꼬르륵 → 꼬르록) keyword 는 제목 앞 두 글자 정도로 준다."""
-    _scroll_list(bot, c, 15)
     dx, dy, w, h = c["card_title_offset"]
-    for _ in range(c["list_pages"] + 1):
+    for _ in _list_views(bot, c):
         frame = bot.frame()
         for b in bot.find_all(c["go"]):
             region = [b.x + dx, b.y + dy, w, h]
             if has_word(keyword, read_ko(frame, region), read_text(frame, region, white=180)):
                 return b
-        _scroll_list(bot, c, -10)
     return None
 
 
@@ -136,9 +222,10 @@ def do_alchemy(bot: Bot, c: dict, m: dict) -> str:
         else:
             result = f"승급할 보석 없음 → {bot.snapshot('alchemy').name}"
     else:
+        mark = bot.packets.mark()
         bot.click(a["upgrade_all"])  # 한 번만
         try:
-            wait_until(bot, lambda: not _pending(bot, a["mission_keyword"]), 20, interval=2, what="연금술 미션 완료")
+            _wait_done(bot, a["mission_keyword"], 20, mark, "연금술 미션 완료", interval=2)
             result = "연금술 완료"
         except StepTimeout:
             result = f"모두 승급 후에도 미션 미완료 → {bot.snapshot('alchemy').name}"
@@ -154,9 +241,10 @@ def do_gather(bot: Bot, c: dict, m: dict) -> str:
     go = find_go_button(bot, c, m["Title"][:2])
     if not go:
         return f"채집 미션 카드를 찾지 못함 → {bot.snapshot('gather').name}"
+    mark = bot.packets.mark()
     bot.click(go)
     try:
-        wait_until(bot, lambda: not _pending(bot, g["mission_keyword"]), g["timeout"], interval=5, what="채집 미션 완료")
+        _wait_done(bot, g["mission_keyword"], g["timeout"], mark, "채집 미션 완료", interval=5)
         result = "채집 완료"
     except StepTimeout:
         result = f"{g['timeout']}초 안에 채집 미션 미완료 → {bot.snapshot('gather').name}"
@@ -184,8 +272,6 @@ def run(bot: Bot, cfg: dict) -> str:
 
     bot.step("dm_gifts", "선물 받기")
     gifts = claim_gifts(bot, c)
-    if unclaimed(bot):  # 놓친 선물이 있으면 한 번 더
-        gifts += claim_gifts(bot, c)
     bot.step("dm_milestones", "누적 보상 받기")
     milestones = claim_milestones(bot, c)
 
@@ -193,6 +279,7 @@ def run(bot: Bot, cfg: dict) -> str:
     pending = [f"{m['Title']}({m['Description']} {m['CurrentCount']}/{m['GoalCount']})"
                for m in missions(bot) if not m.get("IsCompleted") and m["Title"] not in ignore]
     missed = [m["Title"] for m in unclaimed(bot)]
+    shot = bot.snapshot("dm_missed").name if missed else ""  # 왜 못 찾았는지 볼 수 있게 미션 창을 남긴다
     bot.to_main()
     summary = f"선물 {gifts}개, 누적 보상 {milestones}개"
     if notes:
@@ -200,5 +287,18 @@ def run(bot: Bot, cfg: dict) -> str:
     if pending:
         summary += f", 미완료: {', '.join(pending)}"
     if missed:
-        summary += f", 못 받은 선물: {', '.join(missed)}"
+        summary += f", 못 받은 선물: {', '.join(missed)} → {shot}"
     return summary
+
+
+def claim_leftovers(bot: Bot, cfg: dict) -> str | None:
+    """캐릭터의 숙제가 다 끝난 뒤: 일일 미션보다 뒤에 한 숙제(아르바이트 → '따뜻한 손길')나 나중에 먹은 음식으로
+    새로 깬 미션의 선물만 받는다. 받을 게 없으면 창을 열지 않는다 (CLI 로만 본다)."""
+    c = cfg["daily_mission"]
+    if not bot.state.available() or not unclaimed(bot):
+        return None
+    open_window(bot, c)
+    gifts = claim_gifts(bot, c)
+    milestones = claim_milestones(bot, c)
+    bot.to_main()
+    return f"선물 {gifts}개, 누적 보상 {milestones}개"

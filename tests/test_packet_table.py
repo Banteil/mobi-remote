@@ -157,5 +157,31 @@ class DiagTest(unittest.TestCase):
         self.assertEqual(self.lines()[0]["kind"], "table_load")
 
 
+class StatesTableTest(unittest.TestCase):
+    """리모콘 상태 판단 표(states)가 감시 상태(PacketState)를 빠짐없이 적고 있나 — 새 상태를 만들면 표에도 적는다."""
+
+    def test_every_packet_state_field_is_documented(self):
+        import dataclasses
+        from mabi.packet_monitor import PacketState
+        try:
+            table = packet_table.load()
+        except (FileNotFoundError, ValueError) as e:  # 키가 없는 곳 (packet.key 는 저장소에 없다)
+            self.skipTest(str(e))
+        self.assertTrue(table.states)
+        written = " ".join(s.get("field", "") for s in table.states)
+        skip = {"extra", "entered_at", "ai", "dead_at"}  # 내부용
+        missing = [f.name for f in dataclasses.fields(PacketState) if f.name not in skip and f.name not in written]
+        self.assertEqual(missing, [], "spec/states.json 의 states 에 적을 것")
+
+    def test_states_point_at_real_events(self):
+        try:
+            table = packet_table.load()
+        except (FileNotFoundError, ValueError) as e:
+            self.skipTest(str(e))
+        for s in table.states:
+            for key in s["events"]:
+                self.assertIsNotNone(table.by_key(key), f"{s['key']}: {key}")
+
+
 if __name__ == "__main__":
     unittest.main()

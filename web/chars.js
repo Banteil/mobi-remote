@@ -26,6 +26,7 @@ function tagsOf(c) {
   t.push(c.dungeon ? '<span>' + esc(c.dungeon) + ' ' + esc(floorText(c.floor)) + '</span>' : '<span class="off">던전 안 감</span>');
   t.push(c.black_hole ? '<span>검은 구멍</span>' : '<span class="off">검은 구멍 안 감</span>');
   if (c.arbeit) t.push('<span>아르바이트</span>');
+  t.push('<span>일요일 ' + esc(c.sunday || '') + '</span>');
   return t.join('');
 }
 
@@ -87,6 +88,7 @@ function openEdit(slot) {
   $('#ch-e-dungeon').innerHTML = options([['', '던전 안 감']].concat(d.dungeons.map((x) => [x, x])), e.dungeon);
   $('#ch-e-floor').innerHTML = options(Object.entries(d.floors), e.floor);
   $('#ch-e-bh').checked = e.black_hole !== false;
+  $('#ch-e-sun').innerHTML = options(d.sundays.map((x) => [x, x]), e.sunday);
   $('#ch-e-arb').checked = !!e.arbeit;
   $('#ch-e-del').classList.toggle('hidden', !!e.isNew);
   paintEditArt();
@@ -108,6 +110,31 @@ function syncEditFields() {
   $('#ch-e-floor').disabled = $('#ch-e-dungeon').value === '';
 }
 
+/** 설정 창의 값을 숙제 기본값으로 채운다 (저장은 따로). 아르바이트는 기본값이 없어 그대로 둔다 */
+function resetEdit() {
+  const d = ch.data.defaults;
+  $('#ch-e-field').value = d.field;
+  $('#ch-e-runs').value = String(d.field_runs);
+  $('#ch-e-dungeon').value = d.dungeon;
+  $('#ch-e-floor').value = String(d.floor);
+  $('#ch-e-bh').checked = d.black_hole !== false;
+  $('#ch-e-sun').value = d.sunday;
+  syncEditFields();
+}
+
+/** 모든 캐릭터를 숙제 기본값으로 (묻고 나서). 이름·그림·아르바이트는 그대로 */
+async function resetAll() {
+  const ok = await confirmModal('모두 기본값으로',
+    '<p>모든 캐릭터의 사냥터 · 은동전 던전 · 검은 구멍 · 일요일 요일 던전을 숙제 기본값으로 되돌릴까요?</p>' +
+    '<p class="hint">캐릭터별로 따로 정한 값이 지워집니다. 아르바이트는 그대로 둡니다.</p>', '되돌리기');
+  if (!ok) return;
+  const d = ch.data.defaults;
+  if (await saveCharList(ch.data.chars.map((c) => ({
+    ...c, field: d.field, field_runs: d.field_runs, dungeon: d.dungeon, floor: d.floor,
+    black_hole: d.black_hole !== false, sunday: d.sunday,
+  })))) toast('모든 캐릭터를 기본값으로 되돌렸습니다', '', 'ok');
+}
+
 function closeEdit() {
   $('#ch-edit').classList.add('hidden');
   ch.edit = null;
@@ -120,13 +147,14 @@ function collectEdit() {
     dungeon: $('#ch-e-dungeon').value, floor: Number($('#ch-e-floor').value),
     black_hole: $('#ch-e-bh').checked,
     arbeit: $('#ch-e-arb').checked,
+    sunday: $('#ch-e-sun').value,
   };
 }
 
 async function saveCharList(list) {
   const r = await mm.chars.save(list.map((c) => ({
     slot: c.slot, name: c.name, field: c.field, field_runs: c.field_runs, dungeon: c.dungeon, floor: c.floor,
-    black_hole: c.black_hole, arbeit: !!c.arbeit,
+    black_hole: c.black_hole, arbeit: !!c.arbeit, sunday: c.sunday,
   })));
   if (r && r.error) { toast('저장하지 못했습니다', r.error, 'bad'); return false; }
   dl.pickedChars = null;  // 일일 숙제 탭의 고른 캐릭터를 새로
@@ -234,6 +262,8 @@ $('#ch-grid').addEventListener('click', (e) => {
 $('#ch-e-runs').addEventListener('change', syncEditFields);
 $('#ch-e-dungeon').addEventListener('change', syncEditFields);
 $('#ch-e-cancel').addEventListener('click', closeEdit);
+$('#ch-e-reset').addEventListener('click', resetEdit);
+$('#ch-reset-all').addEventListener('click', resetAll);
 $('#ch-e-save').addEventListener('click', saveEdit);
 $('#ch-e-del').addEventListener('click', deleteEdit);
 $('#ch-e-pic').addEventListener('click', async () => {

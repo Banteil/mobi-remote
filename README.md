@@ -14,6 +14,12 @@
 설치: `pip install -r requirements.txt` 후 **`pip install --no-deps rapidocr`** (한글 OCR. 의존성을 같이 깔면
 opencv-python-headless 가 들어와 opencv-python 과 겹칩니다).
 
+함께 깔면 좋은 것: **[Npcap](https://npcap.com/#download)** (무료). 게임 서버가 보내는 패킷을 받기만 해서 맵 이동·던전·대화 같은
+상태를 화면보다 빨리 압니다. 무료판은 재배포·무인 설치가 허락되지 않아 설치 파일에 넣지 않고, 없으면 설치 마지막 화면,
+켤 때 위쪽 알림 띠(포터블판 포함, '다시 묻지 않기' 가능), 옵션 창 '패킷 감시' 줄에서 받는 곳을 엽니다. 없어도 리모콘은
+화면·CLI 로 돕니다. 설치한 뒤 '다시 확인' 을 누르면 리모콘을 다시 켜지 않고 감시가 켜집니다.
+새 판은 켤 때 한 번 확인하고, 옵션 창 '새 판 확인' 으로 언제든 다시 확인해 그 자리에서 받아 설치할 수 있습니다.
+
 ## 콘솔 실행 (관리자 권한 터미널)
 게임이 관리자 권한으로 실행되므로, 봇도 관리자 권한이 아니면 입력이 무시됩니다.
 
@@ -26,7 +32,8 @@ opencv-python-headless 가 들어와 opencv-python 과 겹칩니다).
 .\.venv\Scripts\python.exe run.py --force       # 오늘 끝낸 숙제도 다시
 .\.venv\Scripts\python.exe run.py --dry-run     # 클릭 없이 인식만
 ```
-실행 중 **F12** = 중단. 로그는 `logs/`, 실패 시 스크린샷은 `logs/shots/`.
+실행 중 **F12** = 일시정지 · 다시 누르면 이어 하기, **Shift+F12** = 지금 작업만 중단하고 다음으로, **Ctrl+F12** = 큐 전체 중단.
+로그는 `logs/`, 실패 시 스크린샷은 `logs/shots/` (7일 지나면 지운다).
 
 숙제별 동작, 확인된 게임 동작, 남은 일은 [docs/STATUS.md](docs/STATUS.md) 에 정리되어 있습니다.
 실행 중에는 게임 화면을 다른 창으로 가리지 말고, Windows 방해 금지 모드를 켜 두세요.

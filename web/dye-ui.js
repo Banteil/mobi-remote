@@ -135,15 +135,35 @@ async function wireUpdate() {
   });
 
   // 켜자마자 묻지 않는다. 첫 화면이 다 그려진 뒤에 조용히 확인한다.
-  setTimeout(async () => {
-    const r = await mm.update.check().catch(() => null);
-    if (!r || !r.ok || !r.newer) return;      // 못 물어봤거나 최신이면 아무 말도 안 한다
-    updUI.info = r;
-    // 패치(코드만, 수 MB)인지 설치 파일 전체인지 크기로 알려 준다
-    const a = r.asset;
-    const size = a && a.size ? ' (' + (a.kind === 'patch' ? '패치 ' : '') + (a.size / 1048576).toFixed(1) + 'MB)' : '';
-    showUpdate('새 판이 나왔습니다 — ' + r.version + size, true);
-  }, 4000);
+  setTimeout(checkUpdate, 4000);
+
+  // 옵션 창 '새 판 확인' — 다시 켜지 않고 그 자리에서 묻는다 (버전 칸은 옵션을 열 때마다 새로 그려진다)
+  document.addEventListener('click', async (e) => {
+    if (e.target.closest('[data-upd-go]')) { $('#update-go').click(); return; }  // 위 알림 띠의 버튼과 같은 일
+    if (!e.target.closest('#upd-check')) return;
+    const msg = $('#upd-msg');
+    msg.textContent = '확인 중…';
+    const r = await checkUpdate();
+    if (r && r.ok && r.newer) {
+      msg.innerHTML = esc(r.version) + ' 이 나왔습니다 <button class="btn btn-tiny btn-primary" data-upd-go>받아서 설치</button>';
+      return;
+    }
+    msg.textContent = !r || !r.ok ? '확인하지 못했습니다' + (r && r.error ? ' — ' + r.error : '') : '최신입니다';
+  });
+}
+
+/** 새 판을 묻고, 있으면 위에 띠를 띄운다. 물어본 결과를 돌려준다 (받는 중이면 묻지 않는다) */
+async function checkUpdate() {
+  if (updUI.busy) return { ok: true, newer: true, version: updUI.info && updUI.info.version };
+  const r = await mm.update.check().catch(() => null);
+  if (!r || !r.ok || !r.newer) return r;      // 켤 때는 못 물어봤거나 최신이면 아무 말도 안 한다
+  if (!updUI.info || updUI.info.version !== r.version) { updUI.info = r; updUI.file = null; }
+  // 패치(코드만, 수 MB)인지 설치 파일 전체인지 크기로 알려 준다
+  const a = r.asset;
+  const size = a && a.size ? ' (' + (a.kind === 'patch' ? '패치 ' : '') + (a.size / 1048576).toFixed(1) + 'MB)' : '';
+  if (!updUI.file) showUpdate('새 판이 나왔습니다 — ' + r.version + size, true);
+  else $('#update-banner').classList.remove('hidden');
+  return r;
 }
 
 /* ══ 새 판 알림 끝 ══════════════════════════════════════════════ */

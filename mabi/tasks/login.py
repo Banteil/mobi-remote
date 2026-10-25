@@ -163,7 +163,7 @@ def settle_first_login(bot: Bot, cfg: dict, timeout: float) -> list[str]:
         # 대사가 뜬 뒤 한동안 입력을 안 받으므로 3초쯤 지나서 누른다 (2026-10-22 새 캐릭터로 확인).
         # 대사 화면엔 믿을 만한 표시가 없어(말풍선 아이콘은 움직임) '모르는 화면 + 로딩 아님(CLI)' 으로 판단한다
         # 아무것도 처리하기 전(=첫 대사)에만 누른다. '출석 완료' 연출 중에 누르면 가운데 보상 아이템이 눌린다
-        if not handled and unknown in (2, 6) and bot.state.query("get_my_info") is not None:
+        if not handled and unknown in (2, 6) and bot.in_game():
             bot.log.info("버튼 없는 화면이 이어짐 (출석 대사) → 화면 한 번 클릭")
             bot.snapshot("first_dialog")
             bot.click(tuple(c["first_dialog_xy"]))
@@ -219,8 +219,13 @@ def _norm_name(t: str) -> str:
 
 
 def current_name(bot: Bot) -> str:
-    """메인 화면 왼쪽 위의 캐릭터 이름 (RapidOCR). CLI get_my_info 에는 이름이 없다. 못 읽으면 ''.
-    메인 화면이 아니면 (창이 열려 있으면) 그 자리에 다른 것이 있으므로 읽지 않는다."""
+    """접속한 캐릭터 이름. 패킷이 알면 그것 (화면과 상관없이 정확하다), 모르면 메인 화면 왼쪽 위를 OCR.
+    CLI get_my_info 에는 이름이 없다. 못 읽으면 ''. OCR 은 메인 화면일 때만 (창이 열려 있으면 그 자리에 다른 것이 있다)."""
+    p = bot.packets
+    if p.at_charselect():
+        return ""
+    if p.ok and p.state.my_name and not p.state.loading:
+        return _norm_name(p.state.my_name)
     if not bot.at_main():
         return ""
     return name_in_frame(bot.frame())
@@ -375,6 +380,7 @@ def _run(bot: Bot, cfg: dict, character: dict | None) -> str:
             bot.log.info(f"접속 간격 유지: {wait:.0f}초 대기")  # 너무 잦은 접속 전환은 게임 오류를 부른다
             bot.sleep(wait)
         bot.wait(ui["charselect_start"], timeout=10)
+        mark = bot.packets.mark()
         bot.key("space")  # '게임 시작' 단축키. 클릭보다 확실하다
         t0 = _last_login = time.monotonic()
         # 입력이 무시되는 경우가 있다 → 선택 화면이 그대로면 다시 누른다
@@ -397,7 +403,10 @@ def _run(bot: Bot, cfg: dict, character: dict | None) -> str:
             except StepTimeout:
                 if _auth_fail_visible(bot):
                     raise
-                if bot.state.query("get_my_info") is not None:
+                # 게임 안인가: 패킷(게임 시작 뒤 맵에 들어감, 로딩 끝) 또는 CLI
+                p = bot.packets
+                entered = p.ok and p.find("channel.entering", mark) is not None and not p.state.loading
+                if entered or bot.state.query("get_my_info") is not None:
                     bot.log.debug(f"게임 시작 → 버튼 없는 화면, 게임 안 ({time.monotonic() - t0:.0f}s)")
                     break
                 if time.monotonic() > end:

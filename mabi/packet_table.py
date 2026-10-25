@@ -87,6 +87,8 @@ class Field:
     type: str
     enum: str = ""
     lookup: str = ""
+    size: int = 0  # u64list: 항목 하나의 바이트 수
+    at: int = 0    # u64list: 항목 안에서 읽을 u64 위치
 
 
 @dataclass(frozen=True)
@@ -110,6 +112,8 @@ class Table:
         self.enums: dict[str, dict[int, str]] = {
             n: {int(k): v for k, v in vals.items()} for n, vals in data["enums"].items()}
         self.channels: dict[int, dict] = {int(k): v for k, v in data["channels"].items()}
+        # 리모콘이 판단하는 상태 → 쓰는 이벤트·PacketState 필드·대체 수단·아직 못 하는 것 (spec/states.json 의 states)
+        self.states: list[dict] = data.get("states", [])
         self._events: dict[int, Event] = {}
         self._by_key: dict[str, Event] = {}
         for e in data["events"]:
@@ -143,7 +147,7 @@ class Table:
             return None
         vals = {}
         for f in ev.fields:
-            v = _read(body, f.off, f.type)
+            v = _read(body, f.off, f.type, f.size, f.at)
             if v is None:
                 self._problem("short_body", ev.key, body, field=f.name, off=f.off, type=f.type)
                 continue
@@ -169,7 +173,14 @@ class Table:
 _FMT = {"u8": "<B", "u32": "<I", "i32": "<i", "u64": "<Q", "f32": "<f"}
 
 
-def _read(body: bytes, off: int, typ: str):
+def _read(body: bytes, off: int, typ: str, size: int = 0, at: int = 0):
+    if typ == "u64list":  # u32 개수 + size 바이트씩 — 각 항목 at 위치의 u64
+        if off + 4 > len(body):
+            return None
+        n = struct.unpack_from("<I", body, off)[0]
+        if size < at + 8 or off + 4 + n * size > len(body):
+            return None
+        return [struct.unpack_from("<Q", body, off + 4 + i * size + at)[0] for i in range(n)]
     if typ == "bool":
         return bool(body[off]) if off < len(body) else None
     if typ == "str32":

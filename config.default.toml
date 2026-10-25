@@ -9,6 +9,9 @@ pause_on_touch = true       # 숙제 중 게임이 맨 앞일 때 사람이 키�
 # 연결이 안 되면 재화 개수는 화면 숫자 판독으로 대체한다.
 cli_path = ""                          # 비우면 자동으로 찾는다 (레지스트리 → 기본 설치 경로 → Nexon 폴더 → 제거 프로그램 목록)
 fast_travel_key = "t"       # 먼 곳으로 자동 이동할 때 누를 빠른 이동 키 (비우면 사용 안 함)
+# 게임 서버 패킷을 받아 보고 맵 이동·던전 상태를 빨리 안다 (Npcap 필요, 받기만 하고 보내지 않음).
+# Npcap 이 없거나 끄면 화면·CLI 로만 판단한다.
+packet_watch = true
 
 [input]
 jitter_px = 4               # 클릭 좌표 무작위 오차
@@ -76,7 +79,7 @@ popup_closers = ["popup_close", "popup_today_hide", "confirm_green"]
 exit_dialog = "dialog_exit_game"      # 메인에서 ESC 시 뜨는 '게임 종료?' 창
 exit_dialog_cancel = "dialog_cancel"
 auto_off = "auto_battle_off"          # 꺼진 상태의 자동 전투 버튼
-revive = "revive_button"
+revive = "revive_here"            # 사망 화면 '여기서 부활' 버튼 (여신상 부활은 쓰지 않는다)
 questwin_tab_arbeit = "questwin_tab_arbeit"    # 퀘스트 창(J) 하단 '아르바이트' 탭
 questwin_tab_main = "questwin_tab_main"          # 퀘스트 창(J) 하단 '메인' 탭
 dungeon_mission_enter = "dungeon_mission_enter" # 던전 임무 선택 화면 '입장하기'
@@ -129,7 +132,10 @@ gift = "dm_gift"                      # '선물 받기'
 go = "dm_go"                          # 미완료 미션의 '진행하기'
 card_title_offset = [-480, -35, 320, 40]  # '진행하기' 버튼 왼쪽 위 기준 카드 제목 영역 (OCR)
 list_scroll_at = [1030, 800]          # 미션 목록 스크롤 위치
-list_pages = 2                        # 목록을 몇 번 내려가며 볼지
+list_area = [370, 480, 1320, 520]     # 미션 목록 영역 (스크롤해도 안 바뀌면 맨 아래)
+list_step = 3                         # 한 번에 내리는 휠 칸 수 (크게 내리면 가운데 줄을 건너뜀)
+list_steps = 12                       # 최대 몇 번 내려가며 볼지
+gift_rounds = 3                       # 못 받은 선물이 남으면 목록을 처음부터 다시 훑는 횟수
 milestone_x = [877, 1017, 1157]       # 상단 2/4/6회 누적 보상
 milestone_label_y = [238, 250]        # 받을 수 있으면 이 높이까지 'N회' 글자가 크고 노랗다
 milestone_icon_y = 310
@@ -259,6 +265,11 @@ dungeon_tab = "dungeon_tab_weekday_on" # 이동 도착 후 열리는 던전 창�
 extra_loot = 3                        # 클리어 보상 화면의 추가 루팅 횟수 (최대 3, 골드 6천/1만2천/1만8천). 요일 던전에만 있음
 travel_timeout = 300
 clear_timeout = 600
+# 일요일은 카드 진행하기가 마을 임무 게시판으로 가서 던전을 고른다: "골드"(빛나는 동굴) / "보석"(눈부신 저택) / "촉매"(찬란한 유적)
+# 캐릭터별로는 [weekday_dungeon.sunday_by_slot] 에 "슬롯" = "골드" 처럼 (캐릭터 탭 설정 창에서 고른다)
+sunday = "촉매"
+board_next_xy = [960, 900]            # 게시판 대사를 넘기려고 누르는 곳 (아래 선택지 줄 y≈1000 보다 위)
+board_timeout = 60                    # 게시판 대화에서 고르고 끝날 때까지 최대 (초)
 
 # 은동전: 20개 단위로 사냥터/던전에 배분. 아래는 기본값이고 캐릭터별로 [silver.by_slot.<슬롯>] 에서 덮어쓴다.
 [silver]
@@ -327,4 +338,5 @@ run_timeout = 1200                    # 한 판이 이만큼(초) 넘게 안 끝
 travel_timeout = 300                  # 입구에서 먼 캐릭터('이동하기')가 입구까지 가는 것을 기다리는 최대 초
 background = true                     # 입장 뒤로는 게임을 앞에 두지 않고 한다 (가려져 있어도 됨, 내리면 안 됨)
 revive = true                         # 쓰러지면 '여기서 부활' (부활 횟수를 다 썼거나 막혔으면 나가서 처음부터). false = 바로 나감
+revive_timeout = 10                   # R 을 누르고 부활 신호를 기다리는 최대 (초). 안 오면 막힌 것(전멸·횟수·아이템)으로 보고 나감
 fit_display = false                   # 시작 전 화면 설정(테두리 없는 전체화면·16:9·인터페이스 PC 80%)을 맞추고 큐가 끝나면 되돌림

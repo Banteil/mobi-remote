@@ -213,7 +213,15 @@
     ]
   },
   "field_recommend": {},
-  "field_recommend_thumb": {},
+  "field_recommend_thumb": {
+    "roi": [
+      880,
+      50,
+      440,
+      110
+    ],
+    "threshold": 0.7
+  },
   "guide_card_blackhole": {},
   "guide_daily_blackhole": {},
   "guide_daily_weekday": {},
@@ -558,6 +566,14 @@
       756,
       380,
       40
+    ]
+  },
+  "revive_here": {
+    "roi": [
+      1200,
+      860,
+      720,
+      210
     ]
   }
 }

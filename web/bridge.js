@@ -72,7 +72,7 @@
     knowledge: {
       get: c('kn.get'), setLevel: c('kn.setLevel'), rules: c('kn.rules'),
     },
-    cfg: { get: c('cfg.get'), sort: c('cfg.sort'), theme: c('cfg.theme'), set: c('cfg.set') },
+    cfg: { get: c('cfg.get'), sort: c('cfg.sort'), theme: c('cfg.theme'), set: c('cfg.set'), overlay: c('cfg.overlay') },
     goal: { next: c('goal.next') },
     pl: {
       list: c('pl.list'), create: c('pl.create'), update: c('pl.update'), remove: c('pl.remove'),
@@ -98,12 +98,14 @@
       state: c('queue.state'), add: c('queue.add'), remove: c('queue.remove'), move: c('queue.move'),
       playOne: c('queue.playOne'), pauseOne: c('queue.pauseOne'), pause: c('queue.pause'), halt: c('queue.halt'),
       playAll: c('queue.playAll'), tidy: c('queue.tidy'), clear: c('queue.clear'), edit: c('queue.edit'),
-      patch: c('queue.patch'), answer: c('queue.answer'), history: c('queue.history'),
+      patch: c('queue.patch'), answer: c('queue.answer'), history: c('queue.history'), lastReport: c('queue.lastReport'),
+      onReport: (cb) => on('mm:queue-report', cb),
       onChange: (cb) => on('mm:queue', cb), onAsk: (cb) => on('mm:queue-ask', cb),
       onDone: (cb) => on('mm:queue-done', cb), onToast: (cb) => on('mm:queue-toast', cb),
     },
     fav: { all: c('fav.all'), toggle: c('fav.toggle'), clear: c('fav.clear') },
-    version: { info: c('version.info'), check: c('version.check'), accept: c('version.accept') },
+    version: { info: c('version.info'), check: c('version.check'), accept: c('version.accept'), npcap: c('version.npcap'),
+      packetRetry: c('version.packetRetry') },
     cache: { list: c('cache.list'), clear: c('cache.clear') },
 
     // 일일 숙제 (파이썬판에서 새로 생긴 것)

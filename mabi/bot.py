@@ -7,6 +7,7 @@ F12(설정 game.stop_key)를 누르면 다음 대기/캡처 시점에 StopReques
 import ctypes
 import logging
 import random
+import re
 import time
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +19,7 @@ from .digits import DigitReader
 from .connector import Connector
 from .game_state import GameState
 from .inputs import Input, StopWatcher, post_key, vk_of
+from . import packet_monitor
 from .screen import Screen
 from .vision import Match, Vision
 from .window import GameWindow
@@ -43,11 +45,36 @@ class AuthBlocked(Exception):
     """'계정 인증 실패'가 거듭 나서 접속을 더 시도하지 않는다. 실행기는 전체 실행을 멈춘다."""
 
 
+SHOT_KEEP_DAYS = 7
+SHOT_NAME = re.compile(r"\d{8}_\d{6}_.+\.png")  # snapshot() 이 붙이는 이름
+
+
+def prune_shots(shot_dir: Path, log=None, keep_days: int = SHOT_KEEP_DAYS) -> int:
+    """keep_days 일보다 오래된 스크린샷을 지운다. 실패·디버깅 때마다 한 장(1MB 남짓)씩 쌓여
+    정리 없이 닷새 만에 130MB 가 됐다 (2026-10-25). snapshot() 이 만든 이름만 지운다 — 스크린샷 폴더는
+    설정에서 아무 폴더로나 바꿀 수 있다. 지운 개수를 돌려준다."""
+    cutoff = time.time() - keep_days * 86400
+    n = 0
+    for f in shot_dir.glob("*.png") if shot_dir.is_dir() else ():
+        if not SHOT_NAME.fullmatch(f.name):
+            continue
+        try:
+            if f.stat().st_mtime < cutoff:
+                f.unlink()
+                n += 1
+        except OSError:
+            pass  # 열려 있는 파일 등 — 다음에 다시
+    if n and log:
+        log.info(f"오래된 스크린샷 {n}장 정리 ({keep_days}일 지남)")
+    return n
+
+
 class Bot:
     # 뒤에서 키를 보낸 적이 있다 (앞으로 가져올 때 포커스를 한 번 거쳐 준다). 게임 쪽 상태라 Bot 마다가 아니라 함께 쓴다 —
     # 큐는 카드마다 Bot 을 새로 만들어, 앞 카드(어비스)가 뒤에서 키를 보낸 뒤 다음 카드가 이걸 모르고 앞으로 가져와
     # ESC 가 세 번 다 무시됐다 (2026-10-24 21:24, 캐릭터 바꾸기 실패)
     _posted = False
+    _shots_pruned = False
 
     def __init__(self, cfg: dict, paths, dry_run: bool = False, force_exit: bool = True, cli=None):
         self.cfg = cfg
@@ -66,15 +93,23 @@ class Bot:
         self.digits = DigitReader(paths.templates / "digits", self.counters["white_threshold"])
         self.cli = cli or Connector(lambda: cfg["game"].get("cli_path"), self.log)
         self.state = GameState(self.cli, self.log)
+        # 게임 서버 패킷 (받기만) — 맵 이동·던전 상태를 화면·CLI 보다 먼저 안다. 꺼져 있으면 쓰지 않는다
+        self.packets = (packet_monitor.shared(paths.logs) if cfg["game"].get("packet_watch", True)
+                        else packet_monitor.PacketMonitor(paths.logs))
         self.shot_dir = paths.shots
+        if not Bot._shots_pruned:  # 프로세스에 한 번 (큐는 카드마다 Bot 을 만든다)
+            Bot._shots_pruned = True
+            prune_shots(self.shot_dir, self.log)
         self.character: dict | None = None  # 지금 숙제 중인 캐릭터 ({"slot", "name"}), runner 가 설정
         self.watch_weight = False  # 가방이 꽉 찼는지 감시 (숙제 중에만), runner 가 설정
         self._weight_at = 0.0
         self.daily = None  # 오늘 진행 기록 (profile.DailyState), runner 가 설정
         self.also_done: set[str] = set()  # 다른 태스크 안에서 함께 끝낸 태스크 id (runner 가 완료로 기록)
+        self.verified = False  # 지금 숙제가 스스로 완료를 확인했다 (runner 가 다시 확인하지 않는다 — 가이드를 두 번 열던 것)
         self.task_id: str | None = None  # 지금 하는 숙제 id, runner 가 설정
         # 이 숙제를 지난번에 어디까지 했나 ({"stage", "at", ...}) — 도중에 끊겼으면 있다. 숙제가 보고 이어 한다
         self.resume: dict | None = None
+        self.on_step = None  # 단계가 바뀔 때 (step, text) — runner 가 화면(작업 큐 카드·오버레이)에 알리려고 설정
         self._frame: np.ndarray | None = None
         # 게임을 앞으로 가져오지 않고 한다 — 화면은 가려져 있어도 찍고(PrintWindow), 키는 창에 직접 보낸다.
         # 클릭은 그렇게 안 되므로 누를 때만 잠깐 앞으로 가져왔다가 원래 창을 되돌린다 (어비스 반복 중에 쓴다)
@@ -90,6 +125,8 @@ class Bot:
         self.log.info(f"  · [{step}] {text}" if text else f"  · [{step}]")
         if self.daily is not None and self.character and self.task_id:
             self.daily.set_step(self.character["slot"], self.task_id, step, text, **data)
+        if self.on_step:
+            self.on_step(step, text)  # runner._emit 이 화면 쪽 오류를 삼킨다
 
     def resumed_at(self, *steps: str) -> dict | None:
         """지난번에 이 숙제가 steps 중 한 단계에서 끊겼으면 그 기록."""
@@ -107,12 +144,106 @@ class Bot:
         if not self.watch_weight or time.monotonic() - self._weight_at < every:
             return
         self._weight_at = time.monotonic()
-        inv = self.state.query("get_inventory", timeout=10) if self.state.available() else None
-        cur, mx = (inv or {}).get("CurrentInventoryWeight", 0), (inv or {}).get("MaxInventoryWeight", 0)
+        st = self.packets.state
+        if self.packets.ok and st.weight is not None and st.max_weight:  # 패킷: 무게가 바뀔 때마다 온다
+            cur, mx = st.weight, st.max_weight
+        else:
+            inv = self.state.query("get_inventory", timeout=10) if self.state.available() else None
+            cur, mx = (inv or {}).get("CurrentInventoryWeight", 0), (inv or {}).get("MaxInventoryWeight", 0)
         if not mx or cur < mx:
             return
         # 무게를 넘으면 자동 이동·전투가 멈추므로 던전 안이라도 바로 그만둔다
         raise Overweight(f"가방 무게 {cur:.0f}/{mx:.0f}")
+
+    def wait_packet(self, pred, timeout: float) -> bool | None:
+        """패킷 상태(self.packets.state)가 pred 를 만족할 때까지. True 만족 / False 시간 초과 /
+        None 감시가 꺼졌거나 서버 패킷이 끊김 — 부르는 쪽은 CLI·화면으로 넘어간다."""
+        end = time.monotonic() + timeout
+        while True:
+            self.check_stop()
+            if not self.packets.ok:
+                return None
+            if pred(self.packets.state):
+                return True
+            left = end - time.monotonic()
+            if left <= 0:
+                return False
+            self.packets.changed(min(left, 1.0))
+
+    def map_loading(self) -> bool | None:
+        """패킷으로 본 맵 로딩 중 여부 (맵을 떠났고 새 맵에 아직 안 들어감). 모르면 None —
+        감시가 꺼졌거나 끊김, 또는 감시를 켠 뒤 아직 맵을 옮긴 적이 없음."""
+        p = self.packets
+        if not p.ok or (p.state.channel is None and not p.state.loading):
+            return None
+        return p.state.loading
+
+    def is_loading(self) -> bool:
+        """맵 로딩 중인가. 패킷이 알면 패킷으로, 모르면 CLI 가 답하지 않는 것으로 (로딩 중엔 get_activity 가 오류)."""
+        known = self.map_loading()
+        if known is not None:
+            return known
+        return self.state.available() and self.state.activity() is None
+
+    def wait_loaded(self, timeout: float) -> bool | None:
+        """패킷으로 맵 로딩이 끝날 때까지 (로딩 중이 아니면 바로 True). False 시간 초과, None 모름 → 화면·CLI 로."""
+        if self.map_loading() is None:
+            return None
+        return self.wait_packet(lambda s: not s.loading, timeout)
+
+    def in_game(self) -> bool:
+        """게임 안(캐릭터로 접속해 맵에 있음)인가. 패킷이 알면 그것 (로그아웃·입장·맵 진입), 모르면 CLI get_my_info 가 답하는지."""
+        p = self.packets
+        if p.status == "running" and p.state.in_game is not None:
+            return p.state.in_game and not p.state.loading
+        return self.state.query("get_my_info") is not None
+
+    def _act(self, act: dict | None) -> dict:
+        return act if act is not None else ((self.state.activity() if self.state.available() else None) or {})
+
+    def auto_traveling(self, act: dict | None = None) -> bool:
+        """자동 이동 중인가. 패킷(자동 이동 시작·끝, 나한테만 옴)이 알면 그것, 모르면 CLI IsAutoTraveling."""
+        p = self.packets
+        if p.ok and p.state.traveling is not None:
+            return p.state.traveling
+        return bool(self._act(act).get("IsAutoTraveling"))
+
+    def fast_travel_ok(self, act: dict | None = None) -> bool:
+        """지금 빠른 이동(T)을 누를 만한가. 패킷이면 게임이 알려 주는 빠른 이동 가능 상태,
+        모르면 CLI 의 자동 이동 중 + 남은 경로 점이 있음."""
+        p = self.packets
+        if p.ok and p.state.fast_travel_ok is not None and p.state.traveling is not None:
+            return p.state.traveling and p.state.fast_travel_ok
+        a = self._act(act)
+        return bool(a.get("IsAutoTraveling") and a.get("AutoTravelRemainingPositionCount", 0) > 0)
+
+    def in_combat(self, act: dict | None = None) -> bool:
+        """전투 중인가. 패킷(내 캐릭터 전투 상태)이 알면 그것, 모르면 CLI IsInCombat."""
+        p = self.packets
+        if p.ok and p.state.in_combat is not None:
+            return p.state.in_combat
+        return bool(self._act(act).get("IsInCombat"))
+
+    def dialogue_playing(self, act: dict | None = None) -> bool:
+        """NPC 대화 중인가. 패킷(대화 대상)이 알면 그것, 모르면 CLI IsDialoguePlaying."""
+        p = self.packets
+        if p.ok and (p.state.fresh or p.state.in_dialogue):
+            return p.state.in_dialogue
+        return bool(self._act(act).get("IsDialoguePlaying"))
+
+    def is_dead(self, act: dict | None = None) -> bool:
+        """내 캐릭터가 쓰러졌나. 패킷의 부활 창 신호가 CLI IsDead 보다 약 3초 빠르다 (death1 실측).
+        act 는 이미 받아 둔 get_activity 결과 (없으면 CLI 를 부른다)."""
+        p = self.packets
+        if act is None:
+            act = (self.state.activity() if self.state.available() else None) or {}
+        if p.ok and p.state.dead:
+            # 일어난 신호를 못 받은 경우 ('여기서 부활' 은 아직 실측 전) — CLI 가 살아 있다고 하면 그쪽을 믿는다
+            if act.get("IsDead") is False and time.monotonic() - p.state.dead_at > 5:
+                p.state.dead = None
+                return False
+            return True
+        return bool(act.get("IsDead"))
 
     def sleep(self, a: float, b: float | None = None) -> None:
         end = time.monotonic() + (random.uniform(a, b) if b else a)
@@ -343,8 +474,7 @@ class Bot:
         name = self.ui.get("dialog_skip")
         n = 0
         for _ in range(max_n):
-            act = self.state.activity() if self.state.available() else None
-            playing = bool(act and act.get("IsDialoguePlaying"))
+            playing = self.dialogue_playing()
             m = self.find(name) if name and self.vision.has(name) else None
             if not playing and not m:
                 break

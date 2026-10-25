@@ -12,10 +12,22 @@
 import time
 
 from ..bot import Bot, StepTimeout
+from ..profile import game_day_start
 from .content import daily_achieved, game_space, open_guide_card, wait_until
 
 
+def cleared_today(bot: Bot) -> bool:
+    """패킷: 깬 검은 구멍 목록(맵에 들어갈 때마다 온다)에 오늘(6시 뒤) 나타난 구멍이 있으면 True.
+    목록이 비었거나 어제 나타난 것뿐이면 모른다 → False (화면으로 확인)."""
+    times = bot.packets.state.dimensions_cleared if bot.packets.ok else None
+    start = game_day_start().timestamp() * 1000
+    return any(t >= start for t in times or [])
+
+
 def verify(bot: Bot, cfg: dict) -> bool:
+    if cleared_today(bot):
+        bot.log.debug("패킷: 오늘 나타난 검은 구멍을 깸 → 완료")
+        return True
     return daily_achieved(bot, cfg["black_hole"]["achieved"])
 
 
@@ -32,16 +44,15 @@ def enter(bot: Bot, c: dict) -> None:
         if time.monotonic() > end:
             raise StepTimeout(f"{c['travel_timeout']}초 안에 검은 구멍에 들어가지 못함 → {bot.snapshot('black_hole').name}")
         bot.sleep(3)
-        act = bot.state.activity()
-        if act is None:  # 지역 이동 로딩 중
+        if bot.is_loading():  # 지역 이동 로딩 중
             idle_since = None
             continue
-        if act.get("IsInCombat"):
+        if bot.in_combat():
             if not fought:
                 bot.log.info("검은 구멍 가는 길에 전투 시작 → 끝날 때까지 대기")
             fought, idle_since = True, None
             continue
-        if act.get("IsAutoTraveling") and not fought:
+        if bot.auto_traveling() and not fought:
             idle_since = None
             continue
         idle_since = idle_since or time.monotonic()
@@ -64,8 +75,12 @@ def run(bot: Bot, cfg: dict) -> str:
     if c["space_keyword"] in game_space(bot):
         bot.step("bh_inside", f"검은 구멍 안에서 이어 함: {game_space(bot)}")
     else:
-        if verify(bot, cfg):
-            return "완료 (일일 달성 체크)"
+        # 일일 달성 체크로 먼저 확인하지 않는다 — 오늘 끝냈으면 가이드에서 카드가 사라지므로 바로 가기를 열어 보면 된다.
+        # (예전엔 확인에 한 번, 바로 가기에 또 한 번 가이드를 열어 캐릭터마다 10초 — 2026-10-25.)
+        # 카드가 없을 때만 실행기가 일일 달성 체크로 확인한다
+        if cleared_today(bot):
+            bot.verified = True
+            return "완료 (패킷: 오늘 깸)"
         if bot.resumed_at("bh_travel", "bh_inside"):
             bot.log.info("지난번에 검은 구멍으로 가다(또는 안에서) 끊김 → 바로 가기부터 다시")
         bot.step("bh_open", "콘텐츠 가이드 → 검은 구멍 바로 가기")

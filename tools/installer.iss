@@ -55,3 +55,13 @@ Name: "{userdesktop}\모비 커넥터 리모콘"; Filename: "{app}\mobi-remote.e
 
 [Run]
 Filename: "{app}\mobi-remote.exe"; Description: "지금 실행"; Flags: nowait postinstall skipifsilent shellexec
+; 패킷 감시는 Npcap 이 있어야 켜진다. 무료판 Npcap 은 재배포·무인 설치를 허락하지 않아(OEM 라이선스 필요) 같이 넣지 못한다
+; → 없을 때만 받는 곳을 여는 체크를 띄운다 (기본 체크). 없어도 리모콘은 화면·CLI 로 돈다
+Filename: "https://npcap.com/#download"; Description: "Npcap 받는 페이지 열기 (패킷 감시에 필요, 무료 — 없어도 리모콘은 동작)"; Flags: nowait postinstall skipifsilent shellexec; Check: not NpcapInstalled
+
+[Code]
+// Npcap 은 64비트 System32\Npcap 에 깔린다 (리모콘 packet_monitor.NPCAP_DIR 와 같은 곳). 32비트 설치기라 sysnative 로 본다
+function NpcapInstalled: Boolean;
+begin
+  Result := FileExists(ExpandConstant('{sysnative}\Npcap\wpcap.dll')) or FileExists(ExpandConstant('{sys}\Npcap\wpcap.dll'));
+end;

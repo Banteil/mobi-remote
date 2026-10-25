@@ -184,6 +184,7 @@ pre { user-select: text; }
 }
 .banner-mark { color: var(--warn); }
 #offline-banner .btn { margin-left: auto; }
+#npcap-banner [data-npcap] { margin-left: auto; }
 
 /* ── 본문 ───────────────────────────────────────── */
 
@@ -697,6 +698,18 @@ tr.sec .muted { font-weight: 400; letter-spacing: 0; margin-left: 4px; }
 }
 .q-sub { font-size: 11px; color: var(--fg-mute); margin-top: 3px; }
 .q-note { font-size: 11px; color: var(--fg-dim); margin-top: 5px; word-break: break-all; }
+/* 진행 줄 (queue.js qProgress) — 지금 하는 일 · 단계 · 막대 */
+.q-prog { margin-top: 5px; }
+.q-now { display: flex; gap: 8px; font-size: 12px; color: var(--fg); }
+.q-now span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-el { color: var(--fg-mute); font-variant-numeric: tabular-nums; }
+.q-step { font-size: 11px; color: var(--fg-dim); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-barrow { display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 11px; color: var(--fg-mute); font-variant-numeric: tabular-nums; }
+.q-bar { flex: 1; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.q-bar i { display: block; height: 100%; background: var(--accent); }
+.q-pause .q-bar i { opacity: .5; }
+.ov-alpha { margin-left: 12px; white-space: nowrap; }
+.ov-alpha input { vertical-align: middle; width: 120px; }
 .q-move { margin-top: 6px; display: flex; gap: 4px; }
 
 .q-btn {
@@ -906,7 +919,7 @@ tr.sec .muted { font-weight: 400; letter-spacing: 0; margin-left: 4px; }
 .dl-rp-sum { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .dl-rp-sum .pill { font-size: 13px; }
 /* 팝업은 창 높이를 넘지 않고, 목록과 화면 사진은 그 안에서 스크롤된다 */
-#dl-report .modal-box { max-height: 90vh; display: flex; flex-direction: column; }
+#q-report .modal-box { max-height: 90vh; display: flex; flex-direction: column; }
 .dl-rp-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; }
 .dl-rp-body { display: flex; flex-direction: column; gap: 10px; }
 .dl-rp-char { background: var(--bg-3); border-radius: 8px; padding: 10px 12px; }
@@ -919,6 +932,28 @@ tr.sec .muted { font-weight: 400; letter-spacing: 0; margin-left: 4px; }
 .dl-rp-row.has-shot .dl-rp-why::after { content: ' 📷'; }
 .dl-rp-okline { font-size: 12px; color: var(--fg-mute); margin-top: 4px; }
 .dl-rp-shot { width: 100%; margin-top: 10px; border-radius: 8px; border: 1px solid var(--line-2); }
+/* 작업 큐 결과 창 (queue.js showQueueReport) */
+.qr-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.qr-tab { background: var(--bg-3); border: 1px solid var(--line); color: var(--fg-dim); border-radius: 6px; padding: 5px 10px;
+  font-size: 13px; cursor: pointer; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qr-tab.on { border-color: var(--accent); color: var(--accent); }
+.qr-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-left: 4px; vertical-align: middle; background: var(--fg-mute); }
+.qr-dot.qr-done { background: var(--ok); } .qr-dot.qr-fail { background: var(--bad); } .qr-dot.qr-pause { background: var(--warn); }
+.qr-card { display: grid; grid-template-columns: auto auto 1fr auto; gap: 8px; align-items: center; font-size: 13px;
+  padding: 5px 0; border-top: 1px solid var(--line); cursor: pointer; }
+.qr-card:first-of-type { border-top: 0; }
+.qr-card:hover b { color: var(--accent); }
+.qr-goal { color: var(--fg-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qr-kv { display: grid; grid-template-columns: 80px 1fr; gap: 4px 10px; font-size: 13px; }
+.qr-kv span:nth-child(odd) { color: var(--fg-mute); }
+.qr-loot { display: flex; flex-direction: column; gap: 6px; }
+.qr-loot.compact { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
+.qr-lrow { display: grid; grid-template-columns: 64px 1fr; gap: 8px; font-size: 13px; }
+.qr-lt { color: var(--fg-mute); }
+.qr-items { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.qr-item { background: var(--bg-2, var(--bg-3)); border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; font-size: 12px; }
+.qr-item b { font-variant-numeric: tabular-nums; }
+.qr-up b { color: var(--ok); } .qr-down b { color: var(--bad); }
 .st-FAIL, .st-ERROR { color: var(--bad); font-weight: 700; }
 .st-RUN { color: var(--pri-fg, var(--fg)); font-weight: 600; }
 .st-SKIP, .st-STOP { color: var(--fg-mute); }

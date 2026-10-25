@@ -5,7 +5,8 @@
   → 우연한 만남 매칭 (모두 모이면 자동 입장) → 들어가면 숏컷 자동 진행·자동 전투가 저절로 켜진다
   → 클리어하면 '던전 클리어 / 화면을 터치해 주세요' → 보상 화면(나가기 ESC / 다시 하기 Space / 다른 던전 가기)
   → '다시 하기' = 같은 던전·난이도로 다시 매칭 → 4초 세고 입장
-쓰러지면 '행동불능' + '남은 부활 횟수 N/3' 과 오른쪽 아래 '여신상에서 부활'(R) / '여기서 부활'(아이템 1개) 이 뜬다.
+쓰러지면 '행동불능' + '남은 부활 횟수 N/M' 과 오른쪽 아래 '여신상에서 부활' / '여기서 부활'(R, 아이템 1개) 이 뜬다.
+최대 횟수 M 은 함께하기·난이도 등에 따라 다르다 (3, 6 을 봤다) — 고정값으로 보지 않는다.
 '여기서 부활' 을 누르고 그 판을 이어 한다 (2026-10-24 확인 — 누르면 IsDead 가 false, IsReviving 이 true 로 남는다).
 부활 횟수를 다 썼거나 함께하기에서 전멸해 '여기서 부활' 이 막히면 망설이지 않고 나간다 (사용자 규칙):
 오른쪽 맨 위 나가기 버튼 → '던전에서 퇴장하시겠습니까?' 나가기(Space) → 처음부터 다시 입장한다.
@@ -47,6 +48,9 @@ def _click_text(bot: Bot, want: str, region=None, exact: bool = True, what: str 
     raise CannotProceed(f"'{what or want}' 를 화면에서 찾지 못함 → {bot.snapshot('abyss').name}")
 
 
+ABYSS_MAP = "InstanceAbyssDungeon"  # 패킷의 맵 종류
+
+
 def inside(bot: Bot) -> bool:
     """어비스(던전) 안 — 오른쪽 맨 위 나가기 버튼이 보인다."""
     return bot.exists(bot.ui["abyss_exit"])
@@ -69,10 +73,12 @@ def _wait_settled(bot: Bot, timeout: float) -> bool:
     퀘스트 완료 창이 뜨면 그대로 서 있었다 (2026-10-24 사용자)."""
     end = time.monotonic() + timeout
     while time.monotonic() < end:
-        act = bot.state.activity() if bot.state.available() else None
-        if not (act or {}).get("IsAutoTraveling") and bot.at_main():
+        if bot.map_loading():  # 패킷: 맵 로딩 중 — 끝나는 순간까지 화면은 안 본다
+            bot.wait_loaded(end - time.monotonic())
+            continue
+        if not bot.auto_traveling() and bot.at_main():
             return True
-        if act is not None:
+        if not bot.is_loading():
             bot.clear_blockers(ocr=True)
         bot.sleep(2, 2.5)
     return False
@@ -85,8 +91,7 @@ def _travel_to_entry(bot: Bot) -> None:
     _click_text(bot, gd.text("abyss_move"), gd.region("abyss_entry_right"), what="이동하기")
     bot.sleep(2, 3)
     key = bot.cfg["game"].get("fast_travel_key")
-    act = (bot.state.activity() if bot.state.available() else None) or {}
-    if key and act.get("IsAutoTraveling") and act.get("AutoTravelRemainingPositionCount", 0) > 0:
+    if key and bot.fast_travel_ok():
         bot.log.info("빠른 이동")
         bot.key(key)
     if not _wait_settled(bot, bot.cfg["abyss"].get("travel_timeout", 300)):
@@ -109,9 +114,12 @@ def where(bot: Bot, dungeon: str) -> str:
       play     어비스 안 (나가기 버튼)              reward  클리어·보상 화면
       main     필드 메인 화면                       menu    메뉴(ESC)가 열려 있음
       entry    입장 화면 (위쪽 '혼자하기 / 함께하기' 탭)
-      matching 입장 화면인데 입장하기·이동하기 버튼이 없음 — 매칭 중으로 본다 (매칭 중 화면은 아직 못 봤다)
+      matching 매칭 중 — 패킷의 매칭 상태로, 없으면 입장 화면인데 입장하기·이동하기 버튼이 없는 것으로.
+               매칭 중 화면은 필드 + 오른쪽 '우연한 만남' 창 (2026-10-25 captures/abyss)
       list     어비스 목록 (dungeon 이름이 오른쪽 목록에)
-      loading  CLI 가 답하지 않음 (로딩 중엔 get_activity 가 오류)   other  그 밖의 창 — ESC 로 닫으면 된다"""
+      loading  맵 로딩 중 (패킷, 모르면 CLI 가 답하지 않는 것으로)    other  그 밖의 창 — ESC 로 닫으면 된다"""
+    if bot.map_loading():
+        return "loading"
     if inside(bot):
         return "play"
     if after_clear(bot):
@@ -120,11 +128,13 @@ def where(bot: Bot, dungeon: str) -> str:
         return "main"
     if bot.exists(bot.ui["menu_quit"]):
         return "menu"
+    if bot.packets.ok and bot.packets.state.abyss_matching in (1, 2, 3):
+        return "matching"  # 패킷: 우연한 만남 매칭 중 (화면은 필드 + 오른쪽 '우연한 만남' 창)
     if _find_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top")):
         return "entry" if _entry_button(bot) else "matching"
     if _find_text(bot, dungeon, gd.region("abyss_list")):
         return "list"
-    if bot.state.available() and bot.state.activity() is None:
+    if bot.map_loading() is None and bot.is_loading():
         return "loading"
     return "other"
 
@@ -133,7 +143,8 @@ def where_settled(bot: Bot, dungeon: str) -> str:
     """where, 단 로딩 중이면 끝날 때까지 (상한 timing.loading)."""
     end = time.monotonic() + bot.cfg["timing"]["loading"]
     while (at := where(bot, dungeon)) == "loading" and time.monotonic() < end:
-        bot.sleep(2, 2.5)
+        if not bot.wait_loaded(end - time.monotonic()):  # 패킷이 모르면 CLI 로 다시 본다
+            bot.sleep(2, 2.5)
     return at
 
 
@@ -198,13 +209,31 @@ def open_entry(bot: Bot, dungeon: str, difficulty: str = "", _moved: bool = Fals
 
 
 def wait_entered(bot: Bot, timeout: float) -> bool:
-    """매칭(우연한 만남)이 잡혀 어비스 안으로 들어갈 때까지. 모두 모이면 저절로 들어간다. 시간 안에 못 들어가면 False."""
-    end = time.monotonic() + timeout
+    """매칭(우연한 만남)이 잡혀 어비스 안으로 들어갈 때까지. 모두 모이면 저절로 들어간다. 시간 안에 못 들어가면 False.
+    패킷이 있으면 맵을 떠나는 순간 바로 알고, 로딩 동안은 화면을 보지 않는다. 어비스 맵에 들어온 지 10초가 지났는데
+    나가기 버튼이 가려져 있으면 그래도 들어온 것으로 본다 (판 진행 쪽이 가린 창을 넘긴다). 기다리기 시작한 뒤에 들어간
+    어비스 맵만 센다 — '다시 하기' 뒤엔 지난 판 맵에 선 채로 매칭을 기다릴 수 있다."""
+    start = time.monotonic()
+    end = start + timeout
     while not inside(bot):
         if time.monotonic() > end:
             return False
+        loading = bot.map_loading()
+        st = bot.packets.state
+        if loading:
+            bot.wait_loaded(end - time.monotonic())
+            continue
+        if loading is False and st.channel_type == ABYSS_MAP and st.entered_at > start:
+            if time.monotonic() - st.entered_at > 10:
+                bot.log.info("패킷: 어비스 맵에 들어옴 (나가기 버튼은 가려짐)")
+                return True
+            bot.clear_blockers()
+            bot.sleep(1)
+            continue
         bot.clear_blockers(ocr=True)  # 매칭 중에 퀘스트 클리어 창 등이 뜨면 입장을 막는다 (2026-10-24 06:07)
-        bot.sleep(3)
+        # 3초 쉬되 맵을 떠나기 시작하면 바로 깬다
+        if bot.wait_packet(lambda s: s.loading, 3) is None:
+            bot.sleep(3)
     return True
 
 
@@ -226,62 +255,60 @@ def leave(bot: Bot) -> None:
         break
     else:
         raise StepTimeout(f"어비스에서 나가지 못함 → {bot.snapshot('abyss_leave').name}")
-    # 밖(필드)으로 나와 메인 화면이 보일 때까지
+    # 밖(필드)으로 나와 메인 화면이 보일 때까지 — 패킷이 있으면 맵을 떠나기 시작하는 순간(길어야 15초)을 기다렸다가,
+    # 로딩 동안은 화면을 보지 않는다
     end = time.monotonic() + bot.cfg["timing"]["loading"]
+    bot.wait_packet(lambda s: s.loading, 15)
     while inside(bot) or not bot.at_main():
         if time.monotonic() > end:
             raise StepTimeout("어비스에서 나온 뒤 메인 화면이 나오지 않음")
-        if not inside(bot) and bot.state.activity() is not None:
+        if bot.map_loading():
+            bot.wait_loaded(end - time.monotonic())
+            continue
+        if not inside(bot) and not bot.is_loading():
             bot.clear_blockers(ocr=True)  # 나오면서 뜬 퀘스트 완료 창
         bot.sleep(2)
 
 
-def _revives_left(bot: Bot, frame) -> int | None:
-    """사망 화면 가운데 '남은 부활 횟수 N/3' 의 N. 못 읽으면 None. 함께하기 전멸('전멸하였습니다')이면 0.
-    글자 칸만 잘라 읽으면 검출이 안 돼 '행동불능' 줄까지 넓게 읽는다."""
-    import re
-    texts = [t for t, _, _ in find_texts(frame, gd.region("abyss_revive_left"))]
-    if any(gd.text("abyss_wiped") in t for t in texts):
-        return 0  # 전멸이면 '여기서 부활' 버튼 자체가 없다 (2026-10-24 확인)
-    for t in texts:
-        m = re.search(r"(\d+)\s*/\s*\d+", t)
-        if m:
-            return int(m.group(1))
+def revives_left(bot: Bot) -> int | None:
+    """남은 부활 횟수 = 이 판의 최대 - 쓴 횟수 (패킷 revive.count, 최대는 판마다 게임이 보내는 값 — 3, 6 을 봤다).
+    화면 '남은 부활 횟수 3/3' 일 때 쓴 0 · 최대 3 (death1 실측). 모르면 None."""
+    st = bot.packets.state
+    if bot.packets.ok and st.revives_max:
+        return max(0, st.revives_max - (st.revives_used or 0))
     return None
 
 
 def revive_here(bot: Bot) -> bool:
-    """사망 화면에서 '여기서 부활' 을 누른다. 부활했으면 True.
-    부활 횟수가 0 이거나 버튼이 없거나 막혀 있으면(켜진 버튼은 주황) 누르지 않고 False → 나간다."""
-    for _ in range(3):  # 사망 화면 버튼은 쓰러지고 1~2초 뒤에 뜬다
-        frame = bot.frame()
-        if any(gd.text("abyss_wiped") in t for t, _, _ in find_texts(frame, gd.region("abyss_revive_left"))):
-            bot.log.warning(f"함께하기 전멸 ('여기서 부활' 없음) → 나감 ({bot.snapshot('abyss_dead').name})")
-            return False
-        hit = next(((x, y) for t, x, y in find_texts(frame, gd.region("abyss_revive_button"))
-                    if gd.text("abyss_revive_here") in t), None)  # '여기서' — '부활' 은 '부할' 로 자주 읽힌다
-        if hit:
+    """사망 화면에서 '여기서 부활'(R). 부활했으면 True, 못 했으면 False → 부르는 쪽이 나가서 처음부터.
+    막혔는지 미리 알아내려 하지 않는다 — R 을 누르고 정해진 시간 안에 부활 신호가 오는지로 정한다 (사용자 2026-10-25).
+    함께하기 전멸·부활 아이템 없음 등으로 막혀 있으면 R 은 아무 일도 하지 않아 누르는 비용이 없다.
+    (예전엔 화면 글자·버튼 색으로 미리 막힘을 판단했는데, 잘못 읽으면 부활할 수 있는데도 나가 버렸다.)
+    누르기 전에 나가는 것은 확실한 신호뿐: 패킷이 알려 준 이 판의 부활 횟수를 다 씀.
+    부활 신호: 패킷 revive.item_ok (ReviveUsingConsumable_RSP_SUCCESS) 또는 쓰러짐이 풀림 (패킷 SetDead 0 · CLI IsDead)."""
+    if revives_left(bot) == 0:
+        bot.log.warning(f"부활 횟수를 다 씀 (패킷) → 나감 ({bot.snapshot('abyss_dead').name})")
+        return False
+    # 사망 화면 버튼은 쓰러지고 1~2초 뒤에 뜨고, 그 전의 키는 무시된다 → 버튼이 보일 때까지 잠깐.
+    # 못 찾아도(전멸이면 버튼이 없다) 그냥 누른다 — 판단은 아래 시간 제한이 한다
+    for _ in range(3):
+        if bot.vision.find(bot.frame(), "revive_here"):
             break
         bot.sleep(1.5, 2)
-    else:
-        bot.log.warning(f"'여기서 부활' 버튼이 없음 → 나감 ({bot.snapshot('abyss_dead').name})")
-        return False
-    left = _revives_left(bot, frame)
-    x, y = hit
-    patch = frame[y - 14:y + 14, max(0, x - 70):x + 70].reshape(-1, 3).astype(int)  # BGR
-    orange = ((patch[:, 2] > 200) & (patch[:, 1] > 110) & (patch[:, 1] < 210) & (patch[:, 0] < 110)).mean()
-    if left == 0 or orange < 0.15:
-        why = "부활 횟수를 다 씀" if left == 0 else "'여기서 부활' 이 막힘 (함께하기 전멸 등)"
-        bot.log.warning(f"{why} → 나감 ({bot.snapshot('abyss_dead').name})")
-        return False
-    bot.click(hit)
-    end = time.monotonic() + 10
+    mark = bot.packets.mark()
+    bot.key("r")  # '여기서 부활' 단축키 (사용자 확인 2026-10-25) — 버튼 위치가 모드마다 달라도 된다
+    end = time.monotonic() + bot.cfg["abyss"].get("revive_timeout", 10)
+    again = False
     while time.monotonic() < end:
-        bot.sleep(1.5)
-        if not (bot.state.activity() or {}).get("IsDead"):
-            bot.log.info(f"여기서 부활{f' (남은 부활 {left - 1}번)' if left else ''}")
+        bot.sleep(1.0)
+        if bot.packets.find("revive.item_ok", mark) or not bot.is_dead():
+            left = revives_left(bot)
+            bot.log.info(f"여기서 부활{f' (남은 부활 {left}번)' if left is not None else ''}")
             return True
-    bot.log.warning(f"'여기서 부활' 을 눌렀는데 일어나지 않음 → 나감 ({bot.snapshot('abyss_dead').name})")
+        if not again and end - time.monotonic() < 5:  # 첫 키가 무시됐을 수 있다 (아직 쓰러진 채일 때만 한 번 더)
+            bot.key("r")
+            again = True
+    bot.log.warning(f"'여기서 부활' 신호가 없음 (전멸·부활 횟수·아이템 없음 등) → 나감 ({bot.snapshot('abyss_dead').name})")
     return False
 
 
@@ -290,10 +317,19 @@ def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: No
     쓰러지면 revive 일 때 '여기서 부활' 하고 이어 한다 (못 하면 'dead' → 나가서 처음부터).
     배고프면 그때마다 음식을 먹는다 (어비스 반복은 일일 숙제의 하루 횟수 제한 없이)."""
     end = time.monotonic() + run_timeout
+    mark = bot.packets.mark()
+
+    def cleared(_s=None) -> bool:  # 패킷: 이 판의 결과가 옴 (클리어 순간, CLI 결과 연출 표시와 같은 때)
+        return bot.packets.find("abyss.result", mark, lambda v: bool(v.get("abyss"))) is not None
+
     while True:
-        bot.sleep(3)
+        if bot.wait_packet(cleared, 3) is None:  # 3초 쉬되 결과가 오면 바로 깬다
+            bot.sleep(3)
+        if cleared():
+            bot.log.info("패킷: 어비스 결과 옴 → 클리어")
+            return "clear"
         act = bot.state.activity() or {}
-        if act.get("IsDead"):
+        if bot.is_dead(act):
             if revive and revive_here(bot):
                 on_revive()
                 continue
@@ -341,6 +377,8 @@ def _switch_character(bot: Bot, cfg: dict, character: dict) -> None:
 def after_clear(bot: Bot) -> bool:
     """클리어 화면('화면을 터치해 주세요')이나 보상 화면(다시 하기 / 나가기)인가."""
     ui = bot.ui
+    if bot.packets.ok and bot.packets.state.abyss_result:  # 패킷: 결과가 와 있고 아직 안 나감
+        return True
     act = bot.state.activity() if bot.state.available() else None
     return bool((act or {}).get("IsAbyssResultSequencePlaying") or bot.exists(ui["dungeon_retry"])
                 or bot.exists(ui["reward_exit"]) or touch_prompt_visible(bot))

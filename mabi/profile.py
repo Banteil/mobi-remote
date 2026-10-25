@@ -60,6 +60,12 @@ def game_date(now: datetime | None = None) -> str:
     return (now - timedelta(hours=RESET_HOUR)).strftime("%Y-%m-%d")
 
 
+def game_day_start(now: datetime | None = None) -> datetime:
+    """오늘 게임 날짜가 시작된 때 (오전 6시, 6시 전이면 전날 6시)."""
+    now = now or datetime.now()
+    return (now - timedelta(hours=RESET_HOUR)).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=RESET_HOUR)
+
+
 class DailyState:
     """오늘(게임 날짜) 캐릭터별 숙제 결과. 'done' 이면 다음 실행 때 건너뛴다."""
 
@@ -148,6 +154,8 @@ class DailyState:
             self._save()
 
     def failed(self, slot: int, task: str) -> bool:
-        """오늘 해 봤는데 끝나지 않은 숙제 (FAIL/ERROR/CHECK 등)."""
+        """오늘 해 봤는데 끝나지 않은 숙제 (FAIL/ERROR/CHECK 등).
+        사람이 멈춘 것(STOP)은 실패가 아니다 — 실패로 치면 그 캐릭터가 '실패만 남음'으로 맨 뒤로 밀려
+        다시 시작할 때 멈춘 숙제 대신 다음 캐릭터부터 할 수 있었다."""
         s = self.get(slot, task)
-        return s is not None and not self.is_done(slot, task)
+        return s is not None and not self.is_done(slot, task) and not (isinstance(s, str) and s.startswith("STOP"))

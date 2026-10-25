@@ -3,6 +3,7 @@
 캐릭터별 설정은 엔진이 읽는 config.toml 에 그대로 쓴다:
 - [silver.by_slot.N]  field · field_runs · dungeon · floor · black_hole_in_field
 - [run.skip_by_slot]  "N" = ["black_hole"]   (검은 구멍 끄기 — 사냥터 안 검은 구멍도 같이 끈다)
+- [weekday_dungeon.sunday_by_slot]  "N" = "골드"   (일요일 요일 던전 — 임무 게시판에서 고를 던전)
 화면에는 '기본값' 대신 실제로 적용되는 값을 보여 주고, 저장할 때는 공통 설정과 다른 값만 덮어쓰기로 남긴다.
 
 카드 그림은 data/portraits/<슬롯>.png. '자동 설정' 이 캐릭터 선택 화면에서 잘라 오거나 사람이 파일로 고른다.
@@ -17,6 +18,7 @@ import tomlkit
 
 from mabi import gamedata as gd, profile as prof, userconfig
 from mabi.runner import load_config
+from mabi.tasks.weekday import SUNDAY_CHOICES
 from mabi.whoami import Characters
 
 log = logging.getLogger("mabi")
@@ -51,7 +53,8 @@ class CharsApi:
         """지금 접속한 캐릭터 이름 {name, fresh}. CLI 에는 이름이 없어 메인 화면 왼쪽 위 이름을 OCR 로 읽는다.
         게임 창만 따로 찍어(다른 창에 가려 있어도 됨) 부를 때마다 본다. 찍기·화면 확인은 60ms 남짓이고 OCR 만 1초쯤
         걸리므로, 이름 칸 그림이 지난번과 같으면 OCR 을 건너뛴다 (예전엔 15초에 한 번만 읽어 바뀐 게 늦게 보였다).
-        게임이 꺼졌거나 캐릭터 선택·타이틀 화면이면 ''. 일일 숙제가 도는 중이면 그 캐릭터 이름 (화면을 건드리지 않는다)."""
+        게임이 꺼졌거나 캐릭터 선택·타이틀 화면이면 ''. 일일 숙제가 도는 중이면 그 캐릭터 이름 (화면을 건드리지 않는다).
+        패킷 감시가 접속한 캐릭터 이름을 알면 그게 먼저다 (맵에 들어갈 때 오는 내 등장 메시지 — OCR 보다 정확)."""
         import time as _t
         runner = getattr(self, "_daily_runner", None)
         bot = getattr(runner, "bot", None) if runner else None
@@ -59,6 +62,20 @@ class CharsApi:
         if bot and thread and thread.is_alive() and bot.character:
             self._name_now = {"name": bot.character.get("name", ""), "at": _t.time()}
             return {"name": self._name_now["name"], "fresh": True}
+        try:
+            from mabi import packet_monitor
+            if load_config(self.paths)["game"].get("packet_watch", True):
+                pm = packet_monitor.shared(self.paths.logs)
+                if pm.at_charselect():  # 로그아웃 뒤 = 접속한 캐릭터 없음 (게임이 꺼졌는지는 아래 창 확인이 본다)
+                    from mabi.window import GameWindow
+                    if GameWindow(load_config(self.paths)["game"]["window_title"]).find():
+                        self._name_now, self._name_crop = {"name": "", "at": 0.0}, None
+                        return {"name": "", "fresh": False}
+                if pm.ok and pm.state.my_name and not pm.state.loading:
+                    self._name_now, self._name_crop = {"name": "".join(pm.state.my_name.split()), "at": _t.time()}, None
+                    return {"name": self._name_now["name"], "fresh": True}
+        except Exception as e:  # 이름 표시는 덤이다
+            log.debug(f"패킷으로 지금 캐릭터 이름 읽기 실패: {e}")
         busy = (self._scan_thread and self._scan_thread.is_alive()) or _t.time() - self._name_checked < 2
         if not busy:
             self._name_checked = _t.time()
@@ -105,8 +122,9 @@ class CharsApi:
         doc = self._doc()
         s = doc["silver"]
         defaults = {"field": str(s["field"]), "field_runs": int(s["field_runs"]), "dungeon": str(s["dungeon"]),
-                    "floor": int(s["floor"]), "black_hole": True}
+                    "floor": int(s["floor"]), "black_hole": True, "sunday": self._sunday(doc)}
         by = s.get("by_slot", {})
+        sun_by = doc["weekday_dungeon"].get("sunday_by_slot", {})
         skip = doc["run"].get("skip_by_slot", {})
         profile = prof.load_profile(self.paths.profile) or {"slots": [], "names": {}}
         known = Characters(self.paths.data).load()["slots"]
@@ -129,6 +147,7 @@ class CharsApi:
                 "field": str(o.get("field", defaults["field"])), "field_runs": int(o.get("field_runs", defaults["field_runs"])),
                 "dungeon": str(o.get("dungeon", defaults["dungeon"])), "floor": int(o.get("floor", defaults["floor"])),
                 "black_hole": "black_hole" not in list(skip.get(k, [])),
+                "sunday": str(sun_by.get(k, defaults["sunday"])),
                 "arbeit": c["slot"] in [int(x) for x in doc.get("arbeit", {}).get("slots", [])],
                 "level": fp.get("level") or card.get("level"), "job": fp.get("job") or card.get("job"),
                 "portrait": self._data_url(self._portrait(c["slot"])),
@@ -136,11 +155,11 @@ class CharsApi:
         return {"chars": out, "defaults": defaults,
                 "fields": [n for n, p in doc["places"].items() if int(p["index"]) == 2],
                 "dungeons": [n for n, p in doc["places"].items() if int(p["index"]) < 2],
-                "floors": FLOORS, "scanning": bool(self._scan_thread and self._scan_thread.is_alive())}
+                "floors": FLOORS, "sundays": list(SUNDAY_CHOICES), "scanning": bool(self._scan_thread and self._scan_thread.is_alive())}
 
     # ---- 저장 ----
     def chars_save(self, chars: list) -> dict:
-        """chars: [{slot, name, field, field_runs, dungeon, floor, black_hole}] — 화면에 보이는 실제 값."""
+        """chars: [{slot, name, field, field_runs, dungeon, floor, black_hole, sunday}] — 화면에 보이는 실제 값."""
         slots = [int(c["slot"]) for c in chars]
         if len(set(slots)) != len(slots):
             return {"error": "같은 슬롯이 두 번 있습니다"}
@@ -161,6 +180,9 @@ class CharsApi:
             overs[str(c["slot"])] = o
         self._write_by_slot(s, overs)
         self._write_skips(doc["run"], skips)
+        self._write_sundays(doc["weekday_dungeon"], {str(c["slot"]): str(c["sunday"]) for c in chars
+                                                     if c.get("sunday") in SUNDAY_CHOICES
+                                                     and c["sunday"] != self._sunday(doc)})
         if "arbeit" in doc:  # 아르바이트는 켠 캐릭터 목록으로 둔다 (기본 꺼짐)
             arr = tomlkit.array()
             arr.extend(sorted(int(c["slot"]) for c in chars if c.get("arbeit")))
@@ -189,6 +211,23 @@ class CharsApi:
                 t[k] = v
             if not len(t):
                 del by[slot]
+
+    @staticmethod
+    def _sunday(doc) -> str:
+        v = str(doc["weekday_dungeon"].get("sunday", ""))
+        return v if v in SUNDAY_CHOICES else SUNDAY_CHOICES[-1]
+
+    @staticmethod
+    def _write_sundays(wd, sundays: dict) -> None:
+        """일요일 던전은 공통 설정과 다른 캐릭터만 남긴다."""
+        if not sundays:
+            if "sunday_by_slot" in wd:
+                del wd["sunday_by_slot"]
+            return
+        t = tomlkit.table()
+        for slot, v in sorted(sundays.items(), key=lambda kv: int(kv[0])):
+            t[slot] = v
+        wd["sunday_by_slot"] = t
 
     @staticmethod
     def _write_skips(run, skips: dict) -> None:

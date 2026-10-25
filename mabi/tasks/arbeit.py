@@ -218,15 +218,14 @@ def _press_other(bot: Bot, exclude) -> str | None:
 
 
 def _idle(bot: Bot) -> bool:
-    a = bot.state.activity() or {}
-    return not any(a.get(k) for k in ("IsAutoPlaying", "IsAutoTraveling", "IsDialoguePlaying", "IsInCombat"))
+    a = bot._act(None)  # 자동 진행(IsAutoPlaying)은 아직 패킷으로 끝을 모른다 — 나머지는 패킷 우선
+    return not (a.get("IsAutoPlaying") or bot.auto_traveling(a) or bot.dialogue_playing(a) or bot.in_combat(a))
 
 
 def _fast_travel(bot: Bot) -> bool:
     """먼 곳으로 자동 이동 중이면 빠른 이동 키(T)를 누른다 (content.travel 과 같은 기준). 눌렀으면 True."""
     key = bot.cfg["game"].get("fast_travel_key")
-    act = bot.state.activity() or {}
-    if key and act.get("IsAutoTraveling") and act.get("AutoTravelRemainingPositionCount", 0) > 0:
+    if key and bot.fast_travel_ok():
         bot.log.info("빠른 이동")
         bot.key(key)
         return True
@@ -260,8 +259,7 @@ def _settle(bot: Bot) -> None:
             else:
                 bot.click(tuple(a["dialog_next_xy"]))
         else:
-            act = bot.state.activity() or {}
-            if act.get("IsDialoguePlaying"):  # 대화가 열리는 중
+            if bot.dialogue_playing():  # 대화가 열리는 중
                 bot.sleep(1, 1.3)
                 continue
             return

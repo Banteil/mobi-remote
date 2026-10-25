@@ -25,9 +25,10 @@ def ensure_auto(bot: Bot) -> None:
 
 
 def handle_death(bot: Bot) -> bool:
-    if bot.vision.has(bot.ui["revive"]) and bot.click_if(bot.ui["revive"]):
-        bot.log.warning("사망 → 부활")
-        bot.sleep(3, 4)
+    """쓰러지면 '여기서 부활' 만 쓴다 (여신상 부활은 쓰지 않는다 — 사용자 방침). 부활했으면 True."""
+    from .abyss import revive_here  # abyss 가 이 모듈을 가져다 쓴다
+    if revive_here(bot):
+        bot.log.warning("사망 → 여기서 부활")
         ensure_auto(bot)
         return True
     return False
@@ -136,12 +137,14 @@ def travel(bot: Bot, arrive: list[str], timeout: float) -> None:
     """'진행하기' 등으로 시작된 자동 이동이 끝나 arrive 중 하나가 보일 때까지 대기.
     설정에 fast_travel_key 가 있으면 이동 시작 후 한 번 눌러 빠른 이동한다."""
     key = bot.cfg["game"].get("fast_travel_key")
-    bot.sleep(2, 3)
-    if key and bot.state.available():
-        act = bot.state.activity()
-        if act and act.get("IsAutoTraveling") and act.get("AutoTravelRemainingPositionCount", 0) > 0:
-            bot.log.info("빠른 이동")
-            bot.key(key)
+    # 패킷: 자동 이동 시작이 오면 바로 (빠른 이동 가능 여부도 같이 온다). 모르면 예전처럼 2~3초 뒤 CLI 로
+    if bot.wait_packet(lambda s: s.traveling, 5) is True:
+        bot.sleep(0.5)
+    else:
+        bot.sleep(2, 3)
+    if key and bot.fast_travel_ok():
+        bot.log.info("빠른 이동")
+        bot.key(key)
     return bot.wait_any(arrive, timeout=timeout, interval=1.0)
 
 
@@ -303,6 +306,18 @@ def _pick_from_list(bot: Bot, place: dict, name: str) -> bool:
     return True
 
 
+def other_town(bot: Bot, town: str) -> bool:
+    """패킷: 지금 다른 마을(Field 맵)에 있나. 모르거나 마을이 아닌 곳(사냥터·던전)이면 False."""
+    st = bot.packets.state if bot.packets.ok else None
+    if not st or st.loading or st.channel_type != "Field" or not st.channel_name:
+        return False
+    here = st.channel_name.replace(" ", "")
+    if here != town.replace(" ", ""):
+        bot.log.debug(f"패킷: 지금 마을 '{st.channel_name}' ≠ '{town}' → 월드맵으로")
+        return True
+    return False
+
+
 def go_to_place(bot: Bot, name: str, arrive: list[str], timeout: float, tries: int = 2):
     """지도에서 장소([places] 의 마을/탭/목록 칸)를 찾아 '여기로 가기' → 도착까지.
     지금 있는 지역 맵에 있으면 바로 고르고, 아니면 월드맵에서 마을을 찾아 들어간다. 실패하면 처음부터 한 번 더."""
@@ -312,7 +327,9 @@ def go_to_place(bot: Bot, name: str, arrive: list[str], timeout: float, tries: i
     for attempt in range(tries):
         try:
             open_map(bot)
-            if not _pick_from_list(bot, place, name):
+            # 다른 마을에 있으면 지역 맵 목록이 다르다 — 탭 자리를 누르면 그 지역 목록 칸이 눌린다 (2026-10-25).
+            # 패킷이 지금 마을을 알면 목표 마을이 아닐 때 바로 월드맵으로 간다. 사냥터·던전 안이거나 모르면 목록 글자로 본다
+            if other_town(bot, place["town"]) or not _pick_from_list(bot, place, name):
                 open_world_map(bot)
                 bot.click(find_town(bot, place["town"]))
                 bot.sleep(2, 2.5)
@@ -356,8 +373,34 @@ def select_zone(bot: Bot, difficulty: str, floor: int, zone: int) -> None:
 
 
 def dungeon_state(bot: Bot) -> str | None:
+    """던전 상태. 패킷이 알면 그것 (바뀌는 즉시), 모르면 CLI."""
+    if bot.packets.ok and bot.packets.state.dungeon_state:
+        return bot.packets.state.dungeon_state
     act = bot.state.activity() if bot.state.available() else None
     return (act or {}).get("Dungeon", {}).get("State")
+
+
+def wait_dungeon(bot: Bot, pred: Callable[[str], bool], timeout: float, interval: float = 3.0) -> str | None:
+    """던전 상태(NotInDungeon/Entering/InProgress/Cleared)가 pred 를 만족할 때까지 기다려 그 상태를 돌려준다.
+    시간 초과면 "". 패킷이 상태를 알면 패킷으로 (바뀌는 즉시), 모르면 CLI 를 interval 마다 (CLI 조회 실패는 "Unknown").
+    둘 다 못 쓰면 None — 화면으로 판단할 것. 감시가 도중에 시작돼 아직 상태를 모를 때(던전 안에서 시작)도 CLI 로 간다."""
+    end = time.monotonic() + timeout
+    while True:
+        p = bot.packets
+        left = end - time.monotonic()
+        if p.ok and p.state.dungeon_state is not None:
+            if bot.wait_packet(lambda s: pred(s.dungeon_state), max(0.0, min(left, interval))):
+                return p.state.dungeon_state
+        elif bot.state.available():
+            st = dungeon_state(bot) or "Unknown"
+            if pred(st):
+                return st
+            if left > 0:
+                bot.sleep(min(left, interval))
+        else:
+            return None
+        if time.monotonic() > end:
+            return ""
 
 
 def enter_from_dungeon_window(bot: Bot, clear_timeout: float, extra_loot: int = 0,
@@ -386,24 +429,24 @@ def enter_from_dungeon_window(bot: Bot, clear_timeout: float, extra_loot: int = 
 def play_dungeon(bot: Bot, clear_timeout: float, extra_loot: int = 0, again: str | None = None) -> str:
     """입장 직후부터 클리어 → 보상 → 필드 복귀까지. 반환: 'clear' | 'fail' | 'again'(반복 버튼을 누름)"""
     ui = bot.ui
-    if bot.state.available():
-        end = time.monotonic() + bot.cfg["timing"]["loading"]
-        while dungeon_state(bot) != "InProgress":
-            if time.monotonic() > end:
-                raise StepTimeout("던전 입장 확인 실패")
-            bot.sleep(2)
+    entered = wait_dungeon(bot, lambda s: s == "InProgress", bot.cfg["timing"]["loading"], interval=2)
+    if entered == "":
+        raise StepTimeout("던전 입장 확인 실패")
+    if entered is not None:
         bot.step("in_dungeon", "던전 진행 중")
 
         end = time.monotonic() + clear_timeout
         while True:
-            bot.sleep(3)
-            act = bot.state.activity() or {}
-            state = act.get("Dungeon", {}).get("State")
-            if state != "InProgress":
+            state = wait_dungeon(bot, lambda s: s != "InProgress", 3)
+            if state:
                 break
-            if act.get("IsDead"):
+            if state is None:  # 패킷도 CLI 도 끊김 → 클리어 화면으로
+                bot.wait(ui["dungeon_touch"], timeout=max(1.0, end - time.monotonic()), interval=2.0)
+                state = "Cleared"
+                break
+            if bot.is_dead():
                 if not handle_death(bot):
-                    bot.log.warning(f"사망 상태, 부활 버튼 템플릿 없음 → {bot.snapshot('dead').name}")
+                    bot.log.warning("사망 상태, '여기서 부활' 을 못 함")
             if time.monotonic() > end:
                 raise StepTimeout("던전 클리어 대기 시간 초과")
         result = "clear" if state == "Cleared" else "fail"
@@ -485,9 +528,11 @@ def finish_dungeon(bot: Bot, extra_loot: int = 0, again: str | None = None) -> b
     ui = bot.ui
     end = time.monotonic() + 180
     while True:
+        # '화면을 터치해 주세요' 는 템플릿으로 잘 안 잡혀 시간 초과 뒤 터치한다. 패킷이 클리어를 알면 짧게 기다린다
+        # (예전엔 6초씩 두 번 기다려 클리어 → 보상까지 17초, daily1 13:36:05 → 13:36:22)
         try:
             m = bot.wait_any([ui["dungeon_touch"], ui["scene_skip"], ui["reward_exit"], ui["main_hud"]],
-                             timeout=6, interval=1.0)
+                             timeout=2.5 if dungeon_state(bot) == "Cleared" else 6, interval=1.0)
         except StepTimeout:
             if time.monotonic() > end:
                 raise StepTimeout("던전 클리어 후 보상 화면으로 넘어가지 못함")
@@ -527,8 +572,8 @@ def finish_dungeon(bot: Bot, extra_loot: int = 0, again: str | None = None) -> b
         bot.sleep(1.5, 2.5)
     if m.name == ui["reward_exit"]:
         close_quest_clears(bot)
-    # 사냥터는 클리어 후 마을로 돌아와 NPC 대화가 이어진다
-    bot.sleep(2, 3)
+    else:
+        bot.sleep(2, 3)  # 사냥터는 클리어 후 마을로 돌아와 NPC 대화가 이어진다
     bot.skip_dialogue()
     bot.to_main()
     return False
@@ -599,7 +644,12 @@ def play_field(bot: Bot, place: str, clear_timeout: float, on_enter=None, again:
     again 을 주면 보상 화면에서 그 버튼('새 임무 선택')을 눌러 사냥터 창으로 바로 돌아가고 'again' 을 반환한다."""
     bot.step("field_enter", f"{place} 사냥터 입장", place=place)
     bot.key("space")
-    wait_until(bot, lambda: bool(hunt_quest(bot, place)), bot.cfg["timing"]["loading"], what="사냥터 입장")
+    # 패킷이 먼저 (사냥터 상태 InProgress + 사냥터 맵 로딩 끝 — 상태는 로딩 전에 먼저 온다), 못 쓰거나 안 오면 CLI 퀘스트 목록
+    entered = bot.wait_packet(lambda s: s.field_state == "InProgress" and s.channel_type == "BattleField" and not s.loading,
+                              bot.cfg["timing"]["loading"])
+    if not entered:
+        wait_until(bot, lambda: bool(hunt_quest(bot, place)), bot.cfg["timing"]["loading"] if entered is None else 10,
+                   what="사냥터 입장")
     bot.step("in_field", f"사냥터 진행 중: {hunt_quest(bot, place)}", place=place)
     if on_enter:
         on_enter(bot)
@@ -623,6 +673,17 @@ def wait_field(bot: Bot, place: str, clear_timeout: float, again: str | None = N
         return hunt_quest(bot, place)
 
     end = time.monotonic() + clear_timeout
+    # 패킷이 사냥터 상태를 알면 그걸로 — 클리어 순간(WaitingForChannelTransfer) 바로 안다. 퀘스트 목록으로 보는 아래 방식은
+    # 3번 연속(15초+) 확인이 필요하고 창이 HUD 를 가리면 오판했다. 감시가 도중에 끊기면 아래 방식으로 넘어간다
+    while bot.packets.ok and bot.packets.state.field_state == "InProgress":
+        if bot.wait_packet(lambda s: s.field_state != "InProgress", 5):
+            bot.log.info(f"패킷: 사냥터 끝남 ({bot.packets.state.field_state})")
+            bot.step("field_reward", "사냥터 클리어 → 마무리")
+            return "again" if settle_after_clear(bot, again=again) else "clear"
+        if bot.is_dead() and not handle_death(bot):
+            bot.log.warning("사망 상태, '여기서 부활' 을 못 함")
+        if time.monotonic() > end:
+            raise StepTimeout("사냥터 클리어 대기 시간 초과")
     gone = 0
     covered_since = None
     # 조회 실패나 일시적인 빈 응답으로 끝났다고 오판하지 않도록 3번 연속 없어야 클리어로 본다
@@ -643,9 +704,8 @@ def wait_field(bot: Bot, place: str, clear_timeout: float, again: str | None = N
         else:
             covered_since = None
         gone = gone + 1 if h == "" else 0
-        act = bot.state.activity() or {}
-        if act.get("IsDead") and not handle_death(bot):
-            bot.log.warning(f"사망 상태, 부활 버튼 템플릿 없음 → {bot.snapshot('dead').name}")
+        if bot.is_dead() and not handle_death(bot):
+            bot.log.warning("사망 상태, '여기서 부활' 을 못 함")
         if time.monotonic() > end:
             raise StepTimeout("사냥터 클리어 대기 시간 초과")
         bot.sleep(5)
@@ -684,8 +744,7 @@ def settle_after_clear(bot: Bot, timeout: float = 180, again: str | None = None)
             stable = 0
             bot.click(tuple(bot.cfg["dungeon"]["touch_xy"]))
             continue
-        act = bot.state.activity() or {}
-        if bot.vision.find(frame, ui["main_hud"]) and not act.get("IsDialoguePlaying"):
+        if bot.vision.find(frame, ui["main_hud"]) and not bot.dialogue_playing():
             stable += 1
         else:
             stable = 0

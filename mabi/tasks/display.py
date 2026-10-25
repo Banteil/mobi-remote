@@ -99,7 +99,7 @@ def check(bot: Bot | None = None, window=None, interface: bool = True) -> dict:
         have = prefs.get(key)
         if have is not None and float(have) != float(want):
             problems.append(f"{PREFS_LABEL[key]}: {_shown(key, have)} ({_shown(key, want)} 이어야 함)")
-    if interface and not problems and (bot is None or bot.state.query("get_my_info") is None):
+    if interface and not problems and (bot is None or not bot.in_game()):
         problems.append("인터페이스 스타일·스케일 확인 못 함 — 게임에 접속한 뒤 다시 확인하거나 '맞추기'")
     if interface and bot is not None and not problems:
         # 메인 화면인데 HUD 템플릿이 안 맞으면 인터페이스 배율·스타일이 다른 것

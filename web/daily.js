@@ -99,10 +99,7 @@ mm.daily.onEvent((e) => {
   } else if (e.type === 'task_end') {
     setCell(e.slot, e.task, e.status, (e.summary || '') + ' (' + e.seconds + '초)');
   } else if (e.type === 'done') {
-    paintDailyRunning(false);
-    // 일시정지(F12)로 멈춘 것이면 보고서는 끝까지 간 뒤에. '결과 보기' 와 같은 오늘 하루 전체 결과로 띄운다
-    // (이번 실행분만 보이면 끊어 돌린 날 앞 실행 결과가 빠진다)
-    if (!(e.results || []).some((x) => x[1] === 'STOP')) showTodayReport(true);
+    paintDailyRunning(false);  // 결과 창은 작업 큐가 다 비었을 때 큐 전체 결과로 (queue.js showQueueReport)
   } else if (e.type === 'paused') {
     const p = $('#dl-state');
     p.textContent = '일시정지 · ' + stopKey() + '로 재개';
@@ -195,6 +192,8 @@ function paintDailySettings() {
   const fol = (n) => (f.total ? n + '명 적용' : '');
   $('#dl-follow-field').textContent = fol(f.field);
   $('#dl-follow-dungeon').textContent = fol(f.dungeon);
+  $('#dl-sunday').innerHTML = opts(s.sundays, s.sunday);
+  $('#dl-follow-sunday').textContent = fol(f.sunday);
   paintStopKey();
 }
 
@@ -202,6 +201,7 @@ function collectDailySettings() {
   return {
     silver: { field_runs: Number($('#dl-field-runs').value), dungeon: $('#dl-dungeon').value, floor: Number($('#dl-floor').value) },
     field: $('#dl-field').value,
+    sunday: $('#dl-sunday').value,
   };
 }
 
@@ -245,53 +245,36 @@ async function saveDailySettings() {
 
 const SHOT_RE = /\d{8}_\d{6}_[\w-]+\.png/;
 
-/* ── 결과 보고 (숙제가 끝나면 팝업) ──
+/* ── 숙제 결과 (작업 큐 결과 창의 일일 숙제 탭 — queue.js showQueueReport) ──
  * results: [[이름표, 상태, 요약]]. 이름표는 '[캐릭터] 숙제' 또는 '[캐릭터]'(캐릭터 전체 건너뜀).
- * 완료가 아닌 것은 원인(요약)을 목록으로 보이고, 요약에 화면 저장 파일이 있으면 눌러서 그 화면을 본다. */
-/** '결과 보기'·숙제 끝: 오늘 기록(state/<날짜>.json)으로 지금까지의 결과를 보고서로 (실행 중이어도 된다).
- * finished: 숙제가 막 끝났을 때 — 'done' 시점엔 실행 스레드가 아직 살아 있어 '실행 중' 으로 나오므로 떼어 낸다 */
-async function showTodayReport(finished) {
-  const st = await mm.daily.state();
-  const results = [];
-  for (const c of st.chars) {
-    const today = st.today[String(c.slot)] || {};
-    for (const t of (st.orders && st.orders[String(c.slot)]) || st.order) {
-      const v = today[t];
-      const s = v == null ? 'TODO' : v === 'done' ? 'OK' : String(v).split(':')[0].trim().toUpperCase();
-      const sum = v == null || v === 'done' ? '' : String(v).slice(String(v).indexOf(':') + 1).trim();
-      results.push(['[' + c.name + '] ' + (st.labels[t] || t), s, sum]);
-    }
-  }
-  showReport(results, '오늘 결과 (' + st.date + (st.running && finished !== true ? ', 실행 중' : '') + ')');
-}
-
-function showReport(results, title) {
+ * 완료가 아닌 것은 원인(요약)을 목록으로 보이고, 요약에 화면 저장 파일이 있으면 눌러서 그 화면을 본다.
+ * loots: 캐릭터마다 얻은 것 [{who, gained, used, cur}] — 그 캐릭터 칸에 같이 쓴다.
+ * 돌려주는 것: { pills: 상태별 개수 HTML, body: 캐릭터별 HTML } */
+function dailyReportHtml(results, loots) {
   const GOOD = new Set(['OK', 'DONE']);
   const chars = new Map();
-  for (const [label, st, summary] of results) {
+  for (const [label, st, summary] of results || []) {
     const m = /^\[(.+?)\]\s*(.*)$/.exec(label || '');
     const who = m ? m[1] : (label || '실행');
     const task = m ? (m[2] || '전체') : '';
     if (!chars.has(who)) chars.set(who, []);
     chars.get(who).push({ task, st, summary: summary || '' });
   }
-  const n = (f) => results.filter((r) => f(r[1])).length;
-  const bad = n((s) => !GOOD.has(s));
-  const todo = n((s) => s === 'TODO');
-  const head = title || '일일 숙제 결과';
-  $('#dl-rp-title').textContent = bad - todo ? head + ' — 확인이 필요한 것 ' + (bad - todo) + '건'
-    : todo ? head + ' — 남은 숙제 ' + todo + '개' : head + ' — 모두 완료';
-  $('#dl-rp-sum').innerHTML = [
+  const lootOf = new Map((loots || []).map((x) => [x.who, x]));
+  for (const who of lootOf.keys()) if (!chars.has(who)) chars.set(who, []);
+  const rows = (results || []).filter((r) => !/\]\s*접속$/.test(r[0] || ''));  // 접속은 세지 않는다
+  const n = (f) => rows.filter((r) => f(r[1])).length;
+  const pills = [
     ['완료', n((s) => s === 'OK' || s === 'DONE'), 'pill-ok'],
     ['남음', n((s) => s === 'CHECK' || s === 'MANUAL'), 'pill-warn'],
-    ['실패', n((s) => !GOOD.has(s) && !['CHECK', 'MANUAL', 'TODO'].includes(s)), 'pill-bad'],
-    ['아직 안 함', todo, 'pill-muted'],
+    ['중단', n((s) => s === 'STOP'), 'pill-muted'],  // 사람이 멈춘 것(F12·■)은 실패가 아니다 — 이어 하면 그 자리부터
+    ['실패', n((s) => !GOOD.has(s) && !['CHECK', 'MANUAL', 'TODO', 'STOP'].includes(s)), 'pill-bad'],
   ].filter((x) => x[1]).map(([t, c, k]) => '<span class="pill ' + k + '">' + t + ' ' + c + '</span>').join('');
-  $('#dl-rp-body').innerHTML = [...chars.entries()].map(([who, rows]) => {
-    const issues = rows.filter((r) => !GOOD.has(r.st));
-    const oks = rows.filter((r) => GOOD.has(r.st) && r.task && r.task !== '접속');
-    const head = '<h4>' + esc(who) + (issues.length ? '' : ' <span class="muted st-OK">모두 완료</span>') + '</h4>';
-    const list = issues.map((r) => {
+  const body = [...chars.entries()].map(([who, list]) => {
+    const issues = list.filter((r) => !GOOD.has(r.st));
+    const oks = list.filter((r) => GOOD.has(r.st) && r.task && r.task !== '접속');
+    const head = '<h4>' + esc(who) + (list.length && !issues.length ? ' <span class="muted st-OK">모두 완료</span>' : '') + '</h4>';
+    const lines = issues.map((r) => {
       const shot = r.summary.match(SHOT_RE);
       const why = r.summary.replace(/\s*→\s*\S+\.png/g, '').trim() || (r.st === 'TODO' ? '' : '(원인 기록 없음)');
       return '<div class="dl-rp-row' + (shot ? ' has-shot' : '') + '"' + (shot ? ' data-shot="' + esc(shot[0]) + '"' : '') + '>' +
@@ -300,11 +283,10 @@ function showReport(results, title) {
     }).join('');
     const okline = oks.length ? '<div class="dl-rp-okline">' + (oks.some((r) => r.task === '전체') ? '오늘 완료'
       : '완료: ' + oks.map((r) => esc(r.task)).join(' · ')) + '</div>' : '';
-    return '<div class="dl-rp-char">' + head + list + okline + '</div>';
+    const lt = lootOf.get(who);
+    return '<div class="dl-rp-char">' + head + lines + okline + (lt ? lootHtml(lt, true) : '') + '</div>';
   }).join('') || '<p class="muted">실행한 숙제가 없습니다.</p>';
-  $('#dl-rp-shot').classList.add('hidden');
-  $('#dl-rp-scroll').scrollTop = 0;
-  $('#dl-report').classList.remove('hidden');
+  return { pills, body };
 }
 
 /* ── 어비스 반복 ── */
@@ -405,14 +387,13 @@ $('#dl-fit').addEventListener('change', () => mm.daily.saveSettings({ fit_displa
 $('#ab-start').addEventListener('click', startAbyss);
 $('#ab-queue').addEventListener('click', queueAbyss);
 $('#ab-stop').addEventListener('click', () => mm.daily.abyssStop());
-$('#dl-report-btn').addEventListener('click', showTodayReport);
-$('#dl-rp-close').addEventListener('click', () => $('#dl-report').classList.add('hidden'));
-$('#dl-rp-logs').addEventListener('click', () => mm.daily.openFolder('logs'));
-$('#dl-rp-body').addEventListener('click', async (e) => {
+$('#qr-close').addEventListener('click', () => $('#q-report').classList.add('hidden'));
+$('#qr-logs').addEventListener('click', () => mm.daily.openFolder('logs'));
+$('#qr-body').addEventListener('click', async (e) => {
   const row = e.target.closest('[data-shot]');
   if (!row) return;
   const url = await mm.daily.shot(row.dataset.shot);
-  const img = $('#dl-rp-shot');
+  const img = $('#qr-shot');
   if (!url) { img.classList.add('hidden'); toast('화면을 찾지 못했습니다', row.dataset.shot, 'bad'); return; }
   img.src = url;
   img.classList.remove('hidden');

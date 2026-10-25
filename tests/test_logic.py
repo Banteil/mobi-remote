@@ -117,47 +117,69 @@ class ArbeitTest(unittest.TestCase):
         self.assertEqual(arbeit._item_name("은 광석 보유 82/100"), "은 광석")
 
 
-class AbyssTest(unittest.TestCase):
-    def _left(self, texts):
-        with mock.patch.object(abyss, "find_texts", return_value=[(t, 0, 0) for t in texts]):
-            return abyss._revives_left(None, None)
-
-    def test_revives_left(self):
-        self.assertEqual(self._left(["행동불능", "남은 부활 횟수 2/3"]), 2)
-        self.assertEqual(self._left(["남은 부활 횟수 0 / 3"]), 0)
-        self.assertEqual(self._left(["전멸하였습니다"]), 0)  # 함께하기 전멸 — 버튼 자체가 없다
-        self.assertIsNone(self._left(["행동불능"]))
-
-
 class ShotTest(unittest.TestCase):
-    """실제 캡처로 OCR 판정 확인. 캡처(logs/shots)는 화면에 캐릭터 이름이 보여 저장소에 올리지 않는다 → 없으면 건너뜀."""
-    SHOTS = Path(__file__).resolve().parent.parent / "logs" / "shots"
+    """실제 캡처로 OCR 판정 확인. 그림은 tests/fixtures — tools/make_fixture.py 로 시험이 읽는 영역만 남기고
+    나머지를 검게 지운 것 (캡처 원본은 캐릭터 이름이 보여 captures/ 에만 둔다). 없으면 건너뜀.
+    예전엔 logs/shots 의 캡처를 그대로 읽어, 스크린샷을 정리하다 캡처가 지워졌다 (2026-10-25) — 다시 찍어 넣었다.
+    '진행하기' 가 보이는 아르바이트 목록만 아직 없다 (그날 아르바이트를 다 한 캐릭터뿐이었다)."""
+    FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
     def frame(self, name):
-        p = self.SHOTS / name
+        p = self.FIXTURES / name
         if not p.exists():
-            self.skipTest(f"캡처 없음: {name}")
+            self.skipTest(f"시험 그림 없음: {name}")
         import cv2
         import numpy as np
         return cv2.imdecode(np.fromfile(str(p), np.uint8), cv2.IMREAD_COLOR)
 
-    def test_abyss_no_revives_left(self):  # 2026-10-24 실기: 부활 횟수 0/3 → 나가기
-        self.assertEqual(abyss._revives_left(None, self.frame("20261024_143154_abyss_dead.png")), 0)
-
-    def test_abyss_entry_solo_tab_far_away(self):
-        # 2026-10-24: 혼자하기 탭 + 입구에서 먼 캐릭터('이동하기') — 탭 글자로 입장 화면을 알아보고 함께하기를 누를 수 있어야
+    def entry_texts(self, name):
         from mabi import gamedata as gd, ocr
-        f = self.frame("20261024_212603_abyss.png")
+        f = self.frame(name)
         top = [t for t, *_ in ocr.find_texts(f, gd.region("abyss_entry_top"))]
         right = [t for t, *_ in ocr.find_texts(f, gd.region("abyss_entry_right"))]
-        self.assertTrue(any(gd.text("abyss_together") in t for t in top))
-        self.assertTrue(any(gd.text("abyss_move") in t for t in right))
+        return top, right
 
-    def test_arbeit_panel_button(self):  # 퀘스트 창 아르바이트 탭, 다 보이는 '진행하기' 하나
+    def test_abyss_dead_screen(self):  # 2026-10-25 실기: 혼자 쓰러짐, 남은 부활 횟수 3/3 + '여기서 부활' 버튼
+        from mabi.vision import Vision
+        from mabi import paths as P
+        f = self.frame("abyss_dead_revives3.png")
+        self.assertIsNotNone(Vision(P.load().templates).find(f, "revive_here"))
+
+    def test_abyss_entry_together(self):  # 2026-10-25 실기: 함께하기 탭, 입구 근처 → '입장하기'
+        from mabi import gamedata as gd
+        top, right = self.entry_texts("abyss_entry_together.png")
+        self.assertTrue(any(gd.text("abyss_together") in t for t in top))
+        self.assertTrue(any(gd.text("abyss_enter") in t for t in right))
+
+    def test_arbeit_closed(self):  # 2026-10-25 실기: 오늘 아르바이트를 다 함 — '구인 마감', 누를 버튼 없음
+        from mabi import gamedata as gd
         bot = mock.Mock()
-        bot.frame.return_value = self.frame("20261024_125340_questwin.png")
+        bot.frame.return_value = self.frame("questwin_arbeit_closed.png")
+        items = arbeit._buttons(bot)
+        self.assertTrue(any(w in arbeit._norm(t) for t, _, _ in items for w in gd.words("arbeit_closed")))
+        self.assertFalse([t for t, _, _ in items if arbeit._norm(t) in (arbeit.PROGRESS, arbeit.APPLY)])
+
+    def test_arbeit_panel_button(self):  # 퀘스트 창 아르바이트 탭, 다 보이는 '진행하기' 하나 (아르바이트가 남은 날 찍을 것)
+        bot = mock.Mock()
+        bot.frame.return_value = self.frame("questwin_arbeit.png")
         got = [(t, y) for t, _, y in arbeit._buttons(bot) if arbeit._norm(t) == arbeit.PROGRESS]
         self.assertEqual(len(got), 1)
+
+
+class RevivesLeftTest(unittest.TestCase):
+    def test_packet_first(self):
+        from mabi.packet_monitor import PacketMonitor
+        import time
+        m = PacketMonitor(None)
+        m.status, m.last_rx = "running", time.monotonic()
+        bot = mock.Mock(packets=m)
+        self.assertIsNone(abyss.revives_left(bot))  # 모름 → 화면 글자로
+        m.apply("revive.count", {"used": 1, "max": 3})
+        self.assertEqual(abyss.revives_left(bot), 2)
+        m.apply("revive.count", {"used": 3, "max": 3})
+        self.assertEqual(abyss.revives_left(bot), 0)  # 다 씀 → 나가기
+        m.apply("revive.count", {"used": 1, "max": 6})  # 최대는 판마다 다르다 (파티 보스전 6)
+        self.assertEqual(abyss.revives_left(bot), 5)
 
 
 if __name__ == "__main__":
