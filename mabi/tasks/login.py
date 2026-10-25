@@ -330,7 +330,8 @@ def _run(bot: Bot, cfg: dict, character: dict | None) -> str:
 
     # NPC 대화(아르바이트 메뉴·전달 창 등)에 멈춰 있으면 ESC 로는 안 닫히고 (to_main 이 헛돈다) 닫혀도 그 일이 날아간다
     # → 아르바이트 정리로 끝까지 넘긴다 (Space 선택지면 진행). 2026-10-22 케이틴 메뉴에서 이어 하다 26초 헛돎
-    from .arbeit import _settle, in_dialog
+    from .arbeit import _settle
+    from .dialogue import in_dialog
     if bot.state.available() and in_dialog(bot):
         bot.log.info("NPC 대화 중에 시작 → 대화부터 정리")
         _settle(bot)

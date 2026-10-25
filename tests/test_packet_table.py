@@ -1,5 +1,6 @@
 """패킷 상태 표(data\\packet-states.bin) 테스트. 본문 바이트는 실제 던전 캡처에서 가져왔다."""
 import json
+import struct
 import tempfile
 import unittest
 from pathlib import Path
@@ -181,6 +182,22 @@ class StatesTableTest(unittest.TestCase):
         for s in table.states:
             for key in s["events"]:
                 self.assertIsNotNone(table.by_key(key), f"{s['key']}: {key}")
+
+
+class SjonTest(unittest.TestCase):
+    def test_value_after_key(self):
+        from mabi.packet_table import _read
+        strs = [b"Dialogue", b"npcName", b"Osla", b"dialogueAction", b"EndDialogue", "안녕".encode()]
+        ends, n = [], 0
+        for x in strs:
+            n += len(x)
+            ends.append(n)
+        sj = b"SJON" + struct.pack("<III", 1, len(strs), 0) + struct.pack(f"<{len(strs)}I", *ends) + b"".join(strs)
+        body = bytes.fromhex("010500000000") + struct.pack("<I", len(sj)) + sj
+        self.assertEqual(_read(body, 0, "sjon", key="dialogueAction"), "EndDialogue")
+        self.assertEqual(_read(body, 0, "sjon", key="npcName"), "Osla")
+        self.assertEqual(_read(body, 0, "sjon", key="없음"), "")
+        self.assertEqual(_read(bytes(10), 0, "sjon", key="dialogueAction"), "")
 
 
 if __name__ == "__main__":

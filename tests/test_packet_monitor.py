@@ -290,6 +290,31 @@ class DeathTest(unittest.TestCase):
         self.assertFalse(self.m.state.dead)
         self.assertEqual((self.m.state.revives_used, self.m.state.revives_max), (1, 3))
 
+    def test_durability_lowest_until_repair(self):
+        # 깎임 알림은 깎인 장비의 현재/최대 비율뿐 (무기 153/175 → 0.87429) — 어느 장비인지 몰라 가장 낮은 것을 쓴다
+        self.assertIsNone(self.m.state.durability)
+        self.m.apply("equip.durability", {"ratio": 153 / 175})
+        self.m.apply("equip.durability", {"ratio": 0.95})
+        self.assertAlmostEqual(self.m.state.durability, 153 / 175)
+        self.m.apply("equip.repair_ok", {})
+        self.assertIsNone(self.m.state.durability)
+        self.m.apply("equip.durability", {"ratio": 0.99})
+        self.m.apply("char.personal_data", {"char_id": 77})  # 다른 캐릭터
+        self.assertIsNone(self.m.state.durability)
+
+    def test_dialogue_action_and_menu(self):
+        # 대장간: 메뉴(SelectKeyword + 선택지) → '수리' 뒤 대사(OpenNPCRepair) → 작별 인사(EndDialogue) → 끝 (repair2)
+        self.m.apply("dialogue.update", {"active": True, "step": 7, "action": "SelectKeyword"})
+        self.m.apply("dialogue.prompt", {"step": 7, "open": 1, "choices": 9})
+        self.m.apply("dialogue.target", {"target": 36280})
+        s = self.m.state
+        self.assertEqual((s.dialogue_action, s.dialogue_step, s.dialogue_menu), ("SelectKeyword", 7, True))
+        self.m.apply("dialogue.prompt", {"step": 8, "open": 0, "choices": 0})
+        self.m.apply("dialogue.update", {"active": True, "step": 8, "action": "OpenNPCRepair"})
+        self.assertEqual((s.dialogue_action, s.dialogue_step, s.dialogue_menu), ("OpenNPCRepair", 8, False))
+        self.m.apply("dialogue.update", {"active": False, "step": 8, "action": ""})
+        self.assertEqual((s.dialogue_action, s.dialogue_menu, s.in_dialogue), ("", False, False))
+
 
 if __name__ == "__main__":
     unittest.main()

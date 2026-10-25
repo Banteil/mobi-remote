@@ -89,6 +89,7 @@ class Field:
     lookup: str = ""
     size: int = 0  # u64list: 항목 하나의 바이트 수
     at: int = 0    # u64list: 항목 안에서 읽을 u64 위치
+    key: str = ""  # sjon: 이 이름 다음 문자열을 값으로 읽는다
 
 
 @dataclass(frozen=True)
@@ -147,7 +148,7 @@ class Table:
             return None
         vals = {}
         for f in ev.fields:
-            v = _read(body, f.off, f.type, f.size, f.at)
+            v = _read(body, f.off, f.type, f.size, f.at, f.key)
             if v is None:
                 self._problem("short_body", ev.key, body, field=f.name, off=f.off, type=f.type)
                 continue
@@ -173,7 +174,32 @@ class Table:
 _FMT = {"u8": "<B", "u32": "<I", "i32": "<i", "u64": "<Q", "f32": "<f"}
 
 
-def _read(body: bytes, off: int, typ: str, size: int = 0, at: int = 0):
+def sjon_strings(body: bytes, off: int = 0) -> list[str] | None:
+    """대사 내용 묶음(SJON): 'SJON' · u32 판 · u32 문자열 수 n · u32 (?) · u32 끝 위치 n 개 · 문자열 덩어리(UTF-8).
+    문자열은 이름·값이 차례로 이어진다 ('npcName', NPC 이름, …, 'dialogueAction', 'SelectKeyword' …). off 부터 'SJON' 을 찾는다."""
+    s = body.find(b"SJON", off)
+    if s < 0 or s + 16 > len(body):
+        return None
+    n = struct.unpack_from("<I", body, s + 8)[0]
+    blob = s + 16 + n * 4
+    if n > 10000 or blob > len(body):
+        return None
+    ends = struct.unpack_from(f"<{n}I", body, s + 16)
+    out, start = [], 0
+    for e in ends:
+        if e < start or blob + e > len(body):
+            return None
+        out.append(body[blob + start: blob + e].decode("utf-8", "replace"))
+        start = e
+    return out
+
+
+def _read(body: bytes, off: int, typ: str, size: int = 0, at: int = 0, key: str = ""):
+    if typ == "sjon":  # SJON 문자열 중 key 바로 다음 것. key 가 없으면 '' (그 대사엔 그 항목이 없음)
+        strs = sjon_strings(body, off)
+        if strs is None:
+            return ""  # 대사 내용이 없는 메시지 (대화 끝 등)
+        return next((strs[i + 1] for i in range(len(strs) - 1) if strs[i] == key), "")
     if typ == "u64list":  # u32 개수 + size 바이트씩 — 각 항목 at 위치의 u64
         if off + 4 > len(body):
             return None

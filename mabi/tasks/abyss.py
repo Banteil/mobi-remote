@@ -5,6 +5,7 @@
   → 우연한 만남 매칭 (모두 모이면 자동 입장) → 들어가면 숏컷 자동 진행·자동 전투가 저절로 켜진다
   → 클리어하면 '던전 클리어 / 화면을 터치해 주세요' → 보상 화면(나가기 ESC / 다시 하기 Space / 다른 던전 가기)
   → '다시 하기' = 같은 던전·난이도로 다시 매칭 → 4초 세고 입장
+판이 끝났을 때 장비 내구도(패킷)가 repair_below 이하면 '다시 하기' 대신 나가서 대장간에서 전체 수리하고 다시 입장한다 (tasks.repair).
 쓰러지면 '행동불능' + '남은 부활 횟수 N/M' 과 오른쪽 아래 '여신상에서 부활' / '여기서 부활'(R, 아이템 1개) 이 뜬다.
 최대 횟수 M 은 함께하기·난이도 등에 따라 다르다 (3, 6 을 봤다) — 고정값으로 보지 않는다.
 '여기서 부활' 을 누르고 그 판을 이어 한다 (2026-10-24 확인 — 누르면 IsDead 가 false, IsReviving 이 true 로 남는다).
@@ -19,33 +20,18 @@ import time
 from .. import gamedata as gd
 from ..bot import Bot, StepTimeout
 from ..ocr import find_texts
+from . import repair, ui_text
 from .content import CannotProceed, touch_prompt_visible
 
 DIFFICULTIES = ["입문", "어려움", "매우 어려움", "매우 어려움2"]
 
 
-def _norm(t: str) -> str:
-    return "".join(t.split())
-
-
-def _find_text(bot: Bot, want: str, region=None, exact: bool = True):
-    w = _norm(want)
-    for t, x, y in find_texts(bot.frame(), region):
-        n = _norm(t)
-        if n == w if exact else w in n:
-            return x, y
-    return None
+_norm = ui_text.norm
+_find_text = ui_text.find
 
 
 def _click_text(bot: Bot, want: str, region=None, exact: bool = True, what: str = "", tries: int = 4) -> None:
-    for _ in range(tries):
-        hit = _find_text(bot, want, region, exact)
-        if hit:
-            bot.click(hit)
-            bot.sleep(1.2, 1.6)
-            return
-        bot.sleep(1.0, 1.4)
-    raise CannotProceed(f"'{what or want}' 를 화면에서 찾지 못함 → {bot.snapshot('abyss').name}")
+    ui_text.click(bot, want, region, exact, what, tries, shot="abyss")
 
 
 ABYSS_MAP = "InstanceAbyssDungeon"  # 패킷의 맵 종류
@@ -415,6 +401,24 @@ def to_reward(bot: Bot) -> None:
     bot.sleep(1.5, 2.0)  # 보상 연출
 
 
+def exit_reward(bot: Bot) -> None:
+    """보상 화면 '나가기'(ESC) → 필드 메인 화면까지."""
+    bot.key("esc")
+    bot.sleep(3, 4)
+    # 필드로 나오는 로딩이 끝나 메인 화면이 보일 때까지 — 3~4초만 보고 끝내면 다음 카드(다른 캐릭터)가
+    # 로딩 화면에서 ESC 메뉴를 찾다 실패했다 (2026-10-24 21:24)
+    if not _wait_settled(bot, bot.cfg["timing"]["loading"]):
+        if after_clear(bot):  # 나가기 키가 안 들었다
+            bot.key("esc")
+            _wait_settled(bot, bot.cfg["timing"]["loading"])
+    # 판 수를 채운 판에서 깨진 퀘스트(주말 어비스 3판 등)의 완료 창이 필드로 나온 뒤 뜬다. 메인 HUD 가
+    # 보이는 채로 떠서 ESC 를 먹어, 다음 카드가 캐릭터를 바꾸려다 메뉴가 안 열려 실패했다 (2026-10-24 21:24).
+    # 무한 반복은 '다시 하기' Space 가 그 창의 '확인' 까지 눌러 넘어갔다
+    for _ in range(3):
+        bot.sleep(1.5, 2)
+        bot.clear_blockers(ocr=True)
+
+
 def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lambda e: None,
            character: dict | None = None) -> dict:
     """어비스를 반복한다. runs·minutes 가 0 이면 사람이 멈출 때까지 (StopRequested).
@@ -426,6 +430,8 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
     user_window = ctypes.windll.user32.GetForegroundWindow()  # 입장 뒤 되돌려 줄 창 (리모콘 등)
     t0 = time.monotonic()
     stat = {"clears": 0, "deaths": 0, "retries": 0, "revives": 0}
+    below = float(a.get("repair_below", 0.05) or 0)  # 장비 내구도가 이 비율 이하면 판 사이에 대장간에서 수리 (0 = 안 함)
+    repaired_from = None  # 마지막 수리 직전 내구도 — 수리 뒤 첫 판에서 이보다 높아지지 않았으면 수리가 안 된 것
 
     def done() -> bool:
         return (runs and stat["clears"] >= runs) or (minutes and time.monotonic() - t0 >= minutes * 60)
@@ -495,21 +501,21 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
             bot.log.info(f"클리어 {stat['clears']}판 (부활 {stat['revives']} · 사망으로 나감 {stat['deaths']} · 경과 {secs // 60}분 {secs % 60}초)")
             emit(stage="clear")
             if done():
-                bot.key("esc")  # 보상 화면 '나가기'
-                bot.sleep(3, 4)
-                # 필드로 나오는 로딩이 끝나 메인 화면이 보일 때까지 — 3~4초만 보고 끝내면 다음 카드(다른 캐릭터)가
-                # 로딩 화면에서 ESC 메뉴를 찾다 실패했다 (2026-10-24 21:24)
-                if not _wait_settled(bot, bot.cfg["timing"]["loading"]):
-                    if after_clear(bot):  # 나가기 키가 안 들었다
-                        bot.key("esc")
-                        _wait_settled(bot, bot.cfg["timing"]["loading"])
-                # 판 수를 채운 판에서 깨진 퀘스트(주말 어비스 3판 등)의 완료 창이 필드로 나온 뒤 뜬다. 메인 HUD 가
-                # 보이는 채로 떠서 ESC 를 먹어, 다음 카드가 캐릭터를 바꾸려다 메뉴가 안 열려 실패했다 (2026-10-24 21:24).
-                # 무한 반복은 '다시 하기' Space 가 그 창의 '확인' 까지 눌러 넘어갔다
-                for _ in range(3):
-                    bot.sleep(1.5, 2)
-                    bot.clear_blockers(ocr=True)
+                exit_reward(bot)
                 break
+            if repair.needed(bot, below):
+                if repaired_from is not None and repair.durability(bot) <= repaired_from:  # 수리했는데 그대로거나 더 낮다
+                    raise CannotProceed(f"수리했는데도 장비 내구도가 {repair.durability(bot) * 100:.0f}% "
+                                        f"→ {bot.snapshot('repair_again').name}")
+                bot.log.info(f"장비 내구도 {repair.durability(bot) * 100:.0f}% (기준 {below * 100:g}%) → 다시 하기 대신 나가서 수리")
+                emit(stage="repair")
+                repaired_from = repair.durability(bot)
+                exit_reward(bot)
+                repair.run(bot)
+                stat["repairs"] = stat.get("repairs", 0) + 1
+                stage = "entry"
+                continue
+            repaired_from = None
             bot.key("space")  # 다시 하기 (Space) → 같은 던전·난이도로 다시 매칭
             bot.sleep(2, 3)
             for _ in range(2):  # 키가 안 들었으면 — 뒤에서는 키를 한 번 더, 앞에서는 누른다

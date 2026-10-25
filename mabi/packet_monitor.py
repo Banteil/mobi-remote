@@ -363,12 +363,20 @@ class PacketState:
     revives_used: int | None = None  # 이 판에서 쓴 부활 횟수 (화면의 '남은 부활 횟수' = 최대 - 쓴 횟수)
     revives_max: int | None = None
     satiety: int | None = None
+    # 장비 내구도 비율 (현재/최대) — 수리(또는 캐릭터 바꿈) 뒤로 깎임 알림에서 본 가장 낮은 값. 알림에 장비 번호가 없어
+    # 어느 장비인지 모르니 가장 낮은 것을 쓴다. 감시를 켠 뒤 아직 안 깎였으면 None
+    durability: float | None = None
     weight: float | None = None
     max_weight: float | None = None
     char_id: int | None = None       # 내 캐릭터 고유 번호 (안 바뀜) — 맵을 옮길 때마다 오는 내 개인 데이터 맨 앞
     me: int | None = None            # 내 캐릭터 오브젝트 번호 — 맵마다 바뀐다. 등장 캐릭터 중 고유 번호가 든 것 (없으면 포만감 설정)
     my_name: str | None = None       # 접속한 캐릭터 이름 (내 등장 메시지에서). 캐릭터를 바꾸면 다음 맵 진입 때 새로 안다
     dialogue_npc: int | None = None  # 대화 중인 NPC 오브젝트 번호 (대화 중이 아니면 None)
+    # 지금 대사 뒤 할 일 (대사 내용의 dialogueAction): SelectKeyword 메뉴 버튼 · EndDialogue 작별 인사(눌러야 끝남) ·
+    # OpenNPCRepair 대장간 수리 창 · AfterRepair 수리 뒤 등. 대화가 아니면 ''
+    dialogue_action: str = ""
+    dialogue_step: int = 0           # 대사마다 1씩 오른다 — 눌러서 대사가 넘어갔는지 본다
+    dialogue_menu: bool = False      # NPC 메뉴(선택지 버튼)가 떠 있음
     ai: str = ""                     # 내 캐릭터 자동 행동 (InteractAI = NPC 에게 다가가는 중)
     cutscene: bool = False           # 컷신(연출) 재생 중
     traveling: bool | None = None    # 내 자동 이동 중 (시작·끝은 나한테만 온다). 감시를 켠 뒤 한 번도 안 왔으면 None
@@ -599,9 +607,15 @@ class PacketMonitor:
             s.dialogue_npc = None if t in (None, NO_TARGET) else t
         elif key in ("dialogue.cleared", "dialogue.force_end") or key == "dialogue.update" and vals.get("active") is False:
             s.dialogue_npc = None
+            s.dialogue_action, s.dialogue_menu = "", False
+        elif key == "dialogue.update":
+            s.dialogue_action, s.dialogue_step = vals.get("action") or "", vals.get("step") or s.dialogue_step
+        elif key == "dialogue.prompt":
+            s.dialogue_menu = bool(vals.get("open"))
         elif key == "char.personal_data":
             if vals.get("char_id") != s.char_id:  # 다른 캐릭터로 접속 — 맵에 들어가야 새 번호·이름을 안다
                 s.me = s.my_name = None
+                s.durability = None
             s.char_id = vals.get("char_id")
         elif key == "char.appearing":
             if vals.get("mine"):
@@ -650,6 +664,13 @@ class PacketMonitor:
         elif key == "char.satiety":
             s.satiety = vals.get("satiety")
             s.me = vals.get("actor", s.me)
+        elif key == "equip.durability":
+            r = vals.get("ratio")
+            if r is not None:
+                s.durability = r if s.durability is None else min(s.durability, r)
+        elif key == "equip.repair_ok":
+            s.durability = None
+            log.info("패킷: 장비 수리됨")
         elif key == "char.weight":
             s.weight = vals.get("weight")
         elif key == "char.max_weight":

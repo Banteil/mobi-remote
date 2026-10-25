@@ -40,7 +40,7 @@ class INPUT(ctypes.Structure):
 
 VK = {"esc": 0x1B, "enter": 0x0D, "space": 0x20, "tab": 0x09, "backspace": 0x08,
       "up": 0x26, "down": 0x28, "left": 0x25, "right": 0x27, "alt": 0x12, "ctrl": 0x11, "shift": 0x10,
-      "/": 0xBF}
+      "/": 0xBF, ".": 0xBE}
 VK.update({f"f{i}": 0x6F + i for i in range(1, 13)})
 
 

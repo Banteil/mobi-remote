@@ -140,7 +140,7 @@ class DailyKind(Kind):
 
 
 class AbyssKind(Kind):
-    STAGE = {"match": "매칭 중", "play": "진행 중", "clear": "클리어"}
+    STAGE = {"match": "매칭 중", "play": "진행 중", "clear": "클리어", "repair": "장비 수리"}
 
     def __init__(self, api):
         self.api = api

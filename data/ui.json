@@ -38,7 +38,12 @@
     "abyss_move": "이동하기",
     "abyss_together": "함께하기",
     "abyss_chance": "우연한만남",
-    "confirm": "확인"
+    "confirm": "확인",
+    "char_menu_main": "주요",
+    "repair_smithy": "대장간",
+    "repair": "수리",
+    "repair_all": "전체수리",
+    "repair_confirm": "수리하기"
   },
 
   "regions": {
@@ -52,6 +57,10 @@
     "abyss_difficulty": [40, 160, 700, 60],
     "abyss_entry_right": [1180, 560, 740, 500],
     "confirm_button": [460, 300, 1000, 780],
-    "board_choices": [400, 950, 1120, 100]
+    "board_choices": [400, 950, 1120, 100],
+    "char_menu": [560, 200, 800, 640],
+    "npc_buttons": [500, 760, 920, 200],
+    "repair_buttons": [200, 980, 840, 90],
+    "repair_confirm": [640, 960, 640, 110]
   }
 }

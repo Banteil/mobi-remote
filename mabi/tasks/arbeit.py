@@ -23,17 +23,10 @@ from .. import gamedata as gd, ocr
 from ..bot import Bot, StepTimeout
 from ..progress import Progress
 from .content import CannotProceed, open_arbeit_tab, questwin_text_ok
+from .dialogue import in_dialog, next_line, skip_lines
 
 PROGRESS, APPLY = gd.text("arbeit_progress"), gd.text("arbeit_apply")  # 카드 버튼 '진행하기' · '지원하기'
 HAVE = gd.text("arbeit_have_item")  # CLI 조건 '… 보유 3/10'
-
-
-def in_dialog(bot: Bot, frame=None) -> bool:
-    """NPC 대화 화면인가: 왼쪽 위 '대화 기록' 또는 오른쪽 위 '대화 넘기기'.
-    두 버튼은 반투명이라 뒤 배경이 밝으면 한쪽 템플릿이 안 맞는다 (2026-10-23 부자 NPC: 흰 건물 앞에서
-    '대화 기록' 0.78 < 0.85 → 대화를 못 알아보고 멈춤). 둘 중 하나만 맞아도 대화로 본다."""
-    frame = bot.frame() if frame is None else frame
-    return any(bot.vision.find(frame, n) for n in (bot.cfg["arbeit"]["dialog_log"], bot.ui["dialog_skip"]))
 
 
 def _norm(t: str) -> str:
@@ -257,7 +250,7 @@ def _settle(bot: Bot) -> None:
             if bot.exists(a["report"]):
                 bot.key("space")
             else:
-                bot.click(tuple(a["dialog_next_xy"]))
+                next_line(bot)
         else:
             if bot.dialogue_playing():  # 대화가 열리는 중
                 bot.sleep(1, 1.3)
@@ -455,7 +448,7 @@ def _work(bot: Bot, title: str) -> str:
                 _note(bot, title, "arb_report", "결과 보고")
                 bot.key("space")
             else:
-                bot.click(tuple(a["dialog_next_xy"]))
+                next_line(bot)
             idle_since = None
             continue
         if (m := find(ui["scene_skip"])):
@@ -511,11 +504,7 @@ def _apply_top(bot: Bot) -> bool | None:
         return None
     bot.key("space")
     bot.sleep(1.5, 2)
-    for _ in range(10):  # 수락 뒤 이어지는 대사를 넘긴다
-        if not in_dialog(bot):
-            break
-        bot.click(tuple(a["dialog_next_xy"]))
-        bot.sleep(1.2, 1.6)
+    skip_lines(bot)  # 수락 뒤 이어지는 대사를 넘긴다
     return True
 
 

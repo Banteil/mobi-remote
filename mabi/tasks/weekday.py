@@ -13,7 +13,7 @@ import time
 
 from .. import gamedata as gd
 from ..bot import Bot, StepTimeout
-from .arbeit import in_dialog
+from .dialogue import in_dialog
 from .content import CannotProceed, daily_achieved, enter_from_dungeon_window, open_arbeit_tab, questwin_buttons, travel
 
 SUNDAY_CHOICES = ("골드", "보석", "촉매")  # 선택지 글자 괄호 안의 낱말. 이 낱말이 든 버튼을 누른다
