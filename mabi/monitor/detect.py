@@ -60,8 +60,10 @@ def look(bot, frame=None, skip=(), ocr: bool = False) -> Seen:
         return Seen(LOADING, src="packet")
     if bot.packets.at_charselect():
         return Seen(CHARSELECT, src="packet")
-    if bot.packets.ok and bot.packets.state.dead:
-        return Seen(DEAD, src="packet")  # 사망 화면 위의 창은 부활한 뒤에 본다
+    if bot.packets.ok and bot.packets.state.dead and not bot.packets.state.abyss_result:
+        # 사망 화면 위의 창은 부활한 뒤에 본다. 쓰러진 채로 판이 끝났으면(어비스 결과 — 파티가 보스를 잡음)
+        # 부활할 일이 없고 클리어 화면·보상 화면을 봐야 한다
+        return Seen(DEAD, src="packet")
     frame = bot.frame() if frame is None else frame
     ui, a = bot.ui, bot.cfg["arbeit"]
 

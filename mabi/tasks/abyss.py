@@ -235,10 +235,15 @@ def wait_entered(bot: Bot, timeout: float) -> bool:
     return True
 
 
-def leave(bot: Bot) -> None:
-    """어비스 안에서 나간다: 오른쪽 맨 위 나가기 → '던전에서 퇴장하시겠습니까?' 나가기(Space)."""
+def leave(bot: Bot) -> bool:
+    """어비스 안에서 나간다: 오른쪽 맨 위 나가기 → '던전에서 퇴장하시겠습니까?' 나가기(Space). 나왔으면 True.
+    나가기 전에 판이 끝났으면(쓰러진 사이 파티가 보스를 잡음 — 결과가 옴) 나가지 않고 False → 부르는 쪽이 클리어로 잇는다.
+    판 밖이라고 ESC 만 누르다 '나가지 못함' 으로 멈췄다 (2026-10-26 사용자 제보)."""
     ui = bot.ui
     for _ in range(3):
+        if after_clear(bot):
+            bot.log.info("나가기 전에 판이 끝남 (어비스 결과) → 나가지 않고 클리어로")
+            return False
         if not inside(bot):
             bot.key("esc")  # 부활 창 등이 가리고 있으면 닫아 본다
             bot.sleep(1.0, 1.5)
@@ -266,6 +271,7 @@ def leave(bot: Bot) -> None:
         if not inside(bot) and not bot.is_loading():
             bot.clear_blockers(ocr=True)  # 나오면서 뜬 퀘스트 완료 창
         bot.sleep(2)
+    return True
 
 
 def revives_left(bot: Bot) -> int | None:
@@ -299,6 +305,9 @@ def revive_here(bot: Bot) -> bool:
     again = False
     while time.monotonic() < end:
         bot.sleep(1.0)
+        if bot.packets.ok and getattr(bot.packets.state, "abyss_result", 0):
+            bot.log.info("부활을 기다리는 사이 판이 끝남 (어비스 결과)")
+            return False  # 부르는 쪽(play)이 결과를 보고 클리어로 잇는다
         if bot.packets.find("revive.item_ok", mark) or not bot.is_dead():
             left = revives_left(bot)
             bot.log.info(f"여기서 부활{f' (남은 부활 {left}번)' if left is not None else ''}")
@@ -337,7 +346,8 @@ def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: No
         # 나가기 버튼이 가려졌으면 퀘스트 완료 창은 템플릿이 안 맞을 때가 있어 글자로도 본다
         seen = watch(bot, ctx, act, ocr=not here)
         if seen.finish and seen.finish.result == "dead":
-            return "dead"
+            # 부활을 기다리는 사이 파티가 보스를 잡았으면 쓰러진 채로 클리어 — 나가면 안 된다
+            return "clear" if cleared() or after_clear(bot) else "dead"
         if ctx.take("revived"):
             on_revive()
             continue
@@ -368,7 +378,9 @@ def _switch_character(bot: Bot, cfg: dict, character: dict) -> None:
         if name_matches(current_name(bot), character.get("name", "")):
             return
         bot.log.info(f"다른 캐릭터로 어비스 안 → 나간 뒤 {character['name']} 로 접속")
-        leave(bot)
+        if not leave(bot):  # 나가기 전에 판이 끝남 → 보상 화면에서 나간다
+            to_reward(bot)
+            exit_reward(bot)
     elif at == "reward":
         bot.key("esc")  # 보상 화면 '나가기' — 판은 이미 끝났다
         bot.sleep(3, 4)
@@ -508,14 +520,16 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
             r = play(bot, a["run_timeout"], bool(a.get("revive", True)),
                      on_revive=lambda: (stat.__setitem__("revives", stat["revives"] + 1), emit(stage="play")))
         if r == "dead":
+            bot.log.warning("쓰러짐 → 나가서 처음부터 다시 입장")
+        elif r == "timeout":
+            bot.log.warning(f"{a['run_timeout'] / 60:.0f}분 안에 끝나지 않음 → 나가서 다시 입장 → {bot.snapshot('abyss_timeout').name}")
+        if r in ("dead", "timeout") and not leave(bot):
+            r = "clear"  # 나가기 전에 판이 끝남 — 보상부터 잇는다
+        if r == "dead":
             stat["deaths"] += 1
-            bot.log.warning(f"쓰러짐 → 나가서 처음부터 다시 입장 (나간 판 {stat['deaths']}번)")
-            leave(bot)
             stage = "entry"
         elif r == "timeout":
             stat["retries"] += 1
-            bot.log.warning(f"{a['run_timeout'] / 60:.0f}분 안에 끝나지 않음 → 나가서 다시 입장 → {bot.snapshot('abyss_timeout').name}")
-            leave(bot)
             stage = "entry"
         else:
             to_reward(bot)

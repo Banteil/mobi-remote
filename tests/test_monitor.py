@@ -203,6 +203,28 @@ class ChooseTest(unittest.TestCase):
         self.assertTrue(ctx.take("chosen"))
 
 
+class DeadAfterResultTest(unittest.TestCase):
+    def test_dead_with_abyss_result_is_not_dead(self):
+        """쓰러진 채로 판이 끝나면(어비스 결과) 쓰러짐이 아니라 화면(클리어·보상)을 본다."""
+        b = mock.Mock()
+        b.cli.run_limited = False
+        b.map_loading.return_value = False
+        b.packets.at_charselect.return_value = False
+        b.packets.ok = True
+        b.packets.state.dead = True
+        b.packets.state.abyss_result = 0
+        self.assertEqual(d.look(b).what, d.DEAD)
+        b.packets.state.abyss_result = 7
+        from mabi.monitor import offline
+        b.cfg = offline.config()
+        b.ui = b.cfg["ui"]
+        b.vision.has.return_value = False
+        b.skip_button.return_value = None
+        b.at_main.return_value = False
+        with mock.patch("mabi.tasks.dialogue.in_dialog", return_value=False):
+            self.assertNotEqual(d.look(b).what, d.DEAD)
+
+
 class LeaveTest(unittest.TestCase):
     def leave(self, shown):
         b = fake_bot()
