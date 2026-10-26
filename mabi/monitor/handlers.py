@@ -68,6 +68,8 @@ def dialog(bot, ctx, seen):
         return None
     if (done := sit.clear_attendance(bot, seen.frame)):
         return done
+    if ctx.leave:
+        return _leave_line(bot)
     if ctx.choose:
         from ..tasks.dialogue import menu_shown
         return _choose(bot, ctx, menu_shown(bot))
@@ -96,7 +98,7 @@ def _choose(bot, ctx, shown):
     버튼 줄을 글자로 읽고, 원하는 것이 없으면 아무거나 누르지 않고 기다린다 (시간 상한은 태스크 몫). 고른 뒤 남은 대사는 넘긴다."""
     from ..tasks.dialogue import next_line
     if "chosen" not in ctx.events and (shown if shown is not None else bot._act(None).get("IsWaitingForSelection")):
-        hit = next(((t, x, y) for t, x, y in ocr.find_texts(bot.frame(), gd.region("board_choices"))
+        hit = next(((t, x, y) for t, x, y in ocr.find_texts(bot.frame(), gd.region(ctx.choose_region))
                     if ctx.choose in ocr.nospace(t)), None)
         if not hit:
             bot.sleep(1, 1.3)
@@ -107,6 +109,23 @@ def _choose(bot, ctx, shown):
         return f"선택지 '{hit[0]}'"
     next_line(bot)
     return "대사 넘김"
+
+
+def _leave_line(bot):
+    """대화를 마치는 중: 메뉴가 떠 있으면 ESC('대화 종료'), 대사(작별 인사 등 — ESC 로 안 넘어간다)면 넘기기 자리.
+    메뉴는 패킷, 모르면 CLI(선택 기다림)로 본다."""
+    from ..tasks.dialogue import menu_shown, next_line, step, wait_next
+    shown = menu_shown(bot)
+    if shown is None:
+        shown = bool(bot._act(None).get("IsWaitingForSelection"))
+    if not shown:
+        next_line(bot)
+        return "대사 넘김"
+    before = step(bot)
+    bot.key("esc")
+    if wait_next(bot, before, 3) is None:
+        bot.sleep(1.2, 1.6)
+    return "대화 종료"
 
 
 def _dialog_blocker(bot, seen):
@@ -198,6 +217,31 @@ def dead(bot, ctx, seen):
         ctx.event("revived")
         return "여기서 부활"
     return Finish("dead", "'여기서 부활' 을 못 함")
+
+
+# ---------------------------------------------------------------- 접속 직후 창 (어느 일에서든 뜰 수 있다)
+
+def stella(bot, ctx, seen):
+    c = bot.cfg["login"]
+    bot.click(tuple(c["stella_card_xy"]))  # 어느 카드든 상관없음
+    try:
+        bot.wait(c["stella_pick"], timeout=10)
+    except StepTimeout:
+        return "스텔라 픽 카드 누름"
+    bot.sleep(0.5, 0.8)
+    bot.key("space")
+    return "스텔라 픽"
+
+
+def notice(bot, ctx, seen):
+    _esc(bot)
+    return "공지 팝업 닫음"
+
+
+def event_popup(bot, ctx, seen):
+    bot.click(seen.hit)
+    bot.sleep(0.6, 1.0)
+    return "새 이벤트 창 닫음"
 
 
 # ---------------------------------------------------------------- 던전·사냥터 끝 (ctx.reward)
@@ -312,7 +356,7 @@ def fast_travel(bot) -> bool:
 
 # 어느 일이든 (기다리는 중에 끼어든 창 포함)
 BASE = {d.LOADING: loading, d.ATTENDANCE: attendance, d.FAREWELL: farewell, d.SCENE: scene, d.DIALOG: dialog,
-        d.CONFIRM: confirm, d.TOUCH: touch, d.DEAD: dead}
+        d.CONFIRM: confirm, d.TOUCH: touch, d.DEAD: dead, d.STELLA: stella, d.NOTICE: notice, d.EVENT_POPUP: event_popup}
 # NPC 메뉴·전달·던전 창을 다루는 일 (ctx.menus — 아르바이트·정리). 기다리는 중의 정리는 메뉴를 누르지 않는다
 MENUS = {d.REPORT: menu_space, d.ACCEPT: menu_space, d.DELIVER: deliver, d.DUNGEON_WINDOW: dungeon_window}
 # 채집·제작·가공 창 (ctx.job — 아르바이트 한 건을 하는 중)
@@ -325,7 +369,7 @@ DUNGEON = {d.REWARD: reward}
 
 
 def pick(ctx, what):
-    if ctx.choose and what in (d.REPORT, d.ACCEPT):
-        return dialog  # 고를 선택지가 따로 있는 대화 — Space(기본 선택지)를 누르지 않는다
+    if (ctx.choose or ctx.leave) and what in (d.REPORT, d.ACCEPT):
+        return dialog  # 고를 선택지가 따로 있거나 마치는 대화 — Space(기본 선택지)를 누르지 않는다
     return (BASE.get(what) or (MENUS.get(what) if ctx.menus else None) or (JOB.get(what) if ctx.job else None)
             or (DUNGEON.get(what) if ctx.reward else None))

@@ -9,6 +9,7 @@
     (도구 수리 / 장착 장비 수리 / 전체 수리 Space) → Space
   → '소지한 장비 수리 — 총 N개의 장비를 수리하시겠습니까?' 수리하기 Space → 수리 성공(패킷) → NPC 한마디 + 메뉴(AfterRepair)
   → ESC '대화 종료' → 작별 인사(EndDialogue, 눌러야 끝남) → 메인 화면
+대사 넘기기 · 메뉴에서 '수리' 고르기 · 대화 마치기는 점검자 몫 (Ctx choose · leave). 여기는 이동과 수리 창만 본다.
 고칠 장비가 없으면 '수리' 버튼이 꺼져 있어 눌러도 아무 일이 없다 (패킷도 안 옴) → 고칠 게 없는 것으로 끝낸다.
 내구도는 패킷(장비 내구도 깎임 알림 = 현재/최대 비율)으로만 안다. CLI 에는 장비 내구도가 없다.
 """
@@ -41,15 +42,6 @@ def _repair_window(bot: Bot) -> bool:
     return bool(_find(bot, "repair_all", "repair_buttons", exact=False))
 
 
-def _npc_menu(bot: Bot) -> bool:
-    """대장간 메뉴('수리' 버튼)가 떠 있나 — 패킷(선택지가 떠 있음), 모르면 화면 글자.
-    대사 내용·대사 종류 이름·몇 마디인지로는 판단하지 않는다 — 대장간 NPC 마다 다를 수 있다 (사용자 2026-10-25)."""
-    menu = dialogue.menu_open(bot)
-    if menu is not None:
-        return menu
-    return bool(_find(bot, "repair", "npc_buttons", exact=False))
-
-
 def _close_repair_window(bot: Bot) -> bool:
     """대화 처리기: 수리하기 창이 떠 있으면 ESC 로 닫는다."""
     if not dialogue.menu_open(bot) and _repair_window(bot):
@@ -59,17 +51,8 @@ def _close_repair_window(bot: Bot) -> bool:
     return False
 
 
-def _menu_esc_by_screen(bot: Bot) -> bool:
-    """대화 처리기 (패킷이 없을 때만): 화면에 메뉴 버튼이 보이면 ESC '대화 종료'."""
-    if dialogue.menu_open(bot) is None and _find(bot, "repair", "npc_buttons", exact=False):
-        bot.key("esc")
-        bot.sleep(1.2, 1.6)
-        return True
-    return False
-
-
 def _leave_npc(bot: Bot) -> None:
-    dialogue.leave(bot, handlers=(lambda: _close_repair_window(bot), lambda: _menu_esc_by_screen(bot)))
+    dialogue.leave(bot, handlers=(lambda: _close_repair_window(bot),))
 
 
 def _open_quick_nav(bot: Bot) -> tuple[int, int]:
@@ -127,24 +110,30 @@ def _go_smithy(bot: Bot) -> None:
 
 
 def _open_repair(bot: Bot) -> bool:
-    """메뉴 '수리' → 수리하기 창. 열렸으면 True, 고칠 장비가 없어 아무 일이 없으면 False."""
-    # 패킷은 인사말과 같은 순간에 '메뉴' 를 알려 주지만 화면의 버튼은 인사말을 넘겨야 뜬다 (2026-10-25)
-    # → '수리' 버튼이 보일 때까지 대사를 넘긴다 (대장간 NPC 마다 대사·마디 수가 다를 수 있다)
-    dialogue.wait_menu(bot, lambda: bool(_find(bot, "repair", "npc_buttons", exact=False)), timeout=40)
-    hit = _wait(bot, "repair", "npc_buttons", 3, exact=False)
-    if not hit:
-        raise CannotProceed(f"대장간 메뉴에 '수리' 가 없음 → {bot.snapshot('repair_npc').name}")
-    before = dialogue.step(bot)
-    bot.click(hit)
-    moved = dialogue.wait_next(bot, before, 4)
-    if moved is False:  # 패킷: 대사가 그대로 — 꺼진 '수리' (고칠 장비 없음)
-        return False
-    # '수리' 를 누르면 NPC 가 한마디("수리는 자신 없는데에…") 하고 멈춘다 — 넘겨야 수리하기 창이 뜬다
-    if dialogue.talk(bot, lambda: _repair_window(bot), timeout=12):
-        return True
-    if moved is None and _npc_menu(bot):  # 패킷이 없을 때: 눌러도 메뉴 그대로면 고칠 장비 없음
-        return False
-    raise CannotProceed(f"수리하기 창이 열리지 않음 → {bot.snapshot('repair_open').name}")
+    """메뉴 '수리' → 수리하기 창. 열렸으면 True, 고칠 장비가 없어 아무 일이 없으면 False.
+    인사말 넘기기 · 메뉴 버튼이 그려지길 기다렸다 '수리' 누르기 · 그 뒤 NPC 한마디("수리는 자신 없는데에…") 넘기기는 점검자가 한다
+    (대장간 NPC 마다 대사·마디 수가 다를 수 있다). 고칠 장비가 없으면 '수리' 가 꺼져 있어 눌러도 대사가 그대로다 (패킷)."""
+    from .. import monitor
+    mon = monitor.of(bot)
+    ctx = monitor.Ctx("repair", "대장간 메뉴", choose=gd.text("repair"), choose_region="npc_buttons")
+    end = time.monotonic() + 40
+    picked, last = 0, None
+    while time.monotonic() < end:
+        if _repair_window(bot):
+            return True
+        before = dialogue.step(bot)
+        seen = mon.check(ctx, guard=False)
+        last = seen.done or last
+        if ctx.take("chosen"):
+            picked += 1
+            # 패킷이 없으면 대사가 넘어갔는지 몰라 — 몇 번 눌러도 수리하기 창이 안 뜨면 고칠 장비가 없는 것으로
+            if dialogue.wait_next(bot, before, 4) is False or picked >= 3:
+                return False
+            continue
+        if not seen.done:
+            bot.sleep(0.8, 1.2)
+    why = "대장간 메뉴에 '수리' 가 없음" if last == "선택지 기다림" else "수리하기 창이 열리지 않음"
+    raise CannotProceed(f"{why} → {bot.snapshot('repair_open').name}")
 
 
 def run(bot: Bot) -> None:

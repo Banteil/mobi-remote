@@ -461,17 +461,16 @@ class Bot:
 
     # ---- 복구 ----
     def dismiss_popups(self, max_n: int = 6) -> int:
-        """공지/이벤트 팝업 등을 닫는다. 닫은 개수를 반환."""
-        closers = [n for n in self.ui["popup_closers"] if self.vision.has(n)]
+        """남은 창(공지·새 이벤트 창·스텔라 픽·퀘스트 완료 확인 …)을 점검자가 닫는다. NPC 대화는 건드리지 않는다. 닫은 개수."""
+        from . import monitor
+        mon, ctx = monitor.of(self), monitor.Ctx("popups", "남은 창 닫기", talk=False)
         closed = 0
         for _ in range(max_n):
-            frame = self.frame()
-            m = next((m for n in closers if (m := self.vision.find(frame, n))), None)
-            if not m:
+            seen = mon.check(ctx, guard=False)
+            if not seen.done or seen.done in monitor.WAITS:
                 break
-            self.click_xy(*m.center)
             closed += 1
-            self.sleep(0.6, 1.0)
+            self.sleep(0.4, 0.6)
         return closed
 
     def run_limited(self) -> bool:
@@ -564,11 +563,10 @@ class Bot:
                 self.key("esc")
                 self.sleep(1.2, 1.6)
                 continue
-            if not self.dismiss_popups(1):
-                # 템플릿이 안 맞는 퀘스트 완료 창 — ESC 로는 안 닫혀 캐릭터 바꾸기 등이 멈췄다 (2026-10-24 사용자) → 글자로도
-                if monitor.of(self).check(monitor.Ctx("to_main"), guard=False, ocr=True).done:
-                    continue
-                self.key("esc")
+            # 템플릿이 안 맞는 퀘스트 완료 창 — ESC 로는 안 닫혀 캐릭터 바꾸기 등이 멈췄다 (2026-10-24 사용자) → 글자로도
+            if monitor.of(self).check(monitor.Ctx("to_main"), guard=False, ocr=True).done:
+                continue
+            self.key("esc")
             self.sleep(0.8, 1.3)
         if not self.at_main():
             raise StepTimeout("메인 화면으로 돌아오지 못함")

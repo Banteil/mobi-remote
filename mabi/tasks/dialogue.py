@@ -12,8 +12,8 @@
   dialogue_step    대사마다 1씩 오름 — 눌러서 넘어갔는지, 버튼을 눌러도 아무 일이 없었는지(예: 고칠 장비가 없어 꺼진 '수리')
 패킷이 없으면 화면(대화 기록·대화 넘기기 템플릿)으로 본다.
 
-루틴마다 다른 조작은 talk()/leave() 에 넘기는 처리기(handlers)로 끼워 넣는다 — 처리기가 먼저 자기 화면인지 보고
-처리했으면 True, 아니면 공통 처리(대사 넘기기)로 간다. 예: 아르바이트의 '결과 보고' Space, 대장간의 수리 창 ESC.
+대사 넘기기·선택지 고르기·대화 마치기는 점검자(mabi.monitor — Ctx 의 choose · leave)가 한다. 루틴만의 창은
+leave() 에 넘기는 처리기(handlers)로 끼워 넣는다 — 처리기가 먼저 자기 화면인지 보고 처리했으면 True. 예: 대장간의 수리 창 ESC.
 """
 import time
 
@@ -92,57 +92,16 @@ def next_line(bot: Bot, wait: bool = True) -> None:
         bot.sleep(1.0, 1.4)
 
 
-def skip_lines(bot: Bot, max_n: int = 10) -> int:
-    """대화가 끝날 때까지(또는 max_n 마디) 대사를 넘긴다. 넘긴 수."""
-    n = 0
-    while n < max_n and talking(bot):
-        next_line(bot)
-        n += 1
-    return n
-
-
-def _run_handlers(handlers) -> bool:
-    return any(h() for h in handlers)
-
-
-def talk(bot: Bot, until, handlers=(), timeout: float = 30) -> bool:
-    """until() 이 참이 될 때까지 대화를 진행한다. 차례마다 handlers(루틴만의 조작)를 먼저 묻고, 아무도 처리하지 않았으면
-    대사일 때 넘기기 자리를 누른다. 메뉴가 떠 있으면 누르지 않고 기다린다 (메뉴에서 고르는 건 부르는 쪽 일).
-    시간 안에 됐으면 True."""
-    end = time.monotonic() + timeout
-    while time.monotonic() < end:
-        if until():
-            return True
-        if _run_handlers(handlers):
-            continue
-        if talking(bot) and not menu_shown(bot):
-            next_line(bot)
-        else:
-            bot.sleep(0.8, 1.2)
-    return until()
-
-
-def wait_menu(bot: Bot, shown, timeout: float = 20) -> bool:
-    """NPC 에게 말을 건 뒤 메뉴 버튼이 보일 때까지 대사를 넘긴다. shown() 은 그 메뉴의 버튼이 화면에 보이는지
-    (루틴이 정한다 — 예: 대장간 '수리' 글자). 대사가 몇 마디든 넘기기 자리를 계속 누른다."""
-    return talk(bot, shown, timeout=timeout)
-
-
 def leave(bot: Bot, handlers=(), timeout: float = 25) -> None:
-    """NPC 대화에서 메인 화면으로. 차례마다 handlers(루틴이 연 창 닫기 등)를 먼저 묻고, 메뉴면 ESC('대화 종료'),
-    대사(작별 인사 등)면 넘기기 자리를 누른다. 대화가 아닌 화면이 남으면 to_main 에 맡긴다."""
+    """NPC 대화에서 메인 화면으로. 차례마다 handlers(루틴이 연 창 닫기 등)를 먼저 묻고, 나머지는 점검자가 한다
+    (Ctx leave — 메뉴면 ESC '대화 종료', 작별 인사 등 대사면 넘기기). 처리할 것이 없으면 to_main 에 맡긴다."""
+    from .. import monitor
+    mon = monitor.of(bot)
+    ctx = monitor.Ctx(bot.task_id or "npc", "대화 마침", leave=True)
     end = time.monotonic() + timeout
     while not bot.at_main() and time.monotonic() < end:
-        if _run_handlers(handlers):
+        if any(h() for h in handlers):
             continue
-        menu = menu_shown(bot)
-        if menu:
-            before = step(bot)
-            bot.key("esc")
-            if wait_next(bot, before, 3) is None:
-                bot.sleep(1.2, 1.6)
-        elif talking(bot):
-            next_line(bot)
-        else:
+        if not mon.check(ctx, guard=False).done:
             break
     bot.to_main()

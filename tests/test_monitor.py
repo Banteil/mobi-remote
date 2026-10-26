@@ -192,6 +192,54 @@ class ChooseTest(unittest.TestCase):
         self.assertIs(handlers.pick(monitor.Ctx("t", menus=True, choose="골드"), d.REPORT), handlers.dialog)
         self.assertIs(handlers.pick(monitor.Ctx("t", menus=True), d.REPORT), handlers.menu_space)
 
+    def test_choose_reads_given_region(self):
+        """대장간 '수리' 처럼 게시판이 아닌 선택지 줄도 읽는다 (choose_region)."""
+        b = fake_bot()
+        ctx = monitor.Ctx("repair", choose="수리", choose_region="npc_buttons")
+        with mock.patch.object(handlers.ocr, "find_texts", return_value=[("수리", 600, 800)]) as ft,                 mock.patch.object(handlers.gd, "region", side_effect=lambda n: n):
+            self.assertEqual(handlers._choose(b, ctx, True), "선택지 '수리'")
+        self.assertEqual(ft.call_args[0][1], "npc_buttons")
+        b.click.assert_called_once_with((600, 800))
+        self.assertTrue(ctx.take("chosen"))
+
+
+class LeaveTest(unittest.TestCase):
+    def leave(self, shown):
+        b = fake_bot()
+        ctx = monitor.Ctx("repair", leave=True)
+        with mock.patch.object(handlers.sit, "clear_attendance", return_value=None),                 mock.patch("mabi.tasks.dialogue.menu_shown", return_value=shown),                 mock.patch("mabi.tasks.dialogue.wait_next", return_value=True),                 mock.patch("mabi.tasks.dialogue.next_line") as nl:
+            return b, nl, handlers.dialog(b, ctx, Seen(d.DIALOG, frame=frame()))
+
+    def test_menu_is_closed_with_esc(self):
+        """대화를 마칠 때 메뉴는 고르지 않고 ESC('대화 종료')."""
+        b, nl, did = self.leave(True)
+        self.assertEqual(did, "대화 종료")
+        b.key.assert_called_once_with("esc")
+        nl.assert_not_called()
+
+    def test_farewell_line_is_skipped(self):
+        """작별 인사는 ESC 로 안 넘어간다 → 넘기기."""
+        b, nl, did = self.leave(False)
+        self.assertEqual(did, "대사 넘김")
+        nl.assert_called_once()
+        b.key.assert_not_called()
+
+    def test_space_option_is_not_pressed_when_leaving(self):
+        self.assertIs(handlers.pick(monitor.Ctx("t", menus=True, leave=True), d.ACCEPT), handlers.dialog)
+
+
+class LoginPopupTest(unittest.TestCase):
+    def test_popups_handled_in_any_task(self):
+        """접속 직후 창(공지·새 이벤트·스텔라 픽)은 어느 일에서든 처리한다 — 오전 6시 뒤·캐릭터마다 뜰 수도 안 뜰 수도 있다."""
+        for what in (d.NOTICE, d.EVENT_POPUP, d.STELLA):
+            self.assertIsNotNone(handlers.pick(monitor.Ctx("abyss"), what))
+
+    def test_notice_closed_with_esc(self):
+        b = fake_bot()
+        with mock.patch.object(d, "look", return_value=Seen(d.NOTICE, hit=(1, 1), frame=frame())):
+            self.assertEqual(monitor.Monitor(b).check(monitor.Ctx("t"), guard=False).done, "공지 팝업 닫음")
+        b.key.assert_called_with("esc")
+
 
 if __name__ == "__main__":
     unittest.main()

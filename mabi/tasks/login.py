@@ -113,9 +113,13 @@ def select_character(bot: Bot, cfg: dict, character: dict) -> None:
 
 
 def settle_first_login(bot: Bot, cfg: dict, timeout: float) -> list[str]:
-    """접속 직후 화면들(이벤트 대화, 스텔라 픽, 공지 팝업)을 처리하고 메인 화면이 몇 초 유지되면 끝낸다.
-    처리한 화면 이름 목록 반환."""
-    c, ui = cfg["login"], bot.ui
+    """접속 직후 화면들(출석 대사, 새 이벤트 창, 스텔라 픽, 공지 팝업 …)은 점검자가 처리하고, 메인 화면이 몇 번 이어지면 끝낸다.
+    처리한 것 목록 반환. 버튼 없는 출석 첫 대사만 여기서 본다 (알아볼 표시가 없다)."""
+    from .. import monitor
+    c = cfg["login"]
+    mon = monitor.of(bot)
+    # 대화는 넘기지 않는다 — 출석은 '출석부 건너뛰기' 로만 ('대화 넘기기' 는 다른 대사로 이어진다, 사용자 2026-10-22)
+    ctx = monitor.Ctx("login", "접속 직후", talk=False)
     handled = []
     end = time.monotonic() + timeout
     stable = unknown = 0
@@ -123,38 +127,13 @@ def settle_first_login(bot: Bot, cfg: dict, timeout: float) -> list[str]:
         if time.monotonic() > end:
             raise StepTimeout(f"접속 후 메인 화면이 안정되지 않음 → {bot.snapshot('login').name}")
         bot.sleep(1.2, 1.6)
-        frame = bot.frame()
-        if bot.vision.find(frame, c["stella_title"]):
-            stable = 0
-            bot.click(tuple(c["stella_card_xy"]))  # 어느 카드든 상관없음
-            bot.wait(c["stella_pick"], timeout=10)
-            bot.sleep(0.5, 0.8)
-            bot.key("space")
-            handled.append("스텔라 픽")
+        seen = mon.check(ctx, guard=False)
+        if seen.done:
+            stable = unknown = 0
+            if seen.done not in monitor.WAITS and seen.done not in handled:
+                handled.append(seen.done)
             continue
-        if bot.vision.find(frame, c["notice_webview"]):
-            stable = 0
-            bot.key("esc")
-            handled.append("공지 팝업")
-            continue
-        # 출석은 '출석부 건너뛰기'로만 넘긴다. '대화 넘기기'는 다른 대사로 이어지므로 쓰지 않는다 (사용자 2026-10-22)
-        skip = next((m for n in (c["attendance_skip"], ui["scene_skip"]) if (m := bot.vision.find(frame, n))), None)
-        if skip:
-            stable = 0
-            bot.click(skip)
-            handled.append("출석부 건너뛰기" if skip.name == c["attendance_skip"] else "장면 넘기기")
-            continue
-        if bot.vision.find(frame, ui["confirm_green"]):  # '출석 완료' 보상 창 등의 초록 확인
-            stable = 0
-            bot.key("space")
-            handled.append("확인")
-            continue
-        if (m := bot.vision.find(frame, c["event_popup_close"])):  # '새로운 이벤트' 안내 창 (새 캐릭터 등)
-            stable = 0
-            bot.click(m)
-            handled.append("새 이벤트 창 닫기")
-            continue
-        if bot.vision.find(frame, ui["main_hud"]):
+        if seen.what == monitor.detect.MAIN:
             stable += 1
             unknown = 0
             continue

@@ -25,6 +25,9 @@ SCENE = "scene"                    # 연출 '장면 넘기기'
 REWARD = "reward"                  # 던전·사냥터 보상 화면 ('나가기' · '다시 하기' · '새 임무 선택')
 TOUCH = "touch"                    # 던전 클리어 뒤 '화면을 터치해 주세요'
 DEAD = "dead"                      # 내 캐릭터가 쓰러짐 (패킷 — 부활 창 열림)
+STELLA = "stella"                  # '오늘의 스텔라 픽' (하루 첫 접속)
+NOTICE = "notice"                  # 공지사항 웹 팝업 (ESC 로 닫힘)
+EVENT_POPUP = "event_popup"        # '새로운 이벤트' 안내 창 (회색 '닫기')
 
 OUTSIDE = (RUN_LIMIT, CHARSELECT, TITLE, EXIT_ASK)  # 게임 밖이거나 사람 몫 — 점검자가 누르지 않는다
 
@@ -87,6 +90,12 @@ def look(bot, frame=None, skip=(), ocr: bool = False) -> Seen:
         return Seen(CHARSELECT, frame=frame)
     if f(ui.get("title_start")):
         return Seen(TITLE, frame=frame)
+    # 접속 직후 창들 — 오전 6시 뒤 첫 접속·캐릭터마다 뜰 수도 안 뜰 수도 있어 어느 일에서든 본다
+    lg = bot.cfg["login"]
+    for what, name in ((STELLA, lg.get("stella_title")), (NOTICE, lg.get("notice_webview")),
+                       (EVENT_POPUP, lg.get("event_popup_close"))):
+        if (m := f(name)):
+            return Seen(what, m, frame=frame)
     if (m := f(bot.cfg["login"].get("attendance_skip"))):
         return Seen(ATTENDANCE, m, frame=frame)
     # 보상 화면 위에 퀘스트 클리어 '확인' 이 겹쳐 뜬다 (주말 어비스 3판 등) → 확인을 먼저
