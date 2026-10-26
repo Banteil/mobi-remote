@@ -118,6 +118,13 @@ class Bot:
         # 혼자 오래 도는 일(일일 숙제·어비스 반복)만 켠다 — runner·abyss.repeat 가 설정
         self.auto_clear = False
         self._clearing = False
+        # 연출의 '장면 넘기기' 를 누르나. 어비스·던전을 도는 동안은 끈다 — 연출은 스스로 끝나고, 누르면 뒤에서 돌던 게임이
+        # 앞으로 튀어나온다 (2026-10-25 사용자: "어비스나 던전 돌 동안은 장면 넘기기를 안해도 될 것 같아")
+        self.scene_skip = True
+        # 출석을 넘긴 게임 날짜 (situation.attendance_due). 시작할 때는 이미 넘긴 것으로 본다 — 접속 단계가 출석을 따로
+        # 넘기고, 이 실행 도중 오전 6시를 넘기면 (어비스 반복 등) 그때부터 출석 대사를 넘길 준비를 한다
+        from .profile import game_date
+        self.attendance_date = game_date()
 
     def step(self, step: str, text: str = "", **data) -> None:
         """숙제 안의 단계를 오늘 기록에 남긴다 (끊긴 뒤 다시 시작하면 bot.resume 으로 돌아온다).
@@ -230,6 +237,41 @@ class Bot:
         if p.ok and (p.state.fresh or p.state.in_dialogue):
             return p.state.in_dialogue
         return bool(self._act(act).get("IsDialoguePlaying"))
+
+    def cutscene_playing(self) -> bool | None:
+        """컷신(연출) 재생 중인가 — 패킷(컷신 시작·끝)으로만 안다. 모르면 None (CLI 에는 일반 컷신 상태가 없다)."""
+        p = self.packets
+        return p.state.cutscene if p.ok and (p.state.fresh or p.state.cutscene) else None
+
+    def skip_button(self, frame=None, skip=()) -> tuple[str, Match] | None:
+        """오른쪽 위 넘기기 버튼과 그 종류 ("scene" 연출 / "dialog" 대화). 없으면 None.
+        두 버튼은 같은 자리에 '넘기기' 글자가 같고 반투명이라 그림만으로는 헷갈린다 — 밝은 보스 출현 연출의
+        '장면 넘기기' 가 '대화 넘기기' 로 잡혀 눌렸다 (2026-10-25 어비스). 그래서 종류는 패킷 → CLI → 그림 순으로 정한다:
+        패킷이 컷신 중이면 연출, 대화 중이면 대화, 둘 다 아니면 (대화로 누를 일이 없으니) 연출로 본다."""
+        frame = self.frame() if frame is None else frame
+        hits = [m for n in (self.ui.get("dialog_skip"), self.ui.get("scene_skip"))
+                if n and n not in skip and self.vision.has(n) and (m := self.vision.find(frame, n))]
+        if not hits:
+            return None
+        m = max(hits, key=lambda h: h.score)
+        cut = self.cutscene_playing()
+        if cut:
+            return "scene", m
+        p = self.packets
+        if cut is not None and p.ok and (p.state.fresh or p.state.in_dialogue):
+            return ("dialog" if p.state.in_dialogue else "scene"), m
+        act = self.state.activity() if self.state.available() else None
+        if act is not None and "IsDialoguePlaying" in act:
+            return ("dialog" if act["IsDialoguePlaying"] else "scene"), m
+        return ("scene" if m.name == self.ui.get("scene_skip") else "dialog"), m
+
+    def behind(self) -> bool:
+        """뒤에서 도는 중인가 (게임이 앞에 없음) — 클릭하면 게임이 앞으로 튀어나온다."""
+        return bool(self.background) and not self.window.is_foreground() and not self.input.dry_run
+
+    def may_skip_scene(self) -> bool:
+        """연출의 '장면 넘기기' 를 눌러도 되나 — 어비스·던전 중(scene_skip 꺼짐)이나 뒤에서 도는 중이면 기다린다."""
+        return self.scene_skip and not self.behind()
 
     def is_dead(self, act: dict | None = None) -> bool:
         """내 캐릭터가 쓰러졌나. 패킷의 부활 창 신호가 CLI IsDead 보다 약 3초 빠르다 (death1 실측).
@@ -432,7 +474,24 @@ class Bot:
             self.sleep(0.6, 1.0)
         return closed
 
+    def run_limited(self) -> bool:
+        """게임이 '너무 오랫동안 실행되고 있습니다 · 재시작' 창을 띄웠나 (AI 에이전트 연속 실행 제한).
+        CLI 가 그 오류를 한 번이라도 줬으면 그것, 아니면 화면 위쪽 글자를 읽는다 (실패했을 때만 부른다 — OCR 이 무겁다).
+        이 창은 '종료' 하나뿐이라 누르면 게임이 꺼진다 → 누르지 않고 사람에게 넘긴다."""
+        if self.cli.run_limited:
+            return True
+        from . import ocr
+        try:
+            texts = "".join(t for t, _, _ in ocr.find_texts(self.frame(), (0, 0, 1920, 600))).replace(" ", "")
+        except Exception:  # noqa: BLE001 — 확인 실패가 실패 처리를 막으면 안 된다
+            return False
+        return "오랫동안실행" in texts or "재시작해주세요" in texts
+
     def at_main(self) -> bool:
+        """필드 메인 화면인가 — 패킷이 맵 로딩 중이라고 하면 아니다 (로딩 화면 직전·직후 HUD 가 잠깐 보인다).
+        '창이 하나도 안 열림' 은 패킷에 없어서 그 다음은 HUD 그림으로 본다."""
+        if self.map_loading() or self.packets.at_charselect():
+            return False
         return self.exists(self.ui["main_hud"])
 
     def no_food(self, look: bool = True) -> bool:
@@ -470,16 +529,17 @@ class Bot:
         return True
 
     def skip_dialogue(self, max_n: int = 10) -> int:
-        """NPC 대화(주간 정기 의뢰 조건 충족 시 클리어 후 가끔 나옴)가 진행 중이면 '대화 넘기기'를 누른다. 누른 횟수 반환."""
-        name = self.ui.get("dialog_skip")
+        """NPC 대화(주간 정기 의뢰 조건 충족 시 클리어 후 가끔 나옴)가 진행 중이면 '대화 넘기기'를 누른다. 누른 횟수 반환.
+        연출(컷신)의 넘기기는 누르지 않는다 (skip_button) — 보스 클리어 직후 불려 연출을 대화로 누를 뻔했다."""
         n = 0
         for _ in range(max_n):
             playing = self.dialogue_playing()
-            m = self.find(name) if name and self.vision.has(name) else None
-            if not playing and not m:
+            hit = self.skip_button()
+            dialog = hit and hit[0] == "dialog"
+            if not playing and not dialog:
                 break
-            if m:
-                self.click(m)
+            if dialog:
+                self.click(hit[1])
                 n += 1
             self.sleep(1.2, 1.8)
         if n:
@@ -489,16 +549,30 @@ class Bot:
     def to_main(self, tries: int = 10) -> None:
         """ESC 와 팝업 닫기를 반복해서 필드 메인 화면으로 돌아온다. 돌아오면 배고픔도 확인한다."""
         exit_dialog, cancel = self.ui["exit_dialog"], self.ui["exit_dialog_cancel"]
-        for _ in range(tries):
+        wait_end = time.monotonic() + 120  # 로딩·연출을 기다리는 건 tries 와 따로 (그 동안은 누르는 게 없다)
+        n = 0
+        while n < tries:
             if self.at_main():
                 self.eat_if_hungry()
                 return
             # 타이틀·캐릭터 선택 화면에서 ESC 를 누르면 뒤로 가다가 '게임을 종료하시겠습니까?' 가 뜬다
-            if self.exists(self.ui["title_start"]) or self.exists(self.ui["charselect_title"]):
+            if self.packets.at_charselect() or self.exists(self.ui["title_start"]) or self.exists(self.ui["charselect_title"]):
                 raise StepTimeout("게임 밖(타이틀/캐릭터 선택) 화면이라 메인으로 돌아갈 수 없음")
-            if self.vision.has(self.ui["dialog_skip"]) and self.click_if(self.ui["dialog_skip"]):
+            waiting = time.monotonic() < wait_end
+            if waiting and self.map_loading():  # 패킷: 맵을 옮기는 중 — ESC 를 누르지 않고 기다린다
+                self.wait_loaded(min(self.cfg["timing"]["loading"], wait_end - time.monotonic()))
+                continue
+            from . import situation
+            if situation.clear_attendance(self):  # 오전 6시가 지나 필드로 나오면 뜨는 출석 대사 ('대화 넘기기' 로 넘기지 않는다)
                 self.sleep(1.2, 1.8)
                 continue
+            if (hit := self.skip_button()):
+                if hit[0] == "dialog" or self.may_skip_scene() or not waiting:
+                    self.click(hit[1])
+                    n += 1
+                self.sleep(1.2, 1.8)  # 연출은 스스로 끝나길 기다린다
+                continue
+            n += 1
             if self.vision.has(exit_dialog) and self.exists(exit_dialog):
                 self.click(cancel)
                 continue

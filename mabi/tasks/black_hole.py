@@ -2,7 +2,7 @@
 
 입장하는 순간 횟수가 차감되므로 도중에 나가면 안 되고 클리어할 때까지 머문다.
 입장하면 종류(몬스터, 보스, 낚시 등)와 상관없이 자동으로 진행되므로 아무것도 조작하지 않는다.
-클리어하면 검은 구멍 밖(필드)으로 나온다. 장소는 CLI get_current_environment 로 판단한다.
+클리어하면 검은 구멍 밖(필드)으로 나온다. 장소는 패킷의 맵 이름(없으면 CLI get_current_environment)으로 판단한다.
 오늘 끝냈으면 콘텐츠 가이드에서 카드가 사라진다.
 
 검은 구멍은 사냥터 안에 30분마다 3개씩 나오고, 다 깨면 30분 동안 못 들어간다.
@@ -68,8 +68,8 @@ def enter(bot: Bot, c: dict) -> None:
 
 def run(bot: Bot, cfg: dict) -> str:
     c = cfg["black_hole"]
-    if not bot.state.available():
-        raise RuntimeError("검은 구멍은 장소 판단에 CLI 가 필요함")
+    if not bot.state.available() and bot.map_loading() is None:
+        raise RuntimeError("검은 구멍은 장소 판단에 패킷이나 CLI 가 필요함")
     # 단계: bh_open(가이드 → 바로 가기) → bh_travel(이동) → bh_inside(안에서 클리어 대기) → bh_done(나와서 정리)
     # 이미 안에 있으면 (안에서 끊김) 나가지 않고 그대로 클리어를 기다린다 — 나가면 횟수만 날아간다
     if c["space_keyword"] in game_space(bot):

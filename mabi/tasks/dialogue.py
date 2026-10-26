@@ -27,17 +27,24 @@ def _packet(bot: Bot):
 
 
 def in_dialog(bot: Bot, frame=None) -> bool:
-    """NPC 대화 화면인가: 왼쪽 위 '대화 기록' 또는 오른쪽 위 '대화 넘기기'.
+    """NPC 와 대화 중인가 — 패킷(대화 대상)이 알면 그것, 모르면 화면: 왼쪽 위 '대화 기록' 또는 오른쪽 위 넘기기 버튼이
+    대화 쪽(Bot.skip_button — CLI 대화 중 여부, 없으면 그림 점수)일 때.
     두 버튼은 반투명이라 뒤 배경이 밝으면 한쪽 템플릿이 안 맞는다 (2026-10-23 부자 NPC: 흰 건물 앞에서
-    '대화 기록' 0.78 < 0.85 → 대화를 못 알아보고 멈춤). 둘 중 하나만 맞아도 대화로 본다."""
+    '대화 기록' 0.78 < 0.85 → 대화를 못 알아보고 멈춤). 둘 중 하나만 맞아도 대화로 본다.
+    그림만 보던 때는 보스 출현 연출의 '장면 넘기기' 를 대화로 알아보고 눌렀다 (2026-10-25)."""
+    s = _packet(bot)
+    if s is not None:
+        return s.in_dialogue
     frame = bot.frame() if frame is None else frame
-    return any(bot.vision.find(frame, n) for n in (bot.cfg["arbeit"]["dialog_log"], bot.ui["dialog_skip"]))
+    if bot.vision.find(frame, bot.cfg["arbeit"]["dialog_log"]):
+        return True
+    hit = bot.skip_button(frame)
+    return bool(hit and hit[0] == "dialog")
 
 
 def talking(bot: Bot) -> bool:
-    """NPC 와 대화 중인가 — 패킷이 알면 그것, 모르면 화면."""
-    s = _packet(bot)
-    return s.in_dialogue if s is not None else in_dialog(bot)
+    """NPC 와 대화 중인가 (in_dialog)."""
+    return in_dialog(bot)
 
 
 def action(bot: Bot) -> str | None:
@@ -55,8 +62,8 @@ def menu_open(bot: Bot) -> bool | None:
 def lines_left(bot: Bot) -> bool:
     """오른쪽 위 '대화 넘기기' 가 보이나 — 아직 넘길 대사가 있다. 패킷은 첫 대사와 같은 순간에 '메뉴' 를 알려 주지만
     화면의 메뉴 버튼은 대사를 넘긴 뒤에야 뜬다 (2026-10-25 대장간 도착 인사) → 메뉴가 보이는지는 이것과 같이 본다."""
-    name = bot.ui.get("dialog_skip")
-    return bool(name and bot.vision.has(name) and bot.exists(name))
+    hit = bot.skip_button()
+    return bool(hit and hit[0] == "dialog")
 
 
 def menu_shown(bot: Bot) -> bool | None:

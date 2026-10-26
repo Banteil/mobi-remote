@@ -38,7 +38,12 @@ ABYSS_MAP = "InstanceAbyssDungeon"  # 패킷의 맵 종류
 
 
 def inside(bot: Bot) -> bool:
-    """어비스(던전) 안 — 오른쪽 맨 위 나가기 버튼이 보인다."""
+    """어비스 판 안인가 — 패킷이 알면 어비스 맵에 있고 로딩 중이 아니며 이 맵에서 결과가 아직 안 옴
+    ('다시 하기' 뒤 지난 판 맵에 선 채 매칭을 기다리는 건 판 안이 아니다). 모르면 오른쪽 맨 위 나가기 버튼."""
+    loading = bot.map_loading()
+    if loading is not None:
+        st = bot.packets.state
+        return not loading and st.channel_type == ABYSS_MAP and not st.abyss_result
     return bot.exists(bot.ui["abyss_exit"])
 
 
@@ -363,11 +368,19 @@ def _switch_character(bot: Bot, cfg: dict, character: dict) -> None:
 def after_clear(bot: Bot) -> bool:
     """클리어 화면('화면을 터치해 주세요')이나 보상 화면(다시 하기 / 나가기)인가."""
     ui = bot.ui
-    if bot.packets.ok and bot.packets.state.abyss_result:  # 패킷: 결과가 와 있고 아직 안 나감
-        return True
+    known = bot.map_loading() is not None  # 패킷이 지금 맵을 안다
+    st = bot.packets.state
+    if known:
+        if st.loading or st.channel_type != ABYSS_MAP:
+            return False  # 어비스 맵이 아니다 (필드로 나왔거나 옮기는 중)
+        if st.abyss_result:
+            return True  # 패킷: 이 맵에서 결과가 옴 (나가면 새 맵 진입 때 지운다)
     act = bot.state.activity() if bot.state.available() else None
-    return bool((act or {}).get("IsAbyssResultSequencePlaying") or bot.exists(ui["dungeon_retry"])
-                or bot.exists(ui["reward_exit"]) or touch_prompt_visible(bot))
+    if (act or {}).get("IsAbyssResultSequencePlaying"):
+        return True
+    if known:
+        return False  # 어비스 맵인데 결과가 안 옴 — 판 중이다 (그림은 보지 않는다)
+    return bool(bot.exists(ui["dungeon_retry"]) or bot.exists(ui["reward_exit"]) or touch_prompt_visible(bot))
 
 
 def _behind(bot: Bot) -> bool:
@@ -385,8 +398,7 @@ def to_reward(bot: Bot) -> None:
         if time.monotonic() > end:
             raise StepTimeout(f"어비스 보상 화면이 나오지 않음 → {bot.snapshot('abyss_reward').name}")
         if bot.vision.has(ui["scene_skip"]) and bot.exists(ui["scene_skip"]):
-            if not _behind(bot):
-                bot.click_if(ui["scene_skip"])
+            pass  # 연출은 스스로 끝나길 기다린다 (Bot.scene_skip — 어비스 중엔 누르지 않음)
         elif bot.clear_blockers(skip=(ui["dungeon_touch"],)):
             pass  # 클리어와 함께 깨진 퀘스트의 클리어 창·대화 (주말 어비스 3판 등)
         elif touch_prompt_visible(bot) or bot.exists(ui["dungeon_touch"]):
@@ -445,6 +457,7 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
     # 시작해 입장부터 하려다 ESC 가 듣지 않아 멈췄다), 매칭 중이면 들어가길 기다리고, 입장 화면·어비스 목록이면
     # 그 자리부터, 그 밖(메인·다른 창)은 메뉴에서 입장
     bot.auto_clear = True
+    bot.scene_skip = False  # 연출은 누르지 않고 기다린다 — 누르면 뒤에서 돌던 게임이 앞으로 나온다 (2026-10-25 사용자)
     if character:
         _switch_character(bot, cfg, character)
     bot.background = behind
@@ -517,15 +530,19 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
                 continue
             repaired_from = None
             bot.key("space")  # 다시 하기 (Space) → 같은 던전·난이도로 다시 매칭
-            bot.sleep(2, 3)
             for _ in range(2):  # 키가 안 들었으면 — 뒤에서는 키를 한 번 더, 앞에서는 누른다
+                # 패킷: 매칭 상태(요청·찾는 중·잡힘)나 맵 로딩이 오면 눌린 것. 모르면 2~3초 뒤 화면의 '다시 하기' 버튼으로
+                took = bot.wait_packet(lambda s: s.abyss_matching in (1, 2, 3) or s.loading, 3)
+                if took:
+                    break
+                if took is None:
+                    bot.sleep(2, 3)
                 if not bot.exists(bot.ui["dungeon_retry"]):
                     break
                 if _behind(bot):
                     bot.key("space")
                 else:
                     bot.click(bot.ui["dungeon_retry"])
-                bot.sleep(2, 3)
             stage = "match"
         if done():
             break

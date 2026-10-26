@@ -576,6 +576,7 @@ class PacketMonitor:
             s.fast_travel_ok = None  # 새 맵 — 빠른 이동 가능 여부는 다음 자동 이동 때 다시 온다
             if s.channel_type == "InstanceAbyssDungeon":
                 s.abyss_matching = 0
+            s.abyss_result = 0  # 새 맵 — 지난 판 결과는 끝났다 (나갈 때 0 이 오는지 실측이 없어 여기서도 지운다)
             s.dead = None  # 쓰러진 채 맵을 옮기면 부활 신호가 안 올 수 있다 → 다시 쓰러질 때까지 CLI 로
             log.info("패킷: 맵 진입 %s (%s)", s.channel_name or s.channel, s.channel_type or "?")
         elif key == "session.logout_ok":  # 캐릭터 선택 화면으로 (me1 03:29:30 — 맵 떠남·세션 정리와 같은 때)

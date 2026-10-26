@@ -57,6 +57,7 @@ class SundayChoiceTest(unittest.TestCase):
 
 
 @mock.patch.object(weekday, "in_dialog", lambda bot: False)
+@mock.patch.object(weekday, "menu_shown", lambda bot: None)  # 패킷 없음 → CLI 선택 대기로
 @mock.patch("mabi.ocr.find_texts", lambda frame, region: CHOICES)
 class BoardTest(unittest.TestCase):
     def test_talk_select_then_close(self):
