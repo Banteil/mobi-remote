@@ -57,7 +57,9 @@ def pyinstaller() -> Path:
             *[a for p in APP_PACKAGES for a in ("--collect-submodules", p)],
             # 쓰지 않는 무거운 것 (예전 pywebview 화면 등)
             "--exclude-module", "webview", "--exclude-module", "clr_loader", "--exclude-module", "pythonnet",
-            "--exclude-module", "tkinter"]
+            "--exclude-module", "tkinter",
+            # 시험·분류 도구용 (unittest.mock 을 쓴다) — 묶으면 unittest 가 딸려 와 구성 값이 바뀌어 패치 대신 설치 파일이 된다
+            "--exclude-module", "mabi.monitor.offline"]
     args.append(str(ROOT / "gui.py"))
     subprocess.run(args, check=True, cwd=ROOT)
     out = ROOT / "dist" / NAME
