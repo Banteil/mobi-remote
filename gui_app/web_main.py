@@ -20,7 +20,12 @@ COMMANDS = {"--resume": b"resume", "--halt": b"halt"}
 
 def _command(argv: list[str]) -> bytes:
     """이미 떠 있는 리모콘에 보낼 명령. 사람이 컴퓨터를 못 만질 때 밖에서 부린다:
-      --halt 일시정지 · --resume 이어 하기 · --daily 슬롯,슬롯 [숙제,숙제] 일일 숙제 카드를 넣고 시작"""
+      --halt 일시정지 · --resume 이어 하기 · --daily 슬롯,슬롯 [숙제,숙제] 일일 숙제 카드를 넣고 시작
+      --abyss 슬롯 던전 [판수] [난이도] 어비스 카드를 큐 뒤에 넣는다 (판수 0 = 멈출 때까지). 여러 번 부르면 차례로 쌓인다"""
+    if "--abyss" in argv:
+        i = argv.index("--abyss")
+        rest = [a for a in argv[i + 1:i + 5] if not a.startswith("--")]
+        return ("abyss:" + ":".join(rest)).encode()
     if "--daily" in argv:
         i = argv.index("--daily")
         rest = [a for a in argv[i + 1:i + 3] if not a.startswith("--")]
@@ -47,6 +52,21 @@ def _on_message(win: "MainWindow", conn) -> None:
         log.info(f"명령 → 일일 숙제 시작 (슬롯 {slots}, 숙제 {only or '전체'})")
         win.api.queue_add({"kind": "daily", "label": "일일 숙제", "chars": slots, "only": only, "force": False, "fit": False}, "end")
         q.tick()
+    elif msg.startswith(b"abyss:"):
+        parts = msg.decode().split(":")[1:]
+        if len(parts) < 2 or not parts[0].isdigit() or not parts[1]:
+            log.warning("명령 → 어비스: 넣지 않음 (슬롯·던전 없음)")
+            return
+        slot, dungeon = int(parts[0]), parts[1]
+        runs = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
+        difficulty = parts[3] if len(parts) > 3 and parts[3] else "매우 어려움2"
+        chars = win.api.daily_abyssSettings()["chars"]
+        name = next((c["name"] for c in chars if c["slot"] == slot), "") or "지금 캐릭터"
+        log.info(f"명령 → 어비스 담기 (슬롯 {slot}, {dungeon} {difficulty}, {runs or '멈출 때까지'}{'판' if runs else ''})")
+        win.api.queue_add({"kind": "abyss", "label": f"어비스 · {name}", "slot": slot, "dungeon": dungeon,
+                           "difficulty": difficulty, "runs": runs, "minutes": 0, "revive": True, "fit": False}, "end")
+        if not q.running:
+            q.tick()
     else:
         win.show_window()
 

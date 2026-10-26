@@ -26,6 +26,7 @@ from . import repair, ui_text
 from .content import CannotProceed, touch_prompt_visible, watch
 
 DIFFICULTIES = ["입문", "어려움", "매우 어려움", "매우 어려움2"]
+DUNGEONS = ["허상의 정박지", "광기의 동굴", "흩어진 물길"]
 
 
 _norm = ui_text.norm
@@ -41,11 +42,15 @@ ABYSS_MAP = "InstanceAbyssDungeon"  # 패킷의 맵 종류
 
 def inside(bot: Bot) -> bool:
     """어비스 판 안인가 — 패킷이 알면 어비스 맵에 있고 로딩 중이 아니며 이 맵에서 결과가 아직 안 옴
-    ('다시 하기' 뒤 지난 판 맵에 선 채 매칭을 기다리는 건 판 안이 아니다). 모르면 오른쪽 맨 위 나가기 버튼."""
+    ('다시 하기' 뒤 지난 판 맵에 선 채 매칭을 기다리는 건 판 안이 아니다). 패킷이 모르면 CLI 의 장소 이름, 그것도 없으면
+    오른쪽 맨 위 나가기 버튼 — 사냥터에도 비슷한 버튼이 있어 리모콘을 막 켰을 때 사냥터를 어비스로 봤다 (2026-10-26)."""
     loading = bot.map_loading()
     if loading is not None:
         st = bot.packets.state
         return not loading and st.channel_type == ABYSS_MAP and not st.abyss_result
+    env = bot.state.query("get_current_environment") if bot.state.available() else None
+    if (name := (env or {}).get("ChannelDisplayName", "")):
+        return "어비스" in name or any(d in name for d in DUNGEONS)
     return bot.exists(bot.ui["abyss_exit"])
 
 
