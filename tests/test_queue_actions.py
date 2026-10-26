@@ -99,6 +99,9 @@ class StopKeyTest(unittest.TestCase):
             def top_paused(self):
                 return {"id": 1} if paused else None
 
+            def can_resume(self):
+                return paused
+
             def resume_top(self):
                 self.calls.append(("resume",))
         a = FakeApi([])

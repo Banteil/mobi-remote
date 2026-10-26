@@ -299,12 +299,20 @@ class WorkQueue:
             self.request_stop("pause")
 
     def resume_top(self) -> None:
-        """맨 위 일시정지 카드를 이어 한다 (F12). 다른 일이 돌고 있으면 그 F12 는 그 일의 것이다."""
+        """맨 위 일시정지 카드를 이어 한다 (F12). 다른 일이 돌고 있으면 그 F12 는 그 일의 것이다.
+        리모콘을 다시 켜면 일시정지 카드가 대기로 바뀐다(_load) → 그때는 대기 카드를 위에서부터 돌린다
+        (2026-10-26 껐다 켠 뒤 F12 가 아무것도 안 함)."""
         if self.running:
             return
         it = self.top_paused()
         if it:
             self.play_one(it["id"])
+        elif self.can_resume():
+            self.tick()
+
+    def can_resume(self) -> bool:
+        """쉬는 중에 F12 로 이어 할 카드가 있나 (일시정지 카드, 없으면 대기 카드)."""
+        return bool(self.top_paused() or any(x.get("status") == "wait" for x in self.items))
 
     def play_all(self) -> None:
         """▶ 전체 시작. 일시정지한 카드도 대기로 되돌려 위에서부터 차례로."""

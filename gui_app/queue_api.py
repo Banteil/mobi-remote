@@ -433,7 +433,7 @@ class QueueApi:
             log.info("F12 → 작업 큐 일시정지")
             q.request_stop("pause")
             self.cli.cancel()
-        elif q.top_paused():
+        elif q.can_resume():
             log.info("F12 → 이어 하기")
             q.resume_top()
 
