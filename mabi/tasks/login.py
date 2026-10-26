@@ -18,6 +18,7 @@ import time
 import numpy as np
 
 from .. import gamedata as gd
+from .. import situation
 from ..bot import AuthBlocked, Bot, StepTimeout
 from ..vision import Match
 
@@ -335,6 +336,12 @@ def _run(bot: Bot, cfg: dict, character: dict | None) -> str:
     if bot.state.available() and in_dialog(bot):
         bot.log.info("NPC 대화 중에 시작 → 대화부터 정리")
         _settle(bot)
+    # 어디서 켰든 지금 상황(situation.look)을 보고 메인 화면까지 — 작별 대사('벌써 가?')·출석·전달 창·던전 창 등
+    # (2026-10-26 전달 창을 닫은 뒤 이어 하기 — 작별 대사 화면에서 메인 화면을 1분 넘게 기다림)
+    at = situation.look(bot)
+    if at not in (situation.MAIN, situation.LOADING, situation.CHARSELECT, situation.TITLE, situation.DIALOG):
+        bot.log.info(f"시작 상황: {at} → 메인 화면으로")
+        situation.to_main(bot, 30)
 
     # 게임 안에서 창(지도, 퀘스트 등)이 열려 있으면 어느 화면인지 판단할 수 없으므로 먼저 닫는다
     if not bot.at_main() and not (bot.exists(title) or bot.exists(charsel)):
@@ -386,8 +393,11 @@ def _run(bot: Bot, cfg: dict, character: dict | None) -> str:
         t0 = _last_login = time.monotonic()
         # 입력이 무시되는 경우가 있다 → 선택 화면이 그대로면 다시 누른다
         for _ in range(3):
-            bot.sleep(5)
-            if not bot.exists(charsel):
+            # 패킷: 게임 서버 입장(in_game)·맵 로딩이 오면 눌린 것 — 바로 넘어간다. 모르면 5초 뒤 화면으로
+            started = bot.wait_packet(lambda s: bool(s.in_game) or s.loading, 5)
+            if started is None:
+                bot.sleep(5)
+            if started or not bot.exists(charsel):
                 break
             bot.log.info("게임 시작이 눌리지 않음 → 다시 시도")
             bot.key("space")
@@ -415,6 +425,7 @@ def _run(bot: Bot, cfg: dict, character: dict | None) -> str:
 
     bot.state.available(refresh=True)
     handled = settle_first_login(bot, cfg, c["settle_timeout"])
+    situation.attendance_done(bot)
     if handled:
         bot.log.info(f"접속 직후 화면 처리: {', '.join(handled)}")
     closed = bot.dismiss_popups()

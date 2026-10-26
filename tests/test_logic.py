@@ -1,9 +1,13 @@
 """게임 없이 돌리는 판정 로직 테스트.  .venv\\Scripts\\python.exe -m unittest discover tests"""
+import itertools
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from mabi import progress
+from mabi.bot import Bot
+from mabi.monitor import handlers
+from mabi.profile import game_date
 from mabi.tasks import abyss, arbeit, content
 from mabi.vision import Match
 
@@ -61,15 +65,35 @@ class QuestWindowTest(unittest.TestCase):
 
 
 class SceneSkipTest(unittest.TestCase):
-    """뒤에서 도는 동안 '장면 넘기기' 는 누르지 않는다 (클릭하면 게임이 앞으로 나온다). 앞에서는 바로 누른다."""
+    """뒤에서 도는 동안 '장면 넘기기'·'대화 넘기기' 는 누르지 않는다 (클릭하면 게임이 앞으로 나온다).
+    대화는 30초 넘게 그대로면 그때 누른다. 앞에서는 바로 누른다. 어비스·던전 중(scene_skip 꺼짐)엔 연출을 안 누른다."""
 
-    def bot(self, background, foreground=False):
+    def bot(self, background, foreground=False, shown=None):
+        shown = {"scene_skip": 0.9} if shown is None else shown
         b = mock.Mock()
         b.ui = {"scene_skip": "scene_skip", "dialog_skip": "dialog_skip"}
         b.background = background
+        b.scene_skip = True
+        b._skip_seen = None
+        b.packets.ok = False
+        b.state.available.return_value = False
+        b.input.dry_run = False
+        b.cfg = {"login": {"attendance_skip": "attendance_skip", "first_dialog_xy": [960, 540]},
+                 "arbeit": {k: k for k in ("howto_title", "item_missing", "deliver_title", "report", "accept", "alter_button",
+                                           "craft_transfer", "craft_go", "craft_make", "craft_list", "dialog_log")},
+                 "dungeon": {"touch_xy": [960, 900]}}
+        b.ui["confirm_green"] = "confirm_green"
+        b.attendance_date = game_date()
+        # 점검자(mabi.monitor)가 보는 나머지: 게임 안·로딩 아님·메인 화면 아님
+        b.cli.run_limited = False
+        b.map_loading.return_value = None
+        b.packets.at_charselect.return_value = False
+        b.at_main.return_value = False
+        for name in ("skip_button", "may_skip_scene", "behind", "cutscene_playing"):  # 판단은 진짜 Bot 의 것
+            setattr(b, name, getattr(Bot, name).__get__(b))
         b.window.is_foreground.return_value = foreground
         b.vision.has.return_value = True
-        b.vision.find.side_effect = lambda f, n: Match(n, 0, 0, 10, 10, 0.9) if n == "scene_skip" else None
+        b.vision.find.side_effect = lambda f, n: Match(n, 0, 0, 10, 10, shown[n]) if n in shown else None
         return b
 
     def test_front_clicks_right_away(self):
@@ -79,13 +103,61 @@ class SceneSkipTest(unittest.TestCase):
 
     def test_behind_never_grabs(self):
         b = self.bot(background=True)
-        for _ in range(5):
-            self.assertIsNone(content.clear_blockers(b))
+        with mock.patch.object(handlers.time, "monotonic", side_effect=(100.0 * i for i in itertools.count(1))):
+            for _ in range(5):
+                self.assertIsNone(content.clear_blockers(b))
         b.click.assert_not_called()
 
     def test_background_task_but_game_in_front_clicks(self):
         b = self.bot(background=True, foreground=True)  # 사람이 게임을 앞에 두고 보고 있으면 눌러도 된다
         self.assertEqual(content.clear_blockers(b), "장면 넘기기")
+
+    def test_scene_skip_off_never_clicks_scene(self):
+        b = self.bot(background=False)  # 어비스·던전 중 — 앞에 있어도 연출은 기다린다
+        b.scene_skip = False
+        self.assertIsNone(content.clear_blockers(b))
+        b.click.assert_not_called()
+
+    def test_scene_looking_like_dialog(self):
+        # 밝은 보스 출현 연출: '장면 넘기기' 가 '대화 넘기기' 기준도 넘음 → 점수 높은 쪽(장면)으로 본다 (2026-10-25)
+        b = self.bot(background=False, shown={"dialog_skip": 0.72, "scene_skip": 0.86})
+        b.scene_skip = False
+        self.assertIsNone(content.clear_blockers(b))
+        b.click.assert_not_called()
+
+    def test_packet_cutscene_is_not_dialog(self):
+        b = self.bot(background=False, shown={"dialog_skip": 0.9})
+        b.scene_skip = False
+        b.packets.ok, b.packets.state.cutscene, b.packets.state.fresh = True, True, True
+        self.assertIsNone(content.clear_blockers(b))
+        b.click.assert_not_called()
+
+    def packet_bot(self, in_dialogue, cutscene=False):
+        b = self.bot(background=False, shown={"dialog_skip": 0.9})
+        b.packets.ok = True
+        b.packets.state.fresh, b.packets.state.cutscene = True, cutscene
+        b.packets.state.in_dialogue = in_dialogue
+        return b
+
+    def test_packet_decides_kind(self):
+        # 그림은 '대화 넘기기' 지만 패킷이 대화도 컷신도 아니라고 하면 연출로 본다 — 대화로 누를 일이 없다
+        self.assertEqual(self.packet_bot(in_dialogue=False).skip_button(None)[0], "scene")
+        self.assertEqual(self.packet_bot(in_dialogue=True).skip_button(None)[0], "dialog")
+        self.assertEqual(self.packet_bot(in_dialogue=True, cutscene=True).skip_button(None)[0], "scene")
+
+    def test_cli_decides_kind_without_packet(self):
+        b = self.bot(background=False, shown={"dialog_skip": 0.9})
+        b.state.available.return_value = True
+        b.state.activity.return_value = {"IsDialoguePlaying": False}
+        self.assertEqual(b.skip_button(None)[0], "scene")
+
+    def test_behind_dialog_waits_then_clicks(self):
+        b = self.bot(background=True, shown={"dialog_skip": 0.9})
+        with mock.patch.object(handlers.time, "monotonic", return_value=100.0):
+            self.assertIsNone(content.clear_blockers(b))
+        with mock.patch.object(handlers.time, "monotonic", return_value=131.0):
+            self.assertEqual(content.clear_blockers(b), "대화 넘기기")
+        b.click.assert_called_once()
 
 
 class ArbeitTest(unittest.TestCase):
@@ -180,6 +252,37 @@ class RevivesLeftTest(unittest.TestCase):
         self.assertEqual(abyss.revives_left(bot), 0)  # 다 씀 → 나가기
         m.apply("revive.count", {"used": 1, "max": 6})  # 최대는 판마다 다르다 (파티 보스전 6)
         self.assertEqual(abyss.revives_left(bot), 5)
+
+
+class AttendanceTest(unittest.TestCase):
+    """오전 6시가 지나 필드로 나오면 뜨는 출석 대사 — 어비스 반복처럼 접속 단계를 안 거쳐도 넘긴다."""
+
+    def bot(self, date, shown=(), dialogue=True, at_main=False):
+        b = mock.Mock()
+        b.cfg = {"login": {"attendance_skip": "attendance_skip", "first_dialog_xy": [960, 540]}}
+        b.attendance_date = date
+        b._attendance_clicked = 0
+        b.vision.has.return_value = True
+        b.vision.find.side_effect = lambda f, n: Match(n, 5, 5, 10, 10, 0.9) if n in shown else None
+        b.packets.ok = True
+        b.packets.state.in_dialogue = dialogue
+        b.skip_button.return_value = None
+        b.at_main.return_value = at_main
+        return b
+
+    def test_skip_button_always(self):
+        from mabi import situation
+        b = self.bot(game_date(), shown=("attendance_skip",))
+        self.assertEqual(situation.clear_attendance(b, frame=object()), "출석부 건너뛰기")
+        b.click.assert_called_once()
+
+    def test_first_line_only_after_date_change(self):
+        from mabi import situation
+        self.assertIsNone(situation.clear_attendance(self.bot(game_date()), frame=object()))
+        b = self.bot("2000-01-01")
+        self.assertEqual(situation.clear_attendance(b, frame=object()), "출석 첫 대사")
+        b.click.assert_called_once_with((960, 540))
+        self.assertIsNone(situation.clear_attendance(self.bot("2000-01-01", dialogue=False), frame=object()))
 
 
 if __name__ == "__main__":
