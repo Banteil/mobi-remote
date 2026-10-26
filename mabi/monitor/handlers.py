@@ -166,6 +166,31 @@ def dungeon_window(bot, ctx, seen):
     return "던전 창 닫음"
 
 
+# ---------------------------------------------------------------- 던전·사냥터 끝 (ctx.reward)
+
+def reward(bot, ctx, seen):
+    """보상 화면: (추가 루팅) → again 버튼이 있으면 누르고 끝 (반복 플레이), 아니면 나가기(ESC).
+    보상 연출이 길면 버튼이 늦게 뜬다 — 한 번만 보고 나가면 다음 판을 지도에서 다시 찾아간다."""
+    if ctx.extra_loot and not ctx.n.get("loot"):
+        from ..tasks.content import do_extra_loot
+        bot.sleep(2, 3)  # 보상 연출
+        do_extra_loot(bot, ctx.extra_loot)
+        ctx.n["loot"] = 1
+        return "추가 루팅"
+    if ctx.again:
+        try:
+            bot.click(bot.wait(ctx.again, timeout=6, interval=0.5))
+            return Finish("again", "보상 화면에서 다시 하기")
+        except StepTimeout:
+            bot.log.warning(f"보상 화면에 '다시 하기' 가 안 보임 → 나가서 지도로 ({_shot(bot, 'dungeon_no_retry')})")
+            ctx.again = None
+    elif not ctx.n.get("reward_wait"):
+        ctx.n["reward_wait"] = 1
+        bot.sleep(2, 3)  # 보상 연출
+    bot.key("esc")
+    return "보상 화면 나가기"
+
+
 # ---------------------------------------------------------------- 일 (아르바이트·제작 — ctx.job)
 
 def howto(bot, ctx, seen):
@@ -261,5 +286,10 @@ JOB = {d.HOWTO: howto, d.ITEM_MISSING: item_missing, d.ALTER: alter, d.CRAFT_TRA
        d.CRAFT_GO: craft_go, d.CRAFT: craft}
 
 
+# 던전·사냥터를 끝내는 중 (ctx.reward) — 어비스 반복의 보상 화면은 어비스가 따로 본다
+DUNGEON = {d.REWARD: reward}
+
+
 def pick(ctx, what):
-    return BASE.get(what) or (MENUS.get(what) if ctx.menus else None) or (JOB.get(what) if ctx.job else None)
+    return (BASE.get(what) or (MENUS.get(what) if ctx.menus else None) or (JOB.get(what) if ctx.job else None)
+            or (DUNGEON.get(what) if ctx.reward else None))

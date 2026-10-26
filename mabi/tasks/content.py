@@ -154,6 +154,22 @@ def game_space(bot: Bot) -> str:
     return (env or {}).get("GameSpaceDisplayName", "")
 
 
+def started(bot: Bot, arrive: list[str], within: float = 12) -> None:
+    """'진행하기' 뒤 무엇이든 시작됐나 — 이동·로딩·대화거나 도착 화면이 보임. 엉뚱한 버튼·창을 눌렀으면 이동 상한(몇 분)까지
+    기다리지 않고 StepTimeout (단계 다시 하기가 정리하고 한 번 더 한다). 패킷도 CLI 도 없으면 알 수 없어 그냥 둔다."""
+    if not bot.packets.ok and not bot.state.available():
+        return
+    end = time.monotonic() + within
+    while time.monotonic() < end:
+        if bot.auto_traveling() or bot.map_loading() or bot.dialogue_playing() or any(bot.exists(n) for n in arrive):
+            return
+        bot.sleep(1, 1.3)
+    from .. import monitor
+    shot = bot.snapshot("travel_start").name
+    monitor.of(bot).record(None, "동작", did="진행하기 → 이동", ok=False, why="이동이 시작되지 않음", shot=shot)
+    raise StepTimeout(f"진행하기 뒤 {within:.0f}초 안에 이동이 시작되지 않음 → {shot}")
+
+
 def travel(bot: Bot, arrive: list[str], timeout: float) -> None:
     """'진행하기' 등으로 시작된 자동 이동이 끝나 arrive 중 하나가 보일 때까지 대기.
     설정에 fast_travel_key 가 있으면 이동 시작 후 한 번 눌러 빠른 이동한다."""
@@ -164,6 +180,7 @@ def travel(bot: Bot, arrive: list[str], timeout: float) -> None:
         bot.sleep(0.5)
     else:
         bot.sleep(2, 3)
+        started(bot, arrive)
     if key and bot.fast_travel_ok():
         bot.log.info("빠른 이동")
         bot.key(key)
@@ -534,81 +551,54 @@ def _touch_texts(bot: Bot, frame) -> tuple[str, str]:
     return read_ko(frame, r), read_text(frame, r, white=220)
 
 
-def finish_dungeon(bot: Bot, extra_loot: int = 0, again: str | None = None) -> bool:
-    """클리어 화면 → 보상 화면(추가 루팅) → 나가기 → 퀘스트 클리어 확인 → 필드.
-    again 버튼('다시 하기')이 보상 화면에 있으면 나가는 대신 누르고 True 를 반환한다."""
-    ui = bot.ui
-    end = time.monotonic() + 180
-    while True:
-        # '화면을 터치해 주세요' 는 템플릿으로 잘 안 잡혀 시간 초과 뒤 터치한다. 패킷이 클리어를 알면 짧게 기다린다
-        # (예전엔 6초씩 두 번 기다려 클리어 → 보상까지 17초, daily1 13:36:05 → 13:36:22)
-        try:
-            m = bot.wait_any([ui["dungeon_touch"], ui["scene_skip"], ui["reward_exit"], ui["main_hud"]],
-                             timeout=2.5 if dungeon_state(bot) == "Cleared" else 6, interval=1.0)
-        except StepTimeout:
-            if time.monotonic() > end:
-                raise StepTimeout("던전 클리어 후 보상 화면으로 넘어가지 못함")
-            # '화면을 터치해 주세요'는 반투명 글자라 템플릿 인식이 안 될 때가 많다.
-            # 글자를 OCR 로 읽거나, 던전이면 CLI 상태(Cleared)로 판단해 화면 위쪽 빈 곳을 터치한다
-            if touch_prompt_visible(bot) or dungeon_state(bot) == "Cleared":
-                bot.log.debug("클리어 화면 터치")
+def after_clear(bot: Bot, extra_loot: int = 0, again: str | None = None, timeout: float = 180) -> bool:
+    """클리어 뒤 화면들 — 클리어 화면 터치 · 연출 · 보상(추가 루팅·나가기) · 퀘스트 클리어 확인 · 대화 · 작별 화면 —
+    을 순서와 상관없이 점검자가 처리하고, 던전 밖 메인 화면이 몇 번 이어지면 끝낸다.
+    again 버튼('다시 하기'·'새 임무 선택')이 보상 화면에 있으면 나가는 대신 누르고 True (반복 플레이).
+    던전과 사냥터가 따로 갖던 마무리(finish_dungeon · settle_after_clear · close_quest_clears)를 하나로 했다."""
+    from .. import monitor
+    from ..monitor import detect as d
+    mon = monitor.of(bot)
+    ctx = monitor.Ctx(bot.task_id or "dungeon", "클리어 뒤", menus=True, reward=True, extra_loot=extra_loot, again=again)
+    end = time.monotonic() + timeout
+    stable, touched = 0, 0.0
+    while stable < 3:
+        if time.monotonic() > end:
+            raise StepTimeout(f"클리어 후 화면 정리 실패 → {bot.snapshot('settle').name}")
+        seen = mon.check(ctx, guard=False)
+        if seen.finish:
+            if seen.finish.result == "again":
+                return True
+            stable = 0
+        elif seen.done:
+            stable = 0
+        elif seen.what == d.MAIN and dungeon_state(bot) in ("InProgress", "Cleared"):
+            # 클리어 직후 클리어 화면('화면을 터치해 주세요' — 반투명이라 그림으로 잘 안 잡힌다)이 뜨기 전·뜬 뒤에도
+            # 던전 HUD 는 그대로 보인다 → 아직 던전 안. 클리어(패킷·CLI)면 화면 위쪽 빈 곳을 가끔 누른다
+            stable = 0
+            if dungeon_state(bot) == "Cleared" and time.monotonic() - touched > 2.5:
+                touched = time.monotonic()
                 bot.click(tuple(bot.cfg["dungeon"]["touch_xy"]))
-            continue
-        if m.name == ui["dungeon_touch"]:
-            bot.click(m)
-        elif m.name == ui["scene_skip"]:
-            if bot.may_skip_scene():
-                bot.click(m)
-            else:
-                bot.sleep(1.5, 2)  # 던전 중엔 연출이 스스로 끝나길 기다린다 (Bot.scene_skip)
-        elif m.name == ui["reward_exit"]:
-            bot.sleep(2, 3)  # 보상 연출
-            if extra_loot:
-                do_extra_loot(bot, extra_loot)
-            if again:
-                # 보상 연출이 길면 버튼이 늦게 뜬다 — 한 번만 보고 나가면 다음 판을 지도에서 다시 찾아간다
-                try:
-                    bot.click(bot.wait(again, timeout=6, interval=0.5))
-                    return True
-                except StepTimeout:
-                    bot.log.warning(f"보상 화면에 '다시 하기' 가 안 보임 → 나가서 지도로 ({bot.snapshot('dungeon_no_retry').name})")
-            bot.key("esc")   # 나가기
-            break
-        elif dungeon_state(bot) in ("InProgress", "Cleared"):
-            # 클리어 직후 클리어 화면이 뜨기 전까지는 던전 HUD 가 그대로 보인다 → 아직 던전 안
-            if time.monotonic() > end:
-                raise StepTimeout(f"던전 클리어 후 클리어 화면이 나오지 않음 → {bot.snapshot('dungeon_end').name}")
-            if touch_prompt_visible(bot):
-                bot.click(tuple(bot.cfg["dungeon"]["touch_xy"]))
-            bot.sleep(1.0, 1.5)
-            continue
+        elif seen.what == d.MAIN and touch_prompt_visible(bot):
+            stable = 0  # 사냥터 클리어 화면도 HUD 가 보인 채로 뜬다 — 반투명 글자라 그림 대신 글자로
+            bot.click(tuple(bot.cfg["dungeon"]["touch_xy"]))
+        elif seen.what == d.MAIN and not (bot.dialogue_playing() or bot.cutscene_playing()):
+            stable += 1  # HUD 가 보여도 패킷이 대화·연출 중이라고 하면 아직 안 끝났다
         else:
-            break
-        bot.sleep(1.5, 2.5)
-    if m.name == ui["reward_exit"]:
-        close_quest_clears(bot)
-    else:
-        bot.sleep(2, 3)  # 사냥터는 클리어 후 마을로 돌아와 NPC 대화가 이어진다
-    bot.skip_dialogue()
+            stable = 0
+        bot.sleep(1.0, 1.5)
     bot.to_main()
     return False
 
 
-def close_quest_clears(bot: Bot, max_n: int = 5) -> int:
-    """'퀘스트 클리어' 창을 메인 화면이 나올 때까지 확인(Space)으로 닫는다.
-    한 번에 여러 퀘스트가 끝나면 (예: 심층 던전 첫 클리어 시 법황청의 특별 의뢰) 창이 연달아 뜬다."""
-    ui = bot.ui
-    closed = 0
-    for _ in range(max_n + 1):
-        m = bot.wait_any([ui["confirm_green"], ui["main_hud"]], timeout=bot.cfg["timing"]["loading"], interval=1.0)
-        if m.name == ui["main_hud"]:
-            break
-        bot.sleep(1, 1.5)
-        bot.key("space")
-        closed += 1
-        bot.sleep(2, 3)
-    bot.sleep(1.5, 2.5)
-    return closed
+def finish_dungeon(bot: Bot, extra_loot: int = 0, again: str | None = None) -> bool:
+    """던전 클리어 화면 → 보상(추가 루팅) → 나가기 → 퀘스트 클리어 확인 → 필드 (after_clear)."""
+    return after_clear(bot, extra_loot, again)
+
+
+def settle_after_clear(bot: Bot, timeout: float = 180, again: str | None = None) -> bool:
+    """사냥터 클리어 뒤 마무리 (after_clear). 사냥터는 클리어 화면에서도 HUD 가 보인다."""
+    return after_clear(bot, again=again, timeout=timeout)
 
 
 def do_extra_loot(bot: Bot, n: int) -> int:
@@ -726,48 +716,3 @@ def wait_field(bot: Bot, place: str, clear_timeout: float, again: str | None = N
         bot.sleep(5)
     bot.step("field_reward", "사냥터 클리어 → 마무리")
     return "again" if settle_after_clear(bot, again=again) else "clear"
-
-
-def settle_after_clear(bot: Bot, timeout: float = 180, again: str | None = None) -> bool:
-    """클리어 후 화면들('화면을 터치해 주세요', 장면/대화 넘기기, 보상 나가기, 확인)을 순서와 상관없이 처리하고
-    메인 화면이 몇 초간 유지되면 끝낸다. 사냥터는 클리어 화면에서도 HUD 가 보이므로 이 방식으로 마무리한다.
-    again 버튼이 보상 화면에 있으면 나가는 대신 그것을 누르고 True 를 반환한다 (반복 플레이)."""
-    ui = bot.ui
-    end = time.monotonic() + timeout
-    stable = 0
-    while stable < 3:
-        if time.monotonic() > end:
-            raise StepTimeout(f"클리어 후 화면 정리 실패 → {bot.snapshot('settle').name}")
-        bot.sleep(1.5, 2)
-        frame = bot.frame()
-        hit = bot.skip_button(frame)
-        if hit and hit[0] == "scene" and not bot.may_skip_scene():
-            stable = 0  # 연출이 스스로 끝나길 기다린다 (Bot.scene_skip)
-            continue
-        m = hit[1] if hit else next((m for n in (ui["reward_exit"], ui["confirm_green"])
-                                     if (m := bot.vision.find(frame, n))), None)
-        if m:
-            stable = 0
-            if m.name == ui["reward_exit"]:
-                if again and (a := bot.vision.find(frame, again)):
-                    bot.sleep(1, 1.5)  # 보상 연출
-                    bot.click(a)
-                    return True
-                bot.key("esc")
-            elif m.name == ui["confirm_green"]:
-                bot.key("space")
-            else:
-                bot.click(m)
-            continue
-        if touch_prompt_visible(bot):
-            stable = 0
-            bot.click(tuple(bot.cfg["dungeon"]["touch_xy"]))
-            continue
-        # HUD 가 보여도 패킷이 로딩·연출·대화 중이라고 하면 아직 안 끝났다
-        if (bot.vision.find(frame, ui["main_hud"]) and not bot.dialogue_playing() and not bot.map_loading()
-                and not bot.cutscene_playing()):
-            stable += 1
-        else:
-            stable = 0
-    bot.to_main()
-    return False

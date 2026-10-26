@@ -30,14 +30,17 @@ class Ctx:
     """지금 하는 일. task 는 숙제 id, what 은 그 안의 일 (아르바이트 제목 등 — 로그용).
     menus: NPC 메뉴(수락·결과 보고)·전달 창·던전 창까지 다룬다. job: 채집·제작·가공 창까지 (menus 포함). talk: NPC 대화를 넘긴다.
     finish_on: 이 상황이면 이 일은 끝 {상황: 결과}. decide: 태스크만 아는 판단 {상황: fn(bot, ctx, seen) -> 끝낼 이유|None}.
-    note: (단계 키, 설명) — 태스크의 단계 기록 (이어 하기용)."""
+    note: (단계 키, 설명) — 태스크의 단계 기록 (이어 하기용).
+    reward: 보상 화면을 다룬다 (던전·사냥터를 끝내는 중) — extra_loot 추가 루팅 횟수, again 이 보이면 누르고 끝."""
 
     def __init__(self, task: str, what: str = "", job: bool = False, menus: bool | None = None, talk: bool = True,
-                 finish_on=None, decide=None, note=None, keep_dungeon_window: bool = False):
+                 finish_on=None, decide=None, note=None, keep_dungeon_window: bool = False,
+                 reward: bool = False, extra_loot: int = 0, again: str | None = None):
         self.task, self.what, self.job, self.talk = task, what, job, talk
         self.menus = job if menus is None else menus
         self.finish_on, self.decide = finish_on or {}, decide or {}
         self._note, self.keep_dungeon_window = note, keep_dungeon_window
+        self.reward, self.extra_loot, self.again = reward, extra_loot, again
         self.n: dict[str, int] = {}
         self.talked = False  # NPC 대화를 마쳤다 (대화 조건을 채워도 게임이 다음 걸음으로 가지 않는다)
         self.events: set[str] = set()

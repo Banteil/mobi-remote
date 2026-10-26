@@ -22,6 +22,7 @@ ALTER = "alter"                    # 가공 시설 창 '가공하기'
 CRAFT_TRANSFER = "craft_transfer"  # '재료를 전송하시겠습니까?'
 CRAFT_GO = "craft_go"              # 제작 창 '제작하러 가기' / 설비 앞 '제작하기'
 SCENE = "scene"                    # 연출 '장면 넘기기'
+REWARD = "reward"                  # 던전·사냥터 보상 화면 ('나가기' · '다시 하기' · '새 임무 선택')
 TOUCH = "touch"                    # 던전 클리어 뒤 '화면을 터치해 주세요'
 
 OUTSIDE = (RUN_LIMIT, CHARSELECT, TITLE, EXIT_ASK)  # 게임 밖이거나 사람 몫 — 점검자가 누르지 않는다
@@ -71,6 +72,8 @@ def look(bot, frame=None, skip=(), ocr: bool = False) -> Seen:
             return Seen(DIALOG, src="packet", frame=frame)  # 대화가 막 열리는 중 (HUD 가 아직 남음)
         if (m := f(ui.get("confirm_green"))):
             return Seen(CONFIRM, m, frame=frame)
+        if (m := f(ui.get("reward_exit"))):
+            return Seen(REWARD, m, frame=frame)  # 사냥터 보상 화면은 HUD 가 보인 채로 뜬다
         if f(ui.get("dungeon_touch")):
             return Seen(TOUCH, frame=frame)
         if (hit := bot.skip_button(frame, skip)) and hit[0] == "scene":
@@ -83,6 +86,11 @@ def look(bot, frame=None, skip=(), ocr: bool = False) -> Seen:
         return Seen(TITLE, frame=frame)
     if (m := f(bot.cfg["login"].get("attendance_skip"))):
         return Seen(ATTENDANCE, m, frame=frame)
+    # 보상 화면 위에 퀘스트 클리어 '확인' 이 겹쳐 뜬다 (주말 어비스 3판 등) → 확인을 먼저
+    if (m := f(ui.get("confirm_green"))):
+        return Seen(CONFIRM, m, frame=frame)
+    if (m := f(ui.get("reward_exit"))):
+        return Seen(REWARD, m, frame=frame)
     tab = next((t for n, t in sit.DUNGEON_TABS.items() if f(n)), None)
     if tab:
         return Seen(DUNGEON_WINDOW, frame=frame, info={"tab": tab})
