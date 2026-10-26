@@ -229,7 +229,7 @@ function qrTook(secs) {
 /** 얻은 것 · 쓴 것 · 재화 (x: {gained, used, cur}). compact: 캐릭터 칸 안에 작게 */
 function lootHtml(x, compact) {
   const list = (m, sign) => Object.entries(m || {}).sort((a, b) => b[1] - a[1])
-    .map(([k, n]) => '<span class="qr-item">' + esc(k) + ' <b>' + sign + num(n) + '</b></span>').join('');
+    .map(([k, n]) => '<span class="qr-item">' + richText(k) + ' <b>' + sign + num(n) + '</b></span>').join('');  // 이름의 <color> 는 색으로
   const cur = Object.entries(x.cur || {}).sort((a, b) => b[1] - a[1])
     .map(([k, n]) => '<span class="qr-item ' + (n > 0 ? 'qr-up' : 'qr-down') + '">' + esc(k) + ' <b>' + (n > 0 ? '+' : '−') + num(Math.abs(n)) + '</b></span>').join('');
   const rows = [['얻은 것', list(x.gained, '+')], ['재화', cur], ['쓴 것', list(x.used, '−')]].filter((r) => r[1]);

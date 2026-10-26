@@ -93,6 +93,38 @@ function richName(item) {
 }
 
 /**
+ * 태그가 섞인 게임 문자열 원문을 받아 색을 살려 그린다 — 메인이 seg 를 쪼개 주지 않는 곳(작업 결과 요약의
+ * 얻은 것 이름 등)에서 쓴다. mabi/richtext.py segments 와 같은 규칙: <color=…> 는 색, 다른 태그는 버린다.
+ */
+const RICH_TAG = /<\/?[a-zA-Z][^>]*>/g;
+const RICH_OPEN = /^<color\s*=\s*(#[0-9a-fA-F]{3,8}|[a-zA-Z]+)\s*>$/;
+const RICH_CLOSE = /^<\/color\s*>$/i;
+
+function richText(s) {
+  s = s == null ? '' : String(s);
+  if (s.indexOf('<') < 0) return esc(s);
+  const seg = [];
+  const stack = [];
+  const push = (text) => {
+    if (!text) return;
+    const color = stack.length ? stack[stack.length - 1] : null;
+    const last = seg[seg.length - 1];
+    if (last && last.color === color) last.text += text;
+    else seg.push({ text, color });
+  };
+  let at = 0;
+  for (const m of s.matchAll(RICH_TAG)) {
+    push(s.slice(at, m.index));
+    const op = RICH_OPEN.exec(m[0]);
+    if (op) stack.push(op[1]);
+    else if (RICH_CLOSE.test(m[0]) && stack.length) stack.pop();
+    at = m.index + m[0].length;
+  }
+  push(s.slice(at));
+  return richName({ name: s, seg });
+}
+
+/**
  * 재료 칸.
  * missing에는 보관함까지 합쳐 "진짜 모자란 것"만 들어 있다.
  * covered는 가방엔 없지만 보관함 재고로 충당되는 것 — 부족으로 오해하지 않게 따로 보여준다.
