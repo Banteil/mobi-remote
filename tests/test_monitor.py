@@ -228,6 +228,17 @@ class LeaveTest(unittest.TestCase):
         self.assertIs(handlers.pick(monitor.Ctx("t", menus=True, leave=True), d.ACCEPT), handlers.dialog)
 
 
+class QuickNavTabTest(unittest.TestCase):
+    def test_selected_tab_has_blue_background(self):
+        """퀵 내비게이터는 고른 탭만 진한 색 바탕 (탭마다 색이 다르다) — '주요' 가 아니면 눌러서 바꾼다 (repair.tab_on)."""
+        from mabi.tasks.repair import tab_on
+        for color in ((118, 179, 13), (219, 176, 29)):  # '주요' 초록 · '설비' 파랑
+            f = np.full((400, 1400, 3), (59, 51, 46), np.uint8)
+            self.assertFalse(tab_on(f, (786, 248)))
+            f[230:268, 730:840] = color
+            self.assertTrue(tab_on(f, (786, 248)))
+
+
 class LoginPopupTest(unittest.TestCase):
     def test_popups_handled_in_any_task(self):
         """접속 직후 창(공지·새 이벤트·스텔라 픽)은 어느 일에서든 처리한다 — 오전 6시 뒤·캐릭터마다 뜰 수도 안 뜰 수도 있다."""

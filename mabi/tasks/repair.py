@@ -15,6 +15,8 @@
 """
 import time
 
+import numpy as np
+
 from .. import gamedata as gd
 from ..bot import Bot
 from . import dialogue, ui_text
@@ -55,20 +57,40 @@ def _leave_npc(bot: Bot) -> None:
     dialogue.leave(bot, handlers=(lambda: _close_repair_window(bot),))
 
 
+def tab_on(frame, xy) -> bool:
+    """퀵 내비게이터 탭(주요·일반·설비·장소)이 골라져 있나 — 고른 탭만 진한 색 바탕이고 나머지는 어두운 회색이다.
+    색은 탭마다 다르다 ('주요' 초록 BGR (118,179,13), '설비' 파랑 (219,176,29), 회색은 (59,51,46) 안팎 — 2026-10-26)
+    → 글자 양옆 바탕이 회색이 아닌(채널 차이가 큰) 색인지로 본다."""
+    x, y = int(xy[0]), int(xy[1])
+    side = np.concatenate([frame[y - 8:y + 10, x - 45:x - 28].reshape(-1, 3), frame[y - 8:y + 10, x + 28:x + 45].reshape(-1, 3)])
+    if not len(side):
+        return False
+    c = side.astype(float).mean(0)
+    return c.max() - c.min() > 80
+
+
 def _open_quick_nav(bot: Bot) -> tuple[int, int]:
     """퀵 내비게이터(단축키 '.', 캐릭터를 눌렀을 때 뜨는 그 메뉴)를 열고 '대장간' 자리를 돌려준다. 몇 번 해도 안 열리면 CannotProceed.
+    메뉴는 마지막에 고른 탭으로 열린다 → '주요' 탭 글자가 보이면(열림) 그 탭이 골라져 있는지 바탕색으로 보고, 아니면 눌러서 바꾼다.
     메뉴 글자 읽기에 3~4초 걸린다 → 6초까지 본다."""
     key = bot.cfg["game"].get("quick_nav_key") or "."
     for i in range(3):
         _leave_npc(bot)
         bot.key(key)
-        hit = _wait(bot, "repair_smithy", "char_menu", 6, exact=False)
-        if not hit and (tab := _find(bot, "char_menu_main", "char_menu")):  # 다른 탭이 열려 있다 → '주요'
+        tab = _wait(bot, "char_menu_main", "char_menu", 6)
+        if tab and not tab_on(bot.frame(), tab):
+            bot.log.info("퀵 내비게이터 → '주요' 탭으로 (다른 탭이 골라져 있음)")
             bot.click(tab)
-            hit = _wait(bot, "repair_smithy", "char_menu", 6, exact=False)
+            bot.sleep(0.6, 0.9)
+            if not tab_on(bot.frame(), tab):
+                bot.log.info(f"'주요' 탭이 골라지지 않음 ({i + 1}/3) → 다시")
+                bot.key("esc")
+                bot.sleep(1.0, 1.4)
+                continue
+        hit = _wait(bot, "repair_smithy", "char_menu", 6, exact=False) if tab else None
         if hit:
             return hit
-        bot.log.info(f"퀵 내비게이터가 안 열림 ({i + 1}/3) → 다시")
+        bot.log.info(f"퀵 내비게이터가 안 열림 ({i + 1}/3) → 다시" if not tab else f"'주요' 탭에 '대장간' 이 없음 ({i + 1}/3) → 다시")
         bot.key("esc")
         bot.sleep(1.0, 1.4)
     raise CannotProceed(f"퀵 내비게이터(대장간)가 열리지 않음 → {bot.snapshot('repair_menu').name}")
