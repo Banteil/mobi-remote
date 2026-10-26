@@ -386,6 +386,11 @@ class Runner:
             if status in ("FAIL", "ERROR") and not bot.window.find():
                 log.error("게임이 꺼짐 → 일시정지 (게임을 켠 뒤 다시 시작하면 이어 함)")
                 status, summary = "STOP", "게임이 꺼짐 — 게임을 켠 뒤 다시 시작하면 이어 합니다"
+            # 게임을 오래 켜 두면 '재시작해 주세요' 창(AI 에이전트 연속 실행 제한)이 떠 CLI·조작이 막힌다 →
+            # 남은 숙제를 실패로 쌓지 않고 일시정지. 창은 '종료' 뿐이라 누르지 않는다
+            elif status in ("FAIL", "ERROR") and bot.run_limited():
+                log.error("게임 연속 실행 제한 창 → 일시정지 (게임을 다시 켠 뒤 이어 하기)")
+                status, summary = "STOP", "게임을 너무 오래 켜 둠 — 게임을 다시 켠 뒤 이어 하기를 누르면 이어 합니다"
             secs = round(time.monotonic() - t0)
             log.info(f"  {status} {summary} ({secs}s)")
             # 중단·실패(튕김 등)는 그 단계에서 이어 해야 하므로 단계 기록을 남겨 둔다

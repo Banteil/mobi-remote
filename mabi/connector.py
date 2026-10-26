@@ -48,6 +48,12 @@ UNINSTALL_ROOTS = [(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\
                    (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall")]
 
 
+def is_run_limit(error, message) -> bool:
+    """CLI 오류가 '연속 실행 제한' 인가. 오류 코드는 아직 실측 전이라 코드·문구 어느 쪽이든 continuous/run limit 이면."""
+    t = f"{error or ''} {message or ''}".lower().replace("_", " ")
+    return "continuous" in t or "run limit" in t or "오랫동안 실행" in t
+
+
 @dataclass
 class Result:
     ok: bool
@@ -149,6 +155,9 @@ class Connector:
         self._costs: dict | None = None
         self.log = log
         self.on_call: Callable[[str, object, Result], None] | None = None  # 호출 기록용
+        # 게임을 오래 켜 두면 AI 에이전트 명령에 '연속 실행 제한'이 걸린다 (게임 데이터 CliForAi_ExecuteCommon_
+        # MsgContinuousRunLimit · 화면에는 '게임이 너무 오랫동안 실행되고 있습니다' 창). 한 번 걸리면 게임을 다시 켜야 풀린다
+        self.run_limited = False
 
     # ---- 실행 파일 ----
     def locate(self, force: bool = False) -> Located:
@@ -228,6 +237,8 @@ class Connector:
                    message=(data.get("message") if isinstance(data, dict) else None)
                    or err.decode("utf-8", "replace").strip() or EXIT_REASON.get(code),
                    ms=int((time.monotonic() - t0) * 1000))
+        if not r.ok and is_run_limit(r.error, r.message):
+            self.run_limited = True
         self._notify(command, body, r)
         return r
 

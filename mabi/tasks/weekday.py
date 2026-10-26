@@ -11,10 +11,11 @@
 """
 import time
 
-from .. import gamedata as gd
+from .. import gamedata as gd, situation
 from ..bot import Bot, StepTimeout
-from .dialogue import in_dialog
-from .content import CannotProceed, daily_achieved, enter_from_dungeon_window, open_arbeit_tab, questwin_buttons, travel
+from .dialogue import in_dialog, menu_shown
+from .content import (CannotProceed, daily_achieved, enter_from_dungeon_window, open_arbeit_tab, questwin_buttons, travel,
+                      with_retries)
 
 SUNDAY_CHOICES = ("골드", "보석", "촉매")  # 선택지 글자 괄호 안의 낱말. 이 낱말이 든 버튼을 누른다
 
@@ -80,7 +81,7 @@ def click_card(bot: Bot, c: dict) -> None:
 def choose_on_board(bot: Bot, c: dict, want: str) -> None:
     """임무 게시판 대화에서 want('골드'·'보석'·'촉매')가 든 선택지를 누르고 대화가 끝날 때까지 넘긴다.
     대사는 화면 가운데 아래(board_next_xy)를 눌러 넘긴다 — 선택지 줄보다 위라 잘못 고를 일이 없다.
-    선택지는 CLI IsWaitingForSelection 이 켜진 뒤 버튼 줄을 OCR 로 읽어 찾는다 (선택 버튼이 조금 늦게 그려진다).
+    선택지는 패킷의 메뉴(없으면 CLI IsWaitingForSelection)가 켜진 뒤 버튼 줄을 OCR 로 읽어 찾는다 (선택 버튼이 조금 늦게 그려진다).
     원하는 선택지가 안 보이면 아무거나 누르지 않고 시간이 다 되면 멈춘다."""
     from ..ocr import find_texts, nospace
     region = gd.region("board_choices")
@@ -95,7 +96,7 @@ def choose_on_board(bot: Bot, c: dict, want: str) -> None:
             raise CannotProceed(f"임무 게시판 대화가 고르기 전에 끝남 → {bot.snapshot('board_closed').name}")
         if picked:  # 고른 뒤 마지막 대사
             bot.click(tuple(c["board_next_xy"]))
-        elif act.get("IsWaitingForSelection"):
+        elif (menu if (menu := menu_shown(bot)) is not None else act.get("IsWaitingForSelection")):
             texts = find_texts(bot.frame(), region)
             hit = next(((t, x, y) for t, x, y in texts if want in nospace(t)), None)
             if hit:
@@ -114,6 +115,15 @@ def choose_on_board(bot: Bot, c: dict, want: str) -> None:
 
 def run(bot: Bot, cfg: dict) -> str:
     c = cfg["weekday_dungeon"]
+    # 요일 던전 창이 이미 열려 있으면 (입구에 선 채 끊김·다시 켬) 카드·이동을 건너뛰고 거기서 입장한다.
+    # 완료 확인(verify)은 가이드 창을 열어 던전 창을 닫으므로 그보다 먼저 본다
+    # (패킷 '추천' 이 요일 던전이 아니면 — 이미 깼을 수 있다 — 가이드로 확인부터)
+    not_done = not bot.packets.ok or bot.packets.state.recommend in (None, 2)
+    if not_done and situation.dungeon_tab(bot) == "weekday":
+        bot.log.info("요일 던전 창이 이미 열려 있음 → 바로 입장")
+        result = enter_from_dungeon_window(bot, c["clear_timeout"], c["extra_loot"])
+        bot.verified = result == "clear"
+        return f"요일 던전 {result}"
     # 단계: wd_card(요일 아르바이트 찾기) → travel → [일요일: wd_board → wd_card → travel] → dungeon_enter → in_dungeon
     # → dungeon_reward (content 가 남김). 던전 안에서 끊겼으면 접속 단계가 클리어까지 보고 나오고,
     # 여기서는 일일 달성 체크로 끝났는지 본다
@@ -123,12 +133,15 @@ def run(bot: Bot, cfg: dict) -> str:
     talk = [bot.cfg["arbeit"]["dialog_log"], bot.ui["dialog_skip"]]
     chosen = None
     for _ in range(2):  # 일요일이면 게시판에서 고른 뒤 카드를 한 번 더 누른다
-        bot.step("wd_card", "퀘스트 창 → 요일 아르바이트 찾기")
-        click_card(bot, c)
-        bot.step("travel", "요일 던전 입구로 이동")
-        # 평일·이미 고른 일요일은 던전 창, 아직 안 고른 일요일은 임무 게시판 대화가 열린다.
-        # 이동은 travel 이 빠른 이동(T)을 누를 수 있으면 누른다
-        m = travel(bot, arrive=[c["dungeon_tab"]] + ([] if chosen else talk), timeout=c["travel_timeout"])
+        def go():
+            bot.step("wd_card", "퀘스트 창 → 요일 아르바이트 찾기")
+            click_card(bot, c)
+            bot.step("travel", "요일 던전 입구로 이동")
+            # 평일·이미 고른 일요일은 던전 창, 아직 안 고른 일요일은 임무 게시판 대화가 열린다.
+            # 이동은 travel 이 빠른 이동(T)을 누를 수 있으면 누른다
+            return travel(bot, arrive=[c["dungeon_tab"]] + ([] if chosen else talk), timeout=c["travel_timeout"])
+
+        m = with_retries(bot, "요일 던전 입구로 가기", go)
         if m.name == c["dungeon_tab"]:
             result = enter_from_dungeon_window(bot, c["clear_timeout"], c["extra_loot"])
             bot.verified = result == "clear"  # 던전 클리어(패킷·CLI 상태 Cleared)가 곧 완료 — 가이드를 다시 열지 않는다

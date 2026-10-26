@@ -7,12 +7,16 @@
 """
 import time
 
-from .. import gamedata as gd
+import numpy as np
+
+from .. import gamedata as gd, situation
 from ..bot import Bot, StepTimeout
-from .content import CannotProceed, enter_from_dungeon_window, questwin_buttons, travel
+from .content import (QUESTWIN_TAB_BAR_Y, CannotProceed, enter_from_dungeon_window, questwin_buttons, travel,
+                      with_retries)
 
 QUEST_TITLE = gd.text("tribute_quest")
 CARD_H = 450  # 퀘스트 카드 하나의 높이 (1920 기준, 제목 → '진행하기' 약 400px)
+LIST_X0, LIST_Y0 = 1220, 220  # 퀘스트 창 오른쪽 카드 목록의 왼쪽 위 (탭 줄 위까지가 목록)
 
 
 def quest_visible(bot: Bot) -> bool:
@@ -27,7 +31,12 @@ def open_quest(bot: Bot, c: dict) -> None:
     bot.key("j")
     bot.click(ui["questwin_tab_main"], timeout=10)
     bot.sleep(1, 1.5)
-    for _ in range(4):
+    # 창은 지난번 스크롤 자리를 기억할 수 있다. 아래로만 내리면 위쪽 카드를 못 본다
+    # (2026-10-26 월요일 — 주간 목표·전리품 카드가 생긴 뒤 목록 끝만 보다 실패) → 맨 위로 올리고 내려가며 찾는다
+    bot.scroll(*c["list_scroll_at"], 15)
+    bot.sleep(1, 1.3)
+    last = None
+    for _ in range(8):
         card = bot.find(c["quest_card"])
         # 같은 카드의 '진행하기' = 제목 아래 카드 안(CARD_H 이내)에서 가장 가까운 주황색 버튼.
         # 주말에는 '주말에는 어비스!' 같은 이벤트 카드도 주황 '진행하기' 라, 고난도 카드 버튼이 화면 밖이면
@@ -38,6 +47,11 @@ def open_quest(bot: Bot, c: dict) -> None:
             bot.click(go[0])
             return
         # 다른 퀘스트(주간 목표 등)가 위에 있으면 카드나 버튼이 화면 아래로 밀려난다 → 목록을 내린다
+        # 내려도 목록이 그대로면 끝까지 본 것
+        view = bot.frame()[LIST_Y0:QUESTWIN_TAB_BAR_Y, LIST_X0:].astype(np.int16)
+        if last is not None and float(np.abs(view - last).mean()) < 2:
+            break
+        last = view
         bot.scroll(*c["list_scroll_at"], -3)
         bot.sleep(1, 1.3)
     raise RuntimeError(f"고난도 퀘스트의 '진행하기' 버튼을 찾지 못함 → {bot.snapshot('tribute_go').name}")
@@ -66,7 +80,12 @@ def verify(bot: Bot, cfg: dict) -> bool:
 
 def run(bot: Bot, cfg: dict) -> str:
     c = cfg["tribute"]
-    bot.to_main()
+    # 심층 던전 창(매우 어려움)이 이미 열려 있으면 (이동 뒤 끊긴 채 다시 켬 등) 퀘스트 창을 건너뛰고 거기서 입장한다
+    ready = situation.dungeon_tab(bot) == "deep" and bot.exists(c["very_hard"])
+    if ready:
+        bot.log.info("심층 던전 창(매우 어려움)이 이미 열려 있음 → 바로 입장")
+    else:
+        bot.to_main()
     start = bot.read_counter("tribute")
     if start is None:
         raise RuntimeError("공물 개수를 읽을 수 없어 중단")
@@ -77,6 +96,8 @@ def run(bot: Bot, cfg: dict) -> str:
     # 단계: tr_wait(퀘스트 대기) → tr_open(n회차 진행하기) → travel → dungeon_enter → in_dungeon → dungeon_reward.
     # 몇 번 남았는지는 공물 개수가 알려 주므로 끊겨도 남은 만큼만 돈다 (던전 안이면 접속 단계가 클리어까지 본다)
     end = time.monotonic() + c["quest_wait"]
+    if ready:
+        return f"공물 {start} → " + _enter(bot, c, start)
     if not quest_visible(bot):
         bot.step("tr_wait", f"공물 {start}개 — 고난도 퀘스트가 나타나길 기다림")
     while not quest_visible(bot):
@@ -89,17 +110,14 @@ def run(bot: Bot, cfg: dict) -> str:
     count = start
     while count >= c["cost"] and len(results) < c["max_runs"] and quest_visible(bot):
         bot.step("tr_open", f"{len(results) + 1}회차 — 고난도 퀘스트 진행하기 (공물 {count}개)", tribute=count)
-        for attempt in range(2):
+        def go():
             open_quest(bot, c)
             bot.step("travel", "심층 던전 입구로 이동")
-            if _travel_started(bot, c):
-                break
-            shot = bot.snapshot('tribute_go').name
-            if attempt:
-                raise RuntimeError(f"'진행하기' 를 눌렀는데 던전으로 이동하지 않음 → {shot}")
-            bot.log.warning(f"'진행하기' 뒤 이동이 시작되지 않음 → 퀘스트 창을 다시 열어 봄 ({shot})")
-            bot.to_main()
-        travel(bot, arrive=[c["dungeon_tab"]], timeout=c["travel_timeout"])
+            if not _travel_started(bot, c):
+                raise RuntimeError(f"'진행하기' 를 눌렀는데 던전으로 이동하지 않음 → {bot.snapshot('tribute_go').name}")
+            travel(bot, arrive=[c["dungeon_tab"]], timeout=c["travel_timeout"])
+
+        with_retries(bot, "심층 던전 입구로 가기", go)
         # 탭이 보인 직후엔 난이도 버튼이 아직 덜 그려졌을 수 있다 (2026-10-22 오탐) → 몇 초 기다려 본다
         try:
             bot.wait(c["very_hard"], timeout=5)
@@ -111,3 +129,9 @@ def run(bot: Bot, cfg: dict) -> str:
             break
 
     return f"공물 {start} → {count}, 클리어 {results.count('clear')}회, 실패 {results.count('fail')}회"
+
+
+def _enter(bot: Bot, c: dict, start: int) -> str:
+    """열려 있는 심층 던전 창에서 입장해 클리어까지 (한 번)."""
+    r = enter_from_dungeon_window(bot, c["clear_timeout"])
+    return f"{bot.read_counter('tribute')}, 클리어 {int(r == 'clear')}회, 실패 {int(r == 'fail')}회"

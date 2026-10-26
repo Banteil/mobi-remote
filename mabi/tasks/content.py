@@ -38,6 +38,23 @@ def handle_death(bot: Bot) -> bool:
 # 그 자리를 누르면 버튼 대신 탭('이벤트')이 눌린다 — 공물 던전(2026-10-24 16:48)·알바(17:42, 18:10)에서 따로 터졌다.
 # 퀘스트 창의 버튼은 모두 questwin_buttons / questwin_text_ok 로 걸러서 누른다 (안 보이면 목록을 내려서 다시)
 QUESTWIN_TAB_BAR_Y = 950
+# 자동 이동이 끝난 뒤 도착 화면(던전 창 등)이 뜰 때까지 기다리는 상한 (초). 빠른 이동 뒤 걸어서 들어가는 시간까지 넉넉히
+ARRIVE_GRACE = 45
+# 퀘스트 창 → 진행하기 → 이동 단계가 막히면 처음부터 다시 해 보는 횟수. 입구에 사람이 몰려 창이 안 뜨거나
+# 창이 지난 스크롤 자리로 열리는 등 한 번 더 하면 되는 일이 많다 (2026-10-26)
+STEP_RETRIES = 2
+
+
+def with_retries(bot: Bot, what: str, fn: Callable, retries: int = STEP_RETRIES):
+    """fn() 을 하고, 막히면(StepTimeout·RuntimeError) 메인 화면으로 돌아가 retries 번까지 다시 한다."""
+    for attempt in range(retries + 1):
+        try:
+            return fn()
+        except (StepTimeout, RuntimeError) as e:
+            if attempt == retries:
+                raise
+            bot.log.warning(f"{what} 막힘 → 다시 시도 ({attempt + 1}/{retries}): {e}")
+            bot.to_main()
 
 
 def questwin_buttons(bot: Bot, name: str, region=None) -> list:
@@ -129,6 +146,10 @@ def wait_until(bot: Bot, pred: Callable[[], bool], timeout: float, interval: flo
 
 
 def game_space(bot: Bot) -> str:
+    """지금 장소 이름. 패킷이 알면 맵 진입 때 온 맵 이름 (검은 구멍은 '지하로 뚫린 검은 구멍_<사냥터>'),
+    로딩 중이거나 모르면 CLI get_current_environment (로딩 중엔 답이 없어 '')."""
+    if bot.map_loading() is False and bot.packets.state.channel_name:
+        return bot.packets.state.channel_name
     env = bot.state.query("get_current_environment") if bot.state.available() else None
     return (env or {}).get("GameSpaceDisplayName", "")
 
@@ -138,14 +159,30 @@ def travel(bot: Bot, arrive: list[str], timeout: float) -> None:
     설정에 fast_travel_key 가 있으면 이동 시작 후 한 번 눌러 빠른 이동한다."""
     key = bot.cfg["game"].get("fast_travel_key")
     # 패킷: 자동 이동 시작이 오면 바로 (빠른 이동 가능 여부도 같이 온다). 모르면 예전처럼 2~3초 뒤 CLI 로
-    if bot.wait_packet(lambda s: s.traveling, 5) is True:
+    moved = bot.wait_packet(lambda s: s.traveling, 5) is True
+    if moved:
         bot.sleep(0.5)
     else:
         bot.sleep(2, 3)
     if key and bot.fast_travel_ok():
         bot.log.info("빠른 이동")
         bot.key(key)
-    return bot.wait_any(arrive, timeout=timeout, interval=1.0)
+    # 이동이 끝났는데(패킷·CLI) 도착 화면이 한참 안 뜨면 엉뚱한 곳에 선 것 — 상한(timeout)까지 기다리지 않는다
+    # (2026-10-26 요일 던전 입구에서 던전 창 없이 5분 서 있음)
+    end = time.monotonic() + timeout
+    stopped = None
+    while True:
+        try:
+            return bot.wait_any(arrive, timeout=min(10, max(0, end - time.monotonic())), interval=1.0)
+        except StepTimeout:
+            if time.monotonic() >= end:
+                raise
+        if bot.auto_traveling() or bot.map_loading():
+            moved, stopped = True, None
+        elif moved:
+            stopped = stopped or time.monotonic()
+            if time.monotonic() - stopped > ARRIVE_GRACE:
+                raise StepTimeout(f"이동이 끝났는데 {ARRIVE_GRACE}s 안에 {arrive} 중 아무것도 나타나지 않음")
 
 
 class CannotProceed(RuntimeError):
@@ -318,32 +355,29 @@ def other_town(bot: Bot, town: str) -> bool:
     return False
 
 
-def go_to_place(bot: Bot, name: str, arrive: list[str], timeout: float, tries: int = 2):
+def go_to_place(bot: Bot, name: str, arrive: list[str], timeout: float, tries: int = STEP_RETRIES + 1):
     """지도에서 장소([places] 의 마을/탭/목록 칸)를 찾아 '여기로 가기' → 도착까지.
-    지금 있는 지역 맵에 있으면 바로 고르고, 아니면 월드맵에서 마을을 찾아 들어간다. 실패하면 처음부터 한 번 더."""
+    지금 있는 지역 맵에 있으면 바로 고르고, 아니면 월드맵에서 마을을 찾아 들어간다.
+    장소를 못 고르거나 이동 뒤 도착 화면이 안 뜨면 처음부터 tries 번까지."""
     place = bot.cfg["places"].get(name)
     if place is None:
         raise CannotProceed(f"config.toml [places] 에 '{name}' 이 없음")
-    for attempt in range(tries):
-        try:
-            open_map(bot)
-            # 다른 마을에 있으면 지역 맵 목록이 다르다 — 탭 자리를 누르면 그 지역 목록 칸이 눌린다 (2026-10-25).
-            # 패킷이 지금 마을을 알면 목표 마을이 아닐 때 바로 월드맵으로 간다. 사냥터·던전 안이거나 모르면 목록 글자로 본다
-            if other_town(bot, place["town"]) or not _pick_from_list(bot, place, name):
-                open_world_map(bot)
-                bot.click(find_town(bot, place["town"]))
-                bot.sleep(2, 2.5)
-                if not _pick_from_list(bot, place, name):
-                    raise CannotProceed(f"'{place['town']}' 지역 맵에서 '{name}' 을 고르지 못함 → {bot.snapshot('map').name}")
-            break
-        except CannotProceed as e:
-            if attempt == tries - 1:
-                raise
-            bot.log.warning(f"장소 찾기 실패, 다시 시도: {e}")
-            bot.to_main()
-    bot.step("travel", f"{name} ({place['town']}) 로 이동", place=name)
-    bot.key("space")
-    return travel(bot, arrive=arrive, timeout=timeout)
+
+    def go():
+        open_map(bot)
+        # 다른 마을에 있으면 지역 맵 목록이 다르다 — 탭 자리를 누르면 그 지역 목록 칸이 눌린다 (2026-10-25).
+        # 패킷이 지금 마을을 알면 목표 마을이 아닐 때 바로 월드맵으로 간다. 사냥터·던전 안이거나 모르면 목록 글자로 본다
+        if other_town(bot, place["town"]) or not _pick_from_list(bot, place, name):
+            open_world_map(bot)
+            bot.click(find_town(bot, place["town"]))
+            bot.sleep(2, 2.5)
+            if not _pick_from_list(bot, place, name):
+                raise CannotProceed(f"'{place['town']}' 지역 맵에서 '{name}' 을 고르지 못함 → {bot.snapshot('map').name}")
+        bot.step("travel", f"{name} ({place['town']}) 로 이동", place=name)
+        bot.key("space")
+        return travel(bot, arrive=arrive, timeout=timeout)
+
+    return with_retries(bot, f"'{name}' 으로 가기", go, retries=tries - 1)
 
 
 def select_zone(bot: Bot, difficulty: str, floor: int, zone: int) -> None:
@@ -427,7 +461,16 @@ def enter_from_dungeon_window(bot: Bot, clear_timeout: float, extra_loot: int = 
 
 
 def play_dungeon(bot: Bot, clear_timeout: float, extra_loot: int = 0, again: str | None = None) -> str:
-    """입장 직후부터 클리어 → 보상 → 필드 복귀까지. 반환: 'clear' | 'fail' | 'again'(반복 버튼을 누름)"""
+    """입장 직후부터 클리어 → 보상 → 필드 복귀까지. 반환: 'clear' | 'fail' | 'again'(반복 버튼을 누름)
+    도는 동안은 연출의 '장면 넘기기' 를 누르지 않는다 (Bot.scene_skip)."""
+    prev, bot.scene_skip = bot.scene_skip, False
+    try:
+        return _play_dungeon(bot, clear_timeout, extra_loot, again)
+    finally:
+        bot.scene_skip = prev
+
+
+def _play_dungeon(bot: Bot, clear_timeout: float, extra_loot: int, again: str | None) -> str:
     ui = bot.ui
     entered = wait_dungeon(bot, lambda s: s == "InProgress", bot.cfg["timing"]["loading"], interval=2)
     if entered == "":
@@ -469,44 +512,13 @@ def touch_prompt_visible(bot: Bot) -> bool:
 
 def clear_blockers(bot: Bot, skip=(), ocr: bool = False) -> str | None:
     """다른 조작을 막는 화면을 하나 넘긴다 — 대화(대화 넘기기), 연출(장면 넘기기), 퀘스트 클리어 등의 초록 '확인',
-    '화면을 터치해 주세요'. 넘긴 것의 이름, 없으면 None. skip 에 든 템플릿은 건드리지 않는다 (지금 기다리는 것).
+    '화면을 터치해 주세요', 출석 대사, 작별 대사. 넘긴 것의 이름, 없으면 None. skip 에 든 템플릿은 건드리지 않는다 (지금 기다리는 것).
     숙제·어비스처럼 오래 혼자 도는 동안 언제든 끼어들 수 있다: 주말 어비스 3판 퀘스트가 반복 도중 깨지며
     클리어 창이 떠 매칭을 10분 막았다 (2026-10-24 06:07). Bot.wait_any 가 오래 못 찾을 때와 어비스 대기 중에 부른다.
-    ocr: '화면을 터치해 주세요' 를 글자로도 본다 (느려서 가끔만)."""
-    ui = bot.ui
-    frame = bot.frame()
-    has = lambda n: n and n not in skip and bot.vision.has(n) and bot.vision.find(frame, n)  # noqa: E731
-    # 게임 종료·던전 퇴장을 묻는 창이 떠 있으면 아무것도 누르지 않는다 (Space·확인이 '예' 가 된다)
-    if any(n and bot.vision.has(n) and bot.vision.find(frame, n) for n in (ui.get("exit_dialog"), ui.get("abyss_exit_dialog"))):
-        return None
-    for key, what in (("dialog_skip", "대화 넘기기"), ("scene_skip", "장면 넘기기")):
-        if (m := has(ui.get(key))):
-            if key == "scene_skip" and bot.background and not bot.window.is_foreground():
-                # 클릭은 게임을 앞으로 가져와야 들어간다. 뒤에서 도는 작업(어비스)은 화면을 잡지 않는 게 우선이라
-                # 누르지 않고 연출이 스스로 끝나길 기다린다 — 판마다 게임이 앞으로 튀어나와 다른 일을 못 했다
-                # (2026-10-24 사용자). 안 끝나는 경우는 어비스의 한 판 시간 초과(run_timeout)가 마지막 안전장치
-                return None
-            bot.click(m)
-            return what
-    m = has(ui.get("confirm_green"))
-    if not m and ocr and (hit := _confirm_text(frame)):
-        m = hit  # 템플릿과 모양이 다른 '확인' (어비스 도중 퀘스트 완료 창에서 한 번도 못 넘겼다 — 2026-10-24)
-    if m:
-        # 퀘스트 클리어 확인 — Space 가 '확인'. 뒤에서 보낸 Space 가 안 먹어 같은 창이 그대로면 누른다
-        if bot.background and time.monotonic() - getattr(bot, "_confirm_keyed", 0) < 10:
-            bot.click(m)
-        else:
-            bot.key("space")
-            bot._confirm_keyed = time.monotonic()
-        return "확인"
-    if has(ui.get("dungeon_touch")) or (ocr and "dungeon_touch" not in skip and has_word(
-            gd.text("clear_touch"), *_touch_texts(bot, frame))):
-        if bot.background:
-            bot.key("space")  # 뒤에서는 키로 (클릭은 게임을 앞으로 가져와야 한다)
-        else:
-            bot.click(tuple(bot.cfg["dungeon"]["touch_xy"]))
-        return "화면 터치"
-    return None
+    판단과 대응은 점검자(mabi.monitor)가 한다 — NPC 메뉴(수락·결과 보고)·전달 창은 누르지 않는다.
+    ocr: '확인'·'화면을 터치해 주세요' 를 글자로도 본다 (느려서 가끔만)."""
+    from .. import monitor
+    return monitor.of(bot).clear(skip=skip, ocr=ocr)
 
 
 def _confirm_text(frame) -> tuple[int, int] | None:
@@ -545,7 +557,10 @@ def finish_dungeon(bot: Bot, extra_loot: int = 0, again: str | None = None) -> b
         if m.name == ui["dungeon_touch"]:
             bot.click(m)
         elif m.name == ui["scene_skip"]:
-            bot.click(m)
+            if bot.may_skip_scene():
+                bot.click(m)
+            else:
+                bot.sleep(1.5, 2)  # 던전 중엔 연출이 스스로 끝나길 기다린다 (Bot.scene_skip)
         elif m.name == ui["reward_exit"]:
             bot.sleep(2, 3)  # 보상 연출
             if extra_loot:
@@ -725,8 +740,12 @@ def settle_after_clear(bot: Bot, timeout: float = 180, again: str | None = None)
             raise StepTimeout(f"클리어 후 화면 정리 실패 → {bot.snapshot('settle').name}")
         bot.sleep(1.5, 2)
         frame = bot.frame()
-        m = next((m for n in (ui["scene_skip"], ui["dialog_skip"], ui["reward_exit"], ui["confirm_green"])
-                  if (m := bot.vision.find(frame, n))), None)
+        hit = bot.skip_button(frame)
+        if hit and hit[0] == "scene" and not bot.may_skip_scene():
+            stable = 0  # 연출이 스스로 끝나길 기다린다 (Bot.scene_skip)
+            continue
+        m = hit[1] if hit else next((m for n in (ui["reward_exit"], ui["confirm_green"])
+                                     if (m := bot.vision.find(frame, n))), None)
         if m:
             stable = 0
             if m.name == ui["reward_exit"]:
@@ -744,7 +763,9 @@ def settle_after_clear(bot: Bot, timeout: float = 180, again: str | None = None)
             stable = 0
             bot.click(tuple(bot.cfg["dungeon"]["touch_xy"]))
             continue
-        if bot.vision.find(frame, ui["main_hud"]) and not bot.dialogue_playing():
+        # HUD 가 보여도 패킷이 로딩·연출·대화 중이라고 하면 아직 안 끝났다
+        if (bot.vision.find(frame, ui["main_hud"]) and not bot.dialogue_playing() and not bot.map_loading()
+                and not bot.cutscene_playing()):
             stable += 1
         else:
             stable = 0
