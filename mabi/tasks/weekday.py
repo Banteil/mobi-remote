@@ -11,9 +11,9 @@
 """
 import time
 
-from .. import gamedata as gd, situation
+from .. import situation
 from ..bot import Bot, StepTimeout
-from .dialogue import in_dialog, menu_shown
+from .dialogue import in_dialog
 from .content import (CannotProceed, daily_achieved, enter_from_dungeon_window, open_arbeit_tab, questwin_buttons, travel,
                       with_retries)
 
@@ -79,35 +79,22 @@ def click_card(bot: Bot, c: dict) -> None:
 
 
 def choose_on_board(bot: Bot, c: dict, want: str) -> None:
-    """임무 게시판 대화에서 want('골드'·'보석'·'촉매')가 든 선택지를 누르고 대화가 끝날 때까지 넘긴다.
-    대사는 화면 가운데 아래(board_next_xy)를 눌러 넘긴다 — 선택지 줄보다 위라 잘못 고를 일이 없다.
-    선택지는 패킷의 메뉴(없으면 CLI IsWaitingForSelection)가 켜진 뒤 버튼 줄을 OCR 로 읽어 찾는다 (선택 버튼이 조금 늦게 그려진다).
-    원하는 선택지가 안 보이면 아무거나 누르지 않고 시간이 다 되면 멈춘다."""
-    from ..ocr import find_texts, nospace
-    region = gd.region("board_choices")
+    """임무 게시판 대화에서 want('골드'·'보석'·'촉매')가 든 선택지를 고르고 대화가 끝날 때까지 — 점검자가 한다
+    (Ctx.choose: 선택지가 뜨면 버튼 줄 글자에서 want 를 찾아 누르고, 대사는 넘긴다. 원하는 게 안 보이면 아무거나 누르지 않는다).
+    대화가 고르기 전에 끝나거나 시간이 다 되면 멈춘다."""
+    from .. import monitor
+    from ..monitor import detect as d
+    mon = monitor.of(bot)
+    ctx = monitor.Ctx("weekday_dungeon", "임무 게시판", choose=want)
     end = time.monotonic() + c["board_timeout"]
-    picked = False
     while time.monotonic() < end:
-        act = bot._act(None)
-        if not (bot.dialogue_playing(act) or in_dialog(bot)):
-            if picked:
+        seen = mon.check(ctx)
+        if not seen.done and seen.what == d.MAIN and not (bot.dialogue_playing() or in_dialog(bot)):
+            if "chosen" in ctx.events:
                 bot.log.info(f"임무 게시판: {want} 던전 고름")
                 return
             raise CannotProceed(f"임무 게시판 대화가 고르기 전에 끝남 → {bot.snapshot('board_closed').name}")
-        if picked:  # 고른 뒤 마지막 대사
-            bot.click(tuple(c["board_next_xy"]))
-        elif (menu if (menu := menu_shown(bot)) is not None else act.get("IsWaitingForSelection")):
-            texts = find_texts(bot.frame(), region)
-            hit = next(((t, x, y) for t, x, y in texts if want in nospace(t)), None)
-            if hit:
-                bot.log.info(f"임무 게시판: '{hit[0]}' 선택")
-                bot.click((hit[1], hit[2]))
-                picked = True
-            elif texts:
-                bot.log.debug(f"임무 게시판 선택지에 '{want}' 없음: {[t for t, _, _ in texts]}")
-        else:
-            bot.click(tuple(c["board_next_xy"]))
-        bot.sleep(1.2, 1.6)
+        bot.sleep(0.6, 0.9)
     shot = bot.snapshot("board_timeout").name
     bot.to_main()
     raise CannotProceed(f"임무 게시판에서 '{want}' 선택지를 고르지 못함 → {shot}")

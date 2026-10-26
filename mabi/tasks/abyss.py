@@ -20,8 +20,10 @@ import time
 from .. import gamedata as gd
 from ..bot import Bot, StepTimeout
 from ..ocr import find_texts
+from .. import monitor
+from ..monitor import detect as d, handlers
 from . import repair, ui_text
-from .content import CannotProceed, touch_prompt_visible
+from .content import CannotProceed, touch_prompt_visible, watch
 
 DIFFICULTIES = ["입문", "어려움", "매우 어려움", "매우 어려움2"]
 
@@ -306,9 +308,11 @@ def revive_here(bot: Bot) -> bool:
 def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: None) -> str:
     """어비스 안에서 끝날 때까지 지켜본다. 'clear' | 'dead' | 'timeout'.
     쓰러지면 revive 일 때 '여기서 부활' 하고 이어 한다 (못 하면 'dead' → 나가서 처음부터).
-    배고프면 그때마다 음식을 먹는다 (어비스 반복은 일일 숙제의 하루 횟수 제한 없이)."""
+    배고프면 그때마다 음식을 먹는다 (어비스 반복은 일일 숙제의 하루 횟수 제한 없이).
+    쓰러짐('여기서 부활')과 판 중에 끼어든 창(퀘스트 클리어 창·대화)은 점검자가 (content.watch)."""
     end = time.monotonic() + run_timeout
     mark = bot.packets.mark()
+    ctx = monitor.Ctx("abyss", "판 진행", revive=revive)
 
     def cleared(_s=None) -> bool:  # 패킷: 이 판의 결과가 옴 (클리어 순간, CLI 결과 연출 표시와 같은 때)
         return bot.packets.find("abyss.result", mark, lambda v: bool(v.get("abyss"))) is not None
@@ -320,21 +324,24 @@ def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: No
             bot.log.info("패킷: 어비스 결과 옴 → 클리어")
             return "clear"
         act = bot.state.activity() or {}
-        if bot.is_dead(act):
-            if revive and revive_here(bot):
-                on_revive()
-                continue
-            return "dead"
         if act.get("IsAbyssResultSequencePlaying"):
             return "clear"
-        if inside(bot):
-            if not bot.clear_blockers():  # 판 중에 깨진 퀘스트의 클리어 창·대화
-                bot.eat_if_hungry()
-        elif (bot.exists(bot.ui["dungeon_retry"]) or bot.exists(bot.ui["reward_exit"])
-              or touch_prompt_visible(bot)):
+        if not revive and bot.is_dead(act):
+            return "dead"
+        here = inside(bot)
+        # 나가기 버튼이 가려졌으면 퀘스트 완료 창은 템플릿이 안 맞을 때가 있어 글자로도 본다
+        seen = watch(bot, ctx, act, ocr=not here)
+        if seen.finish and seen.finish.result == "dead":
+            return "dead"
+        if ctx.take("revived"):
+            on_revive()
+            continue
+        if not here and seen.what in (d.REWARD, d.TOUCH):
             return "clear"  # 클리어 연출로 HUD 가 사라졌다 (CLI 를 못 읽었을 때)
-        else:
-            bot.clear_blockers(ocr=True)  # 나가기 버튼을 가린 창 — 퀘스트 완료 창은 템플릿이 안 맞을 때가 있어 글자로도
+        if not here and not seen.done and touch_prompt_visible(bot):
+            return "clear"
+        if here and not seen.done:
+            bot.eat_if_hungry()
         if time.monotonic() > end:
             return "timeout"
 
@@ -394,21 +401,19 @@ def to_reward(bot: Bot) -> None:
     '화면을 터치해 주세요' 는 Space)."""
     ui = bot.ui
     end = time.monotonic() + 120
+    mon = monitor.of(bot)
+    # 연출은 기다리고 (scene_skip 꺼짐), 클리어와 함께 깨진 퀘스트(주말 어비스 3판 등)의 완료 창·대화는 넘기고,
+    # 화면 터치는 뒤에서면 Space 로 — 점검자가 한다. 보상 화면이 보이면 그 일은 끝 (다시 하기·나가기는 repeat 가 정한다)
+    ctx = monitor.Ctx("abyss", "클리어 뒤", finish_on={d.REWARD: "reward"})
+    n = 0
     while not bot.exists(ui["dungeon_retry"]):
         if time.monotonic() > end:
             raise StepTimeout(f"어비스 보상 화면이 나오지 않음 → {bot.snapshot('abyss_reward').name}")
-        if bot.vision.has(ui["scene_skip"]) and bot.exists(ui["scene_skip"]):
-            pass  # 연출은 스스로 끝나길 기다린다 (Bot.scene_skip — 어비스 중엔 누르지 않음)
-        elif bot.clear_blockers(skip=(ui["dungeon_touch"],)):
-            pass  # 클리어와 함께 깨진 퀘스트의 클리어 창·대화 (주말 어비스 3판 등)
-        elif touch_prompt_visible(bot) or bot.exists(ui["dungeon_touch"]):
-            if _behind(bot):
-                bot.key("space")
-            else:
-                bot.click(tuple(bot.cfg["dungeon"]["touch_xy"]))
-        else:
-            # 판을 마치는 순간 깨진 퀘스트(주말 어비스 3판 등)의 완료 창이 보상 화면을 가린다 — 글자로 '확인' 을 찾는다
-            bot.clear_blockers(skip=(ui["dungeon_touch"],), ocr=True)
+        n += 1
+        # 완료 창이 보상 화면을 가리면 템플릿이 안 맞을 때가 있다 — 두 번에 한 번은 글자로 '확인'·'화면 터치' 도 본다
+        seen = mon.check(ctx, guard=False, ocr=n % 2 == 0)
+        if not seen.done and not seen.finish and seen.what in (d.MAIN, d.UNKNOWN) and touch_prompt_visible(bot):
+            handlers.touch(bot, ctx, seen)  # 반투명 '화면을 터치해 주세요' (그림이 잘 안 맞는다)
         bot.sleep(1.5, 2.0)
     bot.sleep(1.5, 2.0)  # 보상 연출
 

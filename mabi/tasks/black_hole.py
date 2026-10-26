@@ -13,7 +13,7 @@ import time
 
 from ..bot import Bot, StepTimeout
 from ..profile import game_day_start
-from .content import daily_achieved, game_space, open_guide_card, wait_until
+from .content import daily_achieved, game_space, open_guide_card, watch
 
 
 def cleared_today(bot: Bot) -> bool:
@@ -35,7 +35,10 @@ def enter(bot: Bot, c: dict) -> None:
     """'바로 가기' 후 검은 구멍 안에 들어갈 때까지 기다린다. 지역 이동 로딩 중에도 끊기지 않도록
     이동 상태가 아닌 '장소 이름'으로 도착을 판단한다.
     가는 길에 선공 몬스터에게 맞아 전투가 시작되면 자동 이동이 끊긴다 → 전투가 끝나면 '바로 가기'를 다시 누른다.
-    전투 없이 이동이 멈춰 버린 경우(stall 초 동안 이동도 전투도 아님)도 다시 누른다."""
+    전투 없이 이동이 멈춰 버린 경우(stall 초 동안 이동도 전투도 아님)도 다시 누른다.
+    가는 길에 끼어든 창(대화·퀘스트 완료 등)과 쓰러짐은 점검자가 (content.watch)."""
+    from .. import monitor
+    ctx = monitor.Ctx("black_hole", "검은 구멍으로 이동", revive=True)
     end = time.monotonic() + c["travel_timeout"]
     fought = False
     idle_since = None
@@ -45,6 +48,9 @@ def enter(bot: Bot, c: dict) -> None:
             raise StepTimeout(f"{c['travel_timeout']}초 안에 검은 구멍에 들어가지 못함 → {bot.snapshot('black_hole').name}")
         bot.sleep(3)
         if bot.is_loading():  # 지역 이동 로딩 중
+            idle_since = None
+            continue
+        if watch(bot, ctx).done:  # 끼어든 창을 넘겼다 — 멈춘 시간은 그 뒤부터 잰다
             idle_since = None
             continue
         if bot.in_combat():
@@ -90,10 +96,18 @@ def run(bot: Bot, cfg: dict) -> str:
         enter(bot, c)
         bot.step("bh_inside", f"검은 구멍 입장: {game_space(bot)}")
 
-    wait_until(bot, lambda: c["space_keyword"] not in game_space(bot), c["clear_timeout"],
-               interval=5, what="검은 구멍 클리어")
+    # 안에서는 아무것도 조작하지 않는다 — 쓰러짐('여기서 부활')과 끼어든 창만 점검자가
+    from .. import monitor
+    ctx = monitor.Ctx("black_hole", "검은 구멍 안", revive=True)
+    end = time.monotonic() + c["clear_timeout"]
+    while c["space_keyword"] in game_space(bot):
+        if time.monotonic() > end:
+            raise StepTimeout(f"{c['clear_timeout']:.0f}s 안에 검은 구멍 클리어 충족 안 됨")
+        watch(bot, ctx)
+        bot.sleep(5)
     bot.step("bh_done", "검은 구멍 클리어 → 정리")
     bot.sleep(2, 3)
+    monitor.of(bot).settle(monitor.Ctx("black_hole", "검은 구멍 클리어 뒤"))  # 클리어 화면·퀘스트 완료·대화
     bot.dismiss_popups()
     bot.to_main()
     return f"검은 구멍 클리어 → {game_space(bot)}"

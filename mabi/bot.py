@@ -528,24 +528,6 @@ class Bot:
         self.sleep(1.5, 2)
         return True
 
-    def skip_dialogue(self, max_n: int = 10) -> int:
-        """NPC 대화(주간 정기 의뢰 조건 충족 시 클리어 후 가끔 나옴)가 진행 중이면 '대화 넘기기'를 누른다. 누른 횟수 반환.
-        연출(컷신)의 넘기기는 누르지 않는다 (skip_button) — 보스 클리어 직후 불려 연출을 대화로 누를 뻔했다."""
-        n = 0
-        for _ in range(max_n):
-            playing = self.dialogue_playing()
-            hit = self.skip_button()
-            dialog = hit and hit[0] == "dialog"
-            if not playing and not dialog:
-                break
-            if dialog:
-                self.click(hit[1])
-                n += 1
-            self.sleep(1.2, 1.8)
-        if n:
-            self.log.info(f"대화 넘기기 {n}회")
-        return n
-
     def to_main(self, tries: int = 10) -> None:
         """ESC 와 팝업 닫기를 반복해서 필드 메인 화면으로 돌아온다. 돌아오면 배고픔도 확인한다."""
         exit_dialog, cancel = self.ui["exit_dialog"], self.ui["exit_dialog_cancel"]
@@ -562,15 +544,17 @@ class Bot:
             if waiting and self.map_loading():  # 패킷: 맵을 옮기는 중 — ESC 를 누르지 않고 기다린다
                 self.wait_loaded(min(self.cfg["timing"]["loading"], wait_end - time.monotonic()))
                 continue
-            from . import situation
-            if situation.clear_attendance(self):  # 오전 6시가 지나 필드로 나오면 뜨는 출석 대사 ('대화 넘기기' 로 넘기지 않는다)
-                self.sleep(1.2, 1.8)
+            # 출석 대사·대화·연출·퀘스트 완료 '확인'·화면 터치는 점검자가 (상황 판단을 태스크마다 따로 두지 않는다).
+            # 연출은 스스로 끝나길 기다리되, 120초가 넘으면 넘기기를 누른다
+            from . import monitor
+            seen = monitor.of(self).check(monitor.Ctx("to_main"), guard=False)
+            if seen.done == "연출 대기" and not waiting and (hit := self.skip_button()):
+                self.click(hit[1])
+                n += 1
                 continue
-            if (hit := self.skip_button()):
-                if hit[0] == "dialog" or self.may_skip_scene() or not waiting:
-                    self.click(hit[1])
-                    n += 1
-                self.sleep(1.2, 1.8)  # 연출은 스스로 끝나길 기다린다
+            if seen.done:
+                n += seen.done not in monitor.WAITS or not waiting  # 기다림도 120초 뒤엔 횟수에 넣는다
+                self.sleep(0.6, 1.0)
                 continue
             n += 1
             if self.vision.has(exit_dialog) and self.exists(exit_dialog):
@@ -581,12 +565,8 @@ class Bot:
                 self.sleep(1.2, 1.6)
                 continue
             if not self.dismiss_popups(1):
-                from .tasks.content import _confirm_text
-                if _confirm_text(self.frame()):
-                    # 템플릿이 안 맞는 퀘스트 완료 창 — ESC 로는 안 닫혀 캐릭터 바꾸기 등이 멈췄다 (2026-10-24 사용자)
-                    self.log.info("퀘스트 완료 창 → 확인 (Space)")
-                    self.key("space")
-                    self.sleep(1.5, 2.0)
+                # 템플릿이 안 맞는 퀘스트 완료 창 — ESC 로는 안 닫혀 캐릭터 바꾸기 등이 멈췄다 (2026-10-24 사용자) → 글자로도
+                if monitor.of(self).check(monitor.Ctx("to_main"), guard=False, ocr=True).done:
                     continue
                 self.key("esc")
             self.sleep(0.8, 1.3)

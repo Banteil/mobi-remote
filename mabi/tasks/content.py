@@ -24,14 +24,31 @@ def ensure_auto(bot: Bot) -> None:
         bot.log.info("자동 전투 켬")
 
 
-def handle_death(bot: Bot) -> bool:
-    """쓰러지면 '여기서 부활' 만 쓴다 (여신상 부활은 쓰지 않는다 — 사용자 방침). 부활했으면 True."""
-    from .abyss import revive_here  # abyss 가 이 모듈을 가져다 쓴다
-    if revive_here(bot):
-        bot.log.warning("사망 → 여기서 부활")
-        ensure_auto(bot)
-        return True
-    return False
+def watch(bot: Bot, ctx, act: dict | None = None, ocr: bool = False):
+    """던전·사냥터·어비스 안에서 기다리는 동안 한 번 본다 — 쓰러짐('여기서 부활', ctx.revive)과 끼어든 창은 점검자가.
+    패킷이 없으면 쓰러짐을 CLI(act — 이미 받아 둔 get_activity)로 본다. 점검자가 본 것(Seen)을 돌려준다.
+    안에서는 연출의 '장면 넘기기' 를 누르지 않고 기다린다 (던전·어비스 규칙 — 검은 구멍·사냥터도 같이)."""
+    from .. import monitor
+    from ..monitor import handlers
+    prev, bot.scene_skip = bot.scene_skip, False
+    try:
+        seen = monitor.of(bot).check(ctx, guard=False, ocr=ocr)
+    finally:
+        bot.scene_skip = prev
+    if not seen.finish and not seen.done and not bot.packets.ok and bot.is_dead(act):
+        out = handlers.dead(bot, ctx, seen)
+        if isinstance(out, monitor.Finish):
+            seen.finish = out
+        else:
+            seen.done = out
+    if seen.finish and seen.finish.result == "dead":
+        bot.log.warning("사망 상태, '여기서 부활' 을 못 함")
+    return seen
+
+
+def _in_ctx(bot: Bot, what: str):
+    from .. import monitor
+    return monitor.Ctx(bot.task_id or "dungeon", what, revive=True)
 
 
 # 퀘스트 창(J) 아래 탭 줄(지도·퀘스트·아르바이트·이벤트) 윗선 (1920 기준). 카드 버튼이 이 줄에 반쯤 걸쳐 보일 때
@@ -462,10 +479,17 @@ def enter_from_dungeon_window(bot: Bot, clear_timeout: float, extra_loot: int = 
     retry: 직전 보상 화면에서 '다시 하기'를 눌러 이미 임무 화면이 열려 있음 (단계 '진입' 생략).
     again: 보상 화면에서 누를 반복 버튼('다시 하기'). 누르면 'again' 을 반환한다."""
     ui = bot.ui
+    missions = [ui["dungeon_mission_enter"], ui["dungeon_mission_enter_deep"], ui["dungeon_mission_enter_silver"],
+                ui["dungeon_retry_enter"]]
     if not retry:
-        bot.key("space")                 # 단계 '진입'
-    bot.wait_any([ui["dungeon_mission_enter"], ui["dungeon_mission_enter_deep"], ui["dungeon_mission_enter_silver"],
-                  ui["dungeon_retry_enter"]], timeout=15)
+        # 단계 '진입' (점검자가 막는 화면을 먼저 정리). 다시 누르지는 않는다 — 임무 화면이 늦게 뜬 것이면
+        # 두 번째 Space 가 가격 확인 없이 '입장하기' 가 된다
+        from .. import monitor
+        ctx = monitor.Ctx(bot.task_id or "dungeon", "던전 단계 진입", keep_dungeon_window=True)
+        if not monitor.of(bot).act(ctx, "단계 진입", lambda: bot.key("space"),
+                                   lambda: any(bot.exists(n) for n in missions), within=15, tries=1):
+            raise StepTimeout(f"던전 창에서 진입했는데 임무 화면이 안 뜸 → {bot.snapshot('dungeon_mission').name}")
+    bot.wait_any(missions, timeout=15)
     bot.sleep(0.8, 1.2)
     if expect_cost is not None:
         price, win, ko = read_button(bot.frame(), ui["mission_button_region"])
@@ -494,7 +518,7 @@ def _play_dungeon(bot: Bot, clear_timeout: float, extra_loot: int, again: str | 
         raise StepTimeout("던전 입장 확인 실패")
     if entered is not None:
         bot.step("in_dungeon", "던전 진행 중")
-
+        ctx = _in_ctx(bot, "던전 진행 중")
         end = time.monotonic() + clear_timeout
         while True:
             state = wait_dungeon(bot, lambda s: s != "InProgress", 3)
@@ -504,9 +528,7 @@ def _play_dungeon(bot: Bot, clear_timeout: float, extra_loot: int, again: str | 
                 bot.wait(ui["dungeon_touch"], timeout=max(1.0, end - time.monotonic()), interval=2.0)
                 state = "Cleared"
                 break
-            if bot.is_dead():
-                if not handle_death(bot):
-                    bot.log.warning("사망 상태, '여기서 부활' 을 못 함")
+            watch(bot, ctx)  # 쓰러짐·끼어든 창
             if time.monotonic() > end:
                 raise StepTimeout("던전 클리어 대기 시간 초과")
         result = "clear" if state == "Cleared" else "fail"
@@ -518,7 +540,7 @@ def _play_dungeon(bot: Bot, clear_timeout: float, extra_loot: int, again: str | 
         bot.wait(ui["dungeon_touch"], timeout=clear_timeout, interval=2.0)
         result = "clear"
 
-    if finish_dungeon(bot, extra_loot, again) and result == "clear":
+    if after_clear(bot, extra_loot, again) and result == "clear":
         return "again"
     return result
 
@@ -555,7 +577,7 @@ def after_clear(bot: Bot, extra_loot: int = 0, again: str | None = None, timeout
     """클리어 뒤 화면들 — 클리어 화면 터치 · 연출 · 보상(추가 루팅·나가기) · 퀘스트 클리어 확인 · 대화 · 작별 화면 —
     을 순서와 상관없이 점검자가 처리하고, 던전 밖 메인 화면이 몇 번 이어지면 끝낸다.
     again 버튼('다시 하기'·'새 임무 선택')이 보상 화면에 있으면 나가는 대신 누르고 True (반복 플레이).
-    던전과 사냥터가 따로 갖던 마무리(finish_dungeon · settle_after_clear · close_quest_clears)를 하나로 했다."""
+    던전과 사냥터가 따로 갖던 마무리를 하나로 했다."""
     from .. import monitor
     from ..monitor import detect as d
     mon = monitor.of(bot)
@@ -589,16 +611,6 @@ def after_clear(bot: Bot, extra_loot: int = 0, again: str | None = None, timeout
         bot.sleep(1.0, 1.5)
     bot.to_main()
     return False
-
-
-def finish_dungeon(bot: Bot, extra_loot: int = 0, again: str | None = None) -> bool:
-    """던전 클리어 화면 → 보상(추가 루팅) → 나가기 → 퀘스트 클리어 확인 → 필드 (after_clear)."""
-    return after_clear(bot, extra_loot, again)
-
-
-def settle_after_clear(bot: Bot, timeout: float = 180, again: str | None = None) -> bool:
-    """사냥터 클리어 뒤 마무리 (after_clear). 사냥터는 클리어 화면에서도 HUD 가 보인다."""
-    return after_clear(bot, again=again, timeout=timeout)
 
 
 def do_extra_loot(bot: Bot, n: int) -> int:
@@ -678,15 +690,15 @@ def wait_field(bot: Bot, place: str, clear_timeout: float, again: str | None = N
         return hunt_quest(bot, place)
 
     end = time.monotonic() + clear_timeout
+    ctx = _in_ctx(bot, "사냥터 진행 중")
     # 패킷이 사냥터 상태를 알면 그걸로 — 클리어 순간(WaitingForChannelTransfer) 바로 안다. 퀘스트 목록으로 보는 아래 방식은
     # 3번 연속(15초+) 확인이 필요하고 창이 HUD 를 가리면 오판했다. 감시가 도중에 끊기면 아래 방식으로 넘어간다
     while bot.packets.ok and bot.packets.state.field_state == "InProgress":
         if bot.wait_packet(lambda s: s.field_state != "InProgress", 5):
             bot.log.info(f"패킷: 사냥터 끝남 ({bot.packets.state.field_state})")
             bot.step("field_reward", "사냥터 클리어 → 마무리")
-            return "again" if settle_after_clear(bot, again=again) else "clear"
-        if bot.is_dead() and not handle_death(bot):
-            bot.log.warning("사망 상태, '여기서 부활' 을 못 함")
+            return "again" if after_clear(bot, again=again) else "clear"
+        watch(bot, ctx)
         if time.monotonic() > end:
             raise StepTimeout("사냥터 클리어 대기 시간 초과")
     gone = 0
@@ -709,10 +721,9 @@ def wait_field(bot: Bot, place: str, clear_timeout: float, again: str | None = N
         else:
             covered_since = None
         gone = gone + 1 if h == "" else 0
-        if bot.is_dead() and not handle_death(bot):
-            bot.log.warning("사망 상태, '여기서 부활' 을 못 함")
+        watch(bot, ctx)
         if time.monotonic() > end:
             raise StepTimeout("사냥터 클리어 대기 시간 초과")
         bot.sleep(5)
     bot.step("field_reward", "사냥터 클리어 → 마무리")
-    return "again" if settle_after_clear(bot, again=again) else "clear"
+    return "again" if after_clear(bot, again=again) else "clear"

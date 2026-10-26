@@ -57,18 +57,6 @@ def open_quest(bot: Bot, c: dict) -> None:
     raise RuntimeError(f"고난도 퀘스트의 '진행하기' 버튼을 찾지 못함 → {bot.snapshot('tribute_go').name}")
 
 
-def _travel_started(bot: Bot, c: dict, wait: float = 12) -> bool:
-    """'진행하기' 뒤 자동 이동이 시작됐나 (또는 이미 던전 창). 엉뚱한 버튼을 눌렀으면 몇 분씩 기다리지 않게."""
-    if not bot.packets.ok and not bot.state.available():
-        return True  # 패킷도 CLI 도 없으면 판단할 수 없다 — 예전처럼 도착을 기다린다
-    end = time.monotonic() + wait
-    while time.monotonic() < end:
-        if bot.auto_traveling() or bot.exists(c["dungeon_tab"]):
-            return True
-        bot.sleep(1.5)
-    return False
-
-
 def verify(bot: Bot, cfg: dict) -> bool:
     """고난도 퀘스트를 깼으면 (목록에서 사라짐) 완료. 공물이 남아 있어도 숙제로는 하루 한 번이면 된다.
     공물이 모자라 못 도는 날도 완료."""
@@ -113,8 +101,7 @@ def run(bot: Bot, cfg: dict) -> str:
         def go():
             open_quest(bot, c)
             bot.step("travel", "심층 던전 입구로 이동")
-            if not _travel_started(bot, c):
-                raise RuntimeError(f"'진행하기' 를 눌렀는데 던전으로 이동하지 않음 → {bot.snapshot('tribute_go').name}")
+            # 엉뚱한 버튼을 눌러 이동이 시작되지 않으면 travel 이 바로 알린다 (content.started)
             travel(bot, arrive=[c["dungeon_tab"]], timeout=c["travel_timeout"])
 
         with_retries(bot, "심층 던전 입구로 가기", go)

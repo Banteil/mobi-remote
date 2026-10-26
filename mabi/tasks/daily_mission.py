@@ -12,9 +12,22 @@
 """
 import time
 
+from .. import monitor
 from ..bot import Bot, StepTimeout
 from ..ocr import read_ko, read_text
 from .content import has_word, wait_until
+
+
+def _ctx(what: str) -> monitor.Ctx:
+    return monitor.Ctx("daily_mission", what)
+
+
+def _press(bot: Bot, c: dict, button) -> bool:
+    """미션 창의 버튼을 누른다. 미션 창이 아니면 (다른 창이 덮음) 누르지 않고 False."""
+    if not bot.exists(c["title"]):
+        return False
+    bot.click(button)
+    return True
 
 
 def missions(bot: Bot) -> list[dict]:
@@ -54,14 +67,17 @@ def _wait_done(bot: Bot, keyword: str, timeout: float, mark: int, what: str, int
         seen = bot.packets.wait("dm.completed", min(left, 15), after=mark)  # 15초마다 CLI 로도 (감시가 놓쳤을 때)
         if seen:
             mark = seen.seq
+        else:
+            monitor.of(bot).clear()  # 기다리는 동안 끼어든 창 (채집 중 퀘스트 완료 등)
 
 
 def _back_to_window(bot: Bot, c: dict) -> None:
-    """ESC 로 일일 미션 창까지 돌아온다."""
+    """ESC 로 일일 미션 창까지 돌아온다. 획득 연출·퀘스트 완료 창은 ESC 대신 점검자가 넘긴다."""
     for _ in range(6):
         if bot.exists(c["title"]):
             return
-        bot.key("esc")
+        if not monitor.of(bot).check(_ctx("미션 창으로"), guard=False).done:
+            bot.key("esc")
         bot.sleep(1.2, 1.6)
     open_window(bot, c)
 
@@ -98,6 +114,7 @@ def _ensure_window(bot: Bot, c: dict) -> None:
     for _ in range(3):
         if bot.exists(c["title"]):
             return
+        monitor.of(bot).check(_ctx("미션 창 확인"), guard=False)
         bot.sleep(0.8, 1.0)
     open_window(bot, c)
 
@@ -198,8 +215,10 @@ def do_alchemy(bot: Bot, c: dict, m: dict) -> str:
     go = find_go_button(bot, c, m["Title"][:2])
     if not go:
         return f"연금술 미션 카드를 찾지 못함 → {bot.snapshot('alchemy').name}"
-    bot.click(go)
-    bot.wait(a["title"], timeout=10)
+    # 진행하기 → 연금술 창. 안 열리면 카드 자리가 아직 미션 창일 때만 한 번 더 (다른 창 위를 누르지 않게)
+    if not monitor.of(bot).act(_ctx("연금술"), "연금술 진행하기", lambda: _press(bot, c, go),
+                               lambda: bot.exists(a["title"]), within=10):
+        return f"연금술 창이 열리지 않음 → {bot.snapshot('alchemy').name}"
     bot.sleep(1, 1.5)
     bot.click(a["gem_card"], timeout=5)
     bot.wait(a["auto_off"], timeout=10)
@@ -242,7 +261,10 @@ def do_gather(bot: Bot, c: dict, m: dict) -> str:
     if not go:
         return f"채집 미션 카드를 찾지 못함 → {bot.snapshot('gather').name}"
     mark = bot.packets.mark()
-    bot.click(go)
+    # 진행하기 → 미션 창이 닫히고 채집하러 간다. 창이 그대로면 한 번 더
+    if not monitor.of(bot).act(_ctx("채집"), "채집 진행하기", lambda: _press(bot, c, go),
+                               lambda: not bot.exists(c["title"]), within=8):
+        return f"채집 진행하기를 눌러도 미션 창이 그대로 → {bot.snapshot('gather').name}"
     try:
         _wait_done(bot, g["mission_keyword"], g["timeout"], mark, "채집 미션 완료", interval=5)
         result = "채집 완료"

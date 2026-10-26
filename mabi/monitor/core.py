@@ -31,16 +31,20 @@ class Ctx:
     menus: NPC 메뉴(수락·결과 보고)·전달 창·던전 창까지 다룬다. job: 채집·제작·가공 창까지 (menus 포함). talk: NPC 대화를 넘긴다.
     finish_on: 이 상황이면 이 일은 끝 {상황: 결과}. decide: 태스크만 아는 판단 {상황: fn(bot, ctx, seen) -> 끝낼 이유|None}.
     note: (단계 키, 설명) — 태스크의 단계 기록 (이어 하기용).
-    reward: 보상 화면을 다룬다 (던전·사냥터를 끝내는 중) — extra_loot 추가 루팅 횟수, again 이 보이면 누르고 끝."""
+    reward: 보상 화면을 다룬다 (던전·사냥터를 끝내는 중) — extra_loot 추가 루팅 횟수, again 이 보이면 누르고 끝.
+    revive: 쓰러지면 '여기서 부활' (못 하면 끝 'dead'). 끄면 쓰러짐은 태스크 몫.
+    choose: NPC 선택지 중 이 낱말이 든 것을 누른다 (요일 던전 임무 게시판 — 원하는 게 없으면 누르지 않고 기다린다)."""
 
     def __init__(self, task: str, what: str = "", job: bool = False, menus: bool | None = None, talk: bool = True,
                  finish_on=None, decide=None, note=None, keep_dungeon_window: bool = False,
-                 reward: bool = False, extra_loot: int = 0, again: str | None = None):
+                 reward: bool = False, extra_loot: int = 0, again: str | None = None, revive: bool = False,
+                 choose: str | None = None):
         self.task, self.what, self.job, self.talk = task, what, job, talk
         self.menus = job if menus is None else menus
         self.finish_on, self.decide = finish_on or {}, decide or {}
         self._note, self.keep_dungeon_window = note, keep_dungeon_window
         self.reward, self.extra_loot, self.again = reward, extra_loot, again
+        self.revive, self.choose = revive, choose
         self.n: dict[str, int] = {}
         self.talked = False  # NPC 대화를 마쳤다 (대화 조건을 채워도 게임이 다음 걸음으로 가지 않는다)
         self.events: set[str] = set()
@@ -61,7 +65,7 @@ class Ctx:
 
 
 # 기다리는 처리 — 화면이 그대로여도 헛도는 게 아니다 (각자 시간 상한이 있다)
-WAITS = {"로딩 대기", "연출 대기", "전달 물품 채워지길 기다림"}
+WAITS = {"로딩 대기", "연출 대기", "전달 물품 채워지길 기다림", "선택지 기다림"}
 QUIET = WAITS | {"대사 넘김"}  # 로그(INFO)에 남기지 않는 흔한 처리 (기록 파일에는 남는다)
 # 화면이 거의 같아도 나아가는 처리의 헛돌기 기준 (대사는 말풍선 글자만 바뀌어 줄인 화면으로는 같아 보인다 —
 # 패킷을 모를 때를 위해 넉넉히. 패킷이 알면 대사 순번이 바뀌는 것으로 나아간 것을 안다)
@@ -117,11 +121,14 @@ class Monitor:
         if seen.what == d.RUN_LIMIT:
             # '종료' 하나뿐인 창 — 누르지 않고 사람에게. runner 가 실패 + 연속 실행 제한이면 일시정지한다
             raise RuntimeError("게임 연속 실행 제한 창 ('게임을 재시작해주세요')")
-        handler = None if seen.what in d.OUTSIDE else h.pick(ctx, seen.what)
-        out = handler(bot, ctx, seen) if handler else None
+        if (r := ctx.finish_on.get(seen.what)) and seen.what != d.DUNGEON_WINDOW:
+            out = Finish(r, seen.what)  # 태스크가 기다리던 화면 (던전 창은 처리기가 사진을 남긴다)
+        else:
+            handler = None if seen.what in d.OUTSIDE else h.pick(ctx, seen.what)
+            out = handler(bot, ctx, seen) if handler else None
         ms = int((time.monotonic() - t0) * 1000)
         if isinstance(out, Finish):
-            bot.log.warning(f"점검: [{ctx.what or ctx.task}] {seen.what} → 끝 ({out.result}) {out.why}")
+            (bot.log.info if out.why == seen.what else bot.log.warning)(f"점검: [{ctx.what or ctx.task}] {seen.what} → 끝 ({out.result}) {out.why}")
             self.record(ctx, "끝", seen, result=out.result, why=out.why, ms=ms)
             seen.finish = out
             self._last, self._same = None, 0
@@ -222,7 +229,8 @@ class Monitor:
         True 됨 / False 할 수 없음 (do() 가 False — 버튼이 없음 등, 다시 하지 않는다) / None 했는데 기대한 변화가 끝내 없음."""
         within = within or self.act_within
         for n in range(1, tries + 1):
-            self.settle(Ctx(ctx.task, ctx.what, menus=True))
+            # 던전 창에서 하는 동작(입장)이면 그 창을 닫지 않는다
+            self.settle(Ctx(ctx.task, ctx.what, menus=True, keep_dungeon_window=ctx.keep_dungeon_window))
             t0 = time.monotonic()
             if do() is False:
                 self.record(ctx, "동작", did=what, ok=False, why="할 수 없음", n=n)

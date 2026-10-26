@@ -157,5 +157,41 @@ class DialogTest(unittest.TestCase):
         self.assertEqual(seen.finish.result, "dungeon")
 
 
+class DeadTest(unittest.TestCase):
+    def dead(self, revive, ok):
+        b = fake_bot()
+        with mock.patch.object(d, "look", return_value=Seen(d.DEAD, src="packet")),                 mock.patch("mabi.tasks.abyss.revive_here", return_value=ok),                 mock.patch("mabi.tasks.content.ensure_auto"):
+            return monitor.Monitor(b).check(monitor.Ctx("t", revive=revive), guard=False)
+
+    def test_revives_here(self):
+        self.assertEqual(self.dead(True, True).done, "여기서 부활")
+
+    def test_cannot_revive_finishes(self):
+        self.assertEqual(self.dead(True, False).finish.result, "dead")
+
+    def test_without_revive_left_to_task(self):
+        seen = self.dead(False, True)
+        self.assertIsNone(seen.done)
+        self.assertIsNone(seen.finish)
+
+
+class FinishOnTest(unittest.TestCase):
+    def test_waited_screen_finishes_without_pressing(self):
+        """태스크가 기다리던 화면(어비스 보상 화면)이면 누르지 않고 끝 — 다시 하기·나가기는 태스크가 정한다."""
+        b = fake_bot()
+        ctx = monitor.Ctx("abyss", finish_on={d.REWARD: "reward"})
+        with mock.patch.object(d, "look", return_value=Seen(d.REWARD, hit=(1, 1), frame=frame())):
+            self.assertEqual(monitor.Monitor(b).check(ctx).finish.result, "reward")
+        b.key.assert_not_called()
+        b.click.assert_not_called()
+
+
+class ChooseTest(unittest.TestCase):
+    def test_space_option_is_not_pressed_when_choosing(self):
+        """고를 선택지가 따로 있으면 Space(기본 선택지)를 누르지 않는다 — 게시판 선택지가 메뉴 버튼처럼 보여도."""
+        self.assertIs(handlers.pick(monitor.Ctx("t", menus=True, choose="골드"), d.REPORT), handlers.dialog)
+        self.assertIs(handlers.pick(monitor.Ctx("t", menus=True), d.REPORT), handlers.menu_space)
+
+
 if __name__ == "__main__":
     unittest.main()

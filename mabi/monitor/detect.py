@@ -24,6 +24,7 @@ CRAFT_GO = "craft_go"              # 제작 창 '제작하러 가기' / 설비 �
 SCENE = "scene"                    # 연출 '장면 넘기기'
 REWARD = "reward"                  # 던전·사냥터 보상 화면 ('나가기' · '다시 하기' · '새 임무 선택')
 TOUCH = "touch"                    # 던전 클리어 뒤 '화면을 터치해 주세요'
+DEAD = "dead"                      # 내 캐릭터가 쓰러짐 (패킷 — 부활 창 열림)
 
 OUTSIDE = (RUN_LIMIT, CHARSELECT, TITLE, EXIT_ASK)  # 게임 밖이거나 사람 몫 — 점검자가 누르지 않는다
 
@@ -56,6 +57,8 @@ def look(bot, frame=None, skip=(), ocr: bool = False) -> Seen:
         return Seen(LOADING, src="packet")
     if bot.packets.at_charselect():
         return Seen(CHARSELECT, src="packet")
+    if bot.packets.ok and bot.packets.state.dead:
+        return Seen(DEAD, src="packet")  # 사망 화면 위의 창은 부활한 뒤에 본다
     frame = bot.frame() if frame is None else frame
     ui, a = bot.ui, bot.cfg["arbeit"]
 
@@ -72,7 +75,7 @@ def look(bot, frame=None, skip=(), ocr: bool = False) -> Seen:
             return Seen(DIALOG, src="packet", frame=frame)  # 대화가 막 열리는 중 (HUD 가 아직 남음)
         if (m := f(ui.get("confirm_green"))):
             return Seen(CONFIRM, m, frame=frame)
-        if (m := f(ui.get("reward_exit"))):
+        if (m := f(ui.get("reward_exit")) or f(ui.get("dungeon_retry"))):
             return Seen(REWARD, m, frame=frame)  # 사냥터 보상 화면은 HUD 가 보인 채로 뜬다
         if f(ui.get("dungeon_touch")):
             return Seen(TOUCH, frame=frame)
@@ -89,8 +92,8 @@ def look(bot, frame=None, skip=(), ocr: bool = False) -> Seen:
     # 보상 화면 위에 퀘스트 클리어 '확인' 이 겹쳐 뜬다 (주말 어비스 3판 등) → 확인을 먼저
     if (m := f(ui.get("confirm_green"))):
         return Seen(CONFIRM, m, frame=frame)
-    if (m := f(ui.get("reward_exit"))):
-        return Seen(REWARD, m, frame=frame)
+    if (m := f(ui.get("reward_exit")) or f(ui.get("dungeon_retry"))):
+        return Seen(REWARD, m, frame=frame)  # 어비스 보상 화면은 '다시 하기' 로도
     tab = next((t for n, t in sit.DUNGEON_TABS.items() if f(n)), None)
     if tab:
         return Seen(DUNGEON_WINDOW, frame=frame, info={"tab": tab})

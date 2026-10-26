@@ -68,6 +68,9 @@ def dialog(bot, ctx, seen):
         return None
     if (done := sit.clear_attendance(bot, seen.frame)):
         return done
+    if ctx.choose:
+        from ..tasks.dialogue import menu_shown
+        return _choose(bot, ctx, menu_shown(bot))
     if not ctx.menus:
         return _dialog_blocker(bot, seen)
     # 메뉴를 다루는 일 (아르바이트): 말을 건 직후 메뉴 버튼([수락]·[결과 보고])은 1~2초 늦게 뜬다 → 패킷이 대사라고 하면
@@ -84,6 +87,24 @@ def dialog(bot, ctx, seen):
             ctx.note(key, stage)
             bot.key("space")
             return stage
+    next_line(bot)
+    return "대사 넘김"
+
+
+def _choose(bot, ctx, shown):
+    """선택지 중 ctx.choose 낱말이 든 것을 누른다. 선택지 버튼은 메뉴(패킷 · 없으면 CLI)가 켜진 뒤 조금 늦게 그려진다 →
+    버튼 줄을 글자로 읽고, 원하는 것이 없으면 아무거나 누르지 않고 기다린다 (시간 상한은 태스크 몫). 고른 뒤 남은 대사는 넘긴다."""
+    from ..tasks.dialogue import next_line
+    if "chosen" not in ctx.events and (shown if shown is not None else bot._act(None).get("IsWaitingForSelection")):
+        hit = next(((t, x, y) for t, x, y in ocr.find_texts(bot.frame(), gd.region("board_choices"))
+                    if ctx.choose in ocr.nospace(t)), None)
+        if not hit:
+            bot.sleep(1, 1.3)
+            return "선택지 기다림"
+        bot.click((hit[1], hit[2]))
+        ctx.event("chosen")
+        bot.sleep(1.2, 1.6)
+        return f"선택지 '{hit[0]}'"
     next_line(bot)
     return "대사 넘김"
 
@@ -123,7 +144,7 @@ def confirm(bot, ctx, seen):
 
 
 def touch(bot, ctx, seen):
-    if bot.background:
+    if bot.behind():
         bot.key("space")  # 뒤에서는 키로 (클릭은 게임을 앞으로 가져와야 한다)
     else:
         bot.click(tuple(bot.cfg["dungeon"]["touch_xy"]))
@@ -164,6 +185,19 @@ def dungeon_window(bot, ctx, seen):
         return None  # 던전 숙제는 그 창에서 입장한다 (태스크 몫)
     _esc(bot)
     return "던전 창 닫음"
+
+
+def dead(bot, ctx, seen):
+    """쓰러짐 — '여기서 부활' 만 쓴다 (사용자 방침). 못 하면 이 일은 끝 ('dead' — 어비스는 나가서 처음부터)."""
+    if not ctx.revive:
+        return None
+    from ..tasks.abyss import revive_here
+    from ..tasks.content import ensure_auto
+    if revive_here(bot):
+        ensure_auto(bot)
+        ctx.event("revived")
+        return "여기서 부활"
+    return Finish("dead", "'여기서 부활' 을 못 함")
 
 
 # ---------------------------------------------------------------- 던전·사냥터 끝 (ctx.reward)
@@ -278,7 +312,7 @@ def fast_travel(bot) -> bool:
 
 # 어느 일이든 (기다리는 중에 끼어든 창 포함)
 BASE = {d.LOADING: loading, d.ATTENDANCE: attendance, d.FAREWELL: farewell, d.SCENE: scene, d.DIALOG: dialog,
-        d.CONFIRM: confirm, d.TOUCH: touch}
+        d.CONFIRM: confirm, d.TOUCH: touch, d.DEAD: dead}
 # NPC 메뉴·전달·던전 창을 다루는 일 (ctx.menus — 아르바이트·정리). 기다리는 중의 정리는 메뉴를 누르지 않는다
 MENUS = {d.REPORT: menu_space, d.ACCEPT: menu_space, d.DELIVER: deliver, d.DUNGEON_WINDOW: dungeon_window}
 # 채집·제작·가공 창 (ctx.job — 아르바이트 한 건을 하는 중)
@@ -291,5 +325,7 @@ DUNGEON = {d.REWARD: reward}
 
 
 def pick(ctx, what):
+    if ctx.choose and what in (d.REPORT, d.ACCEPT):
+        return dialog  # 고를 선택지가 따로 있는 대화 — Space(기본 선택지)를 누르지 않는다
     return (BASE.get(what) or (MENUS.get(what) if ctx.menus else None) or (JOB.get(what) if ctx.job else None)
             or (DUNGEON.get(what) if ctx.reward else None))

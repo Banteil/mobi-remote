@@ -268,7 +268,7 @@ def name_in_frame(frame) -> str:
 
 def _leave_dungeon(bot: Bot) -> bool:
     """던전 안이거나 클리어/보상 화면에 남아 있으면 (중단·충돌 뒤 다시 시작한 경우) 마무리하고 나온다."""
-    from .content import dungeon_state, finish_dungeon, game_space, hunt_quest, play_dungeon, wait_field, wait_until
+    from .content import after_clear, dungeon_state, game_space, hunt_quest, play_dungeon, wait_field, wait_until
     ui = bot.ui
     # 검은 구멍·사냥터 안에서 끊겼으면 나가지 않고 끝날 때까지 본다 — 캐릭터를 다시 고르면 그 판(횟수·은동전)이 날아간다.
     # 끝난 뒤 그 숙제를 하면 숙제 쪽이 게임 상태(일일 달성·은동전 수)와 자기 단계 기록을 보고 나머지만 한다
@@ -291,7 +291,7 @@ def _leave_dungeon(bot: Bot) -> bool:
         return True
     if state == "Cleared" or bot.exists(ui["dungeon_touch"]) or bot.exists(ui["reward_exit"]):
         bot.step("dungeon_reward_at_login", "던전 클리어 화면에서 시작 → 보상 받고 나옴")
-        finish_dungeon(bot)
+        after_clear(bot)
         return True
     return False
 
