@@ -52,6 +52,29 @@ def idle(bot) -> bool:
     return not (a.get("IsAutoPlaying") or bot.auto_traveling(a) or bot.dialogue_playing(a) or bot.in_combat(a))
 
 
+def busy_why(bot) -> str | None:
+    """idle() 이 아닌 까닭 (로그용). 패킷으로 안 것과 CLI 로 안 것을 가른다. 멈춰 있으면 None."""
+    p, a = bot.packets, bot._act(None)
+    s = p.state if p.ok else None
+    for name, pk, cli in (("자동 진행", None, "IsAutoPlaying"),
+                          ("자동 이동", s and s.traveling, "IsAutoTraveling"),
+                          ("대화", s and (s.fresh or s.in_dialogue) and s.in_dialogue, "IsDialoguePlaying"),
+                          ("전투", s and s.in_combat, "IsInCombat")):
+        if pk:
+            return f"{name} (패킷 · CLI {bool(a.get(cli))})"
+        if pk is None and a.get(cli):
+            return f"{name} (CLI)"
+    return None
+
+
+def cli_idle(bot) -> bool | None:
+    """CLI 만으로 본 '멈춰 있음'. CLI 가 없으면 None."""
+    a = bot.state.activity() if bot.state.available() else None
+    if not a:
+        return None
+    return not any(a.get(k) for k in ("IsAutoPlaying", "IsAutoTraveling", "IsDialoguePlaying", "IsInCombat"))
+
+
 def look(bot, frame=None, skip=(), ocr: bool = False) -> Seen:
     """지금 상황. skip 에 든 템플릿은 보지 않는다 (기다리는 쪽이 지금 찾는 것). ocr: 템플릿이 잘 안 맞는 '확인'·'화면 터치' 를
     글자로도 본다 (느려서 가끔만)."""

@@ -290,6 +290,7 @@ def _work(bot: Bot, title: str) -> str:
     work = Progress(stall=a["job_timeout"], cap=a.get("job_max", 1800))
     gather = None  # 채집 중이면 Progress — 남은 개수가 gather_timeout 동안 그대로면 포기
     idle_since, pushes, last_sig, last_check = None, 0, None, 0.0
+    busy_since, busy_told = None, False  # 메인 화면인데 '움직이는 중' 으로 보인 때부터
     try:
         while not work.expired:
             bot.sleep(1.0, 1.4)
@@ -336,6 +337,18 @@ def _work(bot: Bot, title: str) -> str:
             if seen.done:
                 idle_since = None
                 continue
+            if seen.what == d.MAIN and not seen.idle and not gather:
+                # 패킷 상태가 끝 신호를 놓쳐 '이동 중' 등으로 남으면 멈춘 캐릭터 앞에서 8분을 기다렸다
+                # ('행운의 편지' 첫 전달 뒤, 2026-10-28 07:06~07:14) → 오래가면 CLI 로 다시 보고 멈췄으면 멈춘 것으로
+                busy_since = busy_since or time.monotonic()
+                if time.monotonic() - busy_since > a.get("busy_recheck", 40) and d.cli_idle(bot):
+                    if not busy_told:
+                        bot.log.warning(f"아르바이트 '{title}': {time.monotonic() - busy_since:.0f}초째 '{d.busy_why(bot)}' 인데 "
+                                        f"CLI 는 멈춤 → 멈춘 것으로 봄")
+                        busy_told = True
+                    seen.idle = True
+            else:
+                busy_since, busy_told = None, False
             if seen.what == d.MAIN and seen.idle and not gather:
                 idle_since = idle_since or time.monotonic()
                 # NPC 대화를 마친 뒤에는 짧게 — 'NPC 와 대화' 조건을 채워도 게임이 다음 걸음으로 가지 않는다 (2026-10-26 사용자)
