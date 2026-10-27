@@ -129,6 +129,7 @@ class SceneSkipTest(unittest.TestCase):
         b = self.bot(background=False, shown={"dialog_skip": 0.9})
         b.scene_skip = False
         b.packets.ok, b.packets.state.cutscene, b.packets.state.fresh = True, True, True
+        b.packets.state.attending.return_value = False
         self.assertIsNone(content.clear_blockers(b))
         b.click.assert_not_called()
 
@@ -266,6 +267,7 @@ class AttendanceTest(unittest.TestCase):
         b.vision.find.side_effect = lambda f, n: Match(n, 5, 5, 10, 10, 0.9) if n in shown else None
         b.packets.ok = True
         b.packets.state.in_dialogue = dialogue
+        b.packets.state.attending.return_value = False  # 출석 시작 패킷은 따로 (test_monitor.AttendanceTest)
         b.skip_button.return_value = None
         b.at_main.return_value = at_main
         return b

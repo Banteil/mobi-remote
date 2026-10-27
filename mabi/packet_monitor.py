@@ -389,7 +389,14 @@ class PacketState:
     # 퀘스트 창 '추천' 항목 종류 (RecommendedActivityType). 2(요일 던전)면 요일 던전을 아직 안 한 것.
     # 2 가 빠지는 건 클리어(Add 6 → Remove 2)일 수도, 가방 정리(5)에 밀린 것(weight1 13:12:45)일 수도 있어 완료 신호로 못 쓴다
     recommend: int | None = None
+    # 출석 대화 시작 (monotonic, 0 = 없음). 날짜가 바뀐 뒤 메인 화면으로 갈 때 NPC 가 한두 마디(무작위) 한 뒤 출석부와
+    # '출석부 건너뛰기' 가 뜬다. 끝 신호는 아직 모른다 → 건너뛰기를 누르거나 맵을 옮기면 지우고, 오래되면 끝난 것으로 본다
+    attendance_at: float = 0.0
     extra: dict = field(default_factory=dict)
+
+    def attending(self, limit: float = 90) -> bool:
+        """출석 대화 중 (시작 패킷을 받고 아직 건너뛰지 않음)."""
+        return bool(self.attendance_at) and time.monotonic() - self.attendance_at < limit
 
     @property
     def fresh(self) -> bool:
@@ -566,6 +573,7 @@ class PacketMonitor:
         s = self.state
         if key == "channel.leaving":
             s.loading = True
+            s.attendance_at = 0.0
         elif key == "channel.entering":
             s.loading = False
             s.channel, s.channel_type, s.channel_name = vals.get("channel"), vals.get("channel_type", ""), \
@@ -582,11 +590,15 @@ class PacketMonitor:
         elif key == "session.logout_ok":  # 캐릭터 선택 화면으로 (me1 03:29:30 — 맵 떠남·세션 정리와 같은 때)
             s.in_game, s.loading = False, False
             s.me = s.my_name = None
+            s.attendance_at = 0.0
             log.info("패킷: 로그아웃 → 캐릭터 선택 화면")
         elif key == "session.entered":  # 게임 서버 입장 (접속·서버 옮김). 맵 진입은 몇 초 뒤
             if s.in_game is False:
                 s.loading = True
             s.in_game = True
+        elif key == "daily.attendance_start":
+            s.attendance_at = time.monotonic()
+            log.info("패킷: 출석 대화 시작")
         elif key == "dungeon.state":
             s.dungeon_state = vals.get("state_name")
             log.info("패킷: 던전 상태 %s", s.dungeon_state)

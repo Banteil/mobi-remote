@@ -61,17 +61,27 @@ def attendance_done(bot) -> None:
 def clear_attendance(bot, frame=None) -> str | None:
     """출석 대사를 하나 넘긴다. 넘긴 것의 이름, 없으면 None.
     - '출석부 건너뛰기' 가 보이면 그것만 누른다 ('대화 넘기기' 는 다른 대사로 이어진다 — 사용자 2026-10-22)
-    - 첫 대사는 버튼이 없고 화면을 한 번 눌러야 '출석부 건너뛰기' 가 나온다. 날짜가 바뀐 뒤(attendance_due)에
-      패킷이 NPC 대화 중이라는데 넘기기 버튼이 없을 때만 가운데를 누른다 (4초에 한 번 — 대사가 뜬 뒤 잠깐 입력을 안 받는다)"""
+    - 그 전에 NPC 가 버튼 없는 대사를 한두 마디 한다 (몇 마디인지는 무작위 — 사용자 2026-10-27). 패킷이 출석 대화
+      시작을 알렸으면 건너뛰기가 뜰 때까지 가운데를 2초에 한 번 눌러 대사를 넘긴다
+    - 패킷이 없으면: 날짜가 바뀐 뒤(attendance_due)에 패킷이 NPC 대화 중이라는데 넘기기 버튼이 없을 때만 가운데를 누른다
+      (4초에 한 번 — 대사가 뜬 뒤 잠깐 입력을 안 받는다)"""
     frame = bot.frame() if frame is None else frame
     c = bot.cfg["login"]
+    p = bot.packets
     if (m := _find(bot, frame, c.get("attendance_skip"))):
         bot.click(m)
         attendance_done(bot)
+        if p.ok:
+            p.state.attendance_at = 0.0  # 끝 패킷을 아직 몰라 넘긴 쪽이 지운다 (안 눌렸으면 건너뛰기가 남아 다시 누른다)
         return "출석부 건너뛰기"
+    if p.ok and p.state.attending():
+        if time.monotonic() - getattr(bot, "_attendance_clicked", 0) < 2:
+            return "출석 대사 기다림"
+        bot._attendance_clicked = time.monotonic()
+        bot.click(tuple(c["first_dialog_xy"]))
+        return "출석 대사 넘김"
     if not attendance_due(bot):
         return None
-    p = bot.packets
     if not (p.ok and p.state.in_dialogue) or bot.skip_button(frame) or bot.at_main():
         return None
     if time.monotonic() - getattr(bot, "_attendance_clicked", 0) < 4:

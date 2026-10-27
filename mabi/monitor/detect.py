@@ -70,6 +70,9 @@ def look(bot, frame=None, skip=(), ocr: bool = False) -> Seen:
     def f(name):
         return (name and name not in skip and bot.vision.has(name) and bot.vision.find(frame, name)) or None
 
+    if bot.packets.ok and bot.packets.state.attending():
+        # 패킷: 출석 대화 중 — 건너뛰기가 뜨기 전 버튼 없는 대사도 출석으로 (hit 이 없으면 대사를 넘긴다)
+        return Seen(ATTENDANCE, f(bot.cfg["login"].get("attendance_skip")), src="packet", frame=frame)
     if f(ui.get("exit_dialog")) or f(ui.get("abyss_exit_dialog")):
         return Seen(EXIT_ASK, frame=frame)
     # 메인 HUD 가 보이면 창이 하나도 안 열린 것 — 창 템플릿(대부분 화면 전체를 뒤져 하나에 0.2초)을 건너뛴다.

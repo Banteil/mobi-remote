@@ -274,5 +274,39 @@ class LoginPopupTest(unittest.TestCase):
         b.key.assert_called_with("esc")
 
 
+class AttendanceTest(unittest.TestCase):
+    """출석: 패킷이 출석 대화 시작을 알리면 '출석부 건너뛰기' 가 뜰 때까지 대사(한두 마디, 무작위)를 넘기고, 뜨면 그것만 누른다."""
+    def _bot(self, skip):
+        import time
+        from mabi.packet_monitor import PacketState
+        b = fake_bot()
+        b.cfg["login"] = {"attendance_skip": "attendance_skip", "first_dialog_xy": [960, 540]}
+        b.packets.ok = True
+        b.packets.state = PacketState(attendance_at=time.monotonic())
+        b._attendance_clicked = 0
+        b.vision.has.return_value = True
+        b.vision.find.side_effect = lambda f, n: skip if n == "attendance_skip" else None
+        return b
+
+    def test_lines_then_skip(self):
+        from mabi import situation
+        b = self._bot(skip=None)
+        self.assertEqual(situation.clear_attendance(b, frame()), "출석 대사 넘김")
+        b.click.assert_called_with((960, 540))
+        self.assertEqual(situation.clear_attendance(b, frame()), "출석 대사 기다림")  # 2초 안엔 다시 누르지 않는다
+        b.vision.find.side_effect = lambda f, n: (1800, 45)
+        self.assertEqual(situation.clear_attendance(b, frame()), "출석부 건너뛰기")
+        b.click.assert_called_with((1800, 45))
+        self.assertFalse(b.packets.state.attending())
+
+    def test_detect_attending_before_screens(self):
+        b = self._bot(skip=None)
+        b.cli.run_limited = False
+        b.map_loading.return_value = False
+        b.packets.at_charselect.return_value = False
+        b.frame.return_value = frame()
+        self.assertEqual(d.look(b).what, d.ATTENDANCE)
+
+
 if __name__ == "__main__":
     unittest.main()
