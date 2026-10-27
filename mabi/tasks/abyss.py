@@ -48,6 +48,11 @@ def inside(bot: Bot) -> bool:
     if loading is not None:
         st = bot.packets.state
         return not loading and st.channel_type == ABYSS_MAP and not st.abyss_result
+    # 어비스 안에서 리모콘을 켜 패킷이 아직 맵을 모를 때도 결과·매칭 신호는 온다 — CLI 장소 이름은 결과·보상 화면과
+    # '다시 하기' 뒤 매칭 중에도 어비스라서, 이것을 먼저 본다 (2026-10-27 다시 하기 뒤를 판 안으로 보고 보상 화면을
+    # 기다리다 다음 판이 시작됨)
+    if bot.packets.ok and (bot.packets.state.abyss_result or bot.packets.state.abyss_matching in (1, 2, 3)):
+        return False
     env = bot.state.query("get_current_environment") if bot.state.available() else None
     if (name := (env or {}).get("ChannelDisplayName", "")):
         return "어비스" in name or any(d in name for d in DUNGEONS)
