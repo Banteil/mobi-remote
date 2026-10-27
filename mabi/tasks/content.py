@@ -583,15 +583,20 @@ def after_clear(bot: Bot, extra_loot: int = 0, again: str | None = None, timeout
     mon = monitor.of(bot)
     ctx = monitor.Ctx(bot.task_id or "dungeon", "클리어 뒤", menus=True, reward=True, extra_loot=extra_loot, again=again)
     end = time.monotonic() + timeout
-    stable, touched, unknown = 0, 0.0, 0
+    stable, touched, buttons = 0, 0.0, False
     while stable < 3:
         if time.monotonic() > end:
             raise StepTimeout(f"클리어 후 화면 정리 실패 → {bot.snapshot('settle').name}")
-        # HUD 없이 뜬 사냥터 클리어 화면은 '화면을 터치해 주세요' 가 반투명이라 그림으로 안 잡혀 3분을 모르는 화면으로 서 있었다
-        # (2026-10-27 09:03) → 모르는 화면이 이어지면 한 번 걸러 글자로도 본다
-        seen = mon.check(ctx, guard=False, ocr=unknown >= 2 and unknown % 2 == 0)
-        unknown = unknown + 1 if seen.what == d.UNKNOWN else 0
-        if seen.finish:
+        seen = mon.check(ctx, guard=False)
+        buttons = buttons or seen.what in (d.REWARD, d.SCENE)
+        if seen.what == d.UNKNOWN and not buttons:
+            # HUD 없이 뜬 클리어 화면은 '화면을 터치해 주세요' 가 반투명이라 그림으로 안 잡혀 3분을 모르는 화면으로 서 있었다
+            # (2026-10-27 09:03) → 장면 넘기기·보상 버튼이 뜰 때까지 모르는 화면이면 위쪽 빈 곳을 계속 누른다
+            stable = 0
+            if time.monotonic() - touched > 2.5:
+                touched = time.monotonic()
+                bot.click(tuple(bot.cfg["dungeon"]["touch_xy"]))
+        elif seen.finish:
             if seen.finish.result == "again":
                 return True
             stable = 0
