@@ -77,18 +77,25 @@ def dialog(bot, ctx, seen):
         return _dialog_blocker(bot, seen)
     # 메뉴를 다루는 일 (아르바이트): 말을 건 직후 메뉴 버튼([수락]·[결과 보고])은 1~2초 늦게 뜬다 → 패킷이 대사라고 하면
     # 바로 넘기고, 아니면 조금 기다렸다 다시 본다. 메뉴가 뜨기 전에 넘기기를 눌러 수락을 놓쳤다 (2026-10-26 10:34 콜헨)
-    from ..tasks.dialogue import menu_open, next_line
+    # 버튼이 보이면 바로 Space. 넘길 대사('대화 넘기기' 버튼)가 남았으면 넘기고, 메뉴만 떠 있으면 오른쪽 위를 누르지 않고
+    # 버튼이 그려지길 기다린다 — 메뉴 앞에서 넘기기 자리를 거듭 누르며 30초 가까이 수락을 못 했다 (2026-10-28 08:00:42~08:01:11)
+    from ..tasks.dialogue import lines_left, menu_open, next_line
     ctx.talked = True
-    if menu_open(bot) is False:
-        next_line(bot)
-        return "대사 넘김"
-    bot.sleep(1.5, 2)
     a = bot.cfg["arbeit"]
-    for name, key, stage in ((a["report"], "arb_report", "결과 보고"), (a["accept"], "arb_accept", "수락")):
-        if bot.exists(name):
-            ctx.note(key, stage)
-            bot.key("space")
-            return stage
+    menu = menu_open(bot)
+    end = time.monotonic() + (3 if menu is not False else 0)
+    while True:
+        for name, key, stage in ((a["report"], "arb_report", "결과 보고"), (a["accept"], "arb_accept", "수락")):
+            if bot.exists(name):
+                ctx.note(key, stage)
+                bot.key("space")
+                return stage
+        if time.monotonic() > end or lines_left(bot):
+            break
+        bot.sleep(0.3, 0.4)
+    if menu and not lines_left(bot):
+        bot.log.debug(f"메뉴는 떠 있는데 '수락'·'결과 보고' 버튼을 못 찾음 ({bot.snapshot('arbeit_menu').name})")
+        return "메뉴 버튼 기다림"
     next_line(bot)
     return "대사 넘김"
 
