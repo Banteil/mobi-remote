@@ -33,8 +33,9 @@ _norm = ui_text.norm
 _find_text = ui_text.find
 
 
-def _click_text(bot: Bot, want: str, region=None, exact: bool = True, what: str = "", tries: int = 4) -> None:
-    ui_text.click(bot, want, region, exact, what, tries, shot="abyss")
+def _click_text(bot: Bot, want: str, region=None, exact: bool = True, what: str = "", tries: int = 4,
+                key: str | None = None) -> None:
+    ui_text.click(bot, want, region, exact, what, tries, shot="abyss", key=key)
 
 
 ABYSS_MAP = "InstanceAbyssDungeon"  # 패킷의 맵 종류
@@ -518,7 +519,7 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
             bot.background = False
             open_entry(bot, dungeon, difficulty, at=at)
             at = ""  # 처음 한 번만 — 다음 입장은 판이 끝난 자리(메인)에서
-            _click_text(bot, gd.text("abyss_enter"), gd.region("abyss_entry_right"), what="입장하기")
+            _click_text(bot, gd.text("abyss_enter"), gd.region("abyss_entry_right"), what="입장하기", key="space")
             if behind:
                 bot.background = True
                 bot.window.give_back(user_window)

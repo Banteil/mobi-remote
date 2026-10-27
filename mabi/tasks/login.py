@@ -368,7 +368,7 @@ def _run(bot: Bot, cfg: dict, character: dict | None) -> str:
     m = wait_screen([main, charsel, title])
     bot.log.debug(f"접속 시작 화면: {m.name}")
     if m.name == title:
-        bot.click(m)
+        bot.key("space")  # 타이틀 '게임 시작' (Space 배지)
         m = wait_screen([main, charsel])
     if m.name == main and character is not None:  # 타이틀에서 바로 마지막 캐릭터로 들어간 경우
         bot.to_charselect()

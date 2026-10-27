@@ -166,7 +166,7 @@ def scan(bot: Bot, cfg: dict) -> dict:
         bot.to_charselect()
     m = bot.wait_any([charsel, title, main], timeout=cfg["login"]["timeout"])
     if m.name == title:
-        bot.click(m)
+        bot.key("space")  # 타이틀 '게임 시작' (Space 배지)
         m = bot.wait_any([charsel, main], timeout=cfg["login"]["timeout"])
     if m.name == main:
         bot.to_charselect()

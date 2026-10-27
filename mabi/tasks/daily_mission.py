@@ -242,7 +242,7 @@ def do_alchemy(bot: Bot, c: dict, m: dict) -> str:
             result = f"승급할 보석 없음 → {bot.snapshot('alchemy').name}"
     else:
         mark = bot.packets.mark()
-        bot.click(a["upgrade_all"])  # 한 번만
+        bot.key("a")  # '모두 승급' (A 배지) 한 번만
         try:
             _wait_done(bot, a["mission_keyword"], 20, mark, "연금술 미션 완료", interval=2)
             result = "연금술 완료"

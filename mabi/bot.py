@@ -593,7 +593,7 @@ class Bot:
 
     def to_main(self, tries: int = 10) -> None:
         """ESC 와 팝업 닫기를 반복해서 필드 메인 화면으로 돌아온다. 돌아오면 배고픔도 확인한다."""
-        exit_dialog, cancel = self.ui["exit_dialog"], self.ui["exit_dialog_cancel"]
+        exit_dialog = self.ui["exit_dialog"]
         wait_end = time.monotonic() + 120  # 로딩·연출을 기다리는 건 tries 와 따로 (그 동안은 누르는 게 없다)
         n = 0
         while n < tries:
@@ -621,7 +621,7 @@ class Bot:
                 continue
             n += 1
             if self.vision.has(exit_dialog) and self.exists(exit_dialog):
-                self.click(cancel)
+                self.key("esc")  # '취소' (ESC 배지) — 단축키로
                 continue
             if self.exists(self.ui["menu_quit"]):  # 메뉴(ESC)가 열려 있음 → ESC 로 닫고 애니메이션 대기
                 self.key("esc")
@@ -662,7 +662,7 @@ class Bot:
             raise StepTimeout(f"접속 오류 창 ({m.name})")
         if m.name == ui["title_start"]:
             self.log.warning("캐릭터 선택 대신 타이틀로 나감 → 게임 시작")
-            self.click(m)
+            self.key("space")  # 타이틀 '게임 시작' (Space 배지)
             self.wait(ui["charselect_title"], timeout=60)
         self.state.available(refresh=True)
 

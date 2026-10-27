@@ -30,12 +30,16 @@ def wait(bot: Bot, want: str, region=None, timeout: float = 5, exact: bool = Tru
 
 
 def click(bot: Bot, want: str, region=None, exact: bool = True, what: str = "", tries: int = 4,
-          shot: str = "text") -> None:
-    """want 글자를 찾아 누른다. tries 번 봐도 없으면 CannotProceed (스크린샷 shot)."""
+          shot: str = "text", key: str | None = None) -> None:
+    """want 글자를 찾아 누른다. tries 번 봐도 없으면 CannotProceed (스크린샷 shot).
+    key: 버튼에 단축키가 붙어 있으면 글자로 있는 것만 확인하고 클릭 대신 그 키 (사용자 2026-10-28)."""
     for _ in range(tries):
         hit = find(bot, want, region, exact)
         if hit:
-            bot.click(hit)
+            if key:
+                bot.key(key)
+            else:
+                bot.click(hit)
             bot.sleep(1.2, 1.6)
             return
         bot.sleep(1.0, 1.4)
