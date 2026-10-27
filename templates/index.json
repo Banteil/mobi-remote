@@ -197,6 +197,15 @@
       42
     ]
   },
+  "window_close_x": {
+    "threshold": 0.9,
+    "roi": [
+      1840,
+      15,
+      70,
+      65
+    ]
+  },
   "dungeon_touch": {
     "roi": [
       874,

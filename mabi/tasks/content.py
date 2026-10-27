@@ -617,7 +617,8 @@ def _clear_show(bot: Bot, mon, d, end: float) -> None:
     from .. import monitor
     kind = clear_kind(bot)
     ctx = monitor.Ctx(bot.task_id or "dungeon", "클리어 뒤 연출", menus=True, finish_on={d.REWARD: "menu"})
-    touched, quiet = 0.0, 0
+    touched, quiet, closed = 0.0, 0, 0
+    close_x = bot.cfg["dungeon"].get("window_close")
     bot.log.debug(f"클리어 뒤 연출 ({kind or '패킷 모름'})")
     while True:
         if time.monotonic() > end:
@@ -630,6 +631,15 @@ def _clear_show(bot: Bot, mon, d, end: float) -> None:
             return  # 보상 메뉴 없이 나왔다
         if seen.done:
             quiet = 0
+        elif (seen.what == d.UNKNOWN and closed < 3 and close_x and bot.vision.has(close_x)
+              and bot.vision.find(seen.frame, close_x)):
+            # 위쪽 빈 곳을 누르다 보상 물품을 눌러 장비 비교 창이 열리면, 그 창 앞에서 3분 동안 계속 눌렀다
+            # (사냥터 클리어, 2026-10-28 07:51~07:54) → 연출 화면에는 없는 오른쪽 위 X 가 보이면 ESC 로 닫는다
+            closed += 1
+            bot.log.warning(f"클리어 뒤 연출 중 창이 열림 → 닫음 ({bot.snapshot('clear_window').name})")
+            bot.key("esc")
+            bot.sleep(1.0, 1.5)
+            continue
         elif seen.what in (d.MAIN, d.UNKNOWN) and not (bot.dialogue_playing() or bot.cutscene_playing()):
             if kind:
                 if time.monotonic() - touched > 2.5:
