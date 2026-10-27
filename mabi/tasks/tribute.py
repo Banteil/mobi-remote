@@ -19,9 +19,13 @@ CARD_H = 450  # 퀘스트 카드 하나의 높이 (1920 기준, 제목 → '진�
 LIST_X0, LIST_Y0 = 1220, 220  # 퀘스트 창 오른쪽 카드 목록의 왼쪽 위 (탭 줄 위까지가 목록)
 
 
-def quest_visible(bot: Bot) -> bool:
+def quest_visible(bot: Bot) -> bool | None:
+    """CLI 퀘스트 목록에 고난도 퀘스트가 있나. 목록이 통째로 비었으면 None (모름) — 아르바이트·주간 목표도 없는 빈 목록이
+    와서 3분을 기다리다 건너뛰었다 (2026-10-28 07:54, 사냥터 클리어 화면 정리 실패 뒤). 그때는 퀘스트 창에서 직접 찾는다."""
     quests = bot.state.query("get_quests") if bot.state.available() else None
-    return any(q.get("QuestTitle") == QUEST_TITLE for q in quests or [])
+    if not quests:
+        return None
+    return any(q.get("QuestTitle") == QUEST_TITLE for q in quests)
 
 
 def open_quest(bot: Bot, c: dict) -> None:
@@ -60,7 +64,7 @@ def open_quest(bot: Bot, c: dict) -> None:
 def verify(bot: Bot, cfg: dict) -> bool:
     """고난도 퀘스트를 깼으면 (목록에서 사라짐) 완료. 공물이 남아 있어도 숙제로는 하루 한 번이면 된다.
     공물이 모자라 못 도는 날도 완료."""
-    if not quest_visible(bot):
+    if quest_visible(bot) is False:
         return True
     count = bot.read_counter("tribute")
     return count is not None and count < cfg["tribute"]["cost"]
@@ -88,7 +92,10 @@ def run(bot: Bot, cfg: dict) -> str:
         return f"공물 {start} → " + _enter(bot, c, start)
     if not quest_visible(bot):
         bot.step("tr_wait", f"공물 {start}개 — 고난도 퀘스트가 나타나길 기다림")
-    while not quest_visible(bot):
+    while not (seen := quest_visible(bot)):
+        if seen is None:
+            bot.log.info("CLI 퀘스트 목록이 비어 있음 → 퀘스트 창에서 직접 찾음")
+            break
         if time.monotonic() > end:
             raise CannotProceed(f"공물 {start}개인데 {c['quest_wait']}초 동안 고난도 퀘스트가 나타나지 않음 → 건너뜀")
         bot.log.info("고난도 퀘스트 대기 중")
@@ -96,7 +103,7 @@ def run(bot: Bot, cfg: dict) -> str:
 
     results = []
     count = start
-    while count >= c["cost"] and len(results) < c["max_runs"] and quest_visible(bot):
+    while count >= c["cost"] and len(results) < c["max_runs"] and quest_visible(bot) is not False:
         bot.step("tr_open", f"{len(results) + 1}회차 — 고난도 퀘스트 진행하기 (공물 {count}개)", tribute=count)
         def go():
             open_quest(bot, c)
