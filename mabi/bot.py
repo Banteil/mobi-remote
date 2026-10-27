@@ -47,6 +47,8 @@ class AuthBlocked(Exception):
 
 
 SHOT_KEEP_DAYS = 7
+# 음식을 먹은(또는 못 먹은) 뒤 다시 B 를 누르기까지 (초)
+EAT_GAP = 60
 SHOT_NAME = re.compile(r"\d{8}_\d{6}_.+\.png")  # snapshot() 이 붙이는 이름
 
 
@@ -570,11 +572,22 @@ class Bot:
         tracked = self.daily is not None and slot is not None
         if tracked and self.daily.count(slot, "food") >= self.cfg["run"].get("food_max", 2):
             return False
+        if time.monotonic() < getattr(self, "_eat_after", 0.0):
+            return False  # 방금 먹었거나 못 먹었다 — 한동안 다시 누르지 않는다
         if self.no_food(look=False) or not self.exists(name) or self.no_food():
             return False
+        mark = self.packets.mark()
         self.key("b")
+        # 패킷: 먹으면 포만감이 온다. 안 오면 못 먹은 것 (어비스 판 안에서 6초마다 3분 넘게 B 만 누른 일 — 2026-10-27).
+        # 먹었어도 'B' 표시가 바로 안 사라질 수 있어 먹은 뒤에도 EAT_GAP 동안은 다시 누르지 않는다
+        got = self.packets.wait("char.satiety", 4, after=mark) if self.packets.ok else None
+        self._eat_after = time.monotonic() + EAT_GAP
+        if self.packets.ok and got is None:
+            self.log.warning(f"배고픔 표시 → B 를 눌렀지만 먹지 못함 (포만감 패킷 없음) → {EAT_GAP:.0f}초 뒤 다시")
+            return False
         n = self.daily.bump(slot, "food") if tracked else 0
-        self.log.info(f"배고픔 표시 → 음식 먹기 (B){f' — 오늘 {n}번째' if tracked else ''}")
+        full = f" · 포만감 {got.vals.get('satiety')}" if got is not None else ""
+        self.log.info(f"배고픔 표시 → 음식 먹기 (B){f' — 오늘 {n}번째' if tracked else ''}{full}")
         self.sleep(1.5, 2)
         return True
 
