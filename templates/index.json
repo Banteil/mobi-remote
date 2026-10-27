@@ -564,6 +564,9 @@
   "toast_no_material": {
     "threshold": 0.8
   },
+  "arbeit_accept": {
+    "threshold": 0.78
+  },
   "craft_transfer_title": {
     "threshold": 0.8
   },
