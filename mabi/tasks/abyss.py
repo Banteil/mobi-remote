@@ -120,14 +120,16 @@ def where(bot: Bot, dungeon: str) -> str:
         return "loading"
     if inside(bot):
         return "play"
+    # 패킷: 우연한 만남 매칭 중 (화면은 필드 + 오른쪽 '우연한 만남' 창). 보상 화면에서 다시 하기를 누른 뒤에도 보상 화면이
+    # 남은 채 매칭하므로 보상 화면보다 먼저 본다 (2026-10-27 그 사이 일시정지·이어 하기 → 보상 화면으로 보고 나가 버림)
+    if bot.packets.ok and bot.packets.state.abyss_matching in (1, 2, 3):
+        return "matching"
     if after_clear(bot):
         return "reward"
     if bot.at_main():
         return "main"
     if bot.exists(bot.ui["menu_quit"]):
         return "menu"
-    if bot.packets.ok and bot.packets.state.abyss_matching in (1, 2, 3):
-        return "matching"  # 패킷: 우연한 만남 매칭 중 (화면은 필드 + 오른쪽 '우연한 만남' 창)
     if _find_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top")):
         return "entry" if _entry_button(bot) else "matching"
     if _find_text(bot, dungeon, gd.region("abyss_list")):
@@ -369,6 +371,10 @@ def _switch_character(bot: Bot, cfg: dict, character: dict) -> None:
     from . import login
     bot.background = False
     at = where_settled(bot, cfg["abyss"]["dungeon"])
+    # 패킷이 이름을 알면 화면과 상관없이 바로 안다 — 같은 캐릭터면 매칭·보상 화면도 그대로 repeat 가 잇는다
+    # (2026-10-27 보상 화면에서 일시정지 뒤 이어 하기 → 이름을 못 읽는 보상 화면이라 나가기부터 눌렀다)
+    if at in ("play", "reward", "matching") and name_matches(current_name(bot), character.get("name", "")):
+        return
     if at == "matching":
         bot.log.info("매칭 중에 시작 → 들어간 뒤 캐릭터 확인")
         bot.step("abyss_match", "우연한 만남 매칭 중")
