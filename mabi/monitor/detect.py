@@ -15,6 +15,7 @@ MAIN, UNKNOWN, CRAFT = sit.MAIN, sit.UNKNOWN, sit.CRAFT
 EXIT_ASK = "exit_ask"              # '게임을 종료하시겠습니까?' · '던전에서 퇴장하시겠습니까?' — Space·확인이 '예' 라 건드리지 않는다
 HOWTO = "howto"                    # '구하는 방법' 창 (모자란 물품을 어디서 구하나)
 ITEM_MISSING = "item_missing"      # '퀘스트를 위해 필요한 아이템이 없습니다.'
+ITEM_USE = "item_use"              # 가방이 열리며 퀘스트 아이템에 '사용하기' (아이템을 쓰는 아르바이트)
 CONFIRM = "confirm"                # 초록 '확인' 버튼 (퀘스트 클리어 등)
 ACCEPT = "accept"                  # NPC 메뉴 '수락' (Space)
 REPORT = "report"                  # NPC 메뉴 Space 선택지 ('결과 보고' 등)
@@ -112,7 +113,7 @@ def look(bot, frame=None, skip=(), ocr: bool = False) -> Seen:
     if tab:
         return Seen(DUNGEON_WINDOW, frame=frame, info={"tab": tab})
     # 아르바이트·제작 창 (아르바이트가 보던 순서 그대로)
-    for what, name in ((HOWTO, a["howto_title"]), (ITEM_MISSING, a["item_missing"]), (CONFIRM, ui["confirm_green"]),
+    for what, name in ((HOWTO, a["howto_title"]), (ITEM_MISSING, a["item_missing"]), (ITEM_USE, a.get("item_use")), (CONFIRM, ui["confirm_green"]),
                        (DELIVER, a["deliver_title"]), (REPORT, a["report"]), (ACCEPT, a["accept"]),
                        (ALTER, a["alter_button"]), (CRAFT_TRANSFER, a["craft_transfer"]),
                        # '제작하기' 템플릿은 '제작하러 가기' 에도 0.8 정도로 걸린다 → '가기' 를 먼저

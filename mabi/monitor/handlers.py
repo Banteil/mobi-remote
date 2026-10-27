@@ -310,6 +310,19 @@ def item_missing(bot, ctx, seen):
     return "모자란 물품 줄 → 구하는 방법"
 
 
+def item_use(bot, ctx, seen):
+    """아이템을 쓰는 일 ('행운의 편지' 등): 진행하기를 누르면 게임이 가방을 열고 그 아이템에 '사용하기' 를 띄운다 → Space.
+    모르는 화면으로 보고 두 번 진행하기만 다시 누르다 막힘으로 끝냈다 (2026-10-28)."""
+    ctx.n["item_use"] = ctx.n.get("item_use", 0) + 1
+    if ctx.n["item_use"] > 3:
+        _esc(bot)
+        return Finish("stuck", f"'사용하기' 를 눌러도 그대로 → {_shot(bot, 'arbeit_item_use')}")
+    ctx.note("arb_item_use", "아이템 사용")
+    bot.key("space")
+    bot.sleep(1.5, 2)
+    return "아이템 사용"
+
+
 def alter(bot, ctx, seen):
     # 가공은 시간이 걸려(수십 초~) 기다리지 않고 건너뛴다 (사용자 규칙)
     _esc(bot)
@@ -371,7 +384,7 @@ BASE = {d.LOADING: loading, d.ATTENDANCE: attendance, d.FAREWELL: farewell, d.SC
 # NPC 메뉴·전달·던전 창을 다루는 일 (ctx.menus — 아르바이트·정리). 기다리는 중의 정리는 메뉴를 누르지 않는다
 MENUS = {d.REPORT: menu_space, d.ACCEPT: menu_space, d.DELIVER: deliver, d.DUNGEON_WINDOW: dungeon_window}
 # 채집·제작·가공 창 (ctx.job — 아르바이트 한 건을 하는 중)
-JOB = {d.HOWTO: howto, d.ITEM_MISSING: item_missing, d.ALTER: alter, d.CRAFT_TRANSFER: craft_transfer,
+JOB = {d.HOWTO: howto, d.ITEM_MISSING: item_missing, d.ITEM_USE: item_use, d.ALTER: alter, d.CRAFT_TRANSFER: craft_transfer,
        d.CRAFT_GO: craft_go, d.CRAFT: craft}
 
 

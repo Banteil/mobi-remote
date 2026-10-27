@@ -252,6 +252,7 @@ craft_short_toast = "toast_no_material"  # 제작 버튼을 눌렀는데 재료�
 craft_transfer = "craft_transfer_title"  # '재료를 전송하시겠습니까?' (모자란 재료를 보관함에서) → 확인(Space)
 alter_button = "alter_button"         # 가공 시설 창의 '가공하기' — 가공이 필요한 일은 시간이 걸려 건너뜀
 item_missing = "item_missing"         # '퀘스트를 위해 필요한 아이템이 없습니다.' 창 제목
+item_use = "item_use_button"          # 가방이 열리며 퀘스트 아이템에 '사용하기' (Space) — 아이템을 쓰는 일 (행운의 편지 등)
 item_row_from_title = [170, 147]      # 그 제목 템플릿 왼쪽 위 → 첫 물품 줄 가운데 (누르면 '구하는 방법' 이 열린다)
 howto_title = "howto_title"           # '구하는 방법' 창 제목
 howto_area = [1200, 240, 720, 700]    # 구하는 방법 목록 (맨 위가 가장 가까운 '추천')

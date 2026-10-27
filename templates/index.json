@@ -558,6 +558,15 @@
   "craft_transfer_title": {
     "threshold": 0.8
   },
+  "item_use_button": {
+    "threshold": 0.85,
+    "roi": [
+      860,
+      940,
+      210,
+      110
+    ]
+  },
   "alter_button": {
     "threshold": 0.88
   },
