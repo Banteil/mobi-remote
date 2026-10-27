@@ -300,6 +300,55 @@ class NpcVisitTest(unittest.TestCase):
             nl.assert_not_called()
 
 
+class InterruptTest(unittest.TestCase):
+    """무작위 이벤트 끼어들기 (monitor.interrupts): 패킷 신호 → 하던 일 멈추고 넘김 → 돌아감."""
+    def _bot(self, dialog=True, menu=False, owned=False, attending=False):
+        b = fake_bot()
+        b.packets.ok = True
+        s = b.packets.state
+        s.in_dialogue, s.dialogue_menu = dialog, menu
+        s.attending.return_value = attending
+        b.npc_owned.return_value = owned
+        b.task_id = "silver"
+        return b
+
+    def test_pending(self):
+        from mabi.monitor import interrupts
+        self.assertEqual(interrupts.pending(self._bot()), "dialog")
+        self.assertIsNone(interrupts.pending(self._bot(menu=True)))    # 메뉴가 있는 대화는 태스크 몫
+        self.assertIsNone(interrupts.pending(self._bot(owned=True)))   # NPC 대화를 다루는 일 (아르바이트 등)
+        self.assertEqual(interrupts.pending(self._bot(dialog=False, attending=True)), "attendance")
+        b = self._bot()
+        b.packets.ok = False
+        self.assertIsNone(interrupts.pending(b))
+
+    def test_handle_until_signal_gone(self):
+        from mabi.monitor import interrupts
+        b = self._bot()
+        mon = mock.Mock()
+        calls = []
+
+        def check(ctx, guard=False):
+            calls.append(ctx.what)
+            if len(calls) == 2:
+                b.packets.state.in_dialogue = False  # 대사를 넘겨 대화가 끝남
+            return Seen(d.DIALOG, frame=frame(), done="대사 넘김" if len(calls) <= 2 else None)
+        mon.check.side_effect = check
+        with mock.patch("mabi.monitor.of", return_value=mon):
+            self.assertTrue(interrupts.handle(b, "dialog"))
+        self.assertEqual(calls[0], "끼어들기 (dialog)")
+        b.interrupt_cooldown.assert_not_called()
+
+    def test_gives_up_and_cools_down(self):
+        from mabi.monitor import interrupts
+        b = self._bot()
+        mon = mock.Mock()
+        mon.check.return_value = Seen(d.DIALOG, frame=frame())  # 넘기지 못함 (HUD 가 남아 있는 등)
+        with mock.patch("mabi.monitor.of", return_value=mon), mock.patch.object(interrupts, "IDLE", 0):
+            interrupts.handle(b, "dialog")
+        b.interrupt_cooldown.assert_called_once_with("dialog", interrupts.COOLDOWN)
+
+
 class AttendanceTest(unittest.TestCase):
     """출석: 패킷이 출석 대화 시작을 알리면 '출석부 건너뛰기' 가 뜰 때까지 대사(한두 마디, 무작위)를 넘기고, 뜨면 그것만 누른다."""
     def _bot(self, skip):

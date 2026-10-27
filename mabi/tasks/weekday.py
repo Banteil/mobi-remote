@@ -101,6 +101,12 @@ def choose_on_board(bot: Bot, c: dict, want: str) -> None:
 
 
 def run(bot: Bot, cfg: dict) -> str:
+    """NPC 대화를 스스로 다루는 일 — 그동안 대화는 끼어들기로 넘기지 않는다 (Bot.npc_talk, monitor.interrupts)."""
+    with bot.npc_talk():
+        return _task(bot, cfg)
+
+
+def _task(bot: Bot, cfg: dict) -> str:
     c = cfg["weekday_dungeon"]
     # 요일 던전 창이 이미 열려 있으면 (입구에 선 채 끊김·다시 켬) 카드·이동을 건너뛰고 거기서 입장한다.
     # 완료 확인(verify)은 가이드 창을 열어 던전 창을 닫으므로 그보다 먼저 본다

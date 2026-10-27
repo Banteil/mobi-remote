@@ -276,6 +276,12 @@ def _leave_dungeon(bot: Bot) -> bool:
 
 
 def run(bot: Bot, cfg: dict, character: dict | None = None) -> str:
+    """NPC 대화를 스스로 다루는 일 — 그동안 대화는 끼어들기로 넘기지 않는다 (Bot.npc_talk, monitor.interrupts)."""
+    with bot.npc_talk():
+        return _task(bot, cfg, character)
+
+
+def _task(bot: Bot, cfg: dict, character: dict | None = None) -> str:
     """character 가 None 이면 현재(또는 마지막) 캐릭터로 접속.
     '계정 인증 실패' 창이 있거나 접속 중에 뜨면 확인 → 쉬었다가 한 번 더 시도한다."""
     for attempt in range(2):

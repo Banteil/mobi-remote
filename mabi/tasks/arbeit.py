@@ -431,6 +431,12 @@ def verify(bot: Bot, cfg: dict) -> bool:
 
 
 def run(bot: Bot, cfg: dict) -> str:
+    """NPC 대화를 스스로 다루는 일 — 그동안 대화는 끼어들기로 넘기지 않는다 (Bot.npc_talk, monitor.interrupts)."""
+    with bot.npc_talk():
+        return _task(bot, cfg)
+
+
+def _task(bot: Bot, cfg: dict) -> str:
     if not bot.state.available():
         raise CannotProceed("아르바이트는 진행 상태 확인에 CLI 가 필요함")
     a = cfg["arbeit"]

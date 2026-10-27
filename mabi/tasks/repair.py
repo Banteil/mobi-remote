@@ -159,6 +159,12 @@ def _open_repair(bot: Bot) -> bool:
 
 
 def run(bot: Bot) -> None:
+    """NPC 대화를 스스로 다루는 일 — 그동안 대화는 끼어들기로 넘기지 않는다 (Bot.npc_talk, monitor.interrupts)."""
+    with bot.npc_talk():
+        return _task(bot)
+
+
+def _task(bot: Bot) -> None:
     """대장간에 가서 전체 수리하고 메인 화면으로 돌아온다. 못 하면 CannotProceed."""
     before = durability(bot)
     bot.log.info(f"장비 수리하러 감 (내구도 {before * 100:.0f}%)" if before is not None else "장비 수리하러 감")

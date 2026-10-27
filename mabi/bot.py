@@ -9,6 +9,7 @@ import logging
 import random
 import re
 import time
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -118,6 +119,13 @@ class Bot:
         # 혼자 오래 도는 일(일일 숙제·어비스 반복)만 켠다 — runner·abyss.repeat 가 설정
         self.auto_clear = False
         self._clearing = False
+        # 무작위 이벤트 끼어들기 (monitor.interrupts) — 패킷 신호가 오면 기본 동작(check_stop) 안에서 하던 일을 멈추고 넘긴다.
+        # _npc_owned: NPC 대화를 태스크가 다루는 중 (npc_talk) · _interrupting: 끼어들기·점검 중 (다시 끼어들지 않는다)
+        self.interrupts = not dry_run
+        self._npc_owned = 0
+        self._interrupting = False
+        self._interrupt_off: dict[str, float] = {}
+        self.interrupt_spent = 0.0  # 끼어들기에 쓴 시간 합 — 기다리는 쪽이 시간 상한을 그만큼 늘린다
         # 연출의 '장면 넘기기' 를 누르나. 어비스·던전을 도는 동안은 끈다 — 연출은 스스로 끝나고, 누르면 뒤에서 돌던 게임이
         # 앞으로 튀어나온다 (2026-10-25 사용자: "어비스나 던전 돌 동안은 장면 넘기기를 안해도 될 것 같아")
         self.scene_skip = True
@@ -145,6 +153,48 @@ class Bot:
         if self.stopper.stopped.is_set():
             raise StopRequested()
         self.check_weight()
+        self.check_interrupt()
+
+    def check_interrupt(self) -> None:
+        """패킷이 무작위 이벤트(NPC 가 말을 걺·출석)를 알리면 하던 일을 멈추고 점검자가 넘긴 뒤 돌아간다 (monitor.interrupts).
+        뒤에서 도는 중(어비스 반복)은 클릭이 게임을 앞으로 가져오므로 하지 않는다 — 거기선 태스크의 점검자가 본다."""
+        if self._interrupting or not self.interrupts or not self.packets.ok:
+            return
+        from .monitor import interrupts
+        what = interrupts.pending(self)  # 패킷 상태만 본다 — 0.1초마다 불려도 가볍다
+        if not what or time.monotonic() < self._interrupt_off.get(what, 0) or self.behind():
+            return
+        self._interrupting = True
+        t0 = time.monotonic()
+        try:
+            interrupts.handle(self, what)
+        finally:
+            self._interrupting = False
+            self.interrupt_spent += time.monotonic() - t0
+
+    def interrupt_cooldown(self, what: str, secs: float) -> None:
+        self._interrupt_off[what] = time.monotonic() + secs
+
+    @contextmanager
+    def npc_talk(self):
+        """이 동안 NPC 대화는 태스크 몫 — 끼어들기로 넘기지 않는다 (메뉴가 1~2초 늦게 떠 그 전에 넘기면 놓친다)."""
+        self._npc_owned += 1
+        try:
+            yield
+        finally:
+            self._npc_owned -= 1
+
+    def npc_owned(self) -> bool:
+        return self._npc_owned > 0
+
+    @contextmanager
+    def no_interrupt(self):
+        """끼어들지 않는 구간 (점검자가 화면을 보고 처리하는 중 등)."""
+        prev, self._interrupting = self._interrupting, True
+        try:
+            yield
+        finally:
+            self._interrupting = prev
 
     def check_weight(self, every: float = 20) -> None:
         """watch_weight 가 켜져 있으면 every 초마다 CLI 로 가방 무게를 보고, 꽉 찼으면 Overweight."""
@@ -333,7 +383,7 @@ class Bot:
         for n in names:
             self._require_template(n)
         start = time.monotonic()
-        end, checked = start + timeout, start
+        end, checked, spent = start + timeout, start, self.interrupt_spent
         while True:
             frame = self.frame()
             for n in names:
@@ -341,6 +391,7 @@ class Bot:
                 if m:
                     return m
             now = time.monotonic()
+            end, spent = end + self.interrupt_spent - spent, self.interrupt_spent  # 끼어들기에 쓴 시간만큼 더 기다린다
             if now > end:
                 raise StepTimeout(f"{timeout:.0f}s 안에 {names} 중 아무것도 나타나지 않음")
             if self.auto_clear and now - start > 4 and now - checked > 3:

@@ -113,6 +113,16 @@ class Monitor:
 
     # ---------------------------------------------------------------- 점검
     def check(self, ctx: Ctx, frame=None, skip=(), ocr: bool = False, guard: bool = True) -> d.Seen:
+        # 점검하는 동안(처리기의 sleep·클릭 포함)은 끼어들지 않는다 — 점검자가 이미 지금 화면을 다룬다
+        if getattr(self.bot, "_interrupting", True) is not False:
+            return self._check(ctx, frame, skip, ocr, guard)
+        self.bot._interrupting = True
+        try:
+            return self._check(ctx, frame, skip, ocr, guard)
+        finally:
+            self.bot._interrupting = False
+
+    def _check(self, ctx: Ctx, frame=None, skip=(), ocr: bool = False, guard: bool = True) -> d.Seen:
         bot = self.bot
         t0 = time.monotonic()
         seen = d.look(bot, frame, skip=skip, ocr=ocr)
