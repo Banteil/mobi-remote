@@ -274,6 +274,32 @@ class LoginPopupTest(unittest.TestCase):
         b.key.assert_called_with("esc")
 
 
+class NpcVisitTest(unittest.TestCase):
+    """기다리는 중 NPC 가 말을 걸어 옴 (주간 목표 첫 달성 뒤 에반 — 다시 하기 뒤 다음 판 안에서도): 넘기기 버튼이 안 잡혀도
+    패킷이 대화 중·메뉴 없음이라면 대사를 넘긴다. 메뉴가 있거나 HUD 가 보이면 누르지 않는다."""
+    def _bot(self, menu=False, hud=None):
+        b = fake_bot()
+        b.ui = {"main_hud": "hud"}
+        b.skip_button.return_value = None
+        b.behind.return_value = False
+        b.packets.ok = True
+        b.packets.state.fresh, b.packets.state.in_dialogue, b.packets.state.dialogue_menu = True, True, menu
+        b.vision.find.return_value = hud
+        return b
+
+    def test_lines_advanced_by_packet(self):
+        b = self._bot()
+        with mock.patch("mabi.tasks.dialogue.next_line") as nl:
+            self.assertEqual(handlers._dialog_blocker(b, Seen(d.DIALOG, frame=frame())), "대사 넘김")
+        nl.assert_called_once()
+
+    def test_menu_or_hud_left_alone(self):
+        for b in (self._bot(menu=True), self._bot(hud=(1, 1))):
+            with mock.patch("mabi.tasks.dialogue.next_line") as nl:
+                self.assertIsNone(handlers._dialog_blocker(b, Seen(d.DIALOG, frame=frame())))
+            nl.assert_not_called()
+
+
 class AttendanceTest(unittest.TestCase):
     """출석: 패킷이 출석 대화 시작을 알리면 '출석부 건너뛰기' 가 뜰 때까지 대사(한두 마디, 무작위)를 넘기고, 뜨면 그것만 누른다."""
     def _bot(self, skip):
