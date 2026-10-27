@@ -247,32 +247,48 @@ def name_in_frame(frame) -> str:
 
 def _leave_dungeon(bot: Bot) -> bool:
     """던전 안이거나 클리어/보상 화면에 남아 있으면 (중단·충돌 뒤 다시 시작한 경우) 마무리하고 나온다."""
-    from .content import after_clear, dungeon_state, game_space, hunt_quest, play_dungeon, wait_field, wait_until
+    from .content import after_clear, dungeon_state, game_space, hunt_quest, inside_space, play_dungeon, wait_field, wait_until
     ui = bot.ui
+    # 끊긴 숙제가 요일 던전이면 보상 화면에서 추가 루팅까지 (그냥 나가면 숙제 쪽은 일일 달성만 보고 끝내 추가 루팅이 빠진다)
+    prog = bot.daily.progress() if bot.daily else None
+    cut = prog.get("task") if prog and bot.character and prog.get("slot") == bot.character.get("slot") else None
+    extra_loot = int(bot.cfg["weekday_dungeon"].get("extra_loot", 0) or 0) if cut == "weekday_dungeon" else 0
     # 검은 구멍·사냥터 안에서 끊겼으면 나가지 않고 끝날 때까지 본다 — 캐릭터를 다시 고르면 그 판(횟수·은동전)이 날아간다.
     # 끝난 뒤 그 숙제를 하면 숙제 쪽이 게임 상태(일일 달성·은동전 수)와 자기 단계 기록을 보고 나머지만 한다
     bh = bot.cfg["black_hole"]
     if bh["space_keyword"] in game_space(bot):
         bot.step("bh_inside_at_login", "검은 구멍 안에서 시작 → 클리어까지 기다림")
-        wait_until(bot, lambda: bh["space_keyword"] not in game_space(bot), bh["clear_timeout"], interval=5,
+        wait_until(bot, lambda: not inside_space(bot, bh["space_keyword"]), bh["clear_timeout"], interval=5,
                    what="검은 구멍 클리어")
         bot.sleep(2, 3)
         bot.dismiss_popups()
-        return True
-    if hunt := hunt_quest(bot):
+        # 사냥터 안의 검은 구멍이었으면 사냥터로 돌아온다 — 끝나지 않은 사냥터를 이어서 본다 (은동전은 이미 나갔다)
+        if not _in_field(bot):
+            return True
+    if _in_field(bot):
+        hunt = hunt_quest(bot) or "패킷"
         bot.step("field_inside_at_login", f"사냥터 안에서 시작 ({hunt}) → 클리어까지 기다림")
         wait_field(bot, "", bot.cfg["silver"]["field_timeout"])
         return True
-    state = dungeon_state(bot) if bot.state.available() else None
+    state = dungeon_state(bot)  # 패킷, 모르면 CLI
     if state == "InProgress":
         bot.step("dungeon_inside_at_login", "던전 안에서 시작 → 클리어까지 기다렸다가 나옴")
-        play_dungeon(bot, bot.cfg["tribute"]["clear_timeout"])
+        play_dungeon(bot, bot.cfg["tribute"]["clear_timeout"], extra_loot)
         return True
     if state == "Cleared" or bot.exists(ui["dungeon_touch"]) or bot.exists(ui["reward_exit"]):
         bot.step("dungeon_reward_at_login", "던전 클리어 화면에서 시작 → 보상 받고 나옴")
-        after_clear(bot)
+        after_clear(bot, extra_loot)
         return True
     return False
+
+
+def _in_field(bot: Bot) -> bool:
+    """사냥터 안인가. 패킷이 알면 사냥터 상태로, 모르면 진행 중인 사냥터 퀘스트(CLI)가 있는 것으로."""
+    from .content import hunt_quest
+    st = bot.packets.state
+    if bot.packets.ok and st.field_state is not None:
+        return st.field_state in ("InProgress", "WaitingForChannelTransfer")
+    return bool(hunt_quest(bot))
 
 
 def run(bot: Bot, cfg: dict, character: dict | None = None) -> str:
@@ -311,7 +327,7 @@ def _run(bot: Bot, cfg: dict, character: dict | None) -> str:
     def wait_screen(names: list[str]) -> Match:
         return wait_screen_for(names, c["timeout"])
 
-    if bot.state.available():
+    if bot.state.available() or bot.packets.ok:  # 던전·사냥터 상태는 패킷만으로도 안다
         _leave_dungeon(bot)
 
     # NPC 대화(아르바이트 메뉴·전달 창 등)에 멈춰 있으면 ESC 로는 안 닫히고 (to_main 이 헛돈다) 닫혀도 그 일이 날아간다

@@ -317,6 +317,35 @@ def _shown_style(style: str | None, scale: int | None) -> str:
     return f"PC · {scale}%" if style == "pc" else STYLES.get(style, ("", "?"))[1]
 
 
+def busy(bot: Bot) -> str:
+    """콘텐츠 안이거나 NPC 대화 중이면 그 이유. 환경 설정은 ESC 로 메뉴를 여는데, 이때 ESC 는 보상 화면 '나가기'·
+    매칭 취소·대화 닫기가 된다 → 인터페이스 맞추기는 미룬다 (2026-10-27 감사: 다시 켠 뒤 첫 카드가 콘텐츠 안에서 ESC 부터).
+    패킷 → CLI 순서로 보고, 모르면 ''."""
+    from .content import game_space
+    p, st = bot.packets, bot.packets.state
+    if p.ok:
+        if st.dungeon_state in ("Entering", "InProgress", "Cleared"):
+            return "던전 안"
+        if st.field_state in ("InProgress", "WaitingForChannelTransfer"):
+            return "사냥터 안"
+        if st.channel_type == "InstanceAbyssDungeon" or st.abyss_result or st.abyss_matching in (1, 2, 3):
+            return "어비스 안·매칭 중"
+        if st.in_dialogue:
+            return "NPC 대화 중"
+    act = (bot.state.activity() if bot.state.available() else None) or {}
+    if (act.get("Dungeon") or {}).get("State") in ("Entering", "InProgress", "Cleared"):
+        return "던전 안"
+    if (act.get("Battlefield") or {}).get("IsInBattleField"):
+        return "사냥터 안"
+    if act.get("IsAbyssResultSequencePlaying"):
+        return "어비스 결과"
+    if (act.get("dialogue") or {}).get("IsDialoguePlaying"):
+        return "NPC 대화 중"
+    if bot.cfg["black_hole"]["space_keyword"] in game_space(bot):
+        return "검은 구멍 안"
+    return ""
+
+
 def prepare_interface(bot: Bot, state) -> str:
     """숙제 시작: 환경 설정에서 지금 설정을 보고 기억한 뒤 PC·80% 로 맞춘다. 이미 기억해 둔 게 있으면 (끊겼다 이어 하는 중)
     덮어쓰지 않는다 — 그때는 이미 80% 로 바꿔 둔 뒤라 원래 값이 아니다."""

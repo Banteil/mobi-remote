@@ -269,6 +269,9 @@ class Runner:
             return False
         if not after_login and not bot.in_game():
             return False
+        if not after_login and (why := display.busy(bot)):
+            log.info(f"{why} → 인터페이스 맞추기는 접속 단계가 정리한 뒤로")
+            return False
         self._interface_ready = True
         try:
             log.info(display.prepare_interface(bot, state))

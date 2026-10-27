@@ -13,7 +13,7 @@ import time
 
 from ..bot import Bot, StepTimeout
 from ..profile import game_day_start
-from .content import daily_achieved, game_space, open_guide_card, watch
+from .content import daily_achieved, game_space, inside_space, open_guide_card, watch
 
 
 def cleared_today(bot: Bot) -> bool:
@@ -100,7 +100,7 @@ def run(bot: Bot, cfg: dict) -> str:
     from .. import monitor
     ctx = monitor.Ctx("black_hole", "검은 구멍 안", revive=True)
     end = time.monotonic() + c["clear_timeout"]
-    while c["space_keyword"] in game_space(bot):
+    while inside_space(bot, c["space_keyword"]):
         if time.monotonic() > end:
             raise StepTimeout(f"{c['clear_timeout']:.0f}s 안에 검은 구멍 클리어 충족 안 됨")
         watch(bot, ctx)

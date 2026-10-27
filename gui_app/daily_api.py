@@ -294,8 +294,10 @@ class DailyApi:
                 a = cfg["abyss"]  # 게임은 입장할 때만 앞으로 가져온다 (abyss.repeat)
                 profile = prof.load_profile(self.paths.profile) or {"slots": [], "names": {}}
                 ch = next((c for c in prof.characters(profile) if c["slot"] == int(a.get("slot", 0))), None)
-                if v.get("interface"):  # 화면 설정 맞추기 — 인터페이스 PC·80% (큐에서 이번 처음일 때만, 되돌리기는 큐 끝)
-                    from mabi.tasks import display
+                from mabi.tasks import display
+                if v.get("interface") and (why := display.busy(bot)):  # 어비스 안·매칭 중 — ESC 가 나가기·매칭 취소가 된다
+                    log.info(f"{why} → 인터페이스 맞추기는 건너뜀")
+                elif v.get("interface"):  # 화면 설정 맞추기 — 인터페이스 PC·80% (큐에서 이번 처음일 때만, 되돌리기는 큐 끝)
                     try:
                         log.info(display.prepare_interface(bot, prof.DailyState(self.paths.state)))
                     except Exception as e:

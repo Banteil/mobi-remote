@@ -586,11 +586,14 @@ class PacketMonitor:
                 s.abyss_matching = 0
             s.abyss_result = 0  # 새 맵 — 지난 판 결과는 끝났다 (나갈 때 0 이 오는지 실측이 없어 여기서도 지운다)
             s.dead = None  # 쓰러진 채 맵을 옮기면 부활 신호가 안 올 수 있다 → 다시 쓰러질 때까지 CLI 로
+            # 대화는 맵을 옮기면 끝난다 — 끝 패킷 없이 끊긴 대화가 '대화 중' 으로 남아 끼어들기·정리가 헛돌지 않게
+            s.dialogue_npc, s.dialogue_action, s.dialogue_menu = None, "", False
             log.info("패킷: 맵 진입 %s (%s)", s.channel_name or s.channel, s.channel_type or "?")
         elif key == "session.logout_ok":  # 캐릭터 선택 화면으로 (me1 03:29:30 — 맵 떠남·세션 정리와 같은 때)
             s.in_game, s.loading = False, False
             s.me = s.my_name = None
             s.attendance_at = 0.0
+            s.dialogue_npc, s.dialogue_action, s.dialogue_menu = None, "", False
             log.info("패킷: 로그아웃 → 캐릭터 선택 화면")
         elif key == "session.entered":  # 게임 서버 입장 (접속·서버 옮김). 맵 진입은 몇 초 뒤
             if s.in_game is False:
@@ -629,6 +632,7 @@ class PacketMonitor:
             if vals.get("char_id") != s.char_id:  # 다른 캐릭터로 접속 — 맵에 들어가야 새 번호·이름을 안다
                 s.me = s.my_name = None
                 s.durability = None
+                s.recommend = None  # 앞 캐릭터의 추천 항목 (요일 던전 '안 함' 판단)이 남지 않게
             s.char_id = vals.get("char_id")
         elif key == "char.appearing":
             if vals.get("mine"):

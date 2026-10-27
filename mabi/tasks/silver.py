@@ -143,10 +143,10 @@ def run(bot: Bot, cfg: dict) -> str:
     slot = bot.character["slot"] if bot.character else None
     fields_done = int(bot.daily.get(slot, "silver_fields") or 0) if bot.daily and slot else 0
     # 사냥터 1판 도중에 끊겼으면: 접속 단계가 그 판을 클리어까지 보고 나왔다 (은동전은 들어갈 때 이미 나감)
-    # → 들어가기 전 은동전보다 줄었으면 그 판은 한 것으로 센다
+    # → 들어가기 전 은동전보다 줄었으면 그 판은 한 것으로 센다 (그사이 저절로 차는 1~2개는 봐준다)
     pend = bot.daily.get(slot, "silver_pending") if bot.daily and slot else None
     if isinstance(pend, dict):
-        if pend.get("kind") == "field" and pend.get("coins") is not None and coins <= pend["coins"] - c["dungeon_cost"]:
+        if pend.get("kind") == "field" and pend.get("coins") is not None and coins <= pend["coins"] - c["dungeon_cost"] + 2:
             fields_done += 1
             bot.daily.set(slot, "silver_fields", fields_done)
             bot.log.info(f"지난번 끊긴 사냥터 {pend.get('n')}회차는 은동전이 나갔으므로 한 것으로 셈")

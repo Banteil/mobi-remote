@@ -368,18 +368,24 @@ def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: No
             return "timeout"
 
 
-def _switch_character(bot: Bot, cfg: dict, character: dict) -> None:
+def _switch_character(bot: Bot, cfg: dict, character: dict) -> bool:
     """고른 캐릭터로 접속한다. 이미 그 캐릭터면 그대로 (어비스 안이어도 이어서). 다른 캐릭터로 어비스 안이면 나간 뒤 바꾼다.
     이름은 메인 화면 왼쪽 위에서만 읽힌다 → 매칭 중이면 들어갈 때까지 기다려 안에서 읽고, 어비스 목록·입장 화면이나
-    다른 창이면 login.run 이 ESC 로 닫고 읽는다 (같은 캐릭터면 repeat 가 메뉴에서 다시 연다)."""
+    다른 창이면 login.run 이 ESC 로 닫고 읽는다 (같은 캐릭터면 repeat 가 메뉴에서 다시 연다).
+    매칭·보상 화면인데 이름을 모르면(리모콘을 막 켬 — 패킷 이름은 맵에 들어갈 때 온다) 나가지 않고 False —
+    repeat 가 다음 판에 들어가 이름을 안 뒤 확인한다. 확인했으면 True."""
     from .login import current_name, name_matches
     from . import login
     bot.background = False
     at = where_settled(bot, cfg["abyss"]["dungeon"])
     # 패킷이 이름을 알면 화면과 상관없이 바로 안다 — 같은 캐릭터면 매칭·보상 화면도 그대로 repeat 가 잇는다
     # (2026-10-27 보상 화면에서 일시정지 뒤 이어 하기 → 이름을 못 읽는 보상 화면이라 나가기부터 눌렀다)
-    if at in ("play", "reward", "matching") and name_matches(current_name(bot), character.get("name", "")):
-        return
+    name = current_name(bot)
+    if at in ("play", "reward", "matching") and name_matches(name, character.get("name", "")):
+        return True
+    if at in ("reward", "matching") and not name:
+        bot.log.info(f"{'보상 화면' if at == 'reward' else '매칭 중'}이라 캐릭터 이름을 모름 → 그대로 잇고 다음 판에서 확인")
+        return False
     if at == "matching":
         bot.log.info("매칭 중에 시작 → 들어간 뒤 캐릭터 확인")
         bot.step("abyss_match", "우연한 만남 매칭 중")
@@ -387,7 +393,7 @@ def _switch_character(bot: Bot, cfg: dict, character: dict) -> None:
             at = "play"
     if at == "play":
         if name_matches(current_name(bot), character.get("name", "")):
-            return
+            return True
         bot.log.info(f"다른 캐릭터로 어비스 안 → 나간 뒤 {character['name']} 로 접속")
         if not leave(bot):  # 나가기 전에 판이 끝남 → 보상 화면에서 나간다
             to_reward(bot)
@@ -398,6 +404,7 @@ def _switch_character(bot: Bot, cfg: dict, character: dict) -> None:
         _wait_settled(bot, bot.cfg["timing"]["loading"])
     bot.character = character
     bot.log.info(login.run(bot, cfg, character))
+    return True
 
 
 def after_clear(bot: Bot) -> bool:
@@ -405,6 +412,8 @@ def after_clear(bot: Bot) -> bool:
     ui = bot.ui
     known = bot.map_loading() is not None  # 패킷이 지금 맵을 안다
     st = bot.packets.state
+    if bot.packets.ok and st.abyss_result and not st.loading:
+        return True  # 패킷: 결과가 옴 (맵을 몰라도 — 안에서 켬. 나가면 새 맵 진입 때 지운다)
     if known:
         if st.loading or st.channel_type != ABYSS_MAP:
             return False  # 어비스 맵이 아니다 (필드로 나왔거나 옮기는 중)
@@ -491,8 +500,10 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
     # 그 자리부터, 그 밖(메인·다른 창)은 메뉴에서 입장
     bot.auto_clear = True
     bot.scene_skip = False  # 연출은 누르지 않고 기다린다 — 누르면 뒤에서 돌던 게임이 앞으로 나온다 (2026-10-25 사용자)
-    if character:
-        _switch_character(bot, cfg, character)
+    from .login import current_name, name_matches
+    unchecked = None  # 이름을 확인 못 한 채 이어 한 캐릭터 — 판 안에서 이름을 알면 확인한다
+    if character and not _switch_character(bot, cfg, character):
+        unchecked = character
     bot.background = behind
     at = where_settled(bot, dungeon)
     stage = {"play": "play", "reward": "reward", "matching": "match"}.get(at, "entry")
@@ -522,6 +533,16 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
                 bot.to_main()
                 stage = "entry"
                 continue
+        if unchecked and stage != "reward" and (name := current_name(bot)):
+            if not name_matches(name, unchecked.get("name", "")):
+                bot.log.warning(f"다른 캐릭터({name})로 이어 하던 중 → 나가서 {unchecked['name']} 로 접속")
+                if not leave(bot):
+                    to_reward(bot)
+                    exit_reward(bot)
+                _switch_character(bot, cfg, unchecked)
+                unchecked, stage, at = None, "entry", ""
+                continue
+            unchecked = None
         if stage == "reward":
             r = "clear"
         else:
@@ -568,10 +589,10 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
             for _ in range(2):  # 키가 안 들었으면 — 뒤에서는 키를 한 번 더, 앞에서는 누른다
                 # 패킷: 매칭 상태(요청·찾는 중·잡힘)나 맵 로딩이 오면 눌린 것. 모르면 2~3초 뒤 화면의 '다시 하기' 버튼으로
                 took = bot.wait_packet(lambda s: s.abyss_matching in (1, 2, 3) or s.loading, 3)
-                if took:
+                if took or took is None:
+                    # 패킷이 모르면 다시 누르지 않는다 — 다시 하기를 누른 뒤 매칭하는 동안에도 보상 화면(버튼)이 남아 있어,
+                    # 버튼이 보인다고 또 누르면 매칭이 취소된다 (안 눌렸으면 매칭 상한 뒤 처음부터 다시 한다)
                     break
-                if took is None:
-                    bot.sleep(2, 3)
                 if not bot.exists(bot.ui["dungeon_retry"]):
                     break
                 if _behind(bot):
