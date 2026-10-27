@@ -776,6 +776,12 @@ def wait_field(bot: Bot, place: str, clear_timeout: float, again: str | None = N
         watch(bot, ctx)
         if time.monotonic() > end:
             raise StepTimeout("사냥터 클리어 대기 시간 초과")
+    # 끝남 신호가 watch 하는 동안 와서 위 wait_packet 이 못 봤어도 패킷은 이미 안다 — 아래 퀘스트 목록 방식(3번 · 15초+)으로
+    # 넘어가 클리어 화면 앞에 40초 가까이 서 있었다 (2026-10-28 08:32:43~08:33:21)
+    if bot.packets.ok and bot.packets.state.field_state is not None:
+        bot.log.info(f"패킷: 사냥터 끝남 ({bot.packets.state.field_state})")
+        bot.step("field_reward", "사냥터 클리어 → 마무리")
+        return "again" if after_clear(bot, again=again) else "clear"
     gone = 0
     covered_since = None
     # 조회 실패나 일시적인 빈 응답으로 끝났다고 오판하지 않도록 3번 연속 없어야 클리어로 본다
