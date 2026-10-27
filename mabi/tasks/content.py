@@ -573,6 +573,11 @@ def _touch_texts(bot: Bot, frame) -> tuple[str, str]:
     return read_ko(frame, r), read_text(frame, r, white=220)
 
 
+def field_cleared(bot: Bot) -> bool:
+    """패킷: 사냥터를 클리어하고 아직 그 안 (보상을 받고 나가면 NotInBattlefield)."""
+    return bool(bot.packets.ok and bot.packets.state.field_state == "WaitingForChannelTransfer")
+
+
 def after_clear(bot: Bot, extra_loot: int = 0, again: str | None = None, timeout: float = 180) -> bool:
     """클리어 뒤 화면들 — 클리어 화면 터치 · 연출 · 보상(추가 루팅·나가기) · 퀘스트 클리어 확인 · 대화 · 작별 화면 —
     을 순서와 상관없이 점검자가 처리하고, 던전 밖 메인 화면이 몇 번 이어지면 끝낸다.
@@ -602,11 +607,13 @@ def after_clear(bot: Bot, extra_loot: int = 0, again: str | None = None, timeout
             stable = 0
         elif seen.done:
             stable = 0
-        elif seen.what == d.MAIN and dungeon_state(bot) in ("InProgress", "Cleared"):
+        elif seen.what == d.MAIN and (dungeon_state(bot) in ("InProgress", "Cleared") or field_cleared(bot)):
             # 클리어 직후 클리어 화면('화면을 터치해 주세요' — 반투명이라 그림으로 잘 안 잡힌다)이 뜨기 전·뜬 뒤에도
-            # 던전 HUD 는 그대로 보인다 → 아직 던전 안. 클리어(패킷·CLI)면 화면 위쪽 빈 곳을 가끔 누른다
+            # HUD 는 그대로 보인다 → 아직 던전·사냥터 안. 클리어(패킷·CLI)면 화면 위쪽 빈 곳을 가끔 누른다.
+            # 사냥터는 끝남 패킷이 클리어 화면보다 먼저 와서, 화면이 뜨기 전에 메인 화면 세 번으로 끝내고 떠났다
+            # (2026-10-27 09:26) → 사냥터를 나가 NotInBattlefield 가 될 때까지 끝내지 않는다
             stable = 0
-            if dungeon_state(bot) == "Cleared" and time.monotonic() - touched > 2.5:
+            if (dungeon_state(bot) == "Cleared" or field_cleared(bot)) and time.monotonic() - touched > 2.5:
                 touched = time.monotonic()
                 bot.click(tuple(bot.cfg["dungeon"]["touch_xy"]))
         elif seen.what == d.MAIN and touch_prompt_visible(bot):
