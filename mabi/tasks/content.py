@@ -573,52 +573,90 @@ def _touch_texts(bot: Bot, frame) -> tuple[str, str]:
     return read_ko(frame, r), read_text(frame, r, white=220)
 
 
+# 클리어 뒤 연출 — 콘텐츠마다 '아직 그 안인가' 를 패킷으로 안다. 클리어 패킷은 보스를 잡거나 목표를 채운 즉시 오고,
+# 그 뒤 연출(클리어 화면 '화면을 터치해 주세요'·여신상·장면)이 끝나야 보상 메뉴(나가기·다시 하기)가 뜬다.
+# 어비스는 abyss.to_reward 가 따로 (뒤에서 도는 작업이라 클릭 대신 키로)
+CLEAR_KINDS = {
+    # 이름: (클리어 뒤 아직 그 안, 들어가 있음)
+    "field": (lambda s: s.field_state == "WaitingForChannelTransfer",
+              lambda s: s.field_state in ("InProgress", "WaitingForChannelTransfer")),
+    "dungeon": (lambda s: s.dungeon_state == "Cleared",
+                lambda s: s.dungeon_state in ("InProgress", "Cleared")),
+}
+
+
+def clear_kind(bot: Bot) -> str | None:
+    """패킷: 지금 클리어 뒤 연출 중인 콘텐츠 ('field' · 'dungeon'), 모르거나 이미 나왔으면 None."""
+    if not bot.packets.ok:
+        return "dungeon" if dungeon_state(bot) == "Cleared" else None  # CLI 로는 던전만 안다
+    return next((k for k, (cleared, _) in CLEAR_KINDS.items() if cleared(bot.packets.state)), None)
+
+
 def field_cleared(bot: Bot) -> bool:
     """패킷: 사냥터를 클리어하고 아직 그 안 (보상을 받고 나가면 NotInBattlefield)."""
-    return bool(bot.packets.ok and bot.packets.state.field_state == "WaitingForChannelTransfer")
+    return bool(bot.packets.ok and CLEAR_KINDS["field"][0](bot.packets.state))
+
+
+def _clear_show(bot: Bot, mon, d, end: float) -> None:
+    """1단계 연출: 클리어 패킷 뒤 보상 메뉴(나가기·다시 하기)가 뜰 때까지. 장면 넘기기·화면 터치·퀘스트 완료 '확인'·대화는
+    점검자가 넘기고, 그 밖에는 (HUD 가 보이든 모르는 화면이든) 화면 위쪽 빈 곳을 가끔 누른다 — 반투명 '화면을 터치해 주세요' 는
+    그림으로 잘 안 잡힌다. 사냥터는 끝남 패킷이 클리어 화면보다 먼저 와서, 화면이 뜨기 전 메인 화면만 보고 떠났다 (2026-10-27).
+    메뉴가 뜨거나 그 콘텐츠를 나왔으면 (패킷) 끝. 패킷이 없으면 예전처럼 '화면 터치' 글자가 없는 메인 화면이 이어질 때까지."""
+    from .. import monitor
+    kind = clear_kind(bot)
+    ctx = monitor.Ctx(bot.task_id or "dungeon", "클리어 뒤 연출", menus=True, finish_on={d.REWARD: "menu"})
+    touched, quiet = 0.0, 0
+    bot.log.debug(f"클리어 뒤 연출 ({kind or '패킷 모름'})")
+    while True:
+        if time.monotonic() > end:
+            raise StepTimeout(f"클리어 후 화면 정리 실패 (연출) → {bot.snapshot('settle').name}")
+        seen = mon.check(ctx, guard=False)
+        if seen.finish:
+            return  # 보상 메뉴
+        inside = kind and CLEAR_KINDS[kind][1](bot.packets.state) if bot.packets.ok else kind
+        if seen.what == d.LOADING or (kind and not inside):
+            return  # 보상 메뉴 없이 나왔다
+        if seen.done:
+            quiet = 0
+        elif seen.what in (d.MAIN, d.UNKNOWN) and not (bot.dialogue_playing() or bot.cutscene_playing()):
+            if kind:
+                if time.monotonic() - touched > 2.5:
+                    touched = time.monotonic()
+                    handlers_touch(bot, ctx, seen)
+            elif touch_prompt_visible(bot):
+                quiet = 0
+                handlers_touch(bot, ctx, seen)
+            elif seen.what == d.MAIN:
+                quiet += 1
+                if quiet >= 3:
+                    return
+        bot.sleep(1.0, 1.5)
+
+
+def handlers_touch(bot: Bot, ctx, seen) -> None:
+    from ..monitor import handlers
+    handlers.touch(bot, ctx, seen)
 
 
 def after_clear(bot: Bot, extra_loot: int = 0, again: str | None = None, timeout: float = 180) -> bool:
-    """클리어 뒤 화면들 — 클리어 화면 터치 · 연출 · 보상(추가 루팅·나가기) · 퀘스트 클리어 확인 · 대화 · 작별 화면 —
-    을 순서와 상관없이 점검자가 처리하고, 던전 밖 메인 화면이 몇 번 이어지면 끝낸다.
-    again 버튼('다시 하기'·'새 임무 선택')이 보상 화면에 있으면 나가는 대신 누르고 True (반복 플레이).
-    던전과 사냥터가 따로 갖던 마무리를 하나로 했다."""
+    """클리어 뒤: 1단계 연출(_clear_show) → 2단계 보상 메뉴에 맞춰 행동 — (추가 루팅) · again 버튼('다시 하기'·'새 임무 선택')이
+    있으면 누르고 True (반복 플레이), 아니면 나가기 → 그 콘텐츠 밖 메인 화면이 몇 번 이어지면 끝.
+    순서가 섞여 끼어드는 퀘스트 클리어 확인·대화·작별 화면은 두 단계 모두 점검자가 넘긴다."""
     from .. import monitor
     from ..monitor import detect as d
     mon = monitor.of(bot)
-    ctx = monitor.Ctx(bot.task_id or "dungeon", "클리어 뒤", menus=True, reward=True, extra_loot=extra_loot, again=again)
     end = time.monotonic() + timeout
-    stable, touched, buttons = 0, 0.0, False
+    _clear_show(bot, mon, d, end)
+    ctx = monitor.Ctx(bot.task_id or "dungeon", "클리어 뒤", menus=True, reward=True, extra_loot=extra_loot, again=again)
+    stable = 0
     while stable < 3:
         if time.monotonic() > end:
             raise StepTimeout(f"클리어 후 화면 정리 실패 → {bot.snapshot('settle').name}")
         seen = mon.check(ctx, guard=False)
-        buttons = buttons or seen.what in (d.REWARD, d.SCENE)
-        if seen.what == d.UNKNOWN and not buttons:
-            # HUD 없이 뜬 클리어 화면은 '화면을 터치해 주세요' 가 반투명이라 그림으로 안 잡혀 3분을 모르는 화면으로 서 있었다
-            # (2026-10-27 09:03) → 장면 넘기기·보상 버튼이 뜰 때까지 모르는 화면이면 위쪽 빈 곳을 계속 누른다
-            stable = 0
-            if time.monotonic() - touched > 2.5:
-                touched = time.monotonic()
-                bot.click(tuple(bot.cfg["dungeon"]["touch_xy"]))
-        elif seen.finish:
-            if seen.finish.result == "again":
-                return True
-            stable = 0
-        elif seen.done:
-            stable = 0
-        elif seen.what == d.MAIN and (dungeon_state(bot) in ("InProgress", "Cleared") or field_cleared(bot)):
-            # 클리어 직후 클리어 화면('화면을 터치해 주세요' — 반투명이라 그림으로 잘 안 잡힌다)이 뜨기 전·뜬 뒤에도
-            # HUD 는 그대로 보인다 → 아직 던전·사냥터 안. 클리어(패킷·CLI)면 화면 위쪽 빈 곳을 가끔 누른다.
-            # 사냥터는 끝남 패킷이 클리어 화면보다 먼저 와서, 화면이 뜨기 전에 메인 화면 세 번으로 끝내고 떠났다
-            # (2026-10-27 09:26) → 사냥터를 나가 NotInBattlefield 가 될 때까지 끝내지 않는다
-            stable = 0
-            if (dungeon_state(bot) == "Cleared" or field_cleared(bot)) and time.monotonic() - touched > 2.5:
-                touched = time.monotonic()
-                bot.click(tuple(bot.cfg["dungeon"]["touch_xy"]))
-        elif seen.what == d.MAIN and touch_prompt_visible(bot):
-            stable = 0  # 사냥터 클리어 화면도 HUD 가 보인 채로 뜬다 — 반투명 글자라 그림 대신 글자로
-            bot.click(tuple(bot.cfg["dungeon"]["touch_xy"]))
+        if seen.finish and seen.finish.result == "again":
+            return True
+        if seen.finish or seen.done or clear_kind(bot):
+            stable = 0  # 아직 그 안 (보상 화면을 나가기 전)
         elif seen.what == d.MAIN and not (bot.dialogue_playing() or bot.cutscene_playing()):
             stable += 1  # HUD 가 보여도 패킷이 대화·연출 중이라고 하면 아직 안 끝났다
         else:
