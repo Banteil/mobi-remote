@@ -84,12 +84,31 @@ def wait_next(bot: Bot, since: int | None, timeout: float = 4) -> bool | None:
     return bot.wait_packet(lambda s: s.dialogue_step != since or not s.in_dialogue, timeout)
 
 
-def next_line(bot: Bot, wait: bool = True) -> None:
-    """대사 하나 넘기기 — '대화 넘기기' 자리를 누른다."""
+def line_ready(bot: Bot, frame=None) -> bool:
+    """대사를 넘길 수 있게 대화 창이 떴나 — '대화 넘기기' 가 보이거나 (한마디 대사는 버튼이 없다) HUD 가 가려짐.
+    패킷은 대화 창이 그려지기 전에 대화 중이라고 한다 — 그때 '대화 넘기기' 자리를 누르면 안 먹고, 그 자리의 미니맵이
+    눌릴 수 있다 (사냥터를 나온 뒤 에반이 찾아왔을 때 넘기기 칸이 생기기 전에 눌러 진행이 안 됨 — 사용자 제보 2026-10-27)."""
+    frame = bot.frame() if frame is None else frame
+    hit = bot.skip_button(frame)
+    if hit and hit[0] == "dialog":
+        return True
+    return not bot.vision.find(frame, bot.ui["main_hud"])
+
+
+def next_line(bot: Bot, wait: bool = True, ready_within: float = 5) -> bool:
+    """대사 하나 넘기기 — 대화 창이 뜨길 (ready_within 초까지) 기다렸다가 '대화 넘기기' 자리를 누른다.
+    창이 안 뜨면 누르지 않고 False (부르는 쪽이 다음 차례에 다시 본다)."""
+    end = time.monotonic() + ready_within
+    while not line_ready(bot):
+        if time.monotonic() > end:
+            bot.log.debug("대화 창이 아직 안 떠 대사를 넘기지 않음")
+            return False
+        bot.sleep(0.3, 0.4)
     before = step(bot)
     bot.click(tuple(bot.cfg["arbeit"]["dialog_next_xy"]))
     if wait and wait_next(bot, before, 3) is None:
         bot.sleep(1.0, 1.4)
+    return True
 
 
 def leave(bot: Bot, handlers=(), timeout: float = 25) -> None:

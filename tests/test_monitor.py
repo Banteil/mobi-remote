@@ -300,6 +300,30 @@ class NpcVisitTest(unittest.TestCase):
             nl.assert_not_called()
 
 
+class LineReadyTest(unittest.TestCase):
+    """대사 넘기기는 대화 창이 그려진 뒤에만 — 패킷은 창이 뜨기 전에 대화 중이라고 한다 (넘기기 칸이 생기기 전에 눌러
+    진행이 안 됨, 제보 2026-10-27). '대화 넘기기' 가 보이거나 HUD 가 가려졌을 때 누른다."""
+    def _bot(self, skip=None, hud=None):
+        b = fake_bot()
+        b.ui = {"main_hud": "hud"}
+        b.frame.return_value = frame()
+        b.skip_button.return_value = skip
+        b.vision.find.return_value = hud
+        return b
+
+    def test_waits_for_dialog_window(self):
+        from mabi.tasks import dialogue
+        b = self._bot(hud=(1, 1))  # HUD 가 남음 = 창이 아직
+        self.assertFalse(dialogue.next_line(b, ready_within=0))
+        b.click.assert_not_called()
+
+    def test_clicks_when_window_up(self):
+        from mabi.tasks import dialogue
+        for b in (self._bot(skip=("dialog", (1800, 45)), hud=(1, 1)), self._bot()):  # 넘기기 버튼 / HUD 가려짐 (한마디 대사)
+            self.assertTrue(dialogue.next_line(b, wait=False))
+            b.click.assert_called_once_with((1800, 45))
+
+
 class InterruptTest(unittest.TestCase):
     """무작위 이벤트 끼어들기 (monitor.interrupts): 패킷 신호 → 하던 일 멈추고 넘김 → 돌아감."""
     def _bot(self, dialog=True, menu=False, owned=False, attending=False):
@@ -356,6 +380,7 @@ class AttendanceTest(unittest.TestCase):
         from mabi.packet_monitor import PacketState
         b = fake_bot()
         b.cfg["login"] = {"attendance_skip": "attendance_skip", "first_dialog_xy": [960, 540]}
+        b.ui = {"main_hud": "hud"}
         b.packets.ok = True
         b.packets.state = PacketState(attendance_at=time.monotonic())
         b._attendance_clicked = 0

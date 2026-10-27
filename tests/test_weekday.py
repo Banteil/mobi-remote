@@ -43,6 +43,7 @@ def board_bot(acts):
     b._act.side_effect = lambda a: now["act"]
     b.dialogue_playing.side_effect = lambda a=None: bool(now["act"])
     b.clicks = lambda: [c.args[0] for c in b.click.call_args_list]
+    b.skip_button.return_value = ("dialog", (1800, 45))  # 대화 창이 떠 있음 (dialogue.line_ready)
     return b, look
 
 
