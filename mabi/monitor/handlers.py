@@ -94,6 +94,15 @@ def dialog(bot, ctx, seen):
             break
         bot.sleep(0.3, 0.4)
     if menu and not lines_left(bot):
+        # 메뉴가 떠 있고(패킷) 넘길 대사가 없다 → 그림이 안 맞아도 버튼 줄 글자로 확인하고 Space ('수락'·'결과 보고' 에
+        # Space 배지). 템플릿 점수가 문턱에 못 미쳐 16초·30초씩 수락을 못 한 적이 있다 (2026-10-28 08:43·09:07)
+        texts = [ocr.nospace(t) for t, _, _ in ocr.find_texts(bot.frame(), gd.region("board_choices"))]
+        for word, key, stage in (("arbeit_report", "arb_report", "결과 보고"), ("arbeit_accept", "arb_accept", "수락")):
+            if any(gd.text(word) in t for t in texts):
+                bot.log.debug(f"'{stage}' 버튼을 그림으로 못 찾아 글자로 확인 → Space")
+                ctx.note(key, stage)
+                bot.key("space")
+                return stage
         bot.log.debug(f"메뉴는 떠 있는데 '수락'·'결과 보고' 버튼을 못 찾음 ({bot.snapshot('arbeit_menu').name})")
         return "메뉴 버튼 기다림"
     next_line(bot)

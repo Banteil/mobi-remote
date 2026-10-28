@@ -142,6 +142,25 @@ class DialogTest(unittest.TestCase):
             self.assertEqual(handlers.dialog(b, ctx, Seen(d.DIALOG, frame=frame())), "수락")
         b.key.assert_called_once_with("space")
 
+    def menu_by_text(self, texts):
+        b = fake_bot()
+        b.exists.return_value = False  # 그림으로는 못 찾음
+        ctx = monitor.Ctx("arbeit", "x", menus=True)
+        clock = iter(range(0, 1000, 5))
+        with mock.patch.object(handlers.sit, "clear_attendance", return_value=None),                 mock.patch("mabi.tasks.dialogue.menu_open", return_value=True),                 mock.patch("mabi.tasks.dialogue.lines_left", return_value=False),                 mock.patch.object(handlers.time, "monotonic", side_effect=lambda: next(clock)),                 mock.patch.object(handlers.ocr, "find_texts", return_value=[(t, 0, 0) for t in texts]):
+            return b, handlers.dialog(b, ctx, Seen(d.DIALOG, frame=frame()))
+
+    def test_menu_without_template_uses_button_text(self):
+        """메뉴(패킷) + 넘길 대사 없음 + 그림이 안 맞음 → 버튼 글자 '수락' 이 보이면 Space (2026-10-28 09:07)."""
+        b, did = self.menu_by_text(["Space", "수락", "나중에 한다"])
+        self.assertEqual(did, "수락")
+        b.key.assert_called_once_with("space")
+
+    def test_menu_with_other_buttons_waits(self):
+        b, did = self.menu_by_text(["Space", "상점", "대화 종료"])
+        self.assertEqual(did, "메뉴 버튼 기다림")
+        b.key.assert_not_called()
+
     def test_blocker_does_not_touch_menus(self):
         """기다리는 중의 정리는 NPC 메뉴(수락·결과 보고)를 누르지 않는다."""
         b = fake_bot()
