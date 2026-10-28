@@ -663,7 +663,8 @@ class Bot:
             self.key("esc")
             self.sleep(0.8, 1.3)
         if not self.at_main():
-            raise StepTimeout("메인 화면으로 돌아오지 못함")
+            # 화면을 남긴다 — 어비스 수리 가던 길에 이것만 남고 무슨 화면이었는지 몰랐다 (2026-10-28 다른 PC 로그)
+            raise StepTimeout(f"메인 화면으로 돌아오지 못함 → {self.snapshot('to_main').name}")
 
     def to_charselect(self) -> None:
         """메인 화면 → 메뉴 → 게임 종료 → '캐릭터 선택 화면으로'."""

@@ -465,7 +465,9 @@ def exit_reward(bot: Bot) -> None:
     if not _wait_settled(bot, bot.cfg["timing"]["loading"]):
         if after_clear(bot):  # 나가기 키가 안 들었다
             bot.key("esc")
-            _wait_settled(bot, bot.cfg["timing"]["loading"])
+            if not _wait_settled(bot, bot.cfg["timing"]["loading"]):
+                # 여기서 그냥 넘어가면 다음 일(수리 등)이 '메인 화면으로 돌아오지 못함' 으로만 끝난다
+                bot.log.warning(f"보상 화면에서 나가지 못한 채 다음으로 → {bot.snapshot('abyss_exit_reward').name}")
     # 판 수를 채운 판에서 깨진 퀘스트(주말 어비스 3판 등)의 완료 창이 필드로 나온 뒤 뜬다. 메인 HUD 가
     # 보이는 채로 떠서 ESC 를 먹어, 다음 카드가 캐릭터를 바꾸려다 메뉴가 안 열려 실패했다 (2026-10-24 21:24).
     # 무한 반복은 '다시 하기' Space 가 그 창의 '확인' 까지 눌러 넘어갔다
