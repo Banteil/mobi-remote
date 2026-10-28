@@ -26,6 +26,8 @@ DIFFICULTIES = {"카브락": ["입문", "어려움"], "에이렐": ["어려움",
 
 LOBBY_MAP = "InstanceRaidLobby"  # 출항선 (레이드마다 같은 맵)
 RAID_MAP = "InstanceRaid"
+_boarded: tuple[str, str] | None = None  # 이 리모콘이 마지막으로 태운 출항선 (레이드, 난이도) — 배는 어느 레이드 것인지 모른다
+RESULT_OK = (960, 1010)  # 결과 화면 아래 가운데 '확인' (Space)
 
 _find_text = ui_text.find
 
@@ -84,6 +86,8 @@ def where(bot: Bot, raid: str) -> str:
             return "play"
         if title.endswith(gd.text("raid_quest_done")):
             return "cleared"
+        if not title and _find_text(bot, gd.text("raid_result"), gd.region("raid_result")):
+            return "cleared"  # 결과 화면 동안은 CLI 퀘스트가 빈 목록이다
     if _find_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top")):
         return "entry"
     if _find_text(bot, raid, gd.region("raid_list")):
@@ -178,6 +182,8 @@ def board(bot: Bot, raid: str, difficulty: str, at: str = "") -> None:
         while time.monotonic() < end:
             if (w := where(bot, raid)) == "ship":
                 bot.log.info("출항선에 탐")
+                global _boarded
+                _boarded = (raid, difficulty)
                 return
             if w == "loading":
                 bot.wait_loaded(end - time.monotonic())
@@ -187,13 +193,32 @@ def board(bot: Bot, raid: str, difficulty: str, at: str = "") -> None:
     raise CannotProceed(f"선착장에 가도 출항하기가 나오지 않음 → {bot.snapshot('raid_board').name}")
 
 
+def compass_ready(bot: Bot) -> bool:
+    """오른쪽 아래 나침반(Space)이 기본 모양인가 — 그러면 Space 가 추적 중인 목표(노란 마름모)를 진행한다.
+    주변에 상호작용할 것이 있으면 다른 모양, 자동 진행 중이면 정지(■)로 바뀐다 (2026-10-28 사용자).
+    바늘은 방향 따라 돌아 그림이 안 맞아서, 바늘의 빨간 끝과 흰 몸통 비율로 본다 (나침반 약 3%·13%, 그 밖 빨강 0)."""
+    x, y, w, h = gd.region("compass")
+    c = bot.frame()[y:y + h, x:x + w].reshape(-1, 3).astype(int)
+    b, g, r = c[:, 0], c[:, 1], c[:, 2]
+    red = ((r > 200) & (g < 110) & (b < 110)).mean()
+    white = ((r > 225) & (g > 225) & (b > 225)).mean()
+    return red > 0.015 and 0.06 < white < 0.22
+
+
 def _press_sail(bot: Bot) -> bool:
-    """배 숏컷 퀘스트 '출항하기' 를 진행한다. HUD 오른쪽 퀘스트 제목을 누르고(실측 2026-10-28 자동 진행 시작),
-    안 되면 퀘스트 창(J)의 '출항하기' 카드 '진행하기'. 누른 뒤 시작 신호가 왔으면 True."""
+    """배 숏컷 퀘스트 '출항하기' 를 진행한다. 나침반이 기본 모양이고 CLI 자동 진행 대상이 숏컷이면 Space
+    (키라 게임을 뒤에 둔 채로 된다 — 2026-10-28 뒤에서 Space 로 출항 확인). 안 되면 HUD 오른쪽 퀘스트 제목을 누르고,
+    그것도 안 되면 퀘스트 창(J)의 '출항하기' 카드 '진행하기'. 누른 뒤 시작 신호가 왔으면 True."""
     def started(since: int, timeout: float) -> bool:
         return bool(bot.wait_packet(lambda s: s.loading or s.raid_state == "InProgress", timeout, since=since)) \
             or bool(bot.packets.find("autoplay.start_ok", since)) or bool(bot.packets.find("raid.depart", since))
 
+    act = (bot.state.activity() if bot.state.available() else None) or {}
+    if act.get("AutoPlayTarget", "shortcut") == "shortcut" and compass_ready(bot):
+        bot.key("space")
+        if started(bot.input_mark, 8):
+            return True
+        bot.log.info("나침반 Space 로 출항이 시작되지 않음 → 퀘스트 제목을 누름")
     hit = _find_text(bot, gd.text("raid_sail"), gd.region("quest_hud"))
     if hit:
         bot.click(hit)
@@ -222,7 +247,7 @@ def sail(bot: Bot) -> None:
         bot.sleep(2, 3)
     else:
         raise CannotProceed(f"출항하기를 진행하지 못함 → {bot.snapshot('raid_sail').name}")
-    end = time.monotonic() + bot.cfg["raid"].get("sail_timeout", 120)
+    end = time.monotonic() + bot.cfg["raid"].get("sail_timeout", 300)
     while time.monotonic() < end:
         m = _map(bot)
         if m == RAID_MAP:
@@ -267,11 +292,17 @@ def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: No
 def finish_result(bot: Bot) -> None:
     """보스 처치 연출이 끝나고 뜨는 결과 화면('처치 완료', 확인 Space)을 넘긴다. 연출은 기다린다 (뒤에서면).
     나가기 버튼(abyss_exit)이 보이면 결과 화면이 이미 지나갔다."""
-    end = time.monotonic() + bot.cfg["raid"].get("result_timeout", 120)
+    end = time.monotonic() + bot.cfg["raid"].get("result_timeout", 300)
+    presses = 0
     while time.monotonic() < end:
         if _find_text(bot, gd.text("raid_result"), gd.region("raid_result")):
             bot.sleep(1.0, 1.5)
-            bot.key("space")
+            presses += 1
+            if presses <= 2:
+                bot.key("space")
+            else:  # Space 가 두 번 안 들었다 — 게임이 키를 놓치는 때가 있다 (2026-10-28 2분 동안 그대로) → '확인' 을 누른다
+                bot.log.info("결과 화면 Space 가 안 들음 → 확인 버튼을 누름")
+                bot.click(RESULT_OK)
             bot.sleep(1.5, 2)
             if not _find_text(bot, gd.text("raid_result"), gd.region("raid_result")):
                 bot.log.info("결과 화면 확인")
@@ -282,6 +313,29 @@ def finish_result(bot: Bot) -> None:
         bot.clear_blockers()
         bot.sleep(1.5, 2)
     raise StepTimeout(f"레이드 결과 화면을 넘기지 못함 → {bot.snapshot('raid_result').name}")
+
+
+def leave_ship(bot: Bot) -> None:
+    """출항선에서 내린다: 나가기 → '출항선에서 퇴장하시겠습니까?' 나가기(Space) → 필드 메인 화면까지.
+    어느 레이드의 배인지 모를 때(리모콘을 켜기 전에 탔거나 다른 레이드 카드) 메뉴에서 다시 들어가려고."""
+    for _ in range(3):
+        if _map(bot) not in (LOBBY_MAP, None):
+            break
+        if not bot.exists(bot.ui["abyss_exit"]):
+            bot.clear_blockers(ocr=True)
+            bot.sleep(1.0, 1.5)
+            continue
+        bot.click(bot.ui["abyss_exit"])
+        if not ui_text.wait(bot, gd.text("raid_ship_leave"), gd.region("raid_ship_leave"), timeout=5, exact=False):
+            continue
+        bot.sleep(0.5, 0.8)
+        bot.key("space")
+        break
+    else:
+        raise StepTimeout(f"출항선에서 내리지 못함 → {bot.snapshot('raid_ship_leave').name}")
+    bot.wait_packet(lambda s: s.loading, 15, since=bot.input_mark)
+    if not _wait_settled(bot, bot.cfg["timing"]["loading"]):
+        raise StepTimeout("출항선에서 내린 뒤 메인 화면이 나오지 않음")
 
 
 def leave(bot: Bot, to_field: bool = False) -> None:
@@ -378,6 +432,12 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
             board(bot, raid, difficulty, at=at)
             at = ""
             stage = "ship"
+        if stage == "ship" and _boarded != (raid, difficulty):
+            bot.log.info(f"어느 레이드의 출항선인지 모름 (태운 것 {_boarded or '없음'}) → 내려서 '{raid}' 로 다시 입장")
+            bot.background = False
+            leave_ship(bot)
+            stage = "entry"
+            continue
         if stage == "ship":
             bot.step("raid_sail", "출항")
             emit(stage="sail")

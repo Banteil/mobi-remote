@@ -57,7 +57,8 @@
     "raid_leave_field": "파티&던전나가기",
     "raid_ship": "시작의 갑판",
     "raid_quest_clear": "클리어",
-    "raid_quest_done": "토벌 완료"
+    "raid_quest_done": "토벌 완료",
+    "raid_ship_leave": "출항선에서퇴장"
   },
 
   "regions": {
@@ -82,6 +83,8 @@
     "raid_result": [660, 190, 600, 60],
     "raid_leave_buttons": [560, 830, 800, 80],
     "quest_hud": [1560, 225, 360, 80],
-    "questwin_list": [1230, 150, 690, 850]
+    "questwin_list": [1230, 150, 690, 850],
+    "compass": [1782, 945, 86, 85],
+    "raid_ship_leave": [560, 710, 800, 70]
   }
 }
