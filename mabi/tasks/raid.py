@@ -48,7 +48,8 @@ def _map(bot: Bot) -> str | None:
 def cleared(bot: Bot) -> bool:
     """이 레이드 판의 보스를 잡았나 (패킷 결과·상태 Cleared). 결과 화면이 떠 있는 동안 CLI 퀘스트는 빈 목록이다."""
     st = bot.packets.state
-    return bot.packets.ok and _map(bot) == RAID_MAP and (bool(st.raid_result) or st.raid_state == "Cleared")
+    # 맵을 모를 때(None — 레이드 안에서 리모콘을 켬)도 본다. 아니면 그 판은 클리어를 패킷으로 못 알아챈다
+    return bot.packets.ok and _map(bot) in (RAID_MAP, None) and (bool(st.raid_result) or st.raid_state == "Cleared")
 
 
 def _quest_title(bot: Bot) -> str:
@@ -77,8 +78,15 @@ def where(bot: Bot, raid: str) -> str:
         return "cleared" if cleared(bot) else "play"
     if m == LOBBY_MAP:
         return "ship"
-    if m is None:  # 패킷이 모름 — CLI 장소·퀘스트로
-        env = bot.state.query("get_current_environment") if bot.state.available() else None
+    if m is None:  # 패킷이 맵을 모름 (맵에 들어간 뒤 리모콘을 켬) — 레이드 상태 패킷 → CLI 장소·퀘스트로
+        # 레이드 상태는 맵과 따로 온다. 보스를 잡은 직후 다시 켜 연출 중이면 CLI 퀘스트가 비고 결과 화면도 아직이라
+        # '그 밖의 창' 으로 보고 메뉴에서 입장하려다 멈췄다 (2026-10-28 19:37)
+        st = bot.packets.state
+        if bot.packets.ok and (st.raid_result or st.raid_state == "Cleared"):
+            return "cleared"
+        if bot.packets.ok and st.raid_state == "InProgress":
+            return "play"
+        env =bot.state.query("get_current_environment") if bot.state.available() else None
         title = _quest_title(bot)
         if (env or {}).get("ChannelDisplayName") == gd.text("raid_ship"):
             return "ship"
@@ -488,6 +496,8 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
             to_back()
             stage = "play"
         if stage == "play":
+            # 출항(sail) 뒤에만 뒤로 보냈더니, 레이드 안에서 이어 하면 판 내내 게임을 앞으로 가져왔다 (2026-10-28)
+            to_back()
             n = stat["clears"] + stat["deaths"] + stat["retries"] + 1
             bot.step("raid_play", f"{n}번째 판 진행 중")
             emit(stage="play")
