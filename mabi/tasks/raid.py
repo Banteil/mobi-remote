@@ -151,6 +151,29 @@ def open_entry(bot: Bot, raid: str, difficulty: str = "", at: str = "") -> None:
         _click_text(bot, difficulty, gd.region("raid_difficulty"), what=f"난이도 '{difficulty}'")
 
 
+def _travel_to_dock(bot: Bot) -> bool:
+    """'이동하기' 로 선착장까지 걸어가는 동안 기다린다. 도착해 입장 창이 다시 뜨면 True, 창 없이 메인 화면에
+    멈췄으면 False. 메인 화면만 기다리면 도착 뒤 뜬 입장 창 앞에서 이동 상한(10분)까지 서 있었다 (2026-10-28 사용자)."""
+    end = time.monotonic() + bot.cfg["raid"].get("travel_timeout", 600)
+    still = 0  # 메인 화면에 멈춰 있는 것을 연달아 본 횟수 (이동 사이 잠깐 멈춤과 가르려고)
+    while time.monotonic() < end:
+        if bot.map_loading():
+            bot.wait_loaded(end - time.monotonic())
+            continue
+        if _find_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top")):
+            bot.log.info("선착장 도착 → 입장 창")
+            return True
+        if bot.at_main() and not bot.auto_traveling():
+            still += 1
+            if still >= 3:
+                bot.log.info("이동이 멈췄는데 입장 창이 없음 → 메뉴에서 다시 엶")
+                return False
+        else:
+            still = 0  # 걷는 중이거나 창이 떠 있음 — 막는 창 닫기(ESC)는 하지 않는다: 막 뜬 입장 창을 닫을 수 있다
+        bot.sleep(2, 2.5)
+    raise CannotProceed(f"선착장으로 가지 못함 → {bot.snapshot('raid_travel').name}")
+
+
 def board(bot: Bot, raid: str, difficulty: str, at: str = "") -> None:
     """입장 창 → 출항선(배)까지. '이동하기' 면 선착장까지 걸어간 뒤 창에서 '출항하기'."""
     for attempt in range(3):
@@ -171,10 +194,8 @@ def board(bot: Bot, raid: str, difficulty: str, at: str = "") -> None:
             if key and bot.fast_travel_ok():
                 bot.log.info("빠른 이동")
                 bot.key(key)
-            if not _wait_settled(bot, bot.cfg["raid"].get("travel_timeout", 600)):
-                raise CannotProceed(f"선착장으로 가지 못함 → {bot.snapshot('raid_travel').name}")
-            # 도착하면 입장 창이 다시 뜬다 — 떠 있으면 그 자리부터, 아니면 메뉴에서 다시 연다
-            at = "entry" if _find_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top")) else ""
+            # 도착하면 입장 창이 다시 뜬다 → 그 자리부터 (혼자하기·난이도를 다시 맞추고 출항하기). 창 없이 멈췄으면 메뉴에서
+            at = "entry" if _travel_to_dock(bot) else ""
             continue
         # 출항하기 → 배로 (맵 로딩)
         bot.wait_packet(lambda s: s.loading, 20, since=bot.input_mark)
