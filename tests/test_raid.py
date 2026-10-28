@@ -80,6 +80,16 @@ class CardTest(unittest.TestCase):
         from gui_app.queue_api import RaidKind
         self.assertEqual(RaidKind.detail({"raid": "카브락", "difficulty": "어려움", "runs": 3}), "카브락 어려움 · 3판")
 
+    def test_saved_card_keeps_raid(self):
+        """queue.json 에 저장했다 다시 읽어도 레이드 이름이 남아야 한다 (빠지면 재시작 뒤 '레이드 None')."""
+        import tempfile
+        from pathlib import Path
+        from mabi.craft import queue as store
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "queue.json"
+            store.save(f, {"items": [{"id": 1, "kind": "raid", "raid": "에이렐", "difficulty": "어려움"}]})
+            self.assertEqual(store.load(f)["items"][0]["raid"], "에이렐")
+
     def test_difficulties_cover_raids(self):
         self.assertEqual(set(raid.DIFFICULTIES), set(raid.RAIDS))
 

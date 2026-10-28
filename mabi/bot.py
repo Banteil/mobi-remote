@@ -77,7 +77,9 @@ class Bot:
     # 뒤에서 키를 보낸 적이 있다 (앞으로 가져올 때 포커스를 한 번 거쳐 준다). 게임 쪽 상태라 Bot 마다가 아니라 함께 쓴다 —
     # 큐는 카드마다 Bot 을 새로 만들어, 앞 카드(어비스)가 뒤에서 키를 보낸 뒤 다음 카드가 이걸 모르고 앞으로 가져와
     # ESC 가 세 번 다 무시됐다 (2026-10-24 21:24, 캐릭터 바꾸기 실패)
-    _posted = False
+    # 켜자마자 True — 지난 실행(재시작 전)이나 다른 도구가 뒤에서 키를 보내 게임이 비활성인 줄 알고 있을 수 있다.
+    # 재시작 직후 Space·ESC·X 가 안 먹고 클릭만 먹었다 (2026-10-28 15:50·15:56·18:31 재시작 뒤)
+    _posted = True
     _shots_pruned = False
 
     def __init__(self, cfg: dict, paths, dry_run: bool = False, force_exit: bool = True, cli=None):
@@ -442,9 +444,9 @@ class Bot:
     def ensure_focus(self) -> None:
         """게임 창이 앞에 없으면 가져온다. 포커스를 옮긴 직후 첫 키 입력은 게임이 무시하므로
         효과 없는 키(Shift)를 한 번 먼저 보낸다."""
-        if self.window.is_foreground() or self.input.dry_run:
+        if self.input.dry_run or (self.window.is_foreground() and not self._posted):
             return
-        if self._posted:
+        if self._posted:  # 앞에 있어도 — 비활성인 줄 아는 채로 앞에 있을 수 있다
             # 뒤에서 키를 보낸 뒤(post_key) 처음 앞으로 가져오면 게임이 그 활성화를 놓쳐 키·클릭을 무시했다
             # (2026-10-23). 앞으로 → 다른 창(작업 표시줄) → 다시 앞으로, 두 번째 활성화부터 받는다
             self.window.focus()

@@ -9,6 +9,8 @@ FIELDS = ["id", "via", "name", "label", "recipe", "target", "status", "note",
           "kind", "chars", "only", "force",
           # 어비스 반복 카드 (kind='abyss'; runs 는 위 runs 를 같이 쓴다 — 판 수)
           "slot", "dungeon", "difficulty", "minutes", "revive",
+          # 레이드 반복 카드 (kind='raid' — 어비스와 같고 장소 칸만 raid). 빠지면 다시 켰을 때 '레이드 None'
+          "raid",
           # 한 번 하는 행동 카드 (kind='action' — 제작·채집·가공·수령·연주 버튼)
           "act", "command", "body", "detail", "skipConfirm",
           "doneRuns", "doneSecs", "fit"]  # 어비스 카드가 멈췄다 다시 돌 때 이미 한 판·초
