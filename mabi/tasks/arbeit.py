@@ -291,6 +291,7 @@ def _work(bot: Bot, title: str) -> str:
     gather = None  # 채집 중이면 Progress — 남은 개수가 gather_timeout 동안 그대로면 포기
     idle_since, pushes, last_sig, last_check = None, 0, None, 0.0
     busy_since, busy_told = None, False  # 메인 화면인데 '움직이는 중' 으로 보인 때부터
+    unseen, untracked = 0, False  # 멈춰 있을 때 추적 칸에 이 일이 안 보인 횟수 · 끝내 안 보여 추적 칸 없이 미는 중
     try:
         while not work.expired:
             bot.sleep(1.0, 1.4)
@@ -355,13 +356,20 @@ def _work(bot: Bot, title: str) -> str:
                 if time.monotonic() - idle_since < (a.get("idle_wait_after_talk", 3) if ctx.talked else a["idle_wait"]):
                     continue
                 job = next((j for j in accepted(bot) if _same(j["title"], title)), None)
-                if job is None:
+                if job is None and not untracked:
                     if _finished(bot, title):
                         return "done"  # 확인 창 없이 끝나는 일
-                    idle_since = None
-                    continue
+                    # 추적 칸(CLI)에 끝내 안 나오는 일이 있다 — '행운의 편지' 는 진행 중에도 get_quests 에 없어 여기서
+                    # 소리 없이 되돌기만 하며 NPC 사이에서 몇 분씩 서 있었다 (2026-10-28 07:06~07:14, 09:11~09:13).
+                    # 두 번 거푸 안 보이면 추적 칸 없이 진행하기로 민다 (끝남은 퀘스트 클리어 '확인' 으로 안다)
+                    unseen += 1
+                    if unseen < 2:
+                        idle_since = None
+                        continue
+                    untracked = True
+                    bot.log.info(f"아르바이트 '{title}': 추적 칸(CLI)에 안 나옴 → 조건을 보지 않고 진행하기로 민다")
                 # '주변을 살펴보는 중' 같은 짧은 동작은 CLI 에 진행 중으로 안 나온다 → 조건이 바뀌었으면 나아간 것으로 본다
-                sig = [(o.get("Description"), o.get("Count")) for o in job["objectives"]]
+                sig = [(o.get("Description"), o.get("Count")) for o in job["objectives"]] if job else None
                 if sig != last_sig:
                     last_sig, pushes = sig, 0
                 if pushes >= a["max_pushes"]:
