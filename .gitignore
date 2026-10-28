@@ -44,3 +44,4 @@ docs/TEST-*.md
 
 # 상황 판정 시험 화면 (캐릭터 이름이 보여 올리지 않는다 — tools/classify_shots.py 로 만든다)
 tests/fixtures/screens/
+tests/fixtures/buttons/

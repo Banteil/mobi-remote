@@ -32,6 +32,7 @@ class Vision:
         self.threshold = threshold
         self.roi_margin = roi_margin
         self._cache: dict[str, np.ndarray] = {}
+        self._variants: dict[str, list[str]] = {}
         self._index = self._load_index()
 
     def _load_index(self) -> dict:
@@ -42,6 +43,14 @@ class Vision:
 
     def has(self, name: str) -> bool:
         return (self.dir / f"{name}.png").exists()
+
+    def variants(self, name: str) -> list[str]:
+        """name 과 같은 버튼의 다른 그림들 (name@2.png, name@3.png …) — 배경·밝기에 따라 한 장으로는 문턱을 못 넘는
+        버튼이 있다 (2026-10-28 아르바이트 '수락' 0.61~0.77). 판정 기준·탐색 자리(index.json)는 name 것을 같이 쓴다."""
+        if name not in self._variants:
+            extra = sorted(p.stem for p in self.dir.glob(f"{name}@*.png"))
+            self._variants[name] = [name, *extra]
+        return self._variants[name]
 
     def template(self, name: str) -> np.ndarray:
         if name not in self._cache:
@@ -66,8 +75,8 @@ class Vision:
         x1, y1 = min(fw, x + w), min(fh, y + h)
         return x0, y0, x1 - x0, y1 - y0
 
-    def _score_map(self, name, frame, region):
-        tpl = self.template(name)
+    def _score_map(self, name, frame, region, key=None):
+        tpl = self.template(key or name)
         x, y, w, h = self._search_area(name, frame, region)
         th, tw = tpl.shape[:2]
         if w < tw or h < th:
@@ -80,15 +89,22 @@ class Vision:
             return threshold
         return self._index.get(name, {}).get("threshold", self.threshold)
 
+    def best(self, frame: np.ndarray, name: str, region=None) -> Match | None:
+        """그림들(variants) 중 가장 잘 맞는 자리와 점수 — 문턱과 상관없이 (시험·진단용)."""
+        top = None
+        for key in self.variants(name):
+            res, (ox, oy), tpl = self._score_map(name, frame, region, key)
+            if res is None:
+                continue
+            _, score, _, (mx, my) = cv2.minMaxLoc(res)
+            if top is None or score > top.score:
+                th, tw = tpl.shape[:2]
+                top = Match(name, ox + mx, oy + my, tw, th, float(score))
+        return top
+
     def find(self, frame: np.ndarray, name: str, region=None, threshold: float | None = None) -> Match | None:
-        res, (ox, oy), tpl = self._score_map(name, frame, region)
-        if res is None:
-            return None
-        _, score, _, (mx, my) = cv2.minMaxLoc(res)
-        if score < self.threshold_for(name, threshold):
-            return None
-        th, tw = tpl.shape[:2]
-        return Match(name, ox + mx, oy + my, tw, th, float(score))
+        m = self.best(frame, name, region)
+        return m if m is not None and m.score >= self.threshold_for(name, threshold) else None
 
     def find_all(self, frame: np.ndarray, name: str, region=None, threshold: float | None = None) -> list[Match]:
         """같은 템플릿이 여러 개 있을 때 (예: 미션 '받기' 버튼). 위에서 아래 순서로 반환."""
