@@ -55,13 +55,13 @@ class DailyApi:
         """이 로그 줄이 어느 탭 것인가. 남긴 스레드로 본다 — 숙제·어비스 스레드는 그대로, 작업 큐 스레드는 그때 돌던 카드
         (화면 설정 맞추기 등). 그 밖(F12 감시, 화면 설정 되돌리기 …)은 둘 다."""
         name = record.threadName or ""
-        if name in ("daily", "abyss"):
-            return name
+        if name in ("daily", "abyss", "raid"):
+            return "abyss" if name == "raid" else name  # 레이드는 어비스 탭에 같이 있다
         q = getattr(self, "queue", None)
         if name == "work-queue" and q:
             cur = q.current()
-            if cur and cur.get("kind") in ("daily", "abyss"):
-                return cur["kind"]
+            if cur and cur.get("kind") in ("daily", "abyss", "raid"):
+                return "abyss" if cur["kind"] == "raid" else cur["kind"]
         return "all"
 
     # ---- 상태 ----
@@ -96,6 +96,8 @@ class DailyApi:
             return "캐릭터 자동 설정이 도는 중입니다"
         if self._alive(self._abyss_thread):
             return "어비스 반복이 도는 중입니다"
+        if self._alive(self._raid_thread):
+            return "레이드 반복이 도는 중입니다"
         return None
 
     _daily_result: tuple = ("failed", "")
@@ -257,20 +259,51 @@ class DailyApi:
     def _abyss_launch(self, v: dict, on_event=None) -> threading.Thread:
         """고른 던전·난이도·횟수·시간을 config.toml [abyss] 에 저장하고 반복을 작업 스레드에서 시작한다 (작업 큐가 join).
         진행은 'mm:abyss' {type: start|abyss|done|failed, clears, deaths, ...}, 결과는 self._abyss_result (끝 이벤트와 같은 값)."""
+        def save(a):
+            a["dungeon"] = str(v.get("dungeon") or "허상의 정박지")
+            a["difficulty"] = str(v.get("difficulty") or "매우 어려움2")
+        return self._repeat_launch("abyss", "어비스", v, save, on_event)
+
+    # ---- 레이드 반복 (mabi.tasks.raid) — 어비스와 같은 틀 ----
+    _raid_thread: threading.Thread | None = None
+    _raid_bot = None
+    _raid_result: dict = {}
+
+    def daily_raidSettings(self) -> dict:  # noqa: N802
+        from mabi.tasks import raid
+        r = load_config(self.paths)["raid"]
+        return {"raid": r["raid"], "difficulty": r.get("difficulty") or "어려움", "slot": int(r.get("slot", 0)),
+                "runs": int(r.get("runs", 0)), "minutes": float(r.get("minutes", 0)), "revive": bool(r.get("revive", True)),
+                "raids": raid.RAIDS, "difficulties": raid.DIFFICULTIES,
+                "running": bool(self._raid_thread and self._raid_thread.is_alive())}
+
+    def _raid_launch(self, v: dict, on_event=None) -> threading.Thread:
+        """레이드 반복 — [raid] 에 저장하고 시작 ('mm:raid', self._raid_result). 나머지는 _abyss_launch 와 같다."""
+        def save(a):
+            a["raid"] = str(v.get("raid") or "카브락")
+            a["difficulty"] = str(v.get("difficulty") or "어려움")
+        return self._repeat_launch("raid", "레이드", v, save, on_event)
+
+    def daily_raidStop(self) -> dict:  # noqa: N802
+        if self._raid_bot:
+            self._raid_bot.stopper.request()
+        return {"ok": True}
+
+    def _repeat_launch(self, kind: str, title: str, v: dict, save, on_event=None) -> threading.Thread:
+        """어비스·레이드 반복 공통: config.toml [kind] 에 저장하고 mabi.tasks.<kind>.repeat 를 작업 스레드에서."""
         on_event = on_event or (lambda e: None)
 
         def event(e):
-            self._emit("mm:abyss", e)
+            self._emit(f"mm:{kind}", e)
             on_event(e)
             if e.get("type") in ("done", "failed"):
-                self._abyss_result = e
-        self._abyss_result = {"type": "failed", "message": "시작하지 못함"}
+                setattr(self, f"_{kind}_result", e)
+        setattr(self, f"_{kind}_result", {"type": "failed", "message": "시작하지 못함"})
         doc = self._doc()
-        if "abyss" not in doc:
-            doc["abyss"] = tomlkit.table()
-        a = doc["abyss"]
-        a["dungeon"] = str(v.get("dungeon") or "허상의 정박지")
-        a["difficulty"] = str(v.get("difficulty") or "매우 어려움2")
+        if kind not in doc:
+            doc[kind] = tomlkit.table()
+        a = doc[kind]
+        save(a)
         a["slot"] = max(0, int(v.get("slot") or 0))
         a["runs"] = max(0, int(v.get("runs") or 0))
         a["minutes"] = max(0, int(v.get("minutes") or 0))
@@ -280,18 +313,20 @@ class DailyApi:
         event({"type": "start"})
 
         def work():
+            import importlib
             from mabi.bot import Bot, StopRequested
-            from mabi.tasks import abyss
+            task = importlib.import_module(f"mabi.tasks.{kind}")
             bot = None
             try:
                 self._daily_hook_log()
                 cfg = load_config(self.paths)
-                bot = self._abyss_bot = Bot(cfg, self.paths, force_exit=False)
+                bot = Bot(cfg, self.paths, force_exit=False)
+                setattr(self, f"_{kind}_bot", bot)
                 if not bot.window.find():
                     raise ValueError("게임이 꺼져 있습니다")
                 # '게임 조작 감지' 일시정지는 쓰지 않는다 — 어비스 반복은 게임을 뒤에 두고 PC 를 계속 쓰는 기능인데,
                 # 게임이 잠깐 앞에 있을 때 누른 키(Alt+Tab 등)로 매칭 중에 멈췄다 (2026-10-23). 멈추기는 F12·버튼으로
-                a = cfg["abyss"]  # 게임은 입장할 때만 앞으로 가져온다 (abyss.repeat)
+                a = cfg[kind]  # 게임은 입장할 때만 앞으로 가져온다 (abyss.repeat)
                 profile = prof.load_profile(self.paths.profile) or {"slots": [], "names": {}}
                 ch = next((c for c in prof.characters(profile) if c["slot"] == int(a.get("slot", 0))), None)
                 from mabi.tasks import display
@@ -302,21 +337,22 @@ class DailyApi:
                         log.info(display.prepare_interface(bot, prof.DailyState(self.paths.state)))
                     except Exception as e:
                         log.warning(f"인터페이스 PC·80% 로 맞추지 못함 — 그대로 진행: {e}")
-                res = abyss.repeat(bot, cfg, int(a["runs"]), float(a["minutes"]), on_event=event, character=ch)
+                res = task.repeat(bot, cfg, int(a["runs"]), float(a["minutes"]), on_event=event, character=ch)
                 event({"type": "done", **res})
             except StopRequested:
-                log.info("어비스 반복: 사용자 중단")
+                log.info(f"{title} 반복: 사용자 중단")
                 event({"type": "done", "stopped": True})
             except Exception as e:
-                log.exception("어비스 반복 실패")
+                log.exception(f"{title} 반복 실패")
                 event({"type": "failed", "message": str(e)})
             finally:
-                self._abyss_bot = None
+                setattr(self, f"_{kind}_bot", None)
                 if bot:
                     bot.stopper.close()
-        self._abyss_thread = threading.Thread(target=work, name="abyss", daemon=True)
-        self._abyss_thread.start()
-        return self._abyss_thread
+        t = threading.Thread(target=work, name=kind, daemon=True)
+        setattr(self, f"_{kind}_thread", t)
+        t.start()
+        return t
 
     def daily_abyssStop(self) -> dict:  # noqa: N802
         if self._abyss_bot:

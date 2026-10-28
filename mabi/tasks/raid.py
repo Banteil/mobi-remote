@@ -1,0 +1,431 @@
+"""레이드 반복 (혼자하기). 사람이 멈추거나(F12) 정한 횟수·시간이 될 때까지 같은 레이드를 다시 돈다.
+
+흐름 (2026-10-28 카브락 어려움 5판으로 확인, 캡처 caps/raid1):
+  메뉴(ESC) → '레이드' → 레이드 카드(카브락 / 에이렐 / 화이트 서큐버스) → 입장 창(위쪽 '혼자하기 / 함께하기' 탭, 왼쪽 난이도)
+  → 오른쪽 아래 '이동하기' 또는 '출항하기'(둘 다 Space). 이동하기면 선착장까지 걸어가고(같은 맵, 몇 분) 창에서 다시 출항하기
+  → 출항선(맵 InstanceRaidLobby '시작의 갑판'). 숏컷 퀘스트 '출항하기 · 조타로 이동 후 출항'
+  → 그 퀘스트를 진행하면 연출 뒤 레이드 맵(InstanceRaid)으로. 안에서는 자동 진행·자동 전투가 저절로 켜진다
+  → 보스 처치 (패킷 레이드 상태 Cleared + 결과) → 연출 → 결과 화면 '처치 완료' 확인(Space)
+  → 오른쪽 맨 위 나가기 → '레이드에서 나가시겠습니까?' 출항선으로 이동(Space) → 배에서 다시 출항.
+쓰러지면 '여기서 부활' (부활 제한 3회). 다 쓰면 나가기 → 출항선으로 이동 → 다시 출항.
+장비 내구도가 낮으면 나가기 창에서 '파티&던전 나가기'(필드로) → 대장간 수리 → 메뉴에서 다시 입장.
+연출은 넘기지 않고 기다린다 — '장면 넘기기' 는 클릭이라 뒤에서 돌던 게임이 앞으로 나온다 (2026-10-28 사용자).
+게임을 앞에 둔 채 돌리면(background 끔) 넘긴다.
+"""
+import ctypes
+import time
+
+from .. import gamedata as gd
+from ..bot import Bot, StepTimeout
+from .. import monitor
+from . import repair, ui_text
+from .content import CannotProceed, watch
+
+RAIDS = ["카브락", "에이렐", "화이트 서큐버스"]
+DIFFICULTIES = {"카브락": ["입문", "어려움"], "에이렐": ["어려움", "매우 어려움"], "화이트 서큐버스": ["어려움", "매우 어려움"]}
+
+LOBBY_MAP = "InstanceRaidLobby"  # 출항선 (레이드마다 같은 맵)
+RAID_MAP = "InstanceRaid"
+
+_find_text = ui_text.find
+
+
+def _click_text(bot: Bot, want: str, region=None, exact: bool = True, what: str = "", tries: int = 4,
+                key: str | None = None) -> None:
+    ui_text.click(bot, want, region, exact, what, tries, shot="raid", key=key)
+
+
+def _map(bot: Bot) -> str | None:
+    """패킷이 아는 지금 맵 종류. 로딩 중이면 'loading', 모르면 None."""
+    loading = bot.map_loading()
+    if loading is None:
+        return None
+    return "loading" if loading else bot.packets.state.channel_type
+
+
+def cleared(bot: Bot) -> bool:
+    """이 레이드 판의 보스를 잡았나 (패킷 결과·상태 Cleared). 결과 화면이 떠 있는 동안 CLI 퀘스트는 빈 목록이다."""
+    st = bot.packets.state
+    return bot.packets.ok and _map(bot) == RAID_MAP and (bool(st.raid_result) or st.raid_state == "Cleared")
+
+
+def _quest_title(bot: Bot) -> str:
+    """CLI 숏컷 퀘스트 제목 (색 태그 뺌) — 배 '출항하기', 판 중 '카브락 클리어', 끝 '카브락 토벌 완료'."""
+    qs = bot.state.query("get_quests") if bot.state.available() else None
+    for q in qs or []:
+        if q.get("Source") == "shortcut":
+            t = q.get("QuestTitle", "")
+            while "<" in t and ">" in t[t.index("<"):]:
+                i = t.index("<")
+                t = t[:i] + t[t.index(">", i) + 1:]
+            return t
+    return ""
+
+
+def where(bot: Bot, raid: str) -> str:
+    """지금 어디인가 — 어디서 시작해도 그 자리부터 잇는다.
+      loading  맵 로딩 중            ship   출항선 (배)               play   레이드 맵, 보스를 아직 안 잡음
+      cleared  레이드 맵, 보스를 잡음 (연출·결과 화면·나가기 전)        entry  입장 창 (혼자하기 / 함께하기 탭)
+      list     레이드 목록           menu   메뉴(ESC)                  main   그 밖의 메인 화면 (필드)
+      other    그 밖의 창 — ESC 로 닫으면 된다"""
+    m = _map(bot)
+    if m == "loading":
+        return "loading"
+    if m == RAID_MAP:
+        return "cleared" if cleared(bot) else "play"
+    if m == LOBBY_MAP:
+        return "ship"
+    if m is None:  # 패킷이 모름 — CLI 장소·퀘스트로
+        env = bot.state.query("get_current_environment") if bot.state.available() else None
+        title = _quest_title(bot)
+        if (env or {}).get("ChannelDisplayName") == gd.text("raid_ship"):
+            return "ship"
+        if title.endswith(gd.text("raid_quest_clear")):
+            return "play"
+        if title.endswith(gd.text("raid_quest_done")):
+            return "cleared"
+    if _find_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top")):
+        return "entry"
+    if _find_text(bot, raid, gd.region("raid_list")):
+        return "list"
+    if bot.at_main():
+        return "main"
+    if bot.exists(bot.ui["menu_quit"]):
+        return "menu"
+    if m is None and bot.is_loading():
+        return "loading"
+    return "other"
+
+
+def where_settled(bot: Bot, raid: str) -> str:
+    end = time.monotonic() + bot.cfg["timing"]["loading"]
+    while (at := where(bot, raid)) == "loading" and time.monotonic() < end:
+        if not bot.wait_loaded(end - time.monotonic()):
+            bot.sleep(2, 2.5)
+    return at
+
+
+def _wait_settled(bot: Bot, timeout: float) -> bool:
+    """로딩·자동 이동이 끝나 메인 화면이 보일 때까지 (abyss._wait_settled 와 같음)."""
+    from .abyss import _wait_settled as settled
+    return settled(bot, timeout)
+
+
+def _entry_button(bot: Bot) -> str:
+    """입장 창 오른쪽 아래 버튼: 'sail'(출항하기) · 'move'(이동하기) · ''."""
+    if _find_text(bot, gd.text("raid_sail"), gd.region("abyss_entry_right")):
+        return "sail"
+    if _find_text(bot, gd.text("abyss_move"), gd.region("abyss_entry_right")):
+        return "move"
+    return ""
+
+
+def open_entry(bot: Bot, raid: str, difficulty: str = "", at: str = "") -> None:
+    """raid 입장 창을 열고 '혼자하기' · 난이도를 맞춘다. at 이 entry·list·menu 면 그 자리부터."""
+    if at == "entry" and not _find_text(bot, raid, gd.region("raid_entry_title")):
+        bot.log.info(f"다른 레이드의 입장 창 → 닫고 '{raid}' 로")
+        bot.key("esc")
+        bot.sleep(1.0, 1.4)
+        at = ""
+    if at != "entry":
+        if at != "list":
+            for _ in range(0 if at == "menu" else 3):
+                bot.to_main()
+                bot.key("esc")
+                bot.sleep(1.5, 1.8)
+                if _find_text(bot, gd.text("raid_menu"), gd.region("menu_right")):
+                    break
+                bot.clear_blockers(ocr=True)
+            _click_text(bot, gd.text("raid_menu"), gd.region("menu_right"), what="메뉴의 레이드")
+            bot.sleep(1.0, 1.5)
+        _click_text(bot, raid, gd.region("raid_list"), what=f"레이드 '{raid}'")
+        if not ui_text.wait(bot, gd.text("abyss_together"), gd.region("abyss_entry_top"), timeout=8):
+            raise CannotProceed(f"'{raid}' 입장 창이 열리지 않음 → {bot.snapshot('raid').name}")
+    # 탭 글자는 고르면 끝에 따옴표 같은 표시가 붙어 읽힌다 ('혼자하기'') — 들어 있기만 하면 된다
+    _click_text(bot, gd.text("raid_solo"), gd.region("abyss_entry_top"), exact=False, what="혼자하기")
+    if difficulty:
+        _click_text(bot, difficulty, gd.region("raid_difficulty"), what=f"난이도 '{difficulty}'")
+
+
+def board(bot: Bot, raid: str, difficulty: str, at: str = "") -> None:
+    """입장 창 → 출항선(배)까지. '이동하기' 면 선착장까지 걸어간 뒤 창에서 '출항하기'."""
+    for attempt in range(3):
+        open_entry(bot, raid, difficulty, at=at)
+        at = ""
+        button = ""
+        for _ in range(5):
+            if (button := _entry_button(bot)):
+                break
+            bot.sleep(1.0, 1.4)
+        if not button:
+            raise CannotProceed(f"'{raid}' 입장 창에 출항하기·이동하기가 없음 → {bot.snapshot('raid').name}")
+        bot.key("space")
+        if button == "move":
+            bot.log.info("선착장에서 멂 → 이동하기")
+            bot.sleep(2, 3)
+            key = bot.cfg["game"].get("fast_travel_key")
+            if key and bot.fast_travel_ok():
+                bot.log.info("빠른 이동")
+                bot.key(key)
+            if not _wait_settled(bot, bot.cfg["raid"].get("travel_timeout", 600)):
+                raise CannotProceed(f"선착장으로 가지 못함 → {bot.snapshot('raid_travel').name}")
+            # 도착하면 입장 창이 다시 뜬다 — 떠 있으면 그 자리부터, 아니면 메뉴에서 다시 연다
+            at = "entry" if _find_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top")) else ""
+            continue
+        # 출항하기 → 배로 (맵 로딩)
+        bot.wait_packet(lambda s: s.loading, 20, since=bot.input_mark)
+        end = time.monotonic() + bot.cfg["timing"]["loading"]
+        while time.monotonic() < end:
+            if (w := where(bot, raid)) == "ship":
+                bot.log.info("출항선에 탐")
+                return
+            if w == "loading":
+                bot.wait_loaded(end - time.monotonic())
+            else:
+                bot.sleep(2, 2.5)
+        raise CannotProceed(f"출항선에 타지 못함 → {bot.snapshot('raid_board').name}")
+    raise CannotProceed(f"선착장에 가도 출항하기가 나오지 않음 → {bot.snapshot('raid_board').name}")
+
+
+def _press_sail(bot: Bot) -> bool:
+    """배 숏컷 퀘스트 '출항하기' 를 진행한다. HUD 오른쪽 퀘스트 제목을 누르고(실측 2026-10-28 자동 진행 시작),
+    안 되면 퀘스트 창(J)의 '출항하기' 카드 '진행하기'. 누른 뒤 시작 신호가 왔으면 True."""
+    def started(since: int, timeout: float) -> bool:
+        return bool(bot.wait_packet(lambda s: s.loading or s.raid_state == "InProgress", timeout, since=since)) \
+            or bool(bot.packets.find("autoplay.start_ok", since)) or bool(bot.packets.find("raid.depart", since))
+
+    hit = _find_text(bot, gd.text("raid_sail"), gd.region("quest_hud"))
+    if hit:
+        bot.click(hit)
+        if started(bot.input_mark, 8):
+            return True
+    bot.key("j")
+    bot.sleep(1.5, 2)
+    title = _find_text(bot, gd.text("raid_sail"), gd.region("questwin_list"))
+    goes = [(x, y) for t, x, y in ui_text.find_texts(bot.frame(), gd.region("questwin_list"))
+            if ui_text.norm(t) == ui_text.norm(gd.text("raid_go"))]
+    goes = [g for g in goes if title and 0 < g[1] - title[1] < 260]
+    if not goes:
+        bot.key("esc")
+        return False
+    bot.click(min(goes, key=lambda g: g[1]))
+    return started(bot.input_mark, 10)
+
+
+def sail(bot: Bot) -> None:
+    """배에서 출항해 레이드 맵에 들어갈 때까지. 출항 연출은 로딩 사이에 나온다."""
+    for _ in range(3):
+        if not bot.at_main():
+            bot.clear_blockers(ocr=True)
+        if _press_sail(bot):
+            break
+        bot.sleep(2, 3)
+    else:
+        raise CannotProceed(f"출항하기를 진행하지 못함 → {bot.snapshot('raid_sail').name}")
+    end = time.monotonic() + bot.cfg["raid"].get("sail_timeout", 120)
+    while time.monotonic() < end:
+        m = _map(bot)
+        if m == RAID_MAP:
+            bot.log.info("레이드 맵에 들어옴")
+            return
+        if m == "loading":
+            bot.wait_loaded(end - time.monotonic())
+            continue
+        if m is None and _quest_title(bot).endswith(gd.text("raid_quest_clear")):
+            return
+        bot.clear_blockers()  # 출항 연출 (앞에 있으면 넘기고, 뒤에서면 기다린다 — may_skip_scene)
+        bot.sleep(1.5, 2)
+    raise StepTimeout(f"출항 뒤 레이드 맵에 들어가지 못함 → {bot.snapshot('raid_sail').name}")
+
+
+def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: None) -> str:
+    """레이드 맵에서 보스를 잡을 때까지. 'clear' | 'dead' | 'timeout'.
+    쓰러지면 '여기서 부활' (점검자 — abyss.revive_here, 부활 횟수를 다 쓰면 'dead'). 배고프면 먹는다."""
+    end = time.monotonic() + run_timeout
+    ctx = monitor.Ctx("raid", "레이드 진행", revive=revive)
+    while True:
+        if bot.wait_packet(lambda s: bool(s.raid_result) or s.raid_state == "Cleared", 3) is None:
+            bot.sleep(3)
+        if cleared(bot):
+            bot.log.info("패킷: 레이드 보스 처치 → 클리어")
+            return "clear"
+        act = bot.state.activity() or {}
+        if not revive and bot.is_dead(act):
+            return "dead"
+        seen = watch(bot, ctx, act)
+        if seen.finish and seen.finish.result == "dead":
+            return "clear" if cleared(bot) else "dead"
+        if ctx.take("revived"):
+            on_revive()
+            continue
+        if not seen.done:
+            bot.eat_if_hungry()
+        if time.monotonic() > end:
+            return "timeout"
+
+
+def finish_result(bot: Bot) -> None:
+    """보스 처치 연출이 끝나고 뜨는 결과 화면('처치 완료', 확인 Space)을 넘긴다. 연출은 기다린다 (뒤에서면).
+    나가기 버튼(abyss_exit)이 보이면 결과 화면이 이미 지나갔다."""
+    end = time.monotonic() + bot.cfg["raid"].get("result_timeout", 120)
+    while time.monotonic() < end:
+        if _find_text(bot, gd.text("raid_result"), gd.region("raid_result")):
+            bot.sleep(1.0, 1.5)
+            bot.key("space")
+            bot.sleep(1.5, 2)
+            if not _find_text(bot, gd.text("raid_result"), gd.region("raid_result")):
+                bot.log.info("결과 화면 확인")
+                return
+            continue
+        if bot.exists(bot.ui["abyss_exit"]) and bot.at_main():
+            return
+        bot.clear_blockers()
+        bot.sleep(1.5, 2)
+    raise StepTimeout(f"레이드 결과 화면을 넘기지 못함 → {bot.snapshot('raid_result').name}")
+
+
+def leave(bot: Bot, to_field: bool = False) -> None:
+    """레이드 맵에서 나간다: 나가기 → '레이드에서 나가시겠습니까?' → 출항선으로 이동(Space) 또는 '파티&던전 나가기'(필드).
+    다 나와 메인 화면이 보일 때까지."""
+    want = LOBBY_MAP
+    for _ in range(4):
+        if _map(bot) not in (RAID_MAP, None):
+            break
+        if not bot.exists(bot.ui["abyss_exit"]):
+            bot.key("esc")  # 부활 창·결과 화면 등이 가리면 닫아 본다
+            bot.sleep(1.0, 1.5)
+            continue
+        bot.click(bot.ui["abyss_exit"])
+        if not ui_text.wait(bot, gd.text("raid_leave_ship"), gd.region("raid_leave_buttons"), timeout=5):
+            continue
+        bot.sleep(0.5, 0.8)
+        if to_field:
+            _click_text(bot, gd.text("raid_leave_field"), gd.region("raid_leave_buttons"), what="파티&던전 나가기")
+            want = "Field"
+        else:
+            bot.key("space")  # 출항선으로 이동
+        break
+    else:
+        raise StepTimeout(f"레이드에서 나가지 못함 → {bot.snapshot('raid_leave').name}")
+    bot.wait_packet(lambda s: s.loading, 15, since=bot.input_mark)
+    end = time.monotonic() + bot.cfg["timing"]["loading"]
+    while time.monotonic() < end:
+        m = _map(bot)
+        if m == "loading":
+            bot.wait_loaded(end - time.monotonic())
+            continue
+        if m not in (RAID_MAP, "loading") and bot.at_main():
+            if m and want == LOBBY_MAP and m != LOBBY_MAP:
+                bot.log.warning(f"출항선이 아닌 곳({m})으로 나옴")
+            return
+        if m != RAID_MAP and not bot.is_loading():
+            bot.clear_blockers(ocr=True)
+        bot.sleep(2)
+    raise StepTimeout("레이드에서 나온 뒤 메인 화면이 나오지 않음")
+
+
+def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lambda e: None,
+           character: dict | None = None) -> dict:
+    """레이드를 반복한다. runs·minutes 가 0 이면 사람이 멈출 때까지. 시간이 다 되면 그 판은 마저 끝낸다.
+    character({slot, name})가 있으면 그 캐릭터로 접속해서 한다. 반환 {clears, deaths, retries, revives, seconds}."""
+    from .login import current_name, name_matches
+    from . import login
+    r_cfg = cfg["raid"]
+    raid, difficulty = r_cfg["raid"], r_cfg.get("difficulty", "")
+    behind = bool(r_cfg.get("background", True))
+    user_window = ctypes.windll.user32.GetForegroundWindow()
+    t0 = time.monotonic()
+    stat = {"clears": 0, "deaths": 0, "retries": 0, "revives": 0}
+    below = float(r_cfg.get("repair_below", 0.05) or 0)
+
+    def done() -> bool:
+        return bool((runs and stat["clears"] >= runs) or (minutes and time.monotonic() - t0 >= minutes * 60))
+
+    def emit(**kw):
+        on_event({"type": "raid", **stat, "seconds": round(time.monotonic() - t0), **kw})
+
+    goal = (f"{runs}판" if runs else "") + (" · " if runs and minutes else "") + (f"{minutes:g}분" if minutes else "")
+    bot.log.info(f"레이드 반복 시작: {raid}{' / ' + difficulty if difficulty else ''} — {goal or '멈출 때까지'}")
+    bot.auto_clear = True
+    bot.scene_skip = True  # 레이드는 연출이 길어 넘긴다 (사용자) — 뒤에서 도는 중이면 may_skip_scene 이 막는다
+    bot.background = False
+    at = where_settled(bot, raid)
+    if character and not name_matches(current_name(bot), character.get("name", "")):
+        if at in ("play", "cleared"):
+            bot.log.info(f"다른 캐릭터로 레이드 안 → 나간 뒤 {character['name']} 로 접속")
+            if at == "cleared":
+                finish_result(bot)
+            leave(bot, to_field=True)
+        bot.character = character
+        bot.log.info(login.run(bot, cfg, character))
+        at = where_settled(bot, raid)
+    stage = {"play": "play", "cleared": "cleared", "ship": "ship"}.get(at, "entry")
+    leftover = at == "cleared"  # 시작 전에 이미 잡아 둔 판 — 결과·나가기만 하고 판 수에는 넣지 않는다
+    bot.log.info({"play": "이미 레이드 안 → 이 판부터", "cleared": "보스를 잡은 뒤 → 결과부터", "ship": "출항선 → 출항부터",
+                  "entry": "레이드 입장 창 → 그 자리부터", "list": "레이드 목록 → 그 자리부터",
+                  "menu": "메뉴가 열려 있음 → 그 자리부터"}.get(at, f"{at} → 메뉴에서 입장"))
+
+    def to_back():
+        if behind:
+            bot.background = True
+            bot.window.give_back(user_window)
+
+    while True:
+        if stage == "entry":
+            bot.step("raid_open", f"레이드 입장 ({raid})")
+            emit(stage="entry")
+            bot.background = False
+            board(bot, raid, difficulty, at=at)
+            at = ""
+            stage = "ship"
+        if stage == "ship":
+            bot.step("raid_sail", "출항")
+            emit(stage="sail")
+            sail(bot)
+            to_back()
+            stage = "play"
+        if stage == "play":
+            n = stat["clears"] + stat["deaths"] + stat["retries"] + 1
+            bot.step("raid_play", f"{n}번째 판 진행 중")
+            emit(stage="play")
+            r = play(bot, r_cfg["run_timeout"], bool(r_cfg.get("revive", True)),
+                     on_revive=lambda: (stat.__setitem__("revives", stat["revives"] + 1), emit(stage="play")))
+            if r in ("dead", "timeout"):
+                stat["deaths" if r == "dead" else "retries"] += 1
+                bot.log.warning("쓰러짐(부활 횟수를 다 씀) → 나가서 다시 출항" if r == "dead" else
+                                f"{r_cfg['run_timeout'] / 60:.0f}분 안에 끝나지 않음 → 나가서 다시 출항 "
+                                f"→ {bot.snapshot('raid_timeout').name}")
+                leave(bot)
+                stage = "ship" if _map(bot) in (LOBBY_MAP, None) else "entry"
+                if done():
+                    break
+                continue
+            stage = "cleared"
+        if stage == "cleared":
+            finish_result(bot)
+            if leftover:
+                bot.log.info("시작 전에 끝나 있던 판 → 나가서 다시 출항 (판 수에 넣지 않음)")
+                leftover = False
+            else:
+                stat["clears"] += 1
+                secs = round(time.monotonic() - t0)
+                bot.log.info(f"클리어 {stat['clears']}판 (부활 {stat['revives']} · 쓰러져 나감 {stat['deaths']} · 경과 {secs // 60}분 {secs % 60}초)")
+                emit(stage="clear")
+            if below and repair.needed(bot, below):
+                bot.log.info(f"장비 내구도 {repair.durability(bot) * 100:.0f}% (기준 {below * 100:g}%) → 나가서 수리")
+                emit(stage="repair")
+                bot.background = False
+                leave(bot, to_field=True)
+                repair.run(bot)
+                stat["repairs"] = stat.get("repairs", 0) + 1
+                if done():
+                    break
+                stage = "entry"
+                continue
+            leave(bot)
+            if done():
+                break
+            stage = "ship" if _map(bot) in (LOBBY_MAP, None) else "entry"
+    secs = round(time.monotonic() - t0)
+    bot.log.info(f"레이드 반복 끝: 클리어 {stat['clears']}판, 쓰러져 나감 {stat['deaths']}번 ({secs // 60}분)")
+    return {**stat, "seconds": secs}

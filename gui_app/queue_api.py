@@ -1,7 +1,7 @@
 """작업 큐 화면(web/queue.js)이 부르는 파이썬 쪽 (mm.queue.*). Api 가 이 클래스를 섞어 쓴다.
 
 큐의 주인은 mabi.workqueue.WorkQueue 다. 여기는 카드 종류의 실행기와 화면 연결만 둔다.
-  daily · abyss : 숙제·어비스 (DailyApi 의 _daily_launch · _abyss_launch 를 기다린다)
+  daily · abyss · raid : 숙제·어비스·레이드 (DailyApi 의 _daily_launch · _abyss_launch · _raid_launch 를 기다린다)
   goal          : 제작·채집·가공 목표 (판단 엔진 mabi.craft.goal 의 걸음을 하나씩 실행)
   action        : 한 번 하는 행동 (버튼 하나 = 명령 하나, 전체 수령)
 실행 중 사람에게 물어야 하면(재료를 직접 구해 와야 함) 'mm:queue-ask' 로 묻고 queue.answer 를 기다린다.
@@ -141,16 +141,17 @@ class DailyKind(Kind):
 
 class AbyssKind(Kind):
     STAGE = {"match": "매칭 중", "play": "진행 중", "clear": "클리어", "repair": "장비 수리"}
+    KIND, PLACE = "abyss", "dungeon"  # 반복 종류 (DailyApi._<KIND>_launch · 진행 이벤트 type), 카드의 장소 칸
 
     def __init__(self, api):
         self.api = api
 
-    @staticmethod
-    def detail(x) -> str:
+    @classmethod
+    def detail(cls, x) -> str:
         lim = " · ".join(s for s in [
             (f"{x['runs']}판" + (f" ({x['doneRuns']}판 함)" if x.get("doneRuns") else "")) if x.get("runs") else "",
             f"{x['minutes']}분" if x.get("minutes") else ""] if s)
-        return (f"{x.get('dungeon')} {x.get('difficulty')} · {lim or '멈출 때까지'}" + (" · 쓰러지면 나감" if x.get("revive") is False else "")
+        return (f"{x.get(cls.PLACE)} {x.get('difficulty')} · {lim or '멈출 때까지'}" + (" · 쓰러지면 나감" if x.get("revive") is False else "")
                 + (" · 화면 맞춤" if x.get("fit") else ""))
 
     def where(self, it) -> str:
@@ -191,22 +192,23 @@ class AbyssKind(Kind):
         def on_event(e):
             if e.get("clears") is not None:
                 last.update(clears=e["clears"], secs=e.get("seconds") or 0)
-            if e.get("type") == "abyss":  # 진행은 카드의 진행 줄(view)로 보인다
+            if e.get("type") == self.KIND:  # 진행은 카드의 진행 줄(view)로 보인다
                 p = dict(it.get("prog") or {})
                 p["stage"] = e.get("stage") or p.get("stage")
                 if e.get("clears") is not None:
                     p.update(clears=e["clears"], revives=e.get("revives") or 0, deaths=e.get("deaths") or 0,
                              secs=e.get("seconds") or 0)
                 q.patch(it["id"], {"prog": p})
-        t = api._abyss_launch({"slot": it.get("slot"), "dungeon": it.get("dungeon"), "difficulty": it.get("difficulty"),
-                               "runs": runs, "minutes": minutes, "revive": it.get("revive") is not False,
-                               "fit_display": fit, "interface": fit and not q.session.get("iface")}, on_event)
+        launch = getattr(api, f"_{self.KIND}_launch")
+        t = launch({"slot": it.get("slot"), self.PLACE: it.get(self.PLACE), "difficulty": it.get("difficulty"),
+                    "runs": runs, "minutes": minutes, "revive": it.get("revive") is not False,
+                    "fit_display": fit, "interface": fit and not q.session.get("iface")}, on_event)
         if fit:
             q.session["iface"] = True
         t.join()
         q.patch(it["id"], {"doneRuns": int(it.get("doneRuns") or 0) + last["clears"],
                            "doneSecs": float(it.get("doneSecs") or 0) + last["secs"], "prog": {}})
-        r = api._abyss_result
+        r = getattr(api, f"_{self.KIND}_result")
         if r.get("type") == "failed":
             q.note(it, f"실패 — {r.get('message', '')}")
             return False
@@ -216,7 +218,13 @@ class AbyssKind(Kind):
         return True
 
     def stop(self, reason):
-        self.api.daily_abyssStop()
+        getattr(self.api, f"daily_{self.KIND}Stop")()
+
+
+class RaidKind(AbyssKind):
+    """레이드 반복 (혼자하기) — 어비스 카드와 같은 틀, 장소 칸이 raid."""
+    STAGE = {"entry": "입장", "sail": "출항", "play": "진행 중", "clear": "클리어", "repair": "장비 수리"}
+    KIND, PLACE = "raid", "raid"
 
 
 class GoalKind(Kind):
@@ -375,7 +383,7 @@ class QueueApi:
         emit = lambda ch, v: self._emit(ch, v)  # noqa: E731 — 창은 나중에 붙는다
         self._q_pending_ask: dict | None = None
         self.queue = WorkQueue(self.cd.queue_file, self.cd.history_file, emit,
-                               {"daily": DailyKind(self), "abyss": AbyssKind(self), "goal": GoalKind(self),
+                               {"daily": DailyKind(self), "abyss": AbyssKind(self), "raid": RaidKind(self), "goal": GoalKind(self),
                                 "action": ActionKind(self)},
                                on_drained=self._q_drained, pause_note=self._q_pause_note,
                                snap=self._q_snap, on_report=self._q_report)

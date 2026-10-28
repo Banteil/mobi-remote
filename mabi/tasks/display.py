@@ -330,6 +330,8 @@ def busy(bot: Bot) -> str:
             return "사냥터 안"
         if st.channel_type == "InstanceAbyssDungeon" or st.abyss_result or st.abyss_matching in (1, 2, 3):
             return "어비스 안·매칭 중"
+        if st.channel_type in ("InstanceRaid", "InstanceRaidLobby"):
+            return "레이드 안·출항선"
         if st.in_dialogue:
             return "NPC 대화 중"
     act = (bot.state.activity() if bot.state.available() else None) or {}

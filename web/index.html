@@ -38,7 +38,7 @@
 <nav id="tabs">
   <button class="tab active" data-tab="chars">캐릭터</button>
   <button class="tab" data-tab="daily">일일 숙제</button>
-  <button class="tab" data-tab="abyss">어비스</button>
+  <button class="tab" data-tab="abyss">어비스·레이드</button>
   <button class="tab" data-tab="dash">대시보드</button>
   <button class="tab" data-tab="craft">제작</button>
   <button class="tab" data-tab="alter">가공</button>
@@ -413,6 +413,20 @@
         <button class="btn btn-warn hidden" id="ab-stop">멈추기 (F12)</button>
         <button class="btn" id="ab-queue" title="지금 고른 대로 작업 큐에 담습니다 (재생을 눌러야 진행) — 캐릭터마다 차례로 돌릴 수 있습니다">목표</button>
         <button class="btn btn-primary" id="ab-start" title="지금 바로 시작 — 진행 중인 작업이 있으면 뒤로 미루고 먼저 합니다">반복 시작</button>
+      </div>
+    </div>
+    <div class="card card-wide">
+      <h3>레이드 반복 <small>혼자하기 · 출항선에서 다시 출항하며 반복합니다 (연출은 게임이 앞에 있을 때만 넘깁니다)</small><span class="count" id="rd-stat"></span></h3>
+      <div class="row ab-row">
+        <span class="muted">캐릭터</span><select id="rd-char"></select>
+        <span class="muted ab-gap">레이드</span><select id="rd-raid"></select><select id="rd-difficulty"></select>
+        <span class="muted ab-gap">멈출 때</span><input type="number" id="rd-runs" min="0" class="num-in"> 판
+        <input type="number" id="rd-minutes" min="0" class="num-in"> 분
+        <label class="chk ab-gap" title="부활 횟수를 다 쓰면 나가서 출항선에서 다시 출항합니다"><input type="checkbox" id="rd-revive"> 쓰러지면 여기서 부활</label>
+        <span class="spacer"></span><span id="rd-msg" class="muted"></span>
+        <button class="btn btn-warn hidden" id="rd-stop">멈추기 (F12)</button>
+        <button class="btn" id="rd-queue" title="지금 고른 대로 작업 큐에 담습니다 (재생을 눌러야 진행)">목표</button>
+        <button class="btn btn-primary" id="rd-start" title="지금 바로 시작 — 진행 중인 작업이 있으면 뒤로 미루고 먼저 합니다">반복 시작</button>
       </div>
     </div>
     <div class="card card-wide">

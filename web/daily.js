@@ -304,6 +304,7 @@ async function loadAbyss() {
   $('#ab-revive').checked = a.revive !== false;
   $('#ab-fit').checked = !!a.fit_display;
   paintAbyssRunning(a.running);
+  loadRaid(a.chars);
 }
 
 function paintAbyssRunning(on) {
@@ -372,6 +373,75 @@ mm.daily.onAbyss((e) => {
   }
 });
 
+/* ── 레이드 반복 (혼자하기) — 어비스와 같은 틀 ── */
+
+let raidDiffs = {};
+
+async function loadRaid(chars) {
+  const r = await mm.daily.raidSettings();
+  if (!r) return;
+  raidDiffs = r.difficulties;
+  $('#rd-raid').innerHTML = r.raids.map((d) => '<option' + (d === r.raid ? ' selected' : '') + '>' + esc(d) + '</option>').join('');
+  paintRaidDiffs(r.difficulty);
+  $('#rd-char').innerHTML = '<option value="0">지금 접속한 캐릭터</option>' + chars.map((c) =>
+    '<option value="' + c.slot + '"' + (c.slot === r.slot ? ' selected' : '') + '>' + c.slot + '. ' + esc(c.name) + '</option>').join('');
+  $('#rd-runs').value = r.runs;
+  $('#rd-minutes').value = r.minutes;
+  $('#rd-revive').checked = r.revive !== false;
+  paintRaidRunning(r.running);
+}
+
+function paintRaidDiffs(want) {
+  const list = raidDiffs[$('#rd-raid').value] || [];
+  $('#rd-difficulty').innerHTML = list.map((d) => '<option' + (d === want ? ' selected' : '') + '>' + esc(d) + '</option>').join('');
+}
+
+function paintRaidRunning(on) {
+  $('#rd-start').classList.toggle('hidden', on);
+  $('#rd-stop').classList.toggle('hidden', !on);
+}
+
+function raidSpec() {
+  const sel = $('#rd-char');
+  const slot = Number(sel.value) || 0;
+  const name = slot ? sel.options[sel.selectedIndex].textContent.replace(/^\d+\.\s*/, '') : '';
+  return {
+    kind: 'raid', label: '레이드 · ' + (name || '지금 캐릭터'),
+    slot, raid: $('#rd-raid').value, difficulty: $('#rd-difficulty').value,
+    runs: Number($('#rd-runs').value) || 0, minutes: Number($('#rd-minutes').value) || 0,
+    revive: $('#rd-revive').checked, fit: false,
+  };
+}
+
+function raidAmount(x) {
+  return abyssAmount({ ...x, dungeon: x.raid });
+}
+
+Q_KINDS.raid = {
+  amount: (x) => raidAmount(x),
+  doneToast: (x) => ['레이드 반복 끝', x.label + ' · ' + raidAmount(x)],
+};
+
+mm.daily.onRaid((e) => {
+  if (!e) return;
+  const t = e.seconds != null ? ' · ' + Math.floor(e.seconds / 60) + '분' : '';
+  const stat = e.clears != null ? '클리어 ' + e.clears + (e.revives ? ' · 부활 ' + e.revives : '') + ' · 쓰러져 나감 ' + e.deaths + t : '';
+  if (stat) $('#rd-stat').textContent = stat;
+  if (e.type === 'start') {
+    paintRaidRunning(true);
+    $('#rd-msg').textContent = '시작';
+  } else if (e.type === 'raid') {
+    $('#rd-msg').textContent = { entry: '입장', sail: '출항', play: '진행 중', clear: '클리어', repair: '장비 수리' }[e.stage] || '';
+  } else if (e.type === 'done') {
+    paintRaidRunning(false);
+    $('#rd-msg').textContent = e.stopped ? '멈춤' : '끝';
+  } else if (e.type === 'failed') {
+    paintRaidRunning(false);
+    $('#rd-msg').textContent = '';
+    toast('레이드 반복이 멈췄습니다', e.message, 'bad');
+  }
+});
+
 /* ── 배선 ── */
 
 LOADERS.daily = loadDaily;
@@ -387,6 +457,19 @@ $('#dl-fit').addEventListener('change', () => mm.daily.saveSettings({ fit_displa
 $('#ab-start').addEventListener('click', startAbyss);
 $('#ab-queue').addEventListener('click', queueAbyss);
 $('#ab-stop').addEventListener('click', () => mm.daily.abyssStop());
+$('#rd-raid').addEventListener('change', () => paintRaidDiffs($('#rd-difficulty').value));
+$('#rd-start').addEventListener('click', () => {
+  if (qItems.some((x) => x.kind === 'raid' && x.status === 'run')) { toast('이미 레이드 반복 중입니다', '', 'bad'); return; }
+  const cur = qItems.find((x) => x.status === 'run');
+  toast('레이드 반복 시작', stopKey() + ' = 멈춤' + (cur ? ' · 진행 중이던 "' + cur.label + '" 은 뒤로 미룹니다' : ''), 'ok');
+  qStartNow(raidSpec());
+});
+$('#rd-queue').addEventListener('click', async () => {
+  const it = raidSpec();
+  await mm.queue.add(it, 'end');
+  toast('큐에 담았습니다', it.label + ' — ' + raidAmount(it) + ' · 재생을 누르면 진행합니다.', 'ok');
+});
+$('#rd-stop').addEventListener('click', () => mm.daily.raidStop());
 $('#qr-close').addEventListener('click', () => $('#q-report').classList.add('hidden'));
 $('#qr-logs').addEventListener('click', () => mm.daily.openFolder('logs'));
 $('#qr-body').addEventListener('click', async (e) => {

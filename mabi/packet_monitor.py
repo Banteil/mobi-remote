@@ -357,6 +357,10 @@ class PacketState:
     dungeon: int | None = None
     abyss_result: int = 0            # 어비스 결과 (클리어 순간 어비스 번호, 나가면 0)
     abyss_matching: int = 0          # 우연한 만남 매칭: 0 없음 · 1 요청 · 2 찾는 중 · 3 잡힘 (어비스 맵에 들어가면 0)
+    # 레이드 (caps/raid1 2026-10-28): Lobby 배 위 · InProgress 출항~판 진행 · Cleared 보스 처치. 감시를 켠 뒤 안 왔으면 None
+    raid_state: str | None = None
+    raid_result: int = 0             # 레이드 결과 (보스 처치 순간 레이드 번호, 맵을 옮기면 0)
+    raid_boss: bool = False          # 이 맵에서 레이드 보스전이 시작됨
     field_state: str | None = None   # 사냥터: NotInBattlefield / InProgress / WaitingForChannelTransfer(클리어)
     boss_battle: bool = False
     dead: bool | None = None         # 내 캐릭터가 쓰러짐 (부활 창 열림). 나한테만 오는 부활 가능 여부로 안다
@@ -596,6 +600,7 @@ class PacketMonitor:
             if s.channel_type == "InstanceAbyssDungeon":
                 s.abyss_matching = 0
             s.abyss_result = 0  # 새 맵 — 지난 판 결과는 끝났다 (나갈 때 0 이 오는지 실측이 없어 여기서도 지운다)
+            s.raid_result, s.raid_boss = 0, False
             s.dead = None  # 쓰러진 채 맵을 옮기면 부활 신호가 안 올 수 있다 → 다시 쓰러질 때까지 CLI 로
             # 대화는 맵을 옮기면 끝난다 — 끝 패킷 없이 끊긴 대화가 '대화 중' 으로 남아 끼어들기·정리가 헛돌지 않게
             s.dialogue_npc, s.dialogue_action, s.dialogue_menu = None, "", False
@@ -618,6 +623,14 @@ class PacketMonitor:
             log.info("패킷: 던전 상태 %s", s.dungeon_state)
         elif key == "abyss.result":
             s.abyss_result = vals.get("abyss") or 0
+        elif key == "raid.state":
+            s.raid_state = vals.get("state_name")
+            log.info("패킷: 레이드 상태 %s", s.raid_state)
+        elif key == "raid.result":
+            s.raid_result = vals.get("raid") or 0
+            log.info("패킷: 레이드 결과 옴")
+        elif key == "raid.boss_begin":
+            s.raid_boss = True
         elif key == "abyss.matching_update":
             s.abyss_matching = vals.get("state") or 0
         elif key == "abyss.matching_cancel_ok":

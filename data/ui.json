@@ -47,7 +47,17 @@
     "repair_smithy": "대장간",
     "repair": "수리",
     "repair_all": "전체수리",
-    "repair_confirm": "수리하기"
+    "repair_confirm": "수리하기",
+    "raid_menu": "레이드",
+    "raid_solo": "혼자하기",
+    "raid_sail": "출항하기",
+    "raid_go": "진행하기",
+    "raid_result": "처치완료",
+    "raid_leave_ship": "출항선으로이동",
+    "raid_leave_field": "파티&던전나가기",
+    "raid_ship": "시작의 갑판",
+    "raid_quest_clear": "클리어",
+    "raid_quest_done": "토벌 완료"
   },
 
   "regions": {
@@ -65,6 +75,13 @@
     "char_menu": [560, 200, 800, 640],
     "npc_buttons": [500, 760, 920, 200],
     "repair_buttons": [200, 980, 840, 90],
-    "repair_confirm": [640, 960, 640, 110]
+    "repair_confirm": [640, 960, 640, 110],
+    "raid_list": [0, 745, 1920, 60],
+    "raid_entry_title": [30, 135, 700, 55],
+    "raid_difficulty": [30, 195, 700, 55],
+    "raid_result": [660, 190, 600, 60],
+    "raid_leave_buttons": [560, 830, 800, 80],
+    "quest_hud": [1560, 225, 360, 80],
+    "questwin_list": [1230, 150, 690, 850]
   }
 }
