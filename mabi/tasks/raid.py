@@ -363,25 +363,35 @@ def leave(bot: Bot, to_field: bool = False) -> None:
     """레이드 맵에서 나간다: 나가기 → '레이드에서 나가시겠습니까?' → 출항선으로 이동(Space) 또는 '파티&던전 나가기'(필드).
     다 나와 메인 화면이 보일 때까지."""
     want = LOBBY_MAP
-    for _ in range(4):
+    deadline = time.monotonic() + 120  # 횟수가 아니라 시간으로 — 사람이 PC 를 쓰는 동안 클릭이 몇 번 건너뛰어져도 버틴다
+    while True:
+        if time.monotonic() > deadline:
+            raise StepTimeout(f"레이드에서 나가지 못함 → {bot.snapshot('raid_leave').name}")
         if _map(bot) not in (RAID_MAP, None):
             break
-        if not bot.exists(bot.ui["abyss_exit"]):
-            bot.key("esc")  # 부활 창·결과 화면 등이 가리면 닫아 본다
-            bot.sleep(1.0, 1.5)
-            continue
-        bot.click(bot.ui["abyss_exit"])
-        if not ui_text.wait(bot, gd.text("raid_leave_ship"), gd.region("raid_leave_buttons"), timeout=5):
-            continue
-        bot.sleep(0.5, 0.8)
+        # 확인 창이 이미 떠 있으면(지난 시도의 Space 가 안 먹음) 나가기 아이콘을 또 누르지 않고 그 창부터
+        hit = ui_text.find(bot, gd.text("raid_leave_ship"), gd.region("raid_leave_buttons"))
+        if not hit:
+            if not bot.exists(bot.ui["abyss_exit"]):
+                bot.key("esc")  # 부활 창·결과 화면 등이 가리면 닫아 본다
+                bot.sleep(1.0, 1.5)
+                continue
+            bot.click(bot.ui["abyss_exit"])
+            hit = ui_text.wait(bot, gd.text("raid_leave_ship"), gd.region("raid_leave_buttons"), timeout=5)
+            if not hit:
+                continue
+            bot.sleep(0.5, 0.8)
         if to_field:
             _click_text(bot, gd.text("raid_leave_field"), gd.region("raid_leave_buttons"), what="파티&던전 나가기")
             want = "Field"
-        else:
-            bot.key("space")  # 출항선으로 이동
+            break
+        bot.key("space")  # 출항선으로 이동
+        if not bot.wait_packet(lambda s: s.loading, 6, since=bot.input_mark) and \
+                ui_text.find(bot, gd.text("raid_leave_ship"), gd.region("raid_leave_buttons")):
+            # 29판을 잘 돌다가 이 창에서만 Space 를 안 받고 창이 그대로 남았다 — 마우스로는 바로 넘어감 (2026-10-28)
+            bot.log.info("Space 를 눌러도 출항선으로 안 넘어감 → '출항선으로 이동' 클릭")
+            bot.click(hit)
         break
-    else:
-        raise StepTimeout(f"레이드에서 나가지 못함 → {bot.snapshot('raid_leave').name}")
     bot.wait_packet(lambda s: s.loading, 15, since=bot.input_mark)
     end = time.monotonic() + bot.cfg["timing"]["loading"]
     while time.monotonic() < end:

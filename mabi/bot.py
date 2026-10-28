@@ -464,6 +464,12 @@ class Bot:
         if self.background and not self.window.is_foreground() and not self.input.dry_run:
             prev = ctypes.windll.user32.GetForegroundWindow()
             self.ensure_focus()
+            if not self.window.is_foreground():
+                # 사람이 다른 창에서 입력 중이면 Windows 가 앞으로 가져오기를 막는다 — 그대로 누르면 그 창을 누른다
+                # (2026-10-28 레이드 나가기 4번 헛클릭). 이번 클릭은 건너뛰고 부른 쪽이 다시 시도하게 둔다
+                self.log.warning(f"게임 창을 앞으로 가져오지 못해 ({x}, {y}) 클릭을 건너뜀")
+                self.sleep(2.0)
+                return
             self.input.click(*self.screen.to_screen(x, y))
             self.sleep(0.3)
             self.window.give_back(prev)
