@@ -346,9 +346,11 @@ def leave_ship(bot: Bot) -> None:
             bot.clear_blockers(ocr=True)
             bot.sleep(1.0, 1.5)
             continue
-        bot.click(bot.ui["abyss_exit"])
-        if not ui_text.wait(bot, gd.text("raid_ship_leave"), gd.region("raid_ship_leave"), timeout=5, exact=False):
-            continue
+        bot.key("x")  # 나가기 단축키 (leave 와 같음) — 안 뜨면 아이콘 클릭
+        if not ui_text.wait(bot, gd.text("raid_ship_leave"), gd.region("raid_ship_leave"), timeout=4, exact=False):
+            bot.click(bot.ui["abyss_exit"])
+            if not ui_text.wait(bot, gd.text("raid_ship_leave"), gd.region("raid_ship_leave"), timeout=5, exact=False):
+                continue
         bot.sleep(0.5, 0.8)
         bot.key("space")
         if not bot.wait_packet(lambda s: s.loading, 6, since=bot.input_mark):
@@ -382,8 +384,12 @@ def leave(bot: Bot, to_field: bool = False) -> None:
                 bot.key("esc")  # 부활 창·결과 화면 등이 가리면 닫아 본다
                 bot.sleep(1.0, 1.5)
                 continue
-            bot.click(bot.ui["abyss_exit"])
-            hit = ui_text.wait(bot, gd.text("raid_leave_ship"), gd.region("raid_leave_buttons"), timeout=5)
+            # 나가기 단축키 X — 클릭과 달리 뒤에서 도는 게임을 앞으로 가져오지 않는다 (결과 화면이 떠 있을 땐 안 먹음)
+            bot.key("x")
+            hit = ui_text.wait(bot, gd.text("raid_leave_ship"), gd.region("raid_leave_buttons"), timeout=4)
+            if not hit:
+                bot.click(bot.ui["abyss_exit"])
+                hit = ui_text.wait(bot, gd.text("raid_leave_ship"), gd.region("raid_leave_buttons"), timeout=5)
             if not hit:
                 continue
             bot.sleep(0.5, 0.8)
