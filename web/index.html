@@ -366,7 +366,6 @@
     <div class="toolbar">
       <span id="dl-date" class="muted"></span>
       <span class="spacer"></span>
-      <label class="chk" title="테두리 없는 전체화면 · 16:9 · 인터페이스 PC 80% 로 맞추고, 작업 큐가 다 끝나면 원래대로 되돌립니다 (큐 한 번에 한 번만)"><input type="checkbox" id="dl-fit"> 화면 설정 맞추기</label>
       <label class="chk"><input type="checkbox" id="dl-force"> 오늘 끝낸 숙제도 다시</label>
       <span id="dl-state" class="pill pill-muted hidden"></span>
       <button class="btn" id="dl-queue" title="고른 캐릭터·숙제를 작업 큐 맨 아래에 담습니다 (재생을 눌러야 진행)">목표</button>
@@ -407,7 +406,6 @@
         <span class="muted ab-gap">멈출 때</span><input type="number" id="ab-runs" min="0" class="num-in"> 판
         <input type="number" id="ab-minutes" min="0" class="num-in"> 분
         <label class="chk ab-gap" title="부활 횟수를 다 썼거나 막혔으면 나가서 처음부터 다시 들어갑니다"><input type="checkbox" id="ab-revive"> 쓰러지면 여기서 부활</label>
-        <label class="chk ab-gap" title="테두리 없는 전체화면 · 16:9 · 인터페이스 PC 80% 로 맞추고, 작업 큐가 다 끝나면 원래대로 되돌립니다 (큐 한 번에 한 번만)"><input type="checkbox" id="ab-fit"> 화면 설정 맞추기</label>
         <span class="muted">(0 = 제한 없음 · F12 로 멈춤)</span>
         <span class="spacer"></span><span id="ab-msg" class="muted"></span>
         <button class="btn btn-warn hidden" id="ab-stop">멈추기 (F12)</button>
@@ -555,6 +553,11 @@
         <h3>설정</h3>
         <label class="chk"><input type="checkbox" id="opt-ask-mismatch">
           정해 둔 가공 시설 레벨이 실제와 어긋나면 물어보기</label>
+
+        <label class="chk mt10"><input type="checkbox" id="opt-fit-display">
+          작업 시작 전 화면 설정 맞추기</label>
+        <p class="hint">일일 숙제·어비스·레이드를 시작하기 전에 테두리 없는 전체화면 · 16:9 · 인터페이스 PC 80% 로 맞추고,
+          작업 큐가 다 끝나면 원래대로 되돌립니다 (큐 한 번에 한 번만).</p>
 
         <label class="chk mt10"><input type="checkbox" id="opt-close-to-tray">
           창을 닫으면 트레이로 내리기</label>

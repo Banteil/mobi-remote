@@ -250,7 +250,7 @@ class DailyApi:
         return {"dungeon": a["dungeon"], "difficulty": a.get("difficulty") or "매우 어려움2", "runs": int(a.get("runs", 0)),
                 "slot": int(a.get("slot", 0)), "chars": [{"slot": c["slot"], "name": c["name"]} for c in prof.characters(profile)],
                 "minutes": float(a.get("minutes", 0)), "dungeons": abyss.DUNGEONS,
-                "revive": bool(a.get("revive", True)), "fit_display": bool(a.get("fit_display", False)),
+                "revive": bool(a.get("revive", True)),
                 "difficulties": abyss.DIFFICULTIES,
                 "running": bool(self._abyss_thread and self._abyss_thread.is_alive())}
 
@@ -308,7 +308,6 @@ class DailyApi:
         a["runs"] = max(0, int(v.get("runs") or 0))
         a["minutes"] = max(0, int(v.get("minutes") or 0))
         a["revive"] = v.get("revive") is not False
-        a["fit_display"] = bool(v.get("fit_display"))
         userconfig.save(self.paths, doc)
         event({"type": "start"})
 

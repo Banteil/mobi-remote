@@ -52,7 +52,7 @@ def _on_message(win: "MainWindow", conn) -> None:
             log.warning(f"명령 → 일일 숙제: 넣지 않음 ({'슬롯 없음' if not slots else '다른 작업이 도는 중'})")
             return
         log.info(f"명령 → 일일 숙제 시작 (슬롯 {slots}, 숙제 {only or '전체'})")
-        win.api.queue_add({"kind": "daily", "label": "일일 숙제", "chars": slots, "only": only, "force": False, "fit": False}, "end")
+        win.api.queue_add({"kind": "daily", "label": "일일 숙제", "chars": slots, "only": only, "force": False}, "end")
         q.tick()
     elif msg.startswith((b"abyss:", b"raid:")):
         kind, *parts = msg.decode().split(":")
@@ -67,7 +67,7 @@ def _on_message(win: "MainWindow", conn) -> None:
         name = next((c["name"] for c in chars if c["slot"] == slot), "") or "지금 캐릭터"
         log.info(f"명령 → {title} 담기 (슬롯 {slot}, {where} {difficulty}, {runs or '멈출 때까지'}{'판' if runs else ''})")
         win.api.queue_add({"kind": kind, "label": f"{title} · {name}", "slot": slot, place: where,
-                           "difficulty": difficulty, "runs": runs, "minutes": 0, "revive": True, "fit": False}, "end")
+                           "difficulty": difficulty, "runs": runs, "minutes": 0, "revive": True}, "end")
         if not q.running:
             q.tick()
     else:

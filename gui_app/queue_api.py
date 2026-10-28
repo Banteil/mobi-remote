@@ -101,7 +101,7 @@ class DailyKind(Kind):
         if (err := api._busy_reason()):
             q.note(it, f"시작 못 함 — {err}")
             return False
-        fit = it.get("fit") is not False
+        fit = api._q_fit()
         opts = RunOptions(chars=it.get("chars") or None, only=it.get("only") or None, force=bool(it.get("force")),
                           display=fit, interface_ready=bool(q.session.get("iface")),
                           restore=False,  # 되돌리기는 큐가 다 끝날 때 한 번 (_q_drained)
@@ -151,8 +151,7 @@ class AbyssKind(Kind):
         lim = " · ".join(s for s in [
             (f"{x['runs']}판" + (f" ({x['doneRuns']}판 함)" if x.get("doneRuns") else "")) if x.get("runs") else "",
             f"{x['minutes']}분" if x.get("minutes") else ""] if s)
-        return (f"{x.get(cls.PLACE)} {x.get('difficulty')} · {lim or '멈출 때까지'}" + (" · 쓰러지면 나감" if x.get("revive") is False else "")
-                + (" · 화면 맞춤" if x.get("fit") else ""))
+        return f"{x.get(cls.PLACE)} {x.get('difficulty')} · {lim or '멈출 때까지'}" + (" · 쓰러지면 나감" if x.get("revive") is False else "")
 
     def where(self, it) -> str:
         return f"{it['doneRuns']}판 한 뒤" if it.get("doneRuns") else ""
@@ -179,7 +178,7 @@ class AbyssKind(Kind):
         # 멈췄다 다시 돌 때는 이미 돈 판·시간을 빼고 남은 만큼만
         runs = max(1, int(it["runs"]) - int(it.get("doneRuns") or 0)) if it.get("runs") else 0
         minutes = max(1, math.ceil(float(it["minutes"]) - float(it.get("doneSecs") or 0) / 60)) if it.get("minutes") else 0
-        fit = bool(it.get("fit"))
+        fit = api._q_fit()
         if fit and not api._q_display(q, it):
             return False
         if (err := api._busy_reason()):
@@ -202,7 +201,7 @@ class AbyssKind(Kind):
         launch = getattr(api, f"_{self.KIND}_launch")
         t = launch({"slot": it.get("slot"), self.PLACE: it.get(self.PLACE), "difficulty": it.get("difficulty"),
                     "runs": runs, "minutes": minutes, "revive": it.get("revive") is not False,
-                    "fit_display": fit, "interface": fit and not q.session.get("iface")}, on_event)
+                    "interface": fit and not q.session.get("iface")}, on_event)
         if fit:
             q.session["iface"] = True
         t.join()
@@ -470,10 +469,15 @@ class QueueApi:
     def _q_toast(self, title: str, text: str = "", kind: str = "ok") -> None:
         self._emit("mm:queue-toast", {"title": title, "text": text, "kind": kind})
 
+    def _q_fit(self) -> bool:
+        """옵션 창 '화면 설정 맞추기' ([run] fit_display) — 숙제·어비스·레이드 카드가 시작할 때 모두 이 값을 따른다
+        (예전엔 탭마다 체크박스가 있어 카드에 담겼다 — 2026-10-28 사용자: 옵션 창으로 완전히 옮김)."""
+        return bool(load_config(self.paths)["run"].get("fit_display", True))
+
     def _q_display(self, q: WorkQueue, it: dict) -> bool:
-        """숙제·어비스를 시작하기 전 게임 화면 설정 확인. 기준과 다르면 묻지 않고 맞춘다 (큐가 다 끝나면 되돌림).
+        """숙제·어비스·레이드를 시작하기 전 게임 화면 설정 확인. 기준과 다르면 묻지 않고 맞춘다 (큐가 다 끝나면 되돌림).
         큐 한 번에 한 번만 (q.session['screen']). 맞추지 못하면 False."""
-        if it.get("fit") is False:
+        if not self._q_fit():
             return True
         q.session["used"] = True
         if q.session.get("screen"):

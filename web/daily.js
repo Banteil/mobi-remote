@@ -23,7 +23,6 @@ async function loadDaily() {
   paintDailyTable();
   paintDailyRunning(dl.st.running);
   paintDailySettings();
-  $('#dl-fit').checked = dl.settings.fit_display !== false;
 }
 
 function stateOf(v) {
@@ -145,7 +144,6 @@ function dailySpec() {
   return {
     kind: 'daily', label: '일일 숙제',
     chars: chars, only: only.length === dl.st.order.length ? null : only, force: $('#dl-force').checked,
-    fit: $('#dl-fit').checked,
   };
 }
 
@@ -220,6 +218,7 @@ async function loadPathSettings() {
   $('#opt-stop-key').innerHTML = Array.from({ length: 12 }, (_, i) => 'f' + (i + 1)).map((k) =>
     '<option value="' + k + '"' + (k === s.stop_key ? ' selected' : '') + '>' + k.toUpperCase() + '</option>').join('');
   $('#opt-pause-touch').checked = s.pause_on_touch !== false;
+  $('#opt-fit-display').checked = s.fit_display !== false;
   ['data', 'logs', 'shots'].forEach((k) => { $('#dl-p-' + k).value = s.paths[k] || ''; });
   $('#dl-p-now').textContent = '지금: ' + s.current.data + ' (바꾸면 다음 실행부터)';
 }
@@ -302,7 +301,6 @@ async function loadAbyss() {
   $('#ab-runs').value = a.runs;
   $('#ab-minutes').value = a.minutes;
   $('#ab-revive').checked = a.revive !== false;
-  $('#ab-fit').checked = !!a.fit_display;
   paintAbyssRunning(a.running);
   loadRaid(a.chars);
 }
@@ -323,15 +321,14 @@ function abyssSpec() {
     kind: 'abyss', label: '어비스 · ' + (name || '지금 캐릭터'),
     slot, dungeon: $('#ab-dungeon').value, difficulty: $('#ab-difficulty').value,
     runs: Number($('#ab-runs').value) || 0, minutes: Number($('#ab-minutes').value) || 0,
-    revive: $('#ab-revive').checked, fit: $('#ab-fit').checked,
+    revive: $('#ab-revive').checked,
   };
 }
 
 function abyssAmount(x) {
   const lim = [x.runs ? x.runs + '판' + (x.doneRuns ? ' (' + x.doneRuns + '판 함)' : '') : '',
     x.minutes ? x.minutes + '분' : ''].filter(Boolean).join(' · ');
-  return x.dungeon + ' ' + x.difficulty + ' · ' + (lim || '멈출 때까지') + (x.revive === false ? ' · 쓰러지면 나감' : '') +
-    (x.fit ? ' · 화면 맞춤' : '');
+  return x.dungeon + ' ' + x.difficulty + ' · ' + (lim || '멈출 때까지') + (x.revive === false ? ' · 쓰러지면 나감' : '');
 }
 
 function startAbyss() {
@@ -409,7 +406,7 @@ function raidSpec() {
     kind: 'raid', label: '레이드 · ' + (name || '지금 캐릭터'),
     slot, raid: $('#rd-raid').value, difficulty: $('#rd-difficulty').value,
     runs: Number($('#rd-runs').value) || 0, minutes: Number($('#rd-minutes').value) || 0,
-    revive: $('#rd-revive').checked, fit: false,
+    revive: $('#rd-revive').checked,
   };
 }
 
@@ -453,7 +450,7 @@ $('#dl-start').addEventListener('click', () => {
   startDaily();
 });
 $('#dl-queue').addEventListener('click', queueDaily);
-$('#dl-fit').addEventListener('change', () => mm.daily.saveSettings({ fit_display: $('#dl-fit').checked }));
+$('#opt-fit-display').addEventListener('change', () => mm.daily.saveSettings({ fit_display: $('#opt-fit-display').checked }));
 $('#ab-start').addEventListener('click', startAbyss);
 $('#ab-queue').addEventListener('click', queueAbyss);
 $('#ab-stop').addEventListener('click', () => mm.daily.abyssStop());
