@@ -120,6 +120,17 @@ class WaitTest(unittest.TestCase):
         self.m.apply("dialogue.target", {"target": 0xFFFFFFFFFFFFFFFF})
         self.assertFalse(self.m.state.in_dialogue)
 
+    def test_saw_passing_state(self):
+        """금방 지나간 로딩도 '누른 뒤 한 번이라도' 로는 보인다 — 지금 값만 보면 놓친다 (2026-10-28)."""
+        self.m.apply("channel.leaving", {})  # 누르기 전의 로딩은 세지 않는다
+        self.m.apply("channel.entering", {"channel": 1, "channel_type": "Field"})
+        mark = self.m.mark()
+        self.assertFalse(self.m.saw(lambda s: s.loading, mark))
+        self.m.apply("channel.leaving", {})
+        self.m.apply("channel.entering", {"channel": 2, "channel_type": "Field"})
+        self.assertFalse(self.m.state.loading)
+        self.assertTrue(self.m.saw(lambda s: s.loading, mark))
+
     def test_off_returns_at_once(self):
         self.m.status = "no_npcap"
         t = time.monotonic()

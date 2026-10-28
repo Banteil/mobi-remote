@@ -99,6 +99,7 @@ class Bot:
         # 게임 서버 패킷 (받기만) — 맵 이동·던전 상태를 화면·CLI 보다 먼저 안다. 꺼져 있으면 쓰지 않는다
         self.packets = (packet_monitor.shared(paths.logs) if cfg["game"].get("packet_watch", True)
                         else packet_monitor.PacketMonitor(paths.logs))
+        self.input_mark: int | None = None  # 마지막으로 누르기 직전의 패킷 번호 (아직 누른 적 없으면 None — 지금 상태만 본다)
         self.shot_dir = paths.shots
         if not Bot._shots_pruned:  # 프로세스에 한 번 (큐는 카드마다 Bot 을 만든다)
             Bot._shots_pruned = True
@@ -214,15 +215,17 @@ class Bot:
         # 무게를 넘으면 자동 이동·전투가 멈추므로 던전 안이라도 바로 그만둔다
         raise Overweight(f"가방 무게 {cur:.0f}/{mx:.0f}")
 
-    def wait_packet(self, pred, timeout: float) -> bool | None:
+    def wait_packet(self, pred, timeout: float, since: int | None = None) -> bool | None:
         """패킷 상태(self.packets.state)가 pred 를 만족할 때까지. True 만족 / False 시간 초과 /
-        None 감시가 꺼졌거나 서버 패킷이 끊김 — 부르는 쪽은 CLI·화면으로 넘어간다."""
+        None 감시가 꺼졌거나 서버 패킷이 끊김 — 부르는 쪽은 CLI·화면으로 넘어간다.
+        since: 이 이벤트 번호(packets.mark · input_mark) 뒤에 한 번이라도 만족했으면 바로 True — 로딩·이동 시작처럼
+        금방 지나가는 상태를 기다릴 때. 누르기 전에 찍은 번호를 넘긴다."""
         end = time.monotonic() + timeout
         while True:
             self.check_stop()
             if not self.packets.ok:
                 return None
-            if pred(self.packets.state):
+            if pred(self.packets.state) if since is None else self.packets.saw(pred, since):
                 return True
             left = end - time.monotonic()
             if left <= 0:
@@ -452,6 +455,7 @@ class Bot:
 
     def click_xy(self, x: int, y: int) -> None:
         """기준(1920x1080) 좌표를 누른다. 게임 해상도가 달라도 비율대로 실제 자리를 누른다 (Screen.to_screen)."""
+        self.input_mark = self.packets.mark()  # 누르기 직전 패킷 번호 — wait_packet(since=) 로 '누른 뒤' 를 본다
         if self.background and not self.window.is_foreground() and not self.input.dry_run:
             prev = ctypes.windll.user32.GetForegroundWindow()
             self.ensure_focus()
@@ -503,6 +507,7 @@ class Bot:
             self.click(step, timeout)
 
     def key(self, key: str) -> None:
+        self.input_mark = self.packets.mark()  # 누르기 직전 패킷 번호 (click_xy 와 같음)
         if self.background and not self.window.is_foreground() and not self.input.dry_run:
             post_key(self.window.hwnd, key)
             Bot._posted = True

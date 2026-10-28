@@ -269,7 +269,7 @@ def leave(bot: Bot) -> bool:
     # 밖(필드)으로 나와 메인 화면이 보일 때까지 — 패킷이 있으면 맵을 떠나기 시작하는 순간(길어야 15초)을 기다렸다가,
     # 로딩 동안은 화면을 보지 않는다
     end = time.monotonic() + bot.cfg["timing"]["loading"]
-    bot.wait_packet(lambda s: s.loading, 15)
+    bot.wait_packet(lambda s: s.loading, 15, since=bot.input_mark)  # 나가기(Space)를 누른 뒤 한 번이라도 로딩
     while inside(bot) or not bot.at_main():
         if time.monotonic() > end:
             raise StepTimeout("어비스에서 나온 뒤 메인 화면이 나오지 않음")
@@ -589,7 +589,7 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
             bot.key("space")  # 다시 하기 (Space) → 같은 던전·난이도로 다시 매칭
             for _ in range(2):  # 키가 안 들었으면 — 뒤에서는 키를 한 번 더, 앞에서는 누른다
                 # 패킷: 매칭 상태(요청·찾는 중·잡힘)나 맵 로딩이 오면 눌린 것. 모르면 2~3초 뒤 화면의 '다시 하기' 버튼으로
-                took = bot.wait_packet(lambda s: s.abyss_matching in (1, 2, 3) or s.loading, 3)
+                took = bot.wait_packet(lambda s: s.abyss_matching in (1, 2, 3) or s.loading, 3, since=bot.input_mark)
                 if took or took is None:
                     # 패킷이 모르면 다시 누르지 않는다 — 다시 하기를 누른 뒤 매칭하는 동안에도 보상 화면(버튼)이 남아 있어,
                     # 버튼이 보인다고 또 누르면 매칭이 취소된다 (안 눌렸으면 매칭 상한 뒤 처음부터 다시 한다)

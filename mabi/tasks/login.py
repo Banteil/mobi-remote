@@ -395,7 +395,7 @@ def _run(bot: Bot, cfg: dict, character: dict | None) -> str:
         # 입력이 무시되는 경우가 있다 → 선택 화면이 그대로면 다시 누른다
         for _ in range(3):
             # 패킷: 게임 서버 입장(in_game)·맵 로딩이 오면 눌린 것 — 바로 넘어간다. 모르면 5초 뒤 화면으로
-            started = bot.wait_packet(lambda s: bool(s.in_game) or s.loading, 5)
+            started = bot.wait_packet(lambda s: bool(s.in_game) or s.loading, 5, since=mark)
             if started is None:
                 bot.sleep(5)
             if started or not bot.exists(charsel):

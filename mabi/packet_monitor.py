@@ -9,6 +9,7 @@ Npcap 이 없거나 표·키가 없으면 꺼진 채(status)로 있고, 봇은 �
 
 봇은 프로세스 하나에 감시 하나를 같이 쓴다 (shared). 큐는 카드마다 Bot 을 새로 만들기 때문.
 """
+import copy
 import ctypes
 import logging
 import os
@@ -419,6 +420,9 @@ class PacketMonitor:
         self.error = ""
         self.state = PacketState()
         self.recent: deque[Seen] = deque(maxlen=500)
+        # 이벤트마다 그 뒤의 상태 사본 — '이 뒤에 한 번이라도 그랬나' (saw). 로딩·이동 시작처럼 금방 지나가는 상태를
+        # 지금 값만 보고 기다리면, 화면을 보는 사이에 지나가 버려 놓친다 (2026-10-28 사용자와 정한 규칙)
+        self.history: deque[tuple[int, PacketState]] = deque(maxlen=3000)
         self.last_rx = 0.0           # 마지막으로 서버 패킷을 받은 때 (monotonic)
         self._seq = 0
         self._cond = threading.Condition()
@@ -462,6 +466,13 @@ class PacketMonitor:
                 if s.key == key:
                     return s
         return None
+
+    def saw(self, pred, after: int) -> bool:
+        """after 뒤 어느 순간이든 상태가 pred 를 만족한 적이 있나 (지금 상태 포함)."""
+        with self._cond:
+            if pred(self.state):
+                return True
+            return any(seq > after and pred(st) for seq, st in self.history)
 
     def changed(self, timeout: float) -> None:
         """새 이벤트가 오거나 timeout 이 지날 때까지 잔다."""
@@ -695,6 +706,7 @@ class PacketMonitor:
         with self._cond:
             self._seq += 1
             self.recent.append(Seen(self._seq, time.monotonic(), key, vals))
+            self.history.append((self._seq, copy.copy(s)))
             self._cond.notify_all()
 
 

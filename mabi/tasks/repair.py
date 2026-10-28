@@ -100,7 +100,7 @@ def _moving(bot: Bot) -> bool | None:
     """'대장간' 을 누른 뒤 움직이기 시작했나 (패킷: 자동 이동 · NPC 에게 다가가는 AI · 대화 시작 · 맵 이동). 모르면 None."""
     if not bot.packets.ok:
         return None
-    return bot.wait_packet(lambda s: s.traveling or s.loading or bool(s.ai) or s.in_dialogue, 5)
+    return bot.wait_packet(lambda s: s.traveling or s.loading or bool(s.ai) or s.in_dialogue, 5, since=bot.input_mark)
 
 
 def _go_smithy(bot: Bot) -> None:

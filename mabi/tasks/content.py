@@ -201,7 +201,7 @@ def travel(bot: Bot, arrive: list[str], timeout: float) -> None:
     설정에 fast_travel_key 가 있으면 이동 시작 후 한 번 눌러 빠른 이동한다."""
     key = bot.cfg["game"].get("fast_travel_key")
     # 패킷: 자동 이동 시작이 오면 바로 (빠른 이동 가능 여부도 같이 온다). 모르면 예전처럼 2~3초 뒤 CLI 로
-    moved = bot.wait_packet(lambda s: s.traveling, 5) is True
+    moved = bot.wait_packet(lambda s: s.traveling, 5, since=bot.input_mark) is True  # 진행하기를 누른 뒤 이동이 시작됐나
     if moved:
         bot.sleep(0.5)
     else:
