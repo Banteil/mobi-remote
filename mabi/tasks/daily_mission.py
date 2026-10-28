@@ -255,8 +255,8 @@ def do_alchemy(bot: Bot, c: dict, m: dict) -> str:
 
 def _upgrade_more(bot: Bot, a: dict, tries: int = 4) -> str:
     """모두 승급 한 번으로 미션 횟수(3회)가 안 찼을 때 — 재료가 모자라 2번만 승급됨 (2026-10-28 2/3).
-    골드는 상관없고 미션을 채우는 게 먼저다 (사용자). 결과 화면에 남은 '승급'(Space, 한 번씩) 을 미션이 찰 때까지 누른다.
-    '모두 승급' 버튼이 안 보이면 더 올릴 보석이 없다."""
+    골드는 상관없고 미션을 채우는 게 먼저다 (사용자). 단일 '승급'(Space) 은 쓰지 않고 '모두 승급'(A) 으로만 —
+    미션이 찰 때까지 다시 누른다 (사용자 요청). '모두 승급' 버튼이 안 보이면 더 올릴 보석이 없다."""
     for _ in range(tries):
         if not _pending(bot, a["mission_keyword"]):
             return "연금술 완료"
@@ -265,14 +265,14 @@ def _upgrade_more(bot: Bot, a: dict, tries: int = 4) -> str:
         except StepTimeout:
             return f"더 승급할 보석이 없어 연금술 미션 미완료 → {bot.snapshot('alchemy').name}"
         mark = bot.packets.mark()
-        bot.log.info("연금술 미션이 덜 참 → '승급' (Space) 한 번 더")
-        bot.key("space")
+        bot.log.info("연금술 미션이 덜 참 → '모두 승급' (A) 한 번 더")
+        bot.key("a")
         try:
-            _wait_done(bot, a["mission_keyword"], 8, mark, "연금술 미션 완료", interval=2)
+            _wait_done(bot, a["mission_keyword"], 20, mark, "연금술 미션 완료", interval=2)
             return "연금술 완료"
         except StepTimeout:
             pass
-    return f"승급을 {tries}번 더 해도 미션 미완료 → {bot.snapshot('alchemy').name}"
+    return f"모두 승급을 {tries}번 더 해도 미션 미완료 → {bot.snapshot('alchemy').name}"
 
 
 def do_gather(bot: Bot, c: dict, m: dict) -> str:
