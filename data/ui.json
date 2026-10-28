@@ -58,7 +58,8 @@
     "raid_ship": "시작의 갑판",
     "raid_quest_clear": "클리어",
     "raid_quest_done": "토벌 완료",
-    "raid_ship_leave": "출항선에서퇴장"
+    "raid_ship_leave": "출항선에서퇴장",
+    "raid_ship_leave_ok": "나가기"
   },
 
   "regions": {
@@ -85,6 +86,7 @@
     "quest_hud": [1560, 225, 360, 80],
     "questwin_list": [1230, 150, 690, 850],
     "compass": [1782, 945, 86, 85],
-    "raid_ship_leave": [560, 710, 800, 70]
+    "raid_ship_leave": [560, 710, 800, 70],
+    "raid_ship_leave_buttons": [960, 920, 300, 90]
   }
 }

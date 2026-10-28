@@ -476,6 +476,10 @@ class Bot:
             self.pause()
             return
         self.ensure_focus()
+        if not self.window.is_foreground() and not self.input.dry_run:
+            self.log.warning(f"게임 창을 앞으로 가져오지 못해 ({x}, {y}) 클릭을 건너뜀")
+            self.sleep(2.0)
+            return
         self.input.click(*self.screen.to_screen(x, y))
         self.pause()
 
@@ -526,6 +530,13 @@ class Bot:
             self.pause()
             return
         self.ensure_focus()
+        if not self.window.is_foreground() and not self.input.dry_run:
+            # 앞으로 못 가져왔으면 SendInput 키는 맨 앞의 다른 창으로 간다 — 창에 직접 보낸다
+            self.log.warning(f"게임 창을 앞으로 가져오지 못함 → 키 {key} 를 창에 직접 보냄")
+            post_key(self.window.hwnd, key)
+            Bot._posted = True
+            self.pause()
+            return
         self.input.key(key)
         self.pause()
 

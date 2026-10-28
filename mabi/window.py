@@ -68,3 +68,17 @@ def bring_front(hwnd: int) -> None:
     from .inputs import INPUT, _send
     _send(INPUT(0))  # INPUT_MOUSE, 움직임·버튼 없음
     user32.SetForegroundWindow(hwnd)
+    fg = user32.GetForegroundWindow()
+    if fg == hwnd:
+        return
+    # 그래도 막히면 (사람이 PC 를 안 쓰는 동안 리모콘 키가 엉뚱한 창으로 가 확인 창이 그대로 남았다 2026-10-28)
+    # 지금 맨 앞 창의 입력 스레드에 잠깐 붙어서 가져온다
+    me = ctypes.windll.kernel32.GetCurrentThreadId()
+    other = user32.GetWindowThreadProcessId(fg, None) if fg else 0
+    attached = bool(other and other != me and user32.AttachThreadInput(me, other, True))
+    try:
+        user32.BringWindowToTop(hwnd)
+        user32.SetForegroundWindow(hwnd)
+    finally:
+        if attached:
+            user32.AttachThreadInput(me, other, False)

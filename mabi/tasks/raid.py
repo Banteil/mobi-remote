@@ -351,6 +351,12 @@ def leave_ship(bot: Bot) -> None:
             continue
         bot.sleep(0.5, 0.8)
         bot.key("space")
+        if not bot.wait_packet(lambda s: s.loading, 6, since=bot.input_mark):
+            # Space 가 안 먹고 창이 남았으면 '나가기' 버튼을 누른다 (leave 와 같은 일, 2026-10-28)
+            btn = ui_text.find(bot, gd.text("raid_ship_leave_ok"), gd.region("raid_ship_leave_buttons"))
+            if btn:
+                bot.log.info("Space 를 눌러도 출항선에서 안 내림 → '나가기' 클릭")
+                bot.click(btn)
         break
     else:
         raise StepTimeout(f"출항선에서 내리지 못함 → {bot.snapshot('raid_ship_leave').name}")
