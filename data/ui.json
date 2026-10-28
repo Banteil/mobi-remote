@@ -20,6 +20,8 @@
     "clear_touch": "터치",
     "hunt_quest": "사냥",
     "tribute_quest": "모험가 길드의 고난도 심층 공략",
+    "network_unstable": "네트워크가불안정",
+    "network_retry": "다시시도하기",
     "charscan_main": "대표",
     "display_settings": "환경설정",
     "display_graphics_tab": "그래픽",

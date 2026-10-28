@@ -29,6 +29,8 @@ DEAD = "dead"                      # 내 캐릭터가 쓰러짐 (패킷 — 부�
 STELLA = "stella"                  # '오늘의 스텔라 픽' (하루 첫 접속)
 NOTICE = "notice"                  # 공지사항 웹 팝업 (ESC 로 닫힘)
 EVENT_POPUP = "event_popup"        # '새로운 이벤트' 안내 창 (회색 '닫기')
+NETWORK = "network"                # '네트워크가 불안정' 창 ('시작 화면으로' · '다시 시도하기') — 언제 어디서든 뜰 수 있다
+NETWORK_EVERY = 15                 # 모르는 화면일 때 이 창을 글자로 찾아보는 간격 (초) — OCR 이 1~3초라 매번은 못 본다
 
 OUTSIDE = (RUN_LIMIT, CHARSELECT, TITLE, EXIT_ASK)  # 게임 밖이거나 사람 몫 — 점검자가 누르지 않는다
 
@@ -73,6 +75,15 @@ def cli_idle(bot) -> bool | None:
     if not a:
         return None
     return not any(a.get(k) for k in ("IsAutoPlaying", "IsAutoTraveling", "IsDialoguePlaying", "IsInCombat"))
+
+
+def network_popup(bot, frame):
+    """'네트워크가 불안정' 창이면 '다시 시도하기' 글자 자리, 아니면 None. 그림이 없어(모바일 화면으로만 받음) 글자로 본다."""
+    from .. import gamedata as gd, ocr
+    texts = ocr.find_texts(frame)
+    if not any(gd.text("network_unstable") in ocr.nospace(t) for t, _, _ in texts):
+        return None
+    return next(((x, y) for t, x, y in texts if gd.text("network_retry") in ocr.nospace(t)), None) or (0, 0)
 
 
 def look(bot, frame=None, skip=(), ocr: bool = False) -> Seen:
@@ -163,4 +174,9 @@ def look(bot, frame=None, skip=(), ocr: bool = False) -> Seen:
             return Seen(TOUCH, src="ocr", frame=frame)
     if bot.at_main():
         return Seen(MAIN, frame=frame, idle=idle(bot))
+    import time
+    if time.monotonic() - vars(bot).get("_network_looked", 0) > NETWORK_EVERY:
+        bot._network_looked = time.monotonic()
+        if (xy := network_popup(bot, frame)):
+            return Seen(NETWORK, xy, src="ocr", frame=frame)
     return Seen(UNKNOWN, frame=frame)

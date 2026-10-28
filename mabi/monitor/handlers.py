@@ -239,6 +239,31 @@ def dead(bot, ctx, seen):
 
 # ---------------------------------------------------------------- 접속 직후 창 (어느 일에서든 뜰 수 있다)
 
+NETWORK_TRIES, NETWORK_WINDOW = 3, 600  # 이 시간(초) 안에 '다시 시도하기' 를 이만큼 눌러도 또 뜨면 일시정지
+
+
+def network(bot, ctx, seen):
+    """'네트워크가 불안정' → '다시 시도하기'. NETWORK_WINDOW 안에 NETWORK_TRIES 번을 넘기면 사람에게 넘긴다 —
+    F12 와 같은 일시정지 (사용자 2026-10-28). '시작 화면으로' 는 누르지 않는다."""
+    now = time.monotonic()
+    tries = [t for t in getattr(bot, "_network_tries", []) if now - t < NETWORK_WINDOW]
+    shot = _shot(bot, "network")
+    if len(tries) >= NETWORK_TRIES:
+        bot.log.error(f"'네트워크가 불안정' 이 {len(tries)}번 다시 시도해도 또 뜸 → 일시정지 ({shot})")
+        bot.stopper.by_key = True  # F12 일시정지와 같게 — F12 로 이어 한다
+        bot.stopper.stopped.set()
+        from ..bot import StopRequested
+        raise StopRequested()
+    bot._network_tries = tries + [now]
+    bot.log.warning(f"'네트워크가 불안정' → 다시 시도하기 ({len(tries) + 1}/{NETWORK_TRIES}, {shot})")
+    if seen.hit and seen.hit != (0, 0):
+        bot.click(seen.hit)
+    else:
+        bot.key("space")  # 글자를 못 찾음 — 초록 기본 버튼이 '다시 시도하기'
+    bot.sleep(5, 6)
+    return "네트워크 다시 시도"
+
+
 def stella(bot, ctx, seen):
     c = bot.cfg["login"]
     bot.click(tuple(c["stella_card_xy"]))  # 어느 카드든 상관없음
@@ -387,7 +412,8 @@ def fast_travel(bot) -> bool:
 
 # 어느 일이든 (기다리는 중에 끼어든 창 포함)
 BASE = {d.LOADING: loading, d.ATTENDANCE: attendance, d.FAREWELL: farewell, d.SCENE: scene, d.DIALOG: dialog,
-        d.CONFIRM: confirm, d.TOUCH: touch, d.DEAD: dead, d.STELLA: stella, d.NOTICE: notice, d.EVENT_POPUP: event_popup}
+        d.CONFIRM: confirm, d.TOUCH: touch, d.DEAD: dead, d.STELLA: stella, d.NOTICE: notice, d.EVENT_POPUP: event_popup,
+        d.NETWORK: network}
 # NPC 메뉴·전달·던전 창을 다루는 일 (ctx.menus — 아르바이트·정리). 기다리는 중의 정리는 메뉴를 누르지 않는다
 MENUS = {d.REPORT: menu_space, d.ACCEPT: menu_space, d.DELIVER: deliver, d.DUNGEON_WINDOW: dungeon_window}
 # 채집·제작·가공 창 (ctx.job — 아르바이트 한 건을 하는 중)
