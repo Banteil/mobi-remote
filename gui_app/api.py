@@ -46,7 +46,7 @@ from .queue_overlay import clean as clean_overlay
 log = logging.getLogger("mabi")
 
 APP_NAME = "모비 커넥터 리모콘"
-APP_VERSION = "3.8.3"
+APP_VERSION = "3.8.4"
 
 
 def _ver(v: str) -> tuple:
