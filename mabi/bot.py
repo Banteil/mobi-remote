@@ -21,6 +21,7 @@ from .connector import Connector
 from .game_state import GameState
 from .inputs import Input, StopWatcher, post_key, vk_of
 from . import packet_monitor
+from .blackbox import BlackBox
 from .screen import Screen
 from .vision import Match, Vision
 from .window import GameWindow
@@ -101,6 +102,7 @@ class Bot:
                         else packet_monitor.PacketMonitor(paths.logs))
         self.input_mark: int | None = None  # 마지막으로 누르기 직전의 패킷 번호 (아직 누른 적 없으면 None — 지금 상태만 본다)
         self.shot_dir = paths.shots
+        self.box = BlackBox()  # 직전 30초 화면·누른 것 — 실패하면 dump_box 로 남긴다
         if not Bot._shots_pruned:  # 프로세스에 한 번 (큐는 카드마다 Bot 을 만든다)
             Bot._shots_pruned = True
             prune_shots(self.shot_dir, self.log)
@@ -361,10 +363,12 @@ class Bot:
             img = self.screen.grab_behind()
             if img is not None:
                 self._frame = img
+                self.box.frame(img)
                 return img
         # 화면을 그대로 캡처하므로 다른 창(터미널, 알림 등)이 위에 있으면 인식이 틀어진다
         self.ensure_focus()
         self._frame = self.screen.grab()
+        self.box.frame(self._frame)
         return self._frame
 
     def _require_template(self, name: str) -> None:
@@ -456,6 +460,7 @@ class Bot:
     def click_xy(self, x: int, y: int) -> None:
         """기준(1920x1080) 좌표를 누른다. 게임 해상도가 달라도 비율대로 실제 자리를 누른다 (Screen.to_screen)."""
         self.input_mark = self.packets.mark()  # 누르기 직전 패킷 번호 — wait_packet(since=) 로 '누른 뒤' 를 본다
+        self.box.input(f"클릭 ({x}, {y})")
         if self.background and not self.window.is_foreground() and not self.input.dry_run:
             prev = ctypes.windll.user32.GetForegroundWindow()
             self.ensure_focus()
@@ -508,6 +513,7 @@ class Bot:
 
     def key(self, key: str) -> None:
         self.input_mark = self.packets.mark()  # 누르기 직전 패킷 번호 (click_xy 와 같음)
+        self.box.input(f"키 {key}")
         if self.background and not self.window.is_foreground() and not self.input.dry_run:
             post_key(self.window.hwnd, key)
             Bot._posted = True
@@ -670,6 +676,16 @@ class Bot:
             self.key("space")  # 타이틀 '게임 시작' (Space 배지)
             self.wait(ui["charselect_title"], timeout=60)
         self.state.available(refresh=True)
+
+    def dump_box(self, tag: str) -> str:
+        """블랙박스(직전 30초 화면·누른 것·패킷)를 스크린샷 폴더에 남기고 폴더 이름을 돌려준다 (못 남기면 "")."""
+        try:
+            img = self.screen.grab_behind() if self.background else None
+            last = img if img is not None else self.screen.grab()
+        except RuntimeError:  # 게임 꺼짐 — 들고 있던 것만
+            last = None
+        d = self.box.dump(self.shot_dir, tag, self.packets, last)
+        return d.name if d else ""
 
     def snapshot(self, tag: str) -> Path:
         self.shot_dir.mkdir(parents=True, exist_ok=True)

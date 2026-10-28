@@ -86,6 +86,17 @@ class RunOptions:
     extra: dict = field(default_factory=dict)  # 리포트에 남길 실행 정보
 
 
+def box(bot: Bot, tag: str) -> None:
+    """실패한 숙제의 직전 30초(화면·누른 것·패킷)를 남긴다 — 남기다 터져도 실패 처리는 이어 간다."""
+    try:
+        name = bot.dump_box(tag)
+    except Exception as e:  # noqa: BLE001
+        log.debug(f"블랙박스를 남기지 못함: {e}")
+        return
+    if name:
+        log.info(f"블랙박스: {name}")
+
+
 def overweight(bot: Bot, cfg: dict) -> str | None:
     """가방이 꽉 찼으면 이유 문자열 (자동 이동·전투가 멈추고 보상·채집을 못 받아 숙제가 막힌다)."""
     inv = bot.state.query("get_inventory") if bot.state.available() else None
@@ -380,10 +391,12 @@ class Runner:
                 recover(tid)
             except StepTimeout as e:
                 status, summary = "FAIL", f"{e} → {bot.snapshot(tid).name}"
+                box(bot, tid)
                 recover(tid)
             except Exception as e:  # 한 숙제의 실패가 전체를 멈추지 않도록
                 log.exception(label)
                 status, summary = "ERROR", f"{type(e).__name__}: {e} → {bot.snapshot(tid).name}"
+                box(bot, tid)
             # 도중에 게임이 꺼지면 (튕김·사람이 끔) 남은 캐릭터마다 접속을 두드리며 실패를 쌓지 않는다 → 일시정지.
             # 단계 기록은 남아 있어 게임을 켜고 다시 시작(F12)하면 이 자리부터 이어 한다
             if status in ("FAIL", "ERROR") and not bot.window.find():
