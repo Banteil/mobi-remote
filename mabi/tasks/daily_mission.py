@@ -15,7 +15,7 @@ import time
 from .. import monitor
 from ..bot import Bot, StepTimeout
 from ..ocr import read_ko, read_text
-from .content import has_word, wait_until
+from .content import CannotProceed, has_word, wait_until
 
 
 def _ctx(what: str) -> monitor.Ctx:
@@ -35,9 +35,16 @@ def missions(bot: Bot) -> list[dict]:
 
 
 def verify(bot: Bot, cfg: dict) -> bool:
-    """완료한 미션의 선물을 모두 받았으면 완료 (조건을 못 채운 미션은 따지지 않는다)."""
+    """완료한 미션의 선물을 모두 받았고, 직접 하는 미션(연금술·채집)이 남지 않았으면 완료.
+    다른 조건을 못 채운 미션(음식 등)은 따지지 않는다."""
     ms = missions(bot)
-    return bool(ms) and not unclaimed(bot)
+    return bool(ms) and not unclaimed(bot) and not own_pending(bot, cfg["daily_mission"])
+
+
+def own_pending(bot: Bot, c: dict) -> list[str]:
+    """직접 진행하는 미션(연금술·채집) 중 아직 안 끝난 것의 제목."""
+    return [m["Title"] for key in ("alchemy", "gather") if c[key]["enabled"]
+            and (m := _pending(bot, c[key]["mission_keyword"]))]
 
 
 def unclaimed(bot: Bot) -> list[dict]:
@@ -332,6 +339,10 @@ def run(bot: Bot, cfg: dict) -> str:
         summary += f", 미완료: {', '.join(pending)}"
     if missed:
         summary += f", 못 받은 선물: {', '.join(missed)} → {shot}"
+    # 직접 하는 미션이 남았으면 실패로 남겨 다음에 다시 한다 — 연금술 2/3 인 채 OK 로 기록돼 다시 돌려도
+    # '오늘 완료' 로 건너뛰었다 (2026-10-28)
+    if own_pending(bot, c):
+        raise CannotProceed(summary)
     return summary
 
 
