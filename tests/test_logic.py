@@ -181,6 +181,22 @@ class ArbeitTest(unittest.TestCase):
         self.assertTrue(arbeit._same("별과 돌이 빚은 광석", "별과 돌이 빛은 광석"))
         self.assertFalse(arbeit._same("일생일대의 위기", "국경 수비대 물자 보급"))
 
+    def test_button_word_tolerates_ocr(self):
+        self.assertTrue(arbeit._is("지원 하기", arbeit.APPLY))
+        self.assertTrue(arbeit._is("지원하기》", arbeit.APPLY))
+        self.assertFalse(arbeit._is("진행하기", arbeit.APPLY))
+        self.assertFalse(arbeit._is("지원하기", arbeit.PROGRESS))
+        self.assertFalse(arbeit._is("귀리를 먹다 보면 지원하기", arbeit.APPLY))
+
+    def test_apply_missing_is_not_ok(self):
+        """'구인 마감' 도 '지원하기' 도 못 읽으면 지원할 일이 없다고 보지 않는다 (2026-10-29: 목록이 있는데 0개 완료 OK)."""
+        bot = mock.MagicMock()
+        bot.cfg = {"arbeit": {"list_pages": 1, "list_scroll_at": [0, 0], "accept": "x", "travel_timeout": 1}}
+        with mock.patch.object(arbeit, "open_arbeit_tab"), \
+                mock.patch.object(arbeit.ocr, "find_texts", return_value=[("구인 중", 1274, 167)]):
+            self.assertEqual(arbeit._apply_top(bot), "missing")
+        self.assertEqual(bot.snapshot.call_count, 2)
+
     def test_missing_items(self):
         job = {"title": "x", "objectives": [
             {"Description": "<b>은 광석</b> 보유 82/100", "IsCompleted": False},

@@ -98,11 +98,18 @@ def alter_missing(job: dict) -> list[str]:
     return out
 
 
+def _is(t: str, word: str) -> bool:
+    """버튼 글자 word 인가. OCR 이 한 글자쯤 틀리거나 덧붙여도 ('지원하기》') 같다고 본다.
+    '지원하기' 와 '진행하기' 는 반만 같아 섞이지 않는다."""
+    n = _norm(t)
+    return n == word or (len(n) <= len(word) + 2 and difflib.SequenceMatcher(None, n, word).ratio() >= 0.75)
+
+
 def _buttons(bot: Bot) -> list[tuple[str, int, int]]:
     """퀘스트 창 오른쪽 목록의 글자. 탭 줄에 걸친 '진행하기'·'지원하기' 는 뺀다 (목록을 내리면 다시 보인다).
     2026-10-24: 반쯤 보인 '지원하기' 자리를 눌러 '이벤트' 탭이 열리고, 수락 대화를 180초 기다리다 FAIL."""
     items = ocr.find_texts(bot.frame(), gd.region("arbeit_panel"))
-    return [i for i in items if questwin_text_ok(i[2]) or _norm(i[0]) not in (PROGRESS, APPLY)]
+    return [i for i in items if questwin_text_ok(i[2]) or not (_is(i[0], PROGRESS) or _is(i[0], APPLY))]
 
 
 def _scroll_panel(bot: Bot, notches: int) -> None:
@@ -111,10 +118,13 @@ def _scroll_panel(bot: Bot, notches: int) -> None:
 
 
 def _find_card_button(bot: Bot, title: str | None, word: str):
-    """title 카드의 word 버튼 (title 이 None 이면 맨 위 word 버튼). 목록을 내려 가며 찾는다."""
+    """title 카드의 word 버튼 (title 이 None 이면 맨 위 word 버튼). 목록을 내려 가며 찾는다.
+    못 찾았을 때 무엇을 읽었는지 bot._arb_read 에 남긴다 (쪽마다 글자 목록)."""
+    bot._arb_read = []
     for page in range(bot.cfg["arbeit"]["list_pages"]):
         items = _buttons(bot)
-        btns = sorted(((x, y) for t, x, y in items if _norm(t) == word), key=lambda b: b[1])
+        bot._arb_read.append([t for t, _, _ in items])
+        btns = sorted(((x, y) for t, x, y in items if _is(t, word)), key=lambda b: b[1])
         if title is None:
             if btns:
                 return btns[0]
@@ -125,7 +135,7 @@ def _find_card_button(bot: Bot, title: str | None, word: str):
                 if below:
                     return below[0]
             # 수락한 일의 '진행하기' 는 목록 맨 위에 모인다 → 그 아래 '지원하기' 가 보이는데도 못 찾았으면 더 내려도 없다
-            if word == PROGRESS and any(_norm(t) == APPLY for t, _, _ in items):
+            if word == PROGRESS and any(_is(t, APPLY) for t, _, _ in items):
                 return None
         if page + 1 < bot.cfg["arbeit"]["list_pages"]:
             _scroll_panel(bot, -4)
@@ -182,7 +192,7 @@ def _panel_jobs(bot: Bot) -> list[tuple[str, tuple[int, int], int]]:
     for page in range(pages):
         items = _buttons(bot)
         for t, x, y in items:
-            if _norm(t) == PROGRESS and not any(o[1] == (x, y) for o in out):
+            if _is(t, PROGRESS) and not any(o[1] == (x, y) for o in out):
                 out.append((_card_title(items, x, y), (x, y), page))
                 if out[-1][0]:
                     bot._arb_titles = {*(getattr(bot, "_arb_titles", None) or ()), out[-1][0]}
@@ -191,7 +201,7 @@ def _panel_jobs(bot: Bot) -> list[tuple[str, tuple[int, int], int]]:
             bot._arb_closed = not out
             break
         # 수락한 일('진행하기')은 목록 맨 위에 모이고 그 아래가 구인 중('지원하기') → '지원하기' 가 보이면 더 내릴 필요 없다
-        if any(_norm(t) == APPLY for t, _, _ in items) or page + 1 >= pages:
+        if any(_is(t, APPLY) for t, _, _ in items) or page + 1 >= pages:
             break
         _scroll_panel(bot, -4)
         bot._arb_scrolled += 1
@@ -211,7 +221,7 @@ def _press_other(bot: Bot, exclude) -> str | None:
         for _ in range(page):
             _scroll_panel(bot, -4)
     items = _buttons(bot)
-    btn = next(((x, y) for t, x, y in items if _norm(t) == PROGRESS
+    btn = next(((x, y) for t, x, y in items if _is(t, PROGRESS)
                 and (_same(_card_title(items, x, y), guess) if guess else abs(y - pos[1]) < 30)), None)
     if not btn:
         bot.to_main()
@@ -392,18 +402,35 @@ def _work(bot: Bot, title: str) -> str:
 
 
 def _apply_top(bot: Bot) -> bool | None:
-    """맨 위 '지원하기' → 이동 → 수락. 수락했으면 True, 지원할 일이 없으면 False, 눌렀는데 수락하지 못했으면 None.
+    """맨 위 '지원하기' → 이동 → 수락. 수락했으면 True, 지원할 일이 없으면 False, 눌렀는데 수락하지 못했으면 None,
+    '구인 마감' 도 '지원하기' 도 못 읽었으면 'missing'.
     가는 길과 NPC 대화는 점검자가 본다: 메뉴가 늦게 떠도 '수락' 이 보일 때 누른다 — 기다리던 쪽이 '대화 넘기기' 를 눌러
     수락을 놓치고 3분을 기다린 적이 있다 (2026-10-26 10:34). 수락 전에 대화가 끝나면 한 번 더 지원한다."""
     a = bot.cfg["arbeit"]
     mon = monitor.of(bot)
     ctx = Ctx("arbeit", "지원하기", menus=True)
+    missing = False
 
     def do():
-        open_arbeit_tab(bot)
-        b = _find_card_button(bot, None, APPLY)
-        if not b:
+        nonlocal missing
+        # 목록이 보이는데 '지원하기' 를 못 읽고 그냥 닫은 적이 있다 (2026-10-29 13:33, 0개 완료인데 OK) →
+        # '구인 마감' 이 아니면 창을 다시 열어 한 번 더 보고, 그래도 없으면 읽은 글자와 화면을 남기고 실패로
+        for n in range(1, 3):
+            open_arbeit_tab(bot)
+            b = _find_card_button(bot, None, APPLY)
+            if b:
+                break
+            read = getattr(bot, "_arb_read", [])
+            closed = any(w in _norm(t) for page in read for t in page for w in gd.words("arbeit_closed"))
+            if closed:
+                bot.to_main()
+                return False
+            bot.log.warning(f"아르바이트: 목록에서 '지원하기' 를 못 찾음 ({n}/2) — 읽은 글자 {read} "
+                            f"→ {bot.snapshot('arbeit_no_apply').name}")
             bot.to_main()
+            bot.sleep(1.5, 2)
+        else:
+            missing = True
             return False
         bot.click(b)
         bot.sleep(2, 2.5)
@@ -416,7 +443,7 @@ def _apply_top(bot: Bot) -> bool | None:
     for n in range(1, 3):
         r = mon.act(ctx, "지원하기", do, started, within=15, tries=1)
         if r is False:
-            return False
+            return "missing" if missing else False
         end, still = time.monotonic() + a["travel_timeout"], 0
         while r and time.monotonic() < end:
             seen = mon.check(ctx)
@@ -510,6 +537,9 @@ def _task(bot: Bot, cfg: dict) -> str:
             # 할 수 있는 수락한 일이 없으면 새 일에 지원한다
             before = {j["title"] for j in accepted(bot, raw=True)}
             applied = _apply_top(bot)
+            if applied == "missing":
+                stuck.append("(지원하기를 못 찾음)")
+                break
             if applied is None:
                 stuck.append("(지원 후 수락 대화 없음)")
                 break
