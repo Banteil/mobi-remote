@@ -35,6 +35,7 @@ _ONE = bytes.fromhex("0000803f00000000")                          # 도구 목�
 HELLO = b"MMCG"             # 연결 첫머리 인사 블록 (메시지가 아니다)
 MAX_FRAME = 8 << 20         # 맵 진입 때 오는 것 중 큰 건 0.8MB 쯤
 MAX_PENDING = 512           # 순서가 뒤바뀐 조각을 이만큼까지 들고 기다린다
+OPEN_MAPS = ("Field", "BattleField", "FieldBoss", "HousingInn", "ScenarioField")  # 던전이 아닌 맵 종류
 SYNC_FRAMES = 3             # 중간부터 받기 시작했을 때 이만큼 연달아 말이 되면 맞춘 것으로 본다
 
 
@@ -602,6 +603,10 @@ class PacketMonitor:
             s.abyss_result = 0  # 새 맵 — 지난 판 결과는 끝났다 (나갈 때 0 이 오는지 실측이 없어 여기서도 지운다)
             s.raid_result, s.raid_boss = 0, False
             s.dead = None  # 쓰러진 채 맵을 옮기면 부활 신호가 안 올 수 있다 → 다시 쓰러질 때까지 CLI 로
+            # 마을·사냥터면 던전 밖이다. 던전을 나가는 패킷(NotInDungeon)을 놓치면 지난밤 'Cleared' 가 남아,
+            # 아침에 접속 단계가 메인 화면을 던전 클리어 화면으로 알고 6명 모두 3분씩 헛돌았다 (2026-10-30 06:44)
+            if s.channel_type in OPEN_MAPS and s.dungeon_state not in (None, "NotInDungeon"):
+                s.dungeon_state = "NotInDungeon"
             # 대화는 맵을 옮기면 끝난다 — 끝 패킷 없이 끊긴 대화가 '대화 중' 으로 남아 끼어들기·정리가 헛돌지 않게
             s.dialogue_npc, s.dialogue_action, s.dialogue_menu = None, "", False
             log.info("패킷: 맵 진입 %s (%s)", s.channel_name or s.channel, s.channel_type or "?")

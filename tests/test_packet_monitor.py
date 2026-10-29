@@ -108,6 +108,14 @@ class WaitTest(unittest.TestCase):
         self.assertEqual((self.m.state.channel, self.m.state.channel_type), (5, "InstanceDungeon"))
         self.assertEqual(self.m.last("channel.leaving").key, "channel.leaving")
 
+    def test_dungeon_state_cleared_on_field(self):
+        """던전을 나가는 패킷을 놓쳐도 마을에 들어오면 던전 밖 (2026-10-30: 지난밤 Cleared 가 남아 접속이 헛돎)."""
+        self.m.apply("dungeon.state", {"state_name": "Cleared"})
+        self.m.apply("channel.entering", {"channel": 1, "channel_type": "InstanceDungeon", "channel_name": ""})
+        self.assertEqual(self.m.state.dungeon_state, "Cleared")  # 던전 맵이면 그대로
+        self.m.apply("channel.entering", {"channel": 2, "channel_type": "Field", "channel_name": ""})
+        self.assertEqual(self.m.state.dungeon_state, "NotInDungeon")
+
     def test_dialogue(self):
         # 실제 캡처 순서: 대상 지정 → 진행 … → active 0 + 대상 없음 → 닫힘
         self.m.apply("dialogue.target", {"target": 0xA2A9})
