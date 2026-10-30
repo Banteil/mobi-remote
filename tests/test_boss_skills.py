@@ -92,6 +92,23 @@ class BossSkillsTest(unittest.TestCase):
         self.assertEqual(bot.keys, ["f5", "6"])  # 끝나면 궁극기 (예전엔 패킷 앞 번호를 변신 번호로 읽어 판 내내 막혔다)
         self.assertFalse(sk.tick({"IsInCombat": True}))  # 방금 눌렀다 — RETRY 동안 안 누른다
 
+    def test_no_ultimate_when_start_packet_missing(self):
+        bot = FakeBot()  # 2026-10-30 17:33: 변신은 됐는데 시작 패킷이 안 와 7초 뒤 6 으로 변신이 풀림
+        bot.enter(ABYSS)
+        bot.boss()
+        sk = BossSkills(bot, True, True, abyss_fight)
+        bot.gauge(500)
+        self.assertTrue(sk.tick({"IsInCombat": True}))
+        sk.pressed["팔라딘 변신"] -= 10
+        self.assertFalse(sk.tick({"IsInCombat": True}))
+        sk.pressed["팔라딘 변신"] -= 14  # 변신 시간이 지남
+        bot.packets.apply("ultimate.resource", {"ult_max": 300.0, "ult": 300.0, "pal_max": 500.0, "pal": 0.0})
+        self.assertTrue(sk.tick({"IsInCombat": True}))
+        self.assertEqual(bot.keys, ["f5", "6"])  # 팔라딘 게이지가 비었다 = 변신했다 → F5 다시 안 누르고 궁극기
+        sk.pressed["궁극기"] -= 9
+        bot.packets.apply("ultimate.resource", {"ult_max": 300.0, "ult": 0.0, "pal_max": 500.0, "pal": 0.0})
+        self.assertFalse(sk.tick({"IsInCombat": True}))  # 궁극기만 0 — 따로 쌓인다
+
     def test_end_packet_missed(self):
         bot = FakeBot()
         bot.enter(ABYSS)
@@ -142,12 +159,13 @@ class BossSkillsTest(unittest.TestCase):
         bot.boss()
         sk = BossSkills(bot, False, True, abyss_fight)
         bot.gauge(500)
-        self.assertTrue(sk.tick({"IsInCombat": True}))  # F5 — 시작 패킷이 안 옴 (보스 연출 직후 · 2026-10-30 17:33)
-        self.assertFalse(sk.tick({"IsInCombat": True}))  # 기다리는 동안엔 다시 안 누른다
+        self.assertTrue(sk.tick({"IsInCombat": True}))  # F5 — 변신 패킷도 게이지 변화도 없음
+        sk.pressed["팔라딘 변신"] -= 10
+        self.assertFalse(sk.tick({"IsInCombat": True}))  # 변신이 됐는데 신호만 늦을 수 있다 — 변신 시간 안엔 다시 안 누른다
         for _ in range(2):
-            sk.pressed["팔라딘 변신"] -= 9
+            sk.pressed["팔라딘 변신"] -= 24
             self.assertTrue(sk.tick({"IsInCombat": True}))
-        sk.pressed["팔라딘 변신"] -= 9
+        sk.pressed["팔라딘 변신"] -= 24
         self.assertFalse(sk.tick({"IsInCombat": True}))  # 세 번 안 됨 → 이 맵에선 포기
         self.assertEqual(bot.keys, ["f5", "f5", "f5"])
         bot.enter(ABYSS)  # 다음 판엔 다시
