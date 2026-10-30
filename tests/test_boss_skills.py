@@ -104,6 +104,12 @@ class BossSkillsTest(unittest.TestCase):
         self.assertTrue(sk.tick({"IsInCombat": True}))
         self.assertEqual(bot.keys, ["6"])
 
+    def test_transform_counts_when_me_unknown(self):
+        bot = FakeBot()
+        bot.packets.state.me = None  # 판 도중에 리모콘을 켬 — 내 등장 메시지를 못 봤다
+        bot.packets.apply("transfigure.current", {"actor": 123})
+        self.assertTrue(bot.packets.state.transform_start)
+
     def test_party_member_transform_ignored(self):
         bot = FakeBot()
         bot.enter(ABYSS)

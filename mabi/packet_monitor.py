@@ -761,7 +761,9 @@ class PacketMonitor:
         elif key == "ultimate.can_paladin":
             s.can_paladin = bool(vals.get("on"))
         elif key == "transfigure.current":
-            if s.me is not None and vals.get("actor") == s.me & 0xFFFFFFFF:  # 파티원 변신은 빼고
+            # 파티원 변신은 뺀다. 내 번호를 모르면(판 도중에 리모콘을 켬) 내 것으로 본다 — 변신 중에 6(변신 해제)을
+            # 누르지 않는 쪽이 안전하다
+            if s.me is None or vals.get("actor") == s.me & 0xFFFFFFFF:
                 now = s.transform_seen = time.monotonic()
                 if s.transform_start and now - s.transform_start < 30:  # 변신 중에 또 옴 = 끝
                     s.transform_start = 0.0
