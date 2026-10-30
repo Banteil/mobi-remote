@@ -36,20 +36,21 @@ class Ctx:
     choose: NPC 선택지 중 이 낱말이 든 것을 누른다 (요일 던전 임무 게시판 · 대장간 '수리' — 원하는 게 없으면 누르지 않고 기다린다).
       choose_region 은 선택지 버튼 줄 (gamedata 영역 이름).
     leave: NPC 대화를 마치는 중 — 메뉴는 고르지 않고 ESC('대화 종료'), 작별 인사 등 대사는 넘긴다.
-    alter: 가공해도 되는 물품 이름 (짧은 가공 — 아르바이트가 정한다). 비어 있으면 가공 창은 건너뛴다."""
+    alter: 가공해도 되는 물품 이름 (짧은 가공 — 아르바이트가 정한다). 비어 있으면 가공 창은 건너뛴다.
+    alter_ok: 이름 목록을 받아 짧은 가공인지 답하는 함수. 조건을 모르는 일(추적 칸에 없던 일)은 가공 창 카드 이름으로 정한다."""
 
     def __init__(self, task: str, what: str = "", job: bool = False, menus: bool | None = None, talk: bool = True,
                  finish_on=None, decide=None, note=None, keep_dungeon_window: bool = False,
                  reward: bool = False, extra_loot: int = 0, again: str | None = None, revive: bool = False,
                  choose: str | None = None, choose_region: str = "board_choices", leave: bool = False,
-                 alter=()):
+                 alter=(), alter_ok=None):
         self.task, self.what, self.job, self.talk = task, what, job, talk
         self.menus = job if menus is None else menus
         self.finish_on, self.decide = finish_on or {}, decide or {}
         self._note, self.keep_dungeon_window = note, keep_dungeon_window
         self.reward, self.extra_loot, self.again = reward, extra_loot, again
         self.revive, self.choose, self.choose_region, self.leave = revive, choose, choose_region, leave
-        self.alter = tuple(alter)
+        self.alter, self.alter_ok = tuple(alter), alter_ok
         self.n: dict[str, int] = {}
         self.talked = False  # NPC 대화를 마쳤다 (대화 조건을 채워도 게임이 다음 걸음으로 가지 않는다)
         self.events: set[str] = set()

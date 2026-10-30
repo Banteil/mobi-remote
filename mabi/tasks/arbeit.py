@@ -288,11 +288,12 @@ def _job_ctx(bot: Bot, title: str, alter=()) -> Ctx:
     모자란 물품이 채집으로 못 구하는 것(가공품 등)이면 끝 (사용자 규칙: 채집품만 모자라면 채집해서 완료)."""
     def missing(bot, ctx, seen):
         job = next((j for j in accepted(bot) if _same(j["title"], title)), None)
-        if job and (bad := [n for n in ungatherable(bot, job) if n not in alter]):
+        if job and (bad := [n for n in ungatherable(bot, job) if n not in ctx.alter]):
             return f"채집으로 못 구하는 물품 부족 ({', '.join(bad)})"
         return None
     return Ctx("arbeit", title, job=True, finish_on={d.DUNGEON_WINDOW: "dungeon"}, decide={d.ITEM_MISSING: missing},
-               note=lambda key, stage: _note(bot, title, key, stage), alter=alter)
+               note=lambda key, stage: _note(bot, title, key, stage), alter=alter,
+               alter_ok=lambda names: quick_alter(bot, names))
 
 
 def _moved(bot: Bot) -> bool:
@@ -526,7 +527,8 @@ def _task(bot: Bot, cfg: dict) -> str:
     # 오늘 앞 실행에서 물품 부족으로 건너뛴 일은 다시 가 보지 않는다 (사람 몫). 막혔던 일은 다시 해 본다
     skipped.update(book.get("skipped") or {})
     # 다만 그 사이 물품이 다 모였으면 (채집을 시간으로 끊었는데 게임이 마저 캔 경우) 다시 해 본다
-    for j in accepted(bot):
+    tracked = accepted(bot)
+    for j in tracked:
         for t in [t for t in skipped if _same(t, j["title"])]:
             if not missing_items(j):
                 bot.log.info(f"아르바이트 '{t}': 건너뛴 일인데 물품이 다 모임 → 다시 진행")
@@ -535,6 +537,10 @@ def _task(bot: Bot, cfg: dict) -> str:
                 # 가공 규칙이 바뀐 뒤(채집 가능·짧은 가공은 진행) 같은 날 다시 돌리면 앞서 건너뛴 일도 다시 본다
                 bot.log.info(f"아르바이트 '{t}': 가공 필요로 건너뛴 일인데 채집·짧은 가공으로 할 수 있음 → 다시 진행")
                 skipped.pop(t)
+    # 추적 칸에 없는 '가공 필요' 일은 조건을 몰라 여기서 못 가른다 → 다시 가서 가공 창 카드로 정한다 (_alter_go)
+    for t in [t for t, w in skipped.items() if w == "가공 필요" and not any(_same(t, j["title"]) for j in tracked)]:
+        bot.log.info(f"아르바이트 '{t}': 가공 필요로 건너뛴 일 (추적 칸에 없음) → 가공 창에서 다시 판단")
+        skipped.pop(t)
     if book.get("current"):
         bot.log.info(f"아르바이트 지난 기록: '{book['current']}' {book.get('stage', '')} ({book.get('at', '')}) → 이어서")
 

@@ -428,8 +428,15 @@ def _alter_go(bot, ctx, seen):
     if ctx.n["alter_go"] > 4:
         return Finish("stuck", f"가공 시설 창에서 나아가지 못함 → {_shot(bot, 'arbeit_alter')}")
     # 카드는 제작 창과 달리 '설비로 이동' 아래가 아니라 오른쪽 목록에 있다 → 카드 아래 이름 글자를 찾아 그 카드를 누른다
+    cards = ocr.find_texts(seen.frame, ALTER_CARDS)
+    if not ctx.alter:
+        # 조건을 모르고 온 일 (추적 칸에 없던 일을 이어 함) → 보이는 카드 이름이 짧은 가공이면 가공한다
+        ctx.alter = tuple(t for t, _, _ in cards if ctx.alter_ok([t]))
+        if not ctx.alter:
+            _esc(bot)
+            return Finish("alter", f"가공 시설 창 → {_shot(bot, 'arbeit_alter')}")
     names = {ocr.nospace(n) for n in ctx.alter}
-    hit = next(((x, y) for t, x, y in ocr.find_texts(seen.frame, ALTER_CARDS) if ocr.nospace(t) in names), None)
+    hit = next(((x, y) for t, x, y in cards if ocr.nospace(t) in names), None)
     if not hit:
         return Finish("stuck", f"가공 시설 창에서 가공품 카드를 못 찾음 → {_shot(bot, 'arbeit_alter')}")
     bot.click((hit[0], hit[1] - 60))
@@ -472,7 +479,7 @@ def craft(bot, ctx, seen):
     """제작 창 첫 화면: 아르바이트가 요구하는 물품 하나만 보인다 → 그 카드. 가공 시설 창('식재료 가공' 등)도 첫 화면이 같아
     가공 칸이 다 찬 채면 '가공하기' 가 안 떠 헤맸다 (2026-10-26) → 창 제목으로 가공을 알아본다."""
     if any(t.endswith(ALTER_TITLE) for t, _, _ in ocr.find_texts(seen.frame, CRAFT_TITLE_AREA)):
-        if ctx.alter:
+        if ctx.alter or ctx.alter_ok:
             return _alter_go(bot, ctx, seen)
         _esc(bot)
         return Finish("alter", f"가공 시설 창 → {_shot(bot, 'arbeit_alter')}")

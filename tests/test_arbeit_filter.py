@@ -88,3 +88,30 @@ class HowtoRowTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AlterGoUnknownTest(unittest.TestCase):
+    """추적 칸에 없던 일을 이어 하다 가공 창이 열리면 카드 이름으로 짧은 가공인지 정한다."""
+
+    def _run(self, ok):
+        from types import SimpleNamespace
+        from mabi.monitor import handlers
+        bot = mock.MagicMock()
+        ctx = mock.MagicMock(n={}, alter=(), alter_ok=lambda names: ok and names == ["옷감"])
+        cards = [("옷감", 700, 400), ("가공 시간 45초", 900, 300)]
+        with mock.patch.object(handlers.ocr, "find_texts", return_value=cards), \
+                mock.patch.object(handlers, "_short_toast", return_value=True), \
+                mock.patch.object(handlers, "_shot", return_value="x"), mock.patch.object(handlers, "_esc"):
+            r = handlers._alter_go(bot, ctx, SimpleNamespace(frame=None))
+        return r, ctx, bot
+
+    def test_short(self):
+        r, ctx, bot = self._run(True)
+        self.assertEqual(ctx.alter, ("옷감",))
+        self.assertEqual(bot.click.call_args[0][0], (700, 340))
+        self.assertEqual(r.result, "alter_short")
+
+    def test_long(self):
+        r, ctx, bot = self._run(False)
+        self.assertEqual(r.result, "alter")
+        bot.click.assert_not_called()
