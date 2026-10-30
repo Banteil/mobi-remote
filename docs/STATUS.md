@@ -50,6 +50,7 @@
 - 캐릭터 숙제가 다 끝난 뒤 받을 선물이 있으면 (일일 미션 뒤 아르바이트 → '따뜻한 손길' 등) CLI 로 보고 그것만 받는다.
 
 ## 어비스 반복 (`mabi/tasks/abyss.py`, 리모콘 '어비스' 탭)
+- 구조: `AbyssRepeat`(abyss.py)·`RaidRepeat`(raid.py) 가 공통 틀 `mabi/tasks/repeat.Repeat` 를 상속 — 판 수·시간·캐릭터 확인·수리·얻은 것은 틀이, 입장·판·나가기만 각자 (docs/ARCHITECTURE.md).
 - ESC 메뉴 → 어비스 → 던전(기본 '허상의 정박지') → 함께하기 → 난이도(기본 매우 어려움2) → 우연한 만남 켜기 → 입장하기.
 - 판 진행은 게임 숏컷이 알아서 함. 끝은 CLI `IsAbyssResultSequencePlaying`, 사망은 `IsDead` 로 판단.
   사망하면 우상단 나가기로 나와 처음부터 다시 입장. 판 중에도 배고프면 B.
