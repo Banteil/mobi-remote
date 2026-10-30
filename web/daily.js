@@ -305,25 +305,43 @@ async function loadAbyss() {
   loadRaid(a.chars);
 }
 
-function paintAbyssRunning(on) {
-  $('#ab-start').classList.toggle('hidden', on);
-  $('#ab-stop').classList.toggle('hidden', !on);
+/** 어비스·레이드 탭 공통: 시작/멈춤 버튼 (pre = '#ab' · '#rd') */
+function paintRepeatRunning(pre, on) {
+  $(pre + '-start').classList.toggle('hidden', on);
+  $(pre + '-stop').classList.toggle('hidden', !on);
 }
+
+function paintAbyssRunning(on) { paintRepeatRunning('#ab', on); }
 
 /* 어비스 반복도 작업 큐의 한 항목으로 돈다 (일일 숙제와 같은 방식). '반복 시작' = 큐 맨 앞에 넣고 돌리기,
  * '목표' = 탭에서 고른 그대로(판 수·분 제한 포함) 큐 뒤에 담기만 한다 (재생을 눌러야 진행)
  * → 'A 캐릭터 3판 → B 캐릭터 3판' 처럼 미리 걸어 둘 수 있다. */
-function abyssSpec() {
-  const sel = $('#ab-char');
+/** 어비스·레이드 탭에서 고른 그대로 큐 카드 (pre = '#ab' · '#rd', place = 장소 칸 이름 — dungeon · raid) */
+function repeatSpec(kind, pre, title, place) {
+  const sel = $(pre + '-char');
   const slot = Number(sel.value) || 0;
   const name = slot ? sel.options[sel.selectedIndex].textContent.replace(/^\d+\.\s*/, '') : '';
   return {
-    kind: 'abyss', label: '어비스 · ' + (name || '지금 캐릭터'),
-    slot, dungeon: $('#ab-dungeon').value, difficulty: $('#ab-difficulty').value,
-    runs: Number($('#ab-runs').value) || 0, minutes: Number($('#ab-minutes').value) || 0,
-    revive: $('#ab-revive').checked,
+    kind, label: title + ' · ' + (name || '지금 캐릭터'),
+    slot, [place]: $(pre + '-' + place).value, difficulty: $(pre + '-difficulty').value,
+    runs: Number($(pre + '-runs').value) || 0, minutes: Number($(pre + '-minutes').value) || 0,
+    revive: $(pre + '-revive').checked,
   };
 }
+
+function startRepeat(it, title) {
+  if (qItems.some((x) => x.kind === it.kind && x.status === 'run')) { toast('이미 ' + title + ' 반복 중입니다', '', 'bad'); return; }
+  const cur = qItems.find((x) => x.status === 'run');
+  toast(title + ' 반복 시작', stopKey() + ' = 멈춤' + (cur ? ' · 진행 중이던 "' + cur.label + '" 은 뒤로 미룹니다' : ''), 'ok');
+  qStartNow(it);
+}
+
+async function queueRepeat(it, amount) {  // 탭에서 고른 그대로 (0판·0분 = 멈출 때까지)
+  await mm.queue.add(it, 'end');
+  toast('큐에 담았습니다', it.label + ' — ' + amount + ' · 재생을 누르면 진행합니다.', 'ok');
+}
+
+function abyssSpec() { return repeatSpec('abyss', '#ab', '어비스', 'dungeon'); }
 
 function abyssAmount(x) {
   const lim = [x.runs ? x.runs + '판' + (x.doneRuns ? ' (' + x.doneRuns + '판 함)' : '') : '',
@@ -331,44 +349,39 @@ function abyssAmount(x) {
   return x.dungeon + ' ' + x.difficulty + ' · ' + (lim || '멈출 때까지') + (x.revive === false ? ' · 쓰러지면 나감' : '');
 }
 
-function startAbyss() {
-  if (qItems.some((x) => x.kind === 'abyss' && x.status === 'run')) { toast('이미 어비스 반복 중입니다', '', 'bad'); return; }
-  const it = abyssSpec();
-  const cur = qItems.find((x) => x.status === 'run');
-  toast('어비스 반복 시작', stopKey() + ' = 멈춤' + (cur ? ' · 진행 중이던 "' + cur.label + '" 은 뒤로 미룹니다' : ''), 'ok');
-  qStartNow(it);
-}
-
-async function queueAbyss() {
-  const it = abyssSpec();  // 탭에서 고른 그대로 (0판·0분 = 멈출 때까지)
-  await mm.queue.add(it, 'end');
-  toast('큐에 담았습니다', it.label + ' — ' + abyssAmount(it) + ' · 재생을 누르면 진행합니다.', 'ok');
-}
 
 Q_KINDS.abyss = {
   amount: (x) => abyssAmount(x),
   doneToast: (x) => ['어비스 반복 끝', x.label + ' · ' + abyssAmount(x)],
 };
 
-mm.daily.onAbyss((e) => {
-  if (!e) return;
-  const t = e.seconds != null ? ' · ' + Math.floor(e.seconds / 60) + '분' : '';
-  const stat = e.clears != null ? '클리어 ' + e.clears + (e.revives ? ' · 부활 ' + e.revives : '') + ' · 쓰러져 나감 ' + e.deaths + t : '';
-  if (stat) $('#ab-stat').textContent = stat;
-  if (e.type === 'start') {
-    paintAbyssRunning(true);
-    $('#ab-msg').textContent = '시작';
-  } else if (e.type === 'abyss') {
-    $('#ab-msg').textContent = { match: '매칭 중', play: '진행 중', clear: '클리어', repair: '장비 수리' }[e.stage] || '';
-  } else if (e.type === 'done') {
-    paintAbyssRunning(false);
-    $('#ab-msg').textContent = e.stopped ? '멈춤' : '끝';
-  } else if (e.type === 'failed') {
-    paintAbyssRunning(false);
-    $('#ab-msg').textContent = '';
-    toast('어비스 반복이 멈췄습니다', e.message, 'bad');
-  }
-});
+/** 어비스·레이드 반복 진행 이벤트 (mm:abyss · mm:raid — 같은 틀 mabi/tasks/repeat.Repeat) → 탭의 진행 줄·버튼 */
+const REPEAT_STAGES = { entry: '입장', match: '매칭 중', sail: '출항', play: '진행 중', clear: '클리어', repair: '장비 수리' };
+
+function onRepeatEvent(kind, pre, title) {
+  return (e) => {
+    if (!e) return;
+    const t = e.seconds != null ? ' · ' + Math.floor(e.seconds / 60) + '분' : '';
+    const stat = e.clears != null ? '클리어 ' + e.clears + (e.revives ? ' · 부활 ' + e.revives : '') + ' · 쓰러져 나감 ' + e.deaths + t : '';
+    if (stat) $(pre + '-stat').textContent = stat;
+    if (e.type === 'start') {
+      paintRepeatRunning(pre, true);
+      $(pre + '-msg').textContent = '시작';
+    } else if (e.type === kind) {
+      $(pre + '-msg').textContent = REPEAT_STAGES[e.stage] || '';
+    } else if (e.type === 'done') {
+      paintRepeatRunning(pre, false);
+      $(pre + '-msg').textContent = e.stopped ? '멈춤' : '끝';
+      if (e.message) toast(title + ' 반복을 멈췄습니다', e.message, 'bad');  // 게임 꺼짐·연속 실행 제한 등
+    } else if (e.type === 'failed') {
+      paintRepeatRunning(pre, false);
+      $(pre + '-msg').textContent = '';
+      toast(title + ' 반복이 멈췄습니다', e.message, 'bad');
+    }
+  };
+}
+
+mm.daily.onAbyss(onRepeatEvent('abyss', '#ab', '어비스'));
 
 /* ── 레이드 반복 (혼자하기) — 어비스와 같은 틀 ── */
 
@@ -393,22 +406,9 @@ function paintRaidDiffs(want) {
   $('#rd-difficulty').innerHTML = list.map((d) => '<option' + (d === want ? ' selected' : '') + '>' + esc(d) + '</option>').join('');
 }
 
-function paintRaidRunning(on) {
-  $('#rd-start').classList.toggle('hidden', on);
-  $('#rd-stop').classList.toggle('hidden', !on);
-}
+function paintRaidRunning(on) { paintRepeatRunning('#rd', on); }
 
-function raidSpec() {
-  const sel = $('#rd-char');
-  const slot = Number(sel.value) || 0;
-  const name = slot ? sel.options[sel.selectedIndex].textContent.replace(/^\d+\.\s*/, '') : '';
-  return {
-    kind: 'raid', label: '레이드 · ' + (name || '지금 캐릭터'),
-    slot, raid: $('#rd-raid').value, difficulty: $('#rd-difficulty').value,
-    runs: Number($('#rd-runs').value) || 0, minutes: Number($('#rd-minutes').value) || 0,
-    revive: $('#rd-revive').checked,
-  };
-}
+function raidSpec() { return repeatSpec('raid', '#rd', '레이드', 'raid'); }
 
 function raidAmount(x) {
   return abyssAmount({ ...x, dungeon: x.raid });
@@ -419,25 +419,7 @@ Q_KINDS.raid = {
   doneToast: (x) => ['레이드 반복 끝', x.label + ' · ' + raidAmount(x)],
 };
 
-mm.daily.onRaid((e) => {
-  if (!e) return;
-  const t = e.seconds != null ? ' · ' + Math.floor(e.seconds / 60) + '분' : '';
-  const stat = e.clears != null ? '클리어 ' + e.clears + (e.revives ? ' · 부활 ' + e.revives : '') + ' · 쓰러져 나감 ' + e.deaths + t : '';
-  if (stat) $('#rd-stat').textContent = stat;
-  if (e.type === 'start') {
-    paintRaidRunning(true);
-    $('#rd-msg').textContent = '시작';
-  } else if (e.type === 'raid') {
-    $('#rd-msg').textContent = { entry: '입장', sail: '출항', play: '진행 중', clear: '클리어', repair: '장비 수리' }[e.stage] || '';
-  } else if (e.type === 'done') {
-    paintRaidRunning(false);
-    $('#rd-msg').textContent = e.stopped ? '멈춤' : '끝';
-  } else if (e.type === 'failed') {
-    paintRaidRunning(false);
-    $('#rd-msg').textContent = '';
-    toast('레이드 반복이 멈췄습니다', e.message, 'bad');
-  }
-});
+mm.daily.onRaid(onRepeatEvent('raid', '#rd', '레이드'));
 
 /* ── 배선 ── */
 
@@ -451,21 +433,12 @@ $('#dl-start').addEventListener('click', () => {
 });
 $('#dl-queue').addEventListener('click', queueDaily);
 $('#opt-fit-display').addEventListener('change', () => mm.daily.saveSettings({ fit_display: $('#opt-fit-display').checked }));
-$('#ab-start').addEventListener('click', startAbyss);
-$('#ab-queue').addEventListener('click', queueAbyss);
+$('#ab-start').addEventListener('click', () => startRepeat(abyssSpec(), '어비스'));
+$('#ab-queue').addEventListener('click', () => { const it = abyssSpec(); queueRepeat(it, abyssAmount(it)); });
 $('#ab-stop').addEventListener('click', () => mm.daily.abyssStop());
 $('#rd-raid').addEventListener('change', () => paintRaidDiffs($('#rd-difficulty').value));
-$('#rd-start').addEventListener('click', () => {
-  if (qItems.some((x) => x.kind === 'raid' && x.status === 'run')) { toast('이미 레이드 반복 중입니다', '', 'bad'); return; }
-  const cur = qItems.find((x) => x.status === 'run');
-  toast('레이드 반복 시작', stopKey() + ' = 멈춤' + (cur ? ' · 진행 중이던 "' + cur.label + '" 은 뒤로 미룹니다' : ''), 'ok');
-  qStartNow(raidSpec());
-});
-$('#rd-queue').addEventListener('click', async () => {
-  const it = raidSpec();
-  await mm.queue.add(it, 'end');
-  toast('큐에 담았습니다', it.label + ' — ' + raidAmount(it) + ' · 재생을 누르면 진행합니다.', 'ok');
-});
+$('#rd-start').addEventListener('click', () => startRepeat(raidSpec(), '레이드'));
+$('#rd-queue').addEventListener('click', () => { const it = raidSpec(); queueRepeat(it, raidAmount(it)); });
 $('#rd-stop').addEventListener('click', () => mm.daily.raidStop());
 $('#qr-close').addEventListener('click', () => $('#q-report').classList.add('hidden'));
 $('#qr-logs').addEventListener('click', () => mm.daily.openFolder('logs'));
