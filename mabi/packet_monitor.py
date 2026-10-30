@@ -584,6 +584,44 @@ class PacketMonitor:
                 vals["name"] = appearing_name(body)
         self.apply(ev.key, vals)
 
+    def reconcile(self, act: dict | None) -> list[str]:
+        """새 작업을 시작할 때 (처음이든 이어 하기든 — 그 사이 사람이 무엇을 했을지 모른다): 지난 일에서 남은 상태를
+        그대로 믿지 않고 지금 게임에 맞춘다. 상태가 바뀌는 패킷을 놓치면 (스트림 공백 등) 지난밤 상태가 아침까지 남는다
+        (2026-10-30 06:44: 던전 Cleared 로 6명 모두 접속 실패).
+        act(CLI get_activity) 가 있으면 그 답으로, 없으면(로딩·캐릭터 선택 화면) 모름(None)으로 — 다음 패킷이나
+        CLI·화면으로 다시 본다. 맵 종류가 CLI 와 어긋나면 (마을인데 던전 안·사냥터 안이라 함, 던전·사냥터 맵인데
+        밖이라 함) 맵도 모름으로 돌린다 — 장소 이름은 CLI 와 패킷이 달라 ('마스 심층 던전 1층 2구역' /
+        '마스 3_2 던전 (심층 1층 2구역) 매우 어려움') 비교하지 않는다. 레이드·어비스 결과는 맵 종류로 가린다.
+        바뀐 것 ['이름 전 → 후']."""
+        s = self.state
+        before = {"맵": s.channel_name, "던전": s.dungeon_state, "사냥터": s.field_state, "쓰러짐": s.dead,
+                  "레이드": s.raid_state}
+        if act:
+            s.loading = False
+            dungeon = (act.get("Dungeon") or {}).get("State") not in (None, "NotInDungeon")
+            field = bool((act.get("Battlefield") or {}).get("IsInBattleField"))
+            t = s.channel_type
+            if t and ((t in OPEN_MAPS and dungeon) or (t == "BattleField") != field
+                      or (t == "InstanceDungeon" and not dungeon)):
+                s.channel, s.channel_type, s.channel_name = None, "", ""
+            s.dungeon_state = (act.get("Dungeon") or {}).get("State") or None
+            if not (act.get("Battlefield") or {}).get("IsInBattleField"):
+                s.field_state = "NotInBattlefield"
+            elif s.field_state in (None, "NotInBattlefield"):
+                s.field_state = None  # 사냥터 안인데 패킷은 밖이라 한다 → 모름
+            s.dead = bool(act.get("IsDead"))
+            if not act.get("IsDialoguePlaying"):
+                s.dialogue_npc, s.dialogue_action, s.dialogue_menu = None, "", False
+        else:
+            s.dungeon_state = s.field_state = s.dead = None
+        if s.channel_type not in ("InstanceRaid", "InstanceRaidLobby"):
+            s.raid_state, s.raid_result, s.raid_boss = None, 0, False
+        if s.channel_type != "InstanceAbyssDungeon":
+            s.abyss_result = 0
+        after = {"맵": s.channel_name, "던전": s.dungeon_state, "사냥터": s.field_state, "쓰러짐": s.dead,
+                 "레이드": s.raid_state}
+        return [f"{k} {before[k]} → {after[k]}" for k in before if before[k] != after[k]]
+
     def apply(self, key: str, vals: dict) -> None:
         """이벤트 하나를 상태에 반영하고 기다리는 쪽을 깨운다 (시험에서 직접 부르기도 한다)."""
         s = self.state

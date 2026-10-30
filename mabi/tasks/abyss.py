@@ -498,6 +498,7 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
 
     goal = (f"{runs}판" if runs else "") + (" · " if runs and minutes else "") + (f"{minutes:g}분" if minutes else "")
     bot.log.info(f"어비스 반복 시작: {dungeon}{' / ' + difficulty if difficulty else ''} — {goal or '멈출 때까지'}")
+    bot.check_in()
     # 어디서 시작하나 (where): 어비스 안이면 그 판부터, 클리어·보상 화면이면 보상부터 (2026-10-23 클리어 화면에서
     # 시작해 입장부터 하려다 ESC 가 듣지 않아 멈췄다), 매칭 중이면 들어가길 기다리고, 입장 화면·어비스 목록이면
     # 그 자리부터, 그 밖(메인·다른 창)은 메뉴에서 입장

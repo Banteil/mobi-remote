@@ -451,6 +451,7 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
 
     goal = (f"{runs}판" if runs else "") + (" · " if runs and minutes else "") + (f"{minutes:g}분" if minutes else "")
     bot.log.info(f"레이드 반복 시작: {raid}{' / ' + difficulty if difficulty else ''} — {goal or '멈출 때까지'}")
+    bot.check_in()
     bot.auto_clear = True
     bot.scene_skip = True  # 레이드는 연출이 길어 넘긴다 (사용자) — 뒤에서 도는 중이면 may_skip_scene 이 막는다
     bot.background = False

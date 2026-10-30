@@ -116,6 +116,31 @@ class WaitTest(unittest.TestCase):
         self.m.apply("channel.entering", {"channel": 2, "channel_type": "Field", "channel_name": ""})
         self.assertEqual(self.m.state.dungeon_state, "NotInDungeon")
 
+    def test_reconcile_with_cli(self):
+        """시작 점검: 지난 상태를 CLI 답으로 맞춘다."""
+        self.m.apply("channel.entering", {"channel": 1, "channel_type": "Field", "channel_name": "마을"})
+        s = self.m.state
+        s.dungeon_state, s.dead, s.raid_state, s.raid_result = "Cleared", True, "Cleared", 7
+        act = {"Dungeon": {"State": "NotInDungeon"}, "Battlefield": {"IsInBattleField": False}, "IsDead": False}
+        changed = self.m.reconcile(act)
+        self.assertEqual((s.dungeon_state, s.field_state, s.dead), ("NotInDungeon", "NotInBattlefield", False))
+        self.assertEqual((s.raid_state, s.raid_result), (None, 0))  # 레이드 맵이 아니다
+        self.assertEqual(s.channel_type, "Field")
+        self.assertIn("던전 Cleared → NotInDungeon", changed)
+
+    def test_reconcile_map_disagrees(self):
+        """패킷은 마을이라는데 CLI 는 던전 안 → 맵도 모름."""
+        self.m.apply("channel.entering", {"channel": 1, "channel_type": "Field", "channel_name": "마을"})
+        self.m.reconcile({"Dungeon": {"State": "InProgress"}, "Battlefield": {"IsInBattleField": False}})
+        self.assertEqual((self.m.state.channel_type, self.m.state.dungeon_state), ("", "InProgress"))
+
+    def test_reconcile_without_cli(self):
+        """CLI 가 답하지 않으면 (캐릭터 선택·로딩) 모름으로 — 지난 상태를 믿지 않는다."""
+        s = self.m.state
+        s.dungeon_state, s.field_state, s.dead = "Cleared", "InProgress", True
+        self.m.reconcile(None)
+        self.assertEqual((s.dungeon_state, s.field_state, s.dead), (None, None, None))
+
     def test_dialogue(self):
         # 실제 캡처 순서: 대상 지정 → 진행 … → active 0 + 대상 없음 → 닫힘
         self.m.apply("dialogue.target", {"target": 0xA2A9})

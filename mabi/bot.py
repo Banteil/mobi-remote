@@ -150,6 +150,16 @@ class Bot:
         if self.on_step:
             self.on_step(step, text)  # runner._emit 이 화면 쪽 오류를 삼킨다
 
+    def check_in(self) -> None:
+        """작업을 시작할 때마다 (처음이든 일시정지 뒤 이어 하기든) 지금 상태부터 다시 본다 — 패킷이 기억하는 지난 상태를
+        믿고 시작하지 않는다 (PacketMonitor.reconcile). 캐릭터 선택 화면·로딩이면 CLI 가 답하지 않아 그런 상태는 모름으로 둔다."""
+        if self.packets.status != "running":
+            return
+        act = self.state.activity() if self.state.available() else None
+        changed = self.packets.reconcile(act)
+        self.log.info(f"시작 점검 ({'CLI' if act else 'CLI 응답 없음 → 모름으로'}): "
+                      + (", ".join(changed) if changed else "패킷 상태와 같음"))
+
     def resumed_at(self, *steps: str) -> dict | None:
         """지난번에 이 숙제가 steps 중 한 단계에서 끊겼으면 그 기록."""
         r = self.resume

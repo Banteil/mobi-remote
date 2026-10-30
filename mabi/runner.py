@@ -210,6 +210,7 @@ class Runner:
                                             {"slot": None, "name": "현재 캐릭터"} for c in characters],
                        order=opts.only or cfg["run"]["order"], labels={t: l for t, (l, _) in registry.items()})
             log.info(f"시작: 캐릭터 {len(characters)}명, 게임 날짜 {state.date}  (일시정지: {cfg['game']['stop_key'].upper()})")
+            bot.check_in()
             characters = self._arrange(cfg, opts, by_slot, characters, state)
             self._interface_ready = False
             try:
