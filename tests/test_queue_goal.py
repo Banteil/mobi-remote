@@ -99,6 +99,20 @@ class GoalKindTest(unittest.TestCase):
         self.assertEqual(len(api.calls), 4)
         self.assertIn("진전이 없어", q.notes[-1])
 
+    def test_alter_registrations_are_progress(self):
+        # 가공은 한 호출에 1건 — 남은 건수가 줄며 같은 등록이 거푸 나온다 (2026-10-30 강철괴 4건 뒤 '진전 없음' 으로 섰다)
+        steps = [(0, {"kind": "alter", "name": "강철괴", "runs": 1, "wanted": 10 - i, "queued": i}) for i in range(7)]
+        api = FakeApi(steps + [(50, {"kind": "done"})])
+        ok, q = self.run_goal(api)
+        self.assertTrue(ok)
+        self.assertEqual(len(api.calls), 7)
+
+    def test_same_alter_without_progress_stops(self):
+        api = FakeApi([(0, {"kind": "alter", "name": "강철괴", "runs": 1, "wanted": 10, "queued": 3})] * 10)
+        ok, q = self.run_goal(api)
+        self.assertFalse(ok)
+        self.assertEqual(len(api.calls), 4)
+
     def test_learn_once(self):
         api = FakeApi([(0, {"kind": "learn", "name": "못", "via": "제작"})] * 3)
         ok, q = self.run_goal(api)
