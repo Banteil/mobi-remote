@@ -509,6 +509,7 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
     unchecked = None  # 이름을 확인 못 한 채 이어 한 캐릭터 — 판 안에서 이름을 알면 확인한다
     if character and not _switch_character(bot, cfg, character):
         unchecked = character
+    on_event({"type": "ready"})  # 이 캐릭터로 접속을 마침 — 작업 큐가 여기서부터 얻은 것을 잰다
     bot.background = behind
     at = where_settled(bot, dungeon)
     stage = {"play": "play", "reward": "reward", "matching": "match"}.get(at, "entry")

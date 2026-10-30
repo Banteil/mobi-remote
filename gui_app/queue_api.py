@@ -147,6 +147,9 @@ class DailyKind(Kind):
 
 
 class AbyssKind(Kind):
+    # 카드 앞에서 재면 아직 앞 카드의 캐릭터라 다른 캐릭터 가방끼리 뺀다 (2026-10-30 결과 창에 룬의 파편 +16만 등)
+    # → 이 캐릭터로 접속을 마친 뒤('ready')부터 카드 끝까지 잰다
+    own_loot = True
     STAGE = {"match": "매칭 중", "play": "진행 중", "clear": "클리어", "repair": "장비 수리"}
     KIND, PLACE = "abyss", "dungeon"  # 반복 종류 (DailyApi._<KIND>_launch · 진행 이벤트 type), 카드의 장소 칸
 
@@ -192,10 +195,13 @@ class AbyssKind(Kind):
             q.note(it, f"시작 못 함 — {err}")
             return False
         last = {"clears": 0, "secs": 0}
+        before = []
 
         q.patch(it["id"], {"prog": {}, "note": ""})  # 이번에 돈 몫만 (앞서 돈 판·시간은 doneRuns·doneSecs)
 
         def on_event(e):
+            if e.get("type") == "ready" and not before:
+                before.append(q._snap())
             if e.get("clears") is not None:
                 last.update(clears=e["clears"], secs=e.get("seconds") or 0)
             if e.get("type") == self.KIND:  # 진행은 카드의 진행 줄(view)로 보인다
@@ -212,6 +218,8 @@ class AbyssKind(Kind):
         if fit:
             q.session["iface"] = True
         t.join()
+        if before and q.report:
+            q.report.add_loot(it, queue_report.loot(before[0], q._snap()))
         q.patch(it["id"], {"doneRuns": int(it.get("doneRuns") or 0) + last["clears"],
                            "doneSecs": float(it.get("doneSecs") or 0) + last["secs"], "prog": {}})
         r = getattr(api, f"_{self.KIND}_result")

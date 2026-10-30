@@ -465,6 +465,7 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
         bot.character = character
         bot.log.info(login.run(bot, cfg, character))
         at = where_settled(bot, raid)
+    on_event({"type": "ready"})  # 이 캐릭터로 접속을 마침 — 작업 큐가 여기서부터 얻은 것을 잰다
     stage = {"play": "play", "cleared": "cleared", "ship": "ship"}.get(at, "entry")
     leftover = at == "cleared"  # 시작 전에 이미 잡아 둔 판 — 결과·나가기만 하고 판 수에는 넣지 않는다
     bot.log.info({"play": "이미 레이드 안 → 이 판부터", "cleared": "보스를 잡은 뒤 → 결과부터", "ship": "출항선 → 출항부터",
