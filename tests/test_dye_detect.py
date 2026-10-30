@@ -153,6 +153,34 @@ class ViewTest(unittest.TestCase):
         self.assertEqual(D.snap_area(D.Frame(img), r), r)
 
 
+class GuideTest(unittest.TestCase):
+    def setUp(self):
+        img, _ = screen()
+        img[500:510, 1300:1310] = (40, 200, 60)   # 목표 #3CC828 가까운 자리
+        img[900:910, 1100:1110] = (40, 200, 60)   # 먼 자리
+        img[500:510, 1700:1710] = (40, 200, 60)   # 다른 파트 판
+        self.f = D.Frame(img)
+        self.box = D.palette_at(self.f)
+        self.grid = D.Grid(self.f, self.box, 2, [D.frame_skip(self.box)])
+        self.t = [D.target("#3CC828", 3)]
+
+    def test_nearest_in_own_band(self):
+        ring = D.Ring(1350, 520, 14, (0, 0, 0), 1.0)
+        g = D.guides(self.grid, [ring], self.t, [0], bands=[(1075, 1500)])
+        self.assertEqual(len(g), 1)
+        self.assertTrue(1300 <= g[0].tx < 1310 and 500 <= g[0].ty < 510)
+        self.assertAlmostEqual(g[0].dist, ((g[0].tx - 1350) ** 2 + (g[0].ty - 520) ** 2) ** 0.5)
+        # 다른 판(1700)이 더 가까워도 그 판의 색은 이 스포이드가 못 집는다
+        ring2 = D.Ring(1690, 520, 14, (0, 0, 0), 1.0)
+        g2 = D.guides(self.grid, [ring2], self.t, [0], bands=[(1075, 1500)])
+        self.assertTrue(g2[0].tx < 1500)
+
+    def test_no_pair_or_no_match(self):
+        ring = D.Ring(1350, 520, 14, (0, 0, 0), 1.0)
+        self.assertEqual(D.guides(self.grid, [ring], self.t, [-1]), [])
+        self.assertEqual(D.guides(self.grid, [ring], [D.target("#0000FE", 1)], [0]), [])
+
+
 class CleanViewTest(unittest.TestCase):
     def test_defaults_and_limits(self):
         from gui_app.dye_service import clean_view

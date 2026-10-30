@@ -167,6 +167,25 @@ def overlay_items(state, presets=None, *, scale: float = 1.0, origin=(0, 0), scr
                              Stroke((255, 255, 255, round(0.55 * 255)), 1.5 * s),
                              under=Stroke(dark(0.45), 3.5 * s), closed=True, dash=(5 * s, 5 * s)))
 
+    # 맞추기 안내 — 동그라미 한가운데(실제로 집는 점)에서 그 칸 목표 색의 가장 가까운 자리까지. 그 자리를
+    # 한가운데로 끌어 오면 된다. 끝에 작은 고리와 거리.
+    for gd in getattr(state, "guides", None) or []:
+        c = SLOT[gd.slot] if gd.slot < len(SLOT) else SLOT[0]
+        a_, b_ = (X(gd.x), Y(gd.y)), (X(gd.tx), Y(gd.ty))
+        out.append(PolylineP([a_, b_], Stroke(c, 2 * s), under=Stroke(dark(0.6), 4.5 * s)))
+        out.append(CircleP(b_[0], b_[1], 6 * s, stroke=Stroke(c, 2 * s), under=Stroke(dark(0.6), 4.5 * s)))
+        label = f"{gd.dist * scale:.0f}px"
+        px = round(13 * s)
+        out.append(TextP(b_[0] + 10 * s + 1, b_[1] + 1, label, px, dark(0.9)))
+        out.append(TextP(b_[0] + 10 * s, b_[1], label, px, TEXT))
+
+    # 한가운데 십자 — 동그라미는 크지만 게임이 집는 것은 한가운데 한 점이다. 그 점은 비워 둔다.
+    for rg in state.rings:
+        cx, cy = X(rg.x), Y(rg.y)
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            seg = [(cx + dx * 2 * s, cy + dy * 2 * s), (cx + dx * 7 * s, cy + dy * 7 * s)]
+            out.append(PolylineP(seg, Stroke((255, 255, 255, 255), 1.5 * s), under=Stroke(dark(0.8), 3.5 * s)))
+
     # 지금 고른 색이 목표에 맞은 스포이드만 — 흰 테 안쪽 가장자리를 따라 칸 색 테
     for rg in state.rings:
         if rg.slot < 0:

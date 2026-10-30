@@ -47,6 +47,7 @@ class DyeState:
     chips: list[tuple[str, bool]] = field(default_factory=list)   # (목표 hex, 스포이드가 물었나)
     all_caught: bool = False
     pins: list[tuple[int, int]] | None = None     # 스포이드가 셋일 때 삼각형 꼭짓점
+    guides: list[D.Guide] = field(default_factory=list)   # 동그라미 → 가장 가까운 목표 색 자리 (slot 은 원래 칸 번호)
     shade: np.ndarray | None = None               # 흑백 강조 그림 (RGB, 팔레트의 1/SHADE_STEP 크기) — 켰을 때만
 
 
@@ -161,6 +162,9 @@ class DyeTracker:
         so = getattr(self, "_slot_of", list(range(len(targets))))
         n = max(getattr(self, "_n_slots", len(targets)), len(targets))
         caught = {so[p.slot] for p in pk if p.slot >= 0}
+        # 동그라미 k(왼쪽부터) 는 칸 k 와 짝 — 이미 그 색을 물었으면 안내하지 않는다
+        pair = [so.index(k) if k in so and pk[k].slot != so.index(k) else -1 for k in range(len(rings))]
+        gd = [replace(g, slot=so[g.slot]) for g in D.guides(grid, rings, targets, pair, self.bands)]
         all_caught = len(targets) >= 3 and all(i in caught for i in range(3))
         # 원래 칸 번호 자리에 놓는다 (빈 칸은 None / 빈 점 묶음)
         found_at, spots_at = [None] * n, [np.empty((0, 2), dtype=int) for _ in range(n)]
@@ -177,6 +181,7 @@ class DyeTracker:
             targets=found_at,
             spots=spots_at,
             bands=self.bands,
+            guides=gd,
             chips=[(t.hex, so[k] in caught, so[k]) for k, t in enumerate(targets)],
             all_caught=all_caught,
             pins=[(r.x, r.y) for r in rings] if len(rings) == 3 else None,
