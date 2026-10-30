@@ -422,7 +422,10 @@ def _apply_top(bot: Bot) -> bool | None:
                 break
             read = getattr(bot, "_arb_read", [])
             closed = any(w in _norm(t) for page in read for t in page for w in gd.words("arbeit_closed"))
-            if closed:
+            # 수락해 둔 일('진행하기')만 보이고 구인 카드가 없으면 오늘 지원할 일이 없는 것 — 건너뛴 일(가공 필요 등)만
+            # 남은 경우다 (2026-10-30 09:44 '옷감이 필요해' 카드 하나를 '못 읽음' 으로 봐 막힘 처리)
+            accepted_only = any(_is(t, PROGRESS) for page in read for t in page)
+            if closed or accepted_only:
                 bot.to_main()
                 return False
             bot.log.warning(f"아르바이트: 목록에서 '지원하기' 를 못 찾음 ({n}/2) — 읽은 글자 {read} "

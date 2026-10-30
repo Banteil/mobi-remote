@@ -198,6 +198,15 @@ class ArbeitTest(unittest.TestCase):
             self.assertEqual(arbeit._apply_top(bot), "missing")
         self.assertEqual(bot.snapshot.call_count, 2)
 
+    def test_only_accepted_card_means_nothing_to_apply(self):
+        """수락해 둔 일('진행하기')만 남은 목록은 지원할 일이 없는 것 (2026-10-30 '옷감이 필요해' 하나)."""
+        bot = mock.MagicMock()
+        bot.cfg = {"arbeit": {"list_pages": 1, "list_scroll_at": [0, 0], "accept": "x", "travel_timeout": 1}}
+        items = [("구인 중", 1274, 167), ("옷감이 필요해", 1400, 286), ("진행하기", 1756, 600)]
+        with mock.patch.object(arbeit, "open_arbeit_tab"), mock.patch.object(arbeit.ocr, "find_texts", return_value=items):
+            self.assertIs(arbeit._apply_top(bot), False)
+        bot.snapshot.assert_not_called()
+
     def test_missing_items(self):
         job = {"title": "x", "objectives": [
             {"Description": "<b>은 광석</b> 보유 82/100", "IsCompleted": False},
