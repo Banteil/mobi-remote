@@ -254,16 +254,19 @@ class Bot:
         if not self.watch_weight or time.monotonic() - self._weight_at < every:
             return
         self._weight_at = time.monotonic()
+        if why := self.overweight():  # 무게를 넘으면 자동 이동·전투가 멈추므로 던전 안이라도 바로 그만둔다
+            raise Overweight(why)
+
+    def overweight(self) -> str | None:
+        """가방이 꽉 찼으면 이유 ('가방 무게 300/300'). 패킷(무게가 바뀔 때마다 온다), 모르면 CLI. 모르면 None.
+        꽉 차면 자동 이동·전투가 멈추고 보상·채집을 못 받아 숙제가 막힌다."""
         st = self.packets.state
-        if self.packets.ok and st.weight is not None and st.max_weight:  # 패킷: 무게가 바뀔 때마다 온다
+        if self.packets.ok and st.weight is not None and st.max_weight:
             cur, mx = st.weight, st.max_weight
         else:
             inv = self.state.query("get_inventory", timeout=10) if self.state.available() else None
             cur, mx = (inv or {}).get("CurrentInventoryWeight", 0), (inv or {}).get("MaxInventoryWeight", 0)
-        if not mx or cur < mx:
-            return
-        # 무게를 넘으면 자동 이동·전투가 멈추므로 던전 안이라도 바로 그만둔다
-        raise Overweight(f"가방 무게 {cur:.0f}/{mx:.0f}")
+        return f"가방 무게 {cur:.0f}/{mx:.0f}" if mx and cur >= mx else None
 
     def wait_packet(self, pred, timeout: float, since: int | None = None) -> bool | None:
         """패킷 상태(self.packets.state)가 pred 를 만족할 때까지. True 만족 / False 시간 초과 /

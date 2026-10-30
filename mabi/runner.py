@@ -21,12 +21,12 @@ from typing import Callable
 
 from . import profile as prof
 from . import queue_report, tasks
-from .bot import AuthBlocked, Bot, MissingTemplate, Overweight, StepTimeout, StopRequested
+from .bot import Bot, MissingTemplate, StepTimeout
 from .paths import Paths
 from .report import RunReport
 from .tasks import display, login
 from .tasks.content import CannotProceed
-from .tasks.exits import leave_instance
+from . import outcome
 
 log = logging.getLogger("mabi")
 
@@ -86,28 +86,6 @@ class RunOptions:
     interface_ready: bool = False
     restore: bool = True
     extra: dict = field(default_factory=dict)  # 리포트에 남길 실행 정보
-
-
-def box(bot: Bot, tag: str) -> None:
-    """실패한 숙제의 직전 30초(화면·누른 것·패킷)를 남긴다 — 남기다 터져도 실패 처리는 이어 간다."""
-    try:
-        name = bot.dump_box(tag)
-    except Exception as e:  # noqa: BLE001
-        log.debug(f"블랙박스를 남기지 못함: {e}")
-        return
-    if name:
-        log.info(f"블랙박스: {name}")
-
-
-def overweight(bot: Bot, cfg: dict) -> str | None:
-    """가방이 꽉 찼으면 이유 문자열 (자동 이동·전투가 멈추고 보상·채집을 못 받아 숙제가 막힌다)."""
-    inv = bot.state.query("get_inventory") if bot.state.available() else None
-    if not inv:
-        return None
-    cur, mx = inv.get("CurrentInventoryWeight", 0), inv.get("MaxInventoryWeight", 0)
-    if mx and cur >= mx:
-        return f"가방 무게 {cur:.0f}/{mx:.0f}"
-    return None
 
 
 def _done_view(stored) -> dict:
@@ -330,21 +308,9 @@ class Runner:
 
     def _loop(self, cfg, opts, registry, by_slot, characters, state, bot, report, results) -> None:
         def recover(tid: str) -> None:
-            """실패한 숙제 뒤 메인 화면으로. 접속 실패는 게임 밖 화면이라 건드리지 않는다."""
-            if tid == "login":
-                return
-            try:
-                leave_instance(bot)  # 던전·어비스·레이드 안에서 실패했으면 다음 숙제를 밖에서 시작하게
-            except (StepTimeout, MissingTemplate, RuntimeError):
-                pass
-            except Exception:  # noqa: BLE001
-                log.exception("실패 뒤 던전에서 나가기 실패")
-            try:
-                bot.to_main()
-            except (StepTimeout, MissingTemplate, RuntimeError):  # RuntimeError: 게임 창이 없음 (꺼짐)
-                pass
-            except Exception:  # noqa: BLE001 — 정리 실패로 다음 숙제까지 막지 않는다 (다음 숙제가 시작 점검을 한다)
-                log.exception("실패 뒤 메인 화면으로 돌아가기 실패")
+            """실패한 숙제 뒤 정리 (outcome.recover). 접속 실패는 게임 밖 화면이라 건드리지 않는다."""
+            if tid != "login":
+                outcome.recover(bot)
 
         repeated = FailStreak()
 
@@ -383,40 +349,14 @@ class Runner:
                         # 확인을 못 했으면 끝났다고 하지 않는다 (예전엔 OK·오늘 완료로 남았다)
                         log.warning(f"{label} 완료 확인 실패: {e}")
                         status, summary = "CHECK", f"{summary} — 완료 확인 실패: {e}"
-            except StopRequested:
-                log.warning("사용자 중단")
-                status, summary = "STOP", ""
-            except AuthBlocked as e:  # 접속을 더 두드리면 꼬일 수 있다 → 전체를 멈추고 사람에게 넘긴다
-                log.error(str(e))
-                status, summary = "STOP", str(e)
-            except Overweight as e:  # 가방 정리가 필요 → 이 캐릭터의 남은 숙제는 건너뛴다
-                log.warning(f"{label}: {e} → 이 캐릭터는 건너뜀")
-                status, summary = "HEAVY", str(e)
-            except MissingTemplate as e:
-                status, summary = "SKIP", str(e)
-            except CannotProceed as e:  # 미해금 등: 실패로 기록하고 다음 숙제로
-                status, summary = "FAIL", str(e)
-                recover(tid)
-            except StepTimeout as e:
-                status, summary = "FAIL", f"{e} → {bot.snapshot(tid).name}"
-                box(bot, tid)
-                recover(tid)
-            except Exception as e:  # 한 숙제의 실패가 전체를 멈추지 않도록
-                log.exception(label)
-                status, summary = "ERROR", f"{type(e).__name__}: {e} → {bot.snapshot(tid).name}"
-                box(bot, tid)
-                recover(tid)  # 알 수 없는 오류 뒤에도 다음 숙제가 낯선 화면에서 시작하지 않게
-            # 도중에 게임이 꺼지면 (튕김·사람이 끔) 남은 캐릭터마다 접속을 두드리며 실패를 쌓지 않는다 → 일시정지.
+            except Exception as e:  # noqa: BLE001 — 한 숙제의 실패가 전체를 멈추지 않도록 (가르는 규칙은 outcome)
+                status, summary, messy = outcome.classify(bot, tid, label, e)
+                if messy:
+                    recover(tid)
+            # 게임이 꺼졌거나(튕김·사람이 끔) 연속 실행 제한 창이면 남은 일마다 실패를 쌓지 않고 일시정지.
             # 단계 기록은 남아 있어 게임을 켜고 다시 시작(F12)하면 이 자리부터 이어 한다
-            if status in ("FAIL", "ERROR") and not bot.window.find():
-                log.error("게임이 꺼짐 → 일시정지 (게임을 켠 뒤 다시 시작하면 이어 함)")
-                status, summary = "STOP", "게임이 꺼짐 — 게임을 켠 뒤 다시 시작하면 이어 합니다"
-            # 게임을 오래 켜 두면 '재시작해 주세요' 창(AI 에이전트 연속 실행 제한)이 떠 CLI·조작이 막힌다 →
-            # 남은 숙제를 실패로 쌓지 않고 일시정지. 창은 '종료' 뿐이라 누르지 않는다
-            elif status in ("FAIL", "ERROR") and bot.run_limited():
-                log.error("게임 연속 실행 제한 창 → 일시정지 (게임을 다시 켠 뒤 이어 하기)")
-                status, summary = "STOP", "게임을 너무 오래 켜 둠 — 게임을 다시 켠 뒤 이어 하기를 누르면 이어 합니다"
-            elif repeated(slot, tid, status, summary):
+            status, summary = outcome.escalate(bot, status, summary)
+            if status in ("FAIL", "ERROR") and repeated(slot, tid, status, summary):
                 log.error(f"{label}: 앞 캐릭터와 같은 이유로 또 실패 → 일시정지 (원인을 확인한 뒤 이어 하기)")
                 status, summary = "STOP", f"두 캐릭터 연달아 같은 실패 — 확인 필요: {summary}"
             secs = round(time.monotonic() - t0)
@@ -470,7 +410,7 @@ class Runner:
                 continue  # 접속 실패 시 이 캐릭터의 숙제는 건너뛴다
             self._iface.attempt(bot, after_login=True)
             bot.also_done = {t for t in registry if ch and not opts.force and state.is_done(slot, t)}
-            heavy = overweight(bot, cfg)
+            heavy = bot.overweight()
             if heavy:
                 log.warning(f"[{who}] {heavy} → 이 캐릭터는 건너뜀")
                 results.append((f"[{who}]", "HEAVY", heavy))

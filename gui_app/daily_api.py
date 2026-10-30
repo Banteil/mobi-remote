@@ -314,7 +314,8 @@ class DailyApi:
 
         def work():
             import importlib
-            from mabi.bot import Bot, StopRequested
+            from mabi import outcome
+            from mabi.bot import Bot
             task = importlib.import_module(f"mabi.tasks.{kind}")
             bot = None
             from mabi.queue_report import LootMeter
@@ -338,12 +339,19 @@ class DailyApi:
                 res = task.repeat(bot, cfg, int(a["runs"]), float(a["minutes"]), on_event=event, character=ch, loot=meter,
                                   iface=fit)
                 event({"type": "done", **res})
-            except StopRequested:
-                log.info(f"{title} 반복: 사용자 중단")
-                event({"type": "done", "stopped": True})
-            except Exception as e:
-                log.exception(f"{title} 반복 실패")
-                event({"type": "failed", "message": str(e)})
+            except Exception as e:  # noqa: BLE001 — 가르는 규칙은 일일 숙제와 같은 outcome
+                if bot is None:
+                    log.exception(f"{title} 반복 시작 실패")
+                    event({"type": "failed", "message": str(e)})
+                    return
+                status, summary, messy = outcome.classify(bot, kind, f"{title} 반복", e)
+                if messy:
+                    outcome.recover(bot)  # 어비스·레이드 안에서 실패했으면 나와 둔다 — 다음 카드가 그 안에서 시작하지 않게
+                status, summary = outcome.escalate(bot, status, summary)
+                if status == "STOP":  # 사용자 중단·게임 꺼짐·연속 실행 제한 → 일시정지 (▶ 로 다시)
+                    event({"type": "done", "stopped": True, "message": summary})
+                else:
+                    event({"type": "failed", "message": summary})
             finally:
                 setattr(self, f"_{kind}_bot", None)
                 if bot:

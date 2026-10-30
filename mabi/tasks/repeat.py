@@ -139,6 +139,7 @@ class Repeat:
         at = self.ensure_character(self.where())
         if self.iface and self.iface.attempt(self.bot):
             at = self.where()
+        self.bot.watch_weight = True  # 가방이 꽉 차면 보상을 못 받는다 → Overweight 로 멈춤 (일일 숙제와 같게, 접속 뒤부터)
         if self.loot:  # 이 캐릭터로 접속을 마침 — 여기서부터 얻은 것을 잰다 (queue_report.LootMeter, 닫기는 부른 쪽)
             self.loot.open(self.bot, (self.character or {}).get("name") or current_name(self.bot) or "")
         self.loop(at)

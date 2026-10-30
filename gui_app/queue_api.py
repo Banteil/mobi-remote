@@ -221,7 +221,9 @@ class AbyssKind(Kind):
         if r.get("type") == "failed":
             q.note(it, f"실패 — {r.get('message', '')}")
             return False
-        if r.get("stopped"):  # F12·멈추기 → 일시정지 (▶ 로 다시)
+        if r.get("stopped"):  # F12·멈추기·게임 꺼짐 등 → 일시정지 (▶ 로 다시)
+            if r.get("message"):
+                q.note(it, r["message"])
             q.set_stop("stopped")
             return False
         return True
