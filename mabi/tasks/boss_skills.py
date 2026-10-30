@@ -1,7 +1,7 @@
 """보스전 궁극기·팔라딘 변신 — 어비스·레이드 반복(Repeat)의 판 진행 중에 쓴다. 일반 던전·숙제에서는 쓰지 않는다.
 
 캐릭터마다 따로 켠다 ([boss_skills] ultimate_slots · paladin_slots, 캐릭터 탭). 키는 [game] ultimate_key · paladin_key.
-쓰는 때: 보스전(종류마다 Repeat.boss_fight — 레이드는 보스전 시작 패킷, 어비스는 모닥불 뒤 보스 등장 연출) · 전투 중(CLI IsInCombat,
+쓰는 때: 보스전(종류마다 Repeat.boss_fight — 레이드는 보스전 시작 패킷, 어비스는 한 판에 하나뿐인 보스 등장 연출 뒤) · 전투 중(CLI IsInCombat,
 모르면 패킷) · 게이지가 참(패킷 ultimate.resource) · 컷신·쓰러짐·로딩이 아님. 게임 키만 누르고 패킷은 보내지 않는다.
 게이지가 차 있는데 눌러도 안 줄면 RETRY 초마다 다시 누른다 (게임이 키를 놓치거나 아직 못 쓰는 순간).
 
