@@ -620,7 +620,7 @@ class PacketMonitor:
                             else None if s.field_state == "NotInBattlefield" else s.field_state),
             "dead": bool(act.get("IsDead")),
         }
-        out = []
+        out, fixed = [], False
         recent = min(asked_at, time.monotonic() - CLI_LAG)
         for f, v in want.items():
             cur = getattr(s, f)
@@ -628,8 +628,10 @@ class PacketMonitor:
                 continue
             setattr(s, f, v)
             out.append(f"{f} {cur} → {v}")
+            fixed |= cur is not None
         if out:
-            log.info("CLI 로 맞춤: %s", ", ".join(out))
+            # 모르던 값(None)을 채운 것은 흔하다 (맵을 옮기면 쓰러짐을 모름으로 둔다 등) — 패킷 값이 틀렸던 것만 알린다
+            (log.info if fixed else log.debug)("CLI 로 맞춤: %s", ", ".join(out))
             with self._cond:
                 self._cond.notify_all()
         return out
