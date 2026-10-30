@@ -130,27 +130,46 @@ class BossSkillsTest(unittest.TestCase):
         self.assertTrue(sk.tick({"IsInCombat": True}))  # 새 던전에선 다시 한 번
         self.assertEqual(bot.keys, ["f5", "f5"])
 
-    def test_paladin_key_missed_retries_after_transform_time(self):
+    def test_paladin_key_missed_retries_then_gives_up(self):
         bot = FakeBot()
         bot.enter(ABYSS)
         bot.boss()
-        sk = BossSkills(bot, False, True, abyss_fight)
+        sk = BossSkills(bot, True, True, abyss_fight)
+        bot.gauge(500)
+        self.assertTrue(sk.tick({"IsInCombat": True}))  # F5 — 시작 패킷이 안 옴 (보스 연출 직후 · 2026-10-30 17:33)
+        self.assertFalse(sk.tick({"IsInCombat": True}))  # 기다리는 동안엔 아무것도
+        for _ in range(2):
+            sk.pressed["팔라딘 변신"] -= 9
+            self.assertTrue(sk.tick({"IsInCombat": True}))
+        self.assertEqual(bot.keys, ["f5", "f5", "f5"])  # 궁극기는 아낀다 — 쓰면 같은 게이지라 변신을 못 한다
+        sk.pressed["팔라딘 변신"] -= 9
+        self.assertTrue(sk.tick({"IsInCombat": True}))  # 세 번 안 됨 → 이 맵에선 포기하고 궁극기
+        self.assertEqual(bot.keys, ["f5", "f5", "f5", "6"])
+        bot.enter(ABYSS)  # 다음 판엔 다시 변신부터
+        bot.boss()
         bot.gauge(500)
         self.assertTrue(sk.tick({"IsInCombat": True}))
-        sk.pressed["팔라딘 변신"] -= 10  # 변신 패킷이 안 옴·게이지 그대로 — 그래도 변신 시간 안엔 또 누르지 않는다
+        self.assertEqual(bot.keys[-1], "f5")
+
+    def test_ultimate_waits_for_paladin(self):
+        bot = FakeBot()
+        bot.enter(ABYSS)
+        bot.boss()
+        sk = BossSkills(bot, True, True, abyss_fight)
+        bot.gauge(350)  # 궁극기만 찼다 — 쓰면 팔라딘 게이지도 빠진다
         self.assertFalse(sk.tick({"IsInCombat": True}))
-        sk.pressed["팔라딘 변신"] -= 14
-        self.assertTrue(sk.tick({"IsInCombat": True}))  # 키가 안 먹었다 → 다시
-        self.assertEqual(bot.keys, ["f5", "f5"])
+        bot.gauge(500)
+        self.assertTrue(sk.tick({"IsInCombat": True}))
+        self.assertEqual(bot.keys, ["f5"])
 
     def test_gauge_not_full(self):
         bot = FakeBot()
         bot.enter(ABYSS)
         bot.boss()
-        sk = BossSkills(bot, True, True, abyss_fight)
+        sk = BossSkills(bot, True, False, abyss_fight)  # 팔라딘을 안 켠 캐릭터
         bot.gauge(350)
         self.assertTrue(sk.tick({"IsInCombat": True}))
-        self.assertEqual(bot.keys, ["6"])  # 궁극기만 찼다
+        self.assertEqual(bot.keys, ["6"])  # 궁극기는 300 에서 참
 
     def test_no_paladin_here_or_cutscene_or_new_map(self):
         bot = FakeBot()

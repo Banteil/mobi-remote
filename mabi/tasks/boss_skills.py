@@ -8,8 +8,12 @@
 팔라딘 변신 중에는 궁극기를 쓰지 않는다 — 변신 중엔 궁극기 키(6)가 '변신 해제' 가 된다 (사용자, 2026-10-30).
 변신은 20초 간다 (사용자). 변신 패킷이 시작·끝에 오므로(F5 1초 뒤 · 그 20초 뒤) 그 사이(끝 패킷을 놓치면 TRANSFORM 초)와
 키를 누르고 시작 패킷을 기다리는 동안에는 궁극기를 누르지 않는다.
-팔라딘 변신은 던전(맵)마다 한 번 (사용자). 변신 키를 누른 뒤 게이지가 줄었거나 패킷이 변신 중이라 하면 그 맵에서는
-다시 누르지 않는다 (사람이 직접 변신해도 변신 패킷으로 안다). 게이지가 그대로면 키가 안 먹은 것으로 보고 변신 시간이 지난 뒤 다시 누른다 (변신 중에 또 누르지 않게).
+팔라딘 변신은 던전(맵)마다 한 번 (사용자). 변신 시작 패킷을 받으면 그 맵에서는 다시 누르지 않는다 (사람이 직접 한 것도).
+F5 를 눌렀는데 PENDING 초 안에 시작 패킷이 없으면 안 먹은 것 (보스 연출 직후·패턴 중 — 2026-10-30 두 번) → 다시 누른다.
+MAX_TRIES 번 눌러도 안 되면 그 맵에서는 포기한다.
+두 게이지는 같은 자원이다 (같은 값으로 오르고 궁극기는 300, 팔라딘은 500 에서 참) — 궁극기를 쓰면 팔라딘 게이지도 빠진다.
+그래서 팔라딘을 켠 캐릭터는 그 맵에서 변신을 쓰기(또는 포기하기) 전엔 궁극기를 누르지 않는다 (17:33 F5 가 안 먹은 사이
+궁극기가 게이지를 써 버려 그 판은 변신을 못 함). 이 맵에서 팔라딘을 못 쓰면(can_paladin 거짓) 궁극기는 그대로.
 맵을 나가면(클리어 뒤 다시 하기·나가기) 두 게이지가 처음으로 돌아간다 — packet_monitor 가 맵 진입 때 0 으로 둔다.
 """
 import time
@@ -22,6 +26,7 @@ class BossSkills:
     RETRY = 8  # 같은 기술을 다시 누르기까지 (초)
     TRANSFORM = 20 + 3  # 팔라딘 변신 시간 20초 + 여유 — 이 동안 궁극기 키(6)는 변신 해제
     PENDING = 8         # 변신 키를 누른 뒤 시작 패킷을 기다리는 동안 (보통 1~2초, 3초 걸린 적 있음 2026-10-30 17:26)
+    MAX_TRIES = 3       # 변신 키를 이만큼 눌러도 시작 패킷이 없으면 그 맵에서는 포기 (궁극기를 막지 않게)
 
     def __init__(self, bot: Bot, ultimate: bool, paladin: bool, boss_fight):
         self.bot, self.boss_fight = bot, boss_fight
@@ -32,6 +37,8 @@ class BossSkills:
             (("궁극기", g.get("ultimate_key", "6"), lambda st: (st.ult, st.ult_max)), ultimate),
         ) if on and s[1]]
         self.pressed: dict[str, float] = {}
+        self.paladin = paladin
+        self.tries = (None, 0)  # (맵 entered_at, 그 맵에서 변신 키를 누른 횟수)
 
     @classmethod
     def for_character(cls, bot: Bot, cfg: dict, slot: int | None, boss_fight) -> "BossSkills":
@@ -56,11 +63,13 @@ class BossSkills:
         return now - last < self.PENDING and st.transform_seen < last
 
     def paladin_spent(self, st) -> bool:
-        """이 던전(맵)에서 이미 변신했나 (변신 패킷, 사람이 직접 한 것도). 패킷이 안 오면 눌렀는데 게이지가 줄었는지로."""
-        if st.transformed_here:
-            return True
-        pressed_here = self.pressed.get("팔라딘 변신", -1e9) >= st.entered_at
-        return pressed_here and st.pal is not None and bool(st.pal_max) and st.pal < st.pal_max
+        """이 던전(맵)에서 변신은 끝났나 — 이미 변신했거나(변신 패킷, 사람이 직접 한 것도) MAX_TRIES 번 눌러도 안 됐다."""
+        tries = self.tries[1] if self.tries[0] == st.entered_at else 0
+        return st.transformed_here or tries >= self.MAX_TRIES
+
+    def paladin_first(self, st) -> bool:
+        """궁극기를 아껴야 하나 — 팔라딘을 켰고 이 맵에서 아직 변신 전이면 (궁극기가 같은 게이지를 써 버린다)."""
+        return self.paladin and st.can_paladin is not False and not self.paladin_spent(st)
 
     def tick(self, act: dict) -> bool:
         """판 진행 루프가 부른다 (act = 방금 받은 CLI get_activity). 하나를 눌렀으면 True."""
@@ -75,17 +84,20 @@ class BossSkills:
             return False
         now = time.monotonic()
         for name, key, gauge in self.skills:
-            if name == "궁극기" and self.transformed(st):
+            if name == "궁극기" and (self.transformed(st) or self.paladin_first(st)):
                 continue
             if name == "팔라딘 변신" and self.paladin_spent(st):
                 continue
             cur, need = gauge(st)
-            wait = self.TRANSFORM if name == "팔라딘 변신" else self.RETRY  # 변신 중에 또 누르지 않게
+            wait = self.PENDING if name == "팔라딘 변신" else self.RETRY  # 시작 패킷이 오면 spent 라 다시 안 누른다
             if cur is None or not need or cur < need or now - self.pressed.get(name, -1e9) < wait:
                 continue
             self.bot.log.info(f"보스전 {name} ({cur:.0f}/{need:.0f}) → {key}")
             self.bot.key(key)
             self.pressed[name] = now
+            if name == "팔라딘 변신":
+                n = self.tries[1] if self.tries[0] == st.entered_at else 0
+                self.tries = (st.entered_at, n + 1)
             return True  # 한 번에 하나 — 다음 것은 다음 확인 때 (게이지가 줄었는지 보고)
         return False
 
