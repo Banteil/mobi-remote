@@ -366,9 +366,9 @@ class PacketState:
     raid_result: int = 0             # 레이드 결과 (보스 처치 순간 레이드 번호, 맵을 옮기면 0)
     raid_boss: bool = False          # 이 맵에서 레이드 보스전이 시작됨
     campfire: bool = False           # 이 맵에 모닥불이 나타남 (어비스는 보스방 앞)
-    # 이 맵에서 연출이 나옴. 어비스는 한 판에 연출이 보스 등장 하나뿐이다 (abyss1: 모닥불 → 연출 → 클리어).
-    # 모닥불만으로는 보스방 앞 잡몹 전투까지 보스전으로 봐 변신을 33초 일찍 썼고 (2026-10-30 16:49:27 F5 → 16:50:00 연출),
-    # 모닥불을 함께 요구하면 판 도중에 리모콘을 켰을 때 모닥불을 놓쳐 보스전을 모른다 (16:56)
+    # 모닥불 뒤 연출 = 어비스 보스 등장 (abyss1: 모닥불 → 연출 → 클리어). 모닥불만으로는 보스방 앞 잡몹 전투까지 보스전으로
+    # 봐 변신을 33초 일찍 썼다 (2026-10-30 16:49:27 F5 → 16:50:00 연출). 모닥불 앞 연출은 주마다 첫 입장 연출이라 빼고 (사용자),
+    # 맵 진입을 못 봤으면(판 도중에 리모콘을 켬 — 모닥불을 놓쳤을 수 있다, 16:56) 연출만으로 본다 (입장 연출은 이미 지났다)
     boss_scene: bool = False
     # 궁극기·팔라딘 변신 게이지 (현재/필요). 둘 다 같은 값으로 오르고 궁극기는 300, 팔라딘은 500 에서 찬다. 감시를 켠 뒤 안 왔으면 None
     ult: float | None = None
@@ -824,7 +824,9 @@ class PacketMonitor:
         elif key in ("revive.checkpoint_ok", "revive.item_ok"):
             s.dead = False
         elif key == "cutscene.play":
-            s.cutscene = s.boss_scene = True
+            s.cutscene = True
+            if s.campfire or not s.entered_at:
+                s.boss_scene = True
         elif key in ("cutscene.end", "cutscene.abort"):
             s.cutscene = False
         elif key == "travel.begin":

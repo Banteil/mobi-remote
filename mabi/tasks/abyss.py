@@ -451,7 +451,7 @@ class AbyssRepeat(Repeat):
         return where_settled(self.bot, self.a["dungeon"])
 
     def boss_fight(self, s):
-        # 어비스는 보스전 신호가 없다 (CLI 던전 상태도 NotInDungeon) — 한 판에 하나뿐인 연출(보스 등장)이 나온 뒤가 보스전.
+        # 어비스는 보스전 신호가 없다 (CLI 던전 상태도 NotInDungeon) — 모닥불 뒤 연출(보스 등장)이 나온 뒤가 보스전 (boss_scene).
         # 맵 종류는 보지 않는다 (판 도중에 리모콘을 켜면 맵 진입을 못 봐 모른다 — 반복이 어비스 안에서만 부른다). 연출 중엔 안 누른다
         return s.boss_scene
 

@@ -62,6 +62,13 @@ class BossSkillsTest(unittest.TestCase):
         self.assertTrue(sk.tick({"IsInCombat": True}))
         self.assertEqual(bot.keys, ["f5"])  # 팔라딘 먼저
 
+    def test_weekly_entry_scene_is_not_boss(self):
+        bot = FakeBot()
+        bot.enter(ABYSS)
+        bot.packets.apply("cutscene.play", {})  # 주마다 첫 입장 연출 (모닥불 전)
+        bot.packets.apply("cutscene.end", {})
+        self.assertFalse(abyss_fight(bot.packets.state))
+
     def test_started_mid_run(self):
         bot = FakeBot()  # 판 도중에 리모콘을 켬 — 맵 진입·모닥불을 못 봤다
         bot.packets.apply("cutscene.play", {})
