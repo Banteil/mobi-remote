@@ -579,10 +579,7 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
             if done():
                 exit_reward(bot)
                 break
-            if repair.needed(bot, below):
-                if repaired_from is not None and repair.durability(bot) <= repaired_from:  # 수리했는데 그대로거나 더 낮다
-                    raise CannotProceed(f"수리했는데도 장비 내구도가 {repair.durability(bot) * 100:.0f}% "
-                                        f"→ {bot.snapshot('repair_again').name}")
+            if repair.due(bot, below, repaired_from):
                 bot.log.info(f"장비 내구도 {repair.durability(bot) * 100:.0f}% (기준 {below * 100:g}%) → 다시 하기 대신 나가서 수리")
                 emit(stage="repair")
                 repaired_from = repair.durability(bot)

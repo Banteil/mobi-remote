@@ -492,7 +492,8 @@ class QueueApi:
         q.session["used"] = True
         if q.session.get("screen"):
             return True
-        d = self.daily_displayCheck({"chars": it.get("chars"), "only": it.get("only"), "force": it.get("force")})
+        d = self.daily_displayCheck({"chars": it.get("chars"), "only": it.get("only"), "force": it.get("force"),
+                                     "always": (it.get("kind") or "goal") != "daily"})
         if d.get("ok"):
             q.session["screen"] = not d.get("idle")  # 오늘 할 게 없어 안 본 것이면 다음 카드에서 다시 본다
             return True

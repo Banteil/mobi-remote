@@ -442,6 +442,7 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
     t0 = time.monotonic()
     stat = {"clears": 0, "deaths": 0, "retries": 0, "revives": 0}
     below = float(r_cfg.get("repair_below", 0.05) or 0)
+    repaired_from = None  # 마지막 수리 직전 내구도 (repair.due)
 
     def done() -> bool:
         return bool((runs and stat["clears"] >= runs) or (minutes and time.monotonic() - t0 >= minutes * 60))
@@ -456,7 +457,13 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
     bot.scene_skip = True  # 레이드는 연출이 길어 넘긴다 (사용자) — 뒤에서 도는 중이면 may_skip_scene 이 막는다
     bot.background = False
     at = where_settled(bot, raid)
-    if character and not name_matches(current_name(bot), character.get("name", "")):
+    unchecked = None  # 이름을 확인 못 한 채 이어 한 캐릭터 — 다음 입장 때 확인한다
+    name = current_name(bot)
+    if character and not name and at in ("play", "cleared", "ship"):
+        # 이름은 메인 화면·패킷(맵에 들어갈 때)으로만 안다 — 모른다고 다른 캐릭터로 보고 나가면 같은 캐릭터의 판을 버린다
+        bot.log.info("레이드 안이라 캐릭터 이름을 모름 → 그대로 잇고 다음 입장 때 확인")
+        unchecked = character
+    elif character and not name_matches(name, character.get("name", "")):
         if at in ("play", "cleared"):
             bot.log.info(f"다른 캐릭터로 레이드 안 → 나간 뒤 {character['name']} 로 접속")
             if at == "cleared":
@@ -483,6 +490,11 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
             bot.step("raid_open", f"레이드 입장 ({raid})")
             emit(stage="entry")
             bot.background = False
+            if unchecked and not name_matches(current_name(bot), unchecked.get("name", "")):
+                bot.log.warning(f"다른 캐릭터로 이어 했음 → {unchecked['name']} 로 접속")
+                bot.character = unchecked
+                bot.log.info(login.run(bot, cfg, unchecked))
+            unchecked = None
             board(bot, raid, difficulty, at=at)
             at = ""
             stage = "ship"
@@ -527,17 +539,17 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
                 secs = round(time.monotonic() - t0)
                 bot.log.info(f"클리어 {stat['clears']}판 (부활 {stat['revives']} · 쓰러져 나감 {stat['deaths']} · 경과 {secs // 60}분 {secs % 60}초)")
                 emit(stage="clear")
-            if below and repair.needed(bot, below):
+            if not done() and repair.due(bot, below, repaired_from):  # 마지막 판 뒤엔 수리하러 가지 않는다 (어비스와 같게)
                 bot.log.info(f"장비 내구도 {repair.durability(bot) * 100:.0f}% (기준 {below * 100:g}%) → 나가서 수리")
                 emit(stage="repair")
+                repaired_from = repair.durability(bot)
                 bot.background = False
                 leave(bot, to_field=True)
                 repair.run(bot)
                 stat["repairs"] = stat.get("repairs", 0) + 1
-                if done():
-                    break
                 stage = "entry"
                 continue
+            repaired_from = None
             leave(bot)
             if done():
                 break

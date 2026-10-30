@@ -171,7 +171,8 @@ class DailyApi:
         try:
             o = opts or {}
             run_opts = RunOptions(chars=o.get("chars") or None, only=o.get("only") or None, force=bool(o.get("force")))
-            if not Runner(self.paths, force_exit=False).has_work(run_opts):
+            # 어비스·레이드 카드는 숙제가 다 끝난 날에도 화면을 본다 (always) — 예전엔 숙제 기준으로 건너뛰어 한 번도 안 봤다
+            if not o.get("always") and not Runner(self.paths, force_exit=False).has_work(run_opts):
                 return {"ok": True, "idle": True, "running": True, "problems": [], "target": target}
             cfg = load_config(self.paths)
             bot = Bot(cfg, self.paths, force_exit=False)

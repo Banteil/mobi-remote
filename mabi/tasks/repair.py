@@ -40,6 +40,16 @@ def needed(bot: Bot, below: float) -> bool:
     return bool(below) and d is not None and d <= below
 
 
+def due(bot: Bot, below: float, repaired_from: float | None) -> bool:
+    """판 사이에 수리하러 가야 하나 (어비스·레이드 반복 공통). repaired_from: 바로 앞에 수리했으면 그 직전 내구도.
+    수리했는데 그대로거나 더 낮으면 CannotProceed — 수리가 안 된 채 매 판 대장간을 오가지 않게."""
+    if not needed(bot, below):
+        return False
+    if repaired_from is not None and durability(bot) <= repaired_from:
+        raise CannotProceed(f"수리했는데도 장비 내구도가 {durability(bot) * 100:.0f}% → {bot.snapshot('repair_again').name}")
+    return True
+
+
 def _repair_window(bot: Bot) -> bool:
     return bool(_find(bot, "repair_all", "repair_buttons", exact=False))
 
