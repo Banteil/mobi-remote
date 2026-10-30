@@ -20,7 +20,7 @@ COMMANDS = {"--resume": b"resume", "--halt": b"halt"}
 
 def _command(argv: list[str]) -> bytes:
     """이미 떠 있는 리모콘에 보낼 명령. 사람이 컴퓨터를 못 만질 때 밖에서 부린다:
-      --halt 일시정지 · --resume 이어 하기 · --daily 슬롯,슬롯 [숙제,숙제] 일일 숙제 카드를 넣고 시작
+      --halt 일시정지 · --resume 이어 하기 · --daily 슬롯,슬롯 [숙제,숙제] [--force] 일일 숙제 카드를 넣고 시작 (--force: 오늘 완료 기록이 있어도 다시)
       --abyss 슬롯 던전 [판수] [난이도] 어비스 카드를 큐 뒤에 넣는다 (판수 0 = 멈출 때까지). 여러 번 부르면 차례로 쌓인다
       --raid 슬롯 레이드 [판수] [난이도] 레이드(혼자하기) 카드를 큐 뒤에 넣는다 (어비스와 같음)"""
     for flag in ("--abyss", "--raid"):
@@ -31,6 +31,7 @@ def _command(argv: list[str]) -> bytes:
     if "--daily" in argv:
         i = argv.index("--daily")
         rest = [a for a in argv[i + 1:i + 3] if not a.startswith("--")]
+        rest += [""] * (2 - len(rest)) + (["force"] if "--force" in argv else [])
         return ("daily:" + ":".join(rest)).encode()
     return next((m for a, m in COMMANDS.items() if a in argv), b"show")
 
@@ -48,11 +49,12 @@ def _on_message(win: "MainWindow", conn) -> None:
         parts = msg.decode().split(":")[1:]
         slots = [int(x) for x in (parts[0] if parts else "").split(",") if x.strip().isdigit()]
         only = [x for x in (parts[1] if len(parts) > 1 else "").split(",") if x] or None
+        force = len(parts) > 2 and parts[2] == "force"
         if not slots or q.running:
             log.warning(f"명령 → 일일 숙제: 넣지 않음 ({'슬롯 없음' if not slots else '다른 작업이 도는 중'})")
             return
-        log.info(f"명령 → 일일 숙제 시작 (슬롯 {slots}, 숙제 {only or '전체'})")
-        win.api.queue_add({"kind": "daily", "label": "일일 숙제", "chars": slots, "only": only, "force": False}, "end")
+        log.info(f"명령 → 일일 숙제 시작 (슬롯 {slots}, 숙제 {only or '전체'}{', 완료 기록 무시' if force else ''})")
+        win.api.queue_add({"kind": "daily", "label": "일일 숙제", "chars": slots, "only": only, "force": force}, "end")
         q.tick()
     elif msg.startswith((b"abyss:", b"raid:")):
         kind, *parts = msg.decode().split(":")

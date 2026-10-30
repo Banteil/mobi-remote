@@ -41,6 +41,18 @@ class AlterMissingTest(unittest.TestCase):
         self.assertEqual(arbeit.alter_missing(job, {"두유"}), [])
 
 
+class QuickAlterTest(unittest.TestCase):
+    """가공이 2분(alter_max_sec) 미만인 가공품만 아르바이트에서 가공한다 (사용자 규칙 2026-10-30)."""
+
+    def test_limit(self):
+        craft.configure(ROOT / "state", ROOT / "data", None)
+        bot = mock.MagicMock()
+        bot.cfg = {"arbeit": {"alter_max_sec": 120}}
+        self.assertTrue(arbeit.quick_alter(bot, ["옷감"]))            # 45초
+        self.assertFalse(arbeit.quick_alter(bot, ["깔끔 버섯 포자"]))  # 1500초
+        self.assertFalse(arbeit.quick_alter(bot, ["옷감", "깔끔 버섯 포자"]))
+
+
 class HowtoRowTest(unittest.TestCase):
     """'구하는 방법' 에서 가공 시설 줄보다 채집 줄을 고른다 (가공 시설이 맨 위여도)."""
 
@@ -49,7 +61,7 @@ class HowtoRowTest(unittest.TestCase):
         from mabi.monitor import handlers
         bot = mock.MagicMock()
         bot.cfg = {"arbeit": {"howto_area": [1200, 240, 720, 700]}}
-        ctx = mock.MagicMock(n={})
+        ctx = mock.MagicMock(n={}, alter=())
         with mock.patch.object(handlers.ocr, "find_texts", return_value=texts),                 mock.patch.object(handlers, "fast_travel"):
             handlers.howto(bot, ctx, SimpleNamespace(frame=None))
         return bot.click.call_args[0][0]
@@ -58,6 +70,17 @@ class HowtoRowTest(unittest.TestCase):
         rows = [("구하는 방법", 1290, 160), ("약품", 1340, 275), ("가공 시설", 1420, 275),
                 ("깔끔 버섯", 1360, 369), ("977m", 1790, 369), ("얼음 협곡 임무 전리품", 1420, 463)]
         self.assertEqual(self.pick(rows), (1360, 369))
+
+    def test_alter_job_takes_facility(self):
+        from types import SimpleNamespace
+        from mabi.monitor import handlers
+        bot = mock.MagicMock()
+        bot.cfg = {"arbeit": {"howto_area": [1200, 240, 720, 700]}}
+        ctx = mock.MagicMock(n={}, alter=("옷감",))
+        rows = [("양털 깎기", 1360, 275), ("옷감", 1340, 369), ("가공 시설", 1420, 369)]
+        with mock.patch.object(handlers.ocr, "find_texts", return_value=rows):
+            handlers.howto(bot, ctx, SimpleNamespace(frame=None))
+        self.assertEqual(bot.click.call_args[0][0][1], 369)
 
     def test_facility_only(self):
         self.assertEqual(self.pick([("약품 가공 시설", 1390, 369)]), (1390, 369))

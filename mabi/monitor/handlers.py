@@ -15,6 +15,7 @@ from . import detect as d
 
 # 제작·가공 창 왼쪽 위 제목 칸 (1920 기준). 가공 시설 창은 제목이 '…가공' ('식재료 가공' 등)
 CRAFT_TITLE_AREA, ALTER_TITLE = (80, 15, 420, 60), "가공"
+ALTER_CARDS = (600, 160, 580, 560)  # 가공 시설 창 카드 목록 (x, y, w, h) — 카드 아래쪽에 이름
 
 
 @dataclass
@@ -336,6 +337,12 @@ def howto(bot, ctx, seen):
     # (OCR 이 한 줄을 여러 조각으로 읽을 수 있어 같은 높이의 조각은 같은 줄로 본다)
     fy = [y for t, _, y in rows if any(w in t for w in gd.words("arbeit_howto_facility"))]
     other = [r for r in rows if all(abs(r[2] - y) > 30 for y in fy)]
+    if ctx.alter and fy:  # 짧은 가공으로 하는 일 → 가공 시설 줄
+        mine = [r for r in rows if any(abs(r[2] - y) <= 30 for y in fy)]
+        ctx.note("arb_alter", "가공 시설로")
+        bot.click((mine[0][1], mine[0][2]))
+        bot.sleep(1.5, 2)
+        return "구하는 방법 → 가공 시설"
     rows = [(x, y) for _, x, y in (other or rows)]
     if not rows or ctx.n.get("howto", 0) >= 5:
         _esc(bot, 2)
@@ -372,10 +379,69 @@ def item_use(bot, ctx, seen):
     return "아이템 사용"
 
 
+def _short_toast(bot) -> bool:
+    """방금 누른 버튼 뒤 '재료가 부족합니다.' 가 떴나."""
+    try:
+        bot.wait(bot.cfg["arbeit"]["craft_short_toast"], timeout=2.5, interval=0.3)
+        return True
+    except StepTimeout:
+        return False
+
+
 def alter(bot, ctx, seen):
-    # 가공은 시간이 걸려(수십 초~) 기다리지 않고 건너뛴다 (사용자 규칙)
+    """가공 시설 앞 '가공하기'. 짧은 가공(ctx.alter — 아르바이트가 정함)만 한다: Space → 끝날 때까지(CLI get_altering_works)
+    → 모두 받기(Space) → 가공 완료 확인(Space) → 창 닫기. 재료가 모자라면 포기 (사용자 규칙 2026-10-30). 그 밖의 가공은 건너뛴다."""
+    if not ctx.alter:
+        _esc(bot)
+        return Finish("alter", f"가공이 필요한 일 → {_shot(bot, 'arbeit_alter')}")
+    ctx.n["alter"] = ctx.n.get("alter", 0) + 1
+    if ctx.n["alter"] > 6:
+        return Finish("stuck", f"가공을 거듭해도 일이 안 끝남 → {_shot(bot, 'arbeit_alter')}")
+    ctx.note("arb_alter", "가공")
+    bot.key("space")
+    if _short_toast(bot):
+        _esc(bot)
+        return Finish("alter_short", f"가공 재료 부족 → {_shot(bot, 'arbeit_alter')}")
+    names = set(ctx.alter)
+    end = time.monotonic() + bot.cfg["arbeit"].get("alter_wait", 180)
+    while True:
+        bot.sleep(3, 3.5)
+        data = bot.state.query("get_altering_works") or {}
+        works = [w for w in (data.get("works") or []) if w.get("DisplayName") in names]
+        if works and all(w.get("IsCompleted") for w in works):
+            break
+        if time.monotonic() > end:
+            _esc(bot)
+            return Finish("stuck", f"가공이 끝나지 않음 → {_shot(bot, 'arbeit_alter')}")
+    bot.key("space")  # 모두 받기
+    bot.sleep(2, 2.5)
+    bot.key("space")  # 가공 완료 — 확인
+    bot.sleep(1.5, 2)
     _esc(bot)
-    return Finish("alter", f"가공이 필요한 일 → {_shot(bot, 'arbeit_alter')}")
+    ctx.note("arb_alter", "가공 받음")
+    return "가공 → 받기"
+
+
+def _alter_go(bot, ctx, seen):
+    """가공 시설 창 첫 화면 (아르바이트가 요구하는 가공품 카드만 보인다) → 카드 → '가공하러 가기'(Space) → 빠른 이동."""
+    ctx.n["alter_go"] = ctx.n.get("alter_go", 0) + 1
+    if ctx.n["alter_go"] > 4:
+        return Finish("stuck", f"가공 시설 창에서 나아가지 못함 → {_shot(bot, 'arbeit_alter')}")
+    # 카드는 제작 창과 달리 '설비로 이동' 아래가 아니라 오른쪽 목록에 있다 → 카드 아래 이름 글자를 찾아 그 카드를 누른다
+    names = {ocr.nospace(n) for n in ctx.alter}
+    hit = next(((x, y) for t, x, y in ocr.find_texts(seen.frame, ALTER_CARDS) if ocr.nospace(t) in names), None)
+    if not hit:
+        return Finish("stuck", f"가공 시설 창에서 가공품 카드를 못 찾음 → {_shot(bot, 'arbeit_alter')}")
+    bot.click((hit[0], hit[1] - 60))
+    bot.sleep(1.2, 1.5)
+    ctx.note("arb_alter", "가공하러 감")
+    bot.key("space")
+    if _short_toast(bot):
+        _esc(bot)
+        return Finish("alter_short", f"가공 재료 부족 → {_shot(bot, 'arbeit_alter')}")
+    bot.sleep(0.5, 1)
+    fast_travel(bot)
+    return "가공하러 감"
 
 
 def craft_transfer(bot, ctx, seen):
@@ -406,6 +472,8 @@ def craft(bot, ctx, seen):
     """제작 창 첫 화면: 아르바이트가 요구하는 물품 하나만 보인다 → 그 카드. 가공 시설 창('식재료 가공' 등)도 첫 화면이 같아
     가공 칸이 다 찬 채면 '가공하기' 가 안 떠 헤맸다 (2026-10-26) → 창 제목으로 가공을 알아본다."""
     if any(t.endswith(ALTER_TITLE) for t, _, _ in ocr.find_texts(seen.frame, CRAFT_TITLE_AREA)):
+        if ctx.alter:
+            return _alter_go(bot, ctx, seen)
         _esc(bot)
         return Finish("alter", f"가공 시설 창 → {_shot(bot, 'arbeit_alter')}")
     ctx.n["craft"] = ctx.n.get("craft", 0) + 1

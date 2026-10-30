@@ -267,16 +267,32 @@ def _leave(bot: Bot, ctx: Ctx | None = None) -> None:
     monitor.of(bot).leave(ctx)
 
 
-def _job_ctx(bot: Bot, title: str) -> Ctx:
+def quick_alter(bot: Bot, names) -> bool:
+    """모두 짧은 가공인가 — 레시피 표의 가공 1회 시간(sec, 실제 걸린 시간)이 [arbeit] alter_max_sec 미만.
+    사용자 규칙 (2026-10-30): 가공품인데 채집도 되면 채집, 가공이 2분 미만이면 가공, 그 밖엔 포기."""
+    limit = bot.cfg["arbeit"].get("alter_max_sec", 120)
+    try:
+        table = craft.data().recipes
+    except RuntimeError:
+        return False
+    for name in names:
+        makers = [r for r in table.makers(name) if r.get("via") == "alter"]
+        sec = makers[0].get("sec") if makers else None
+        if sec is None or sec >= limit:
+            return False
+    return True
+
+
+def _job_ctx(bot: Bot, title: str, alter=()) -> Ctx:
     """아르바이트 한 건. 던전 창이 열리면 그 일은 끝 (요일 던전 숙제 몫 — 던전 창 앞에서 8분을 기다리던 것, 2026-10-26).
     모자란 물품이 채집으로 못 구하는 것(가공품 등)이면 끝 (사용자 규칙: 채집품만 모자라면 채집해서 완료)."""
     def missing(bot, ctx, seen):
         job = next((j for j in accepted(bot) if _same(j["title"], title)), None)
-        if job and (bad := ungatherable(bot, job)):
+        if job and (bad := [n for n in ungatherable(bot, job) if n not in alter]):
             return f"채집으로 못 구하는 물품 부족 ({', '.join(bad)})"
         return None
     return Ctx("arbeit", title, job=True, finish_on={d.DUNGEON_WINDOW: "dungeon"}, decide={d.ITEM_MISSING: missing},
-               note=lambda key, stage: _note(bot, title, key, stage))
+               note=lambda key, stage: _note(bot, title, key, stage), alter=alter)
 
 
 def _moved(bot: Bot) -> bool:
@@ -300,11 +316,11 @@ def _press_progress(bot: Bot, title: str) -> bool:
     return monitor.of(bot).act(Ctx("arbeit", title), "진행하기", do, lambda: _moved(bot), within=12) is not False
 
 
-def _work(bot: Bot, title: str) -> str:
+def _work(bot: Bot, title: str, alter=()) -> str:
     """한 아르바이트를 끝까지. 'done' | 'short'(물품 부족) | 'alter'(가공 필요) | 'dungeon'(던전 클리어 필요) | 'stuck'
     | 'gather_stall'(채집이 멈춤). 화면 대응은 점검자, 여기서는 진척(채집 개수·끝남·멈춤)만 본다."""
     a = bot.cfg["arbeit"]
-    mon, ctx = monitor.of(bot), _job_ctx(bot, title)
+    mon, ctx = monitor.of(bot), _job_ctx(bot, title, alter)
     # 일 전체: 채집 개수가 늘거나 채집을 마치면 시계를 되감는다 (job_timeout 동안 아무 진척이 없으면 막힘, job_max 가 상한)
     work = Progress(stall=a["job_timeout"], cap=a.get("job_max", 1800))
     gather = None  # 채집 중이면 Progress — 남은 개수가 gather_timeout 동안 그대로면 포기
@@ -577,7 +593,10 @@ def _task(bot: Bot, cfg: dict) -> str:
                     stuck.append("(지원 후 수락 확인 실패)")
                     break
             continue
-        if "objectives" in job and (alter := alter_missing(job, gatherable(bot))):
+        alter = alter_missing(job, gatherable(bot)) if "objectives" in job else []
+        if alter and quick_alter(bot, alter):
+            bot.log.info(f"아르바이트 '{job['title']}': 짧은 가공 ({', '.join(alter)}) → 가공해서 진행")
+        elif alter:
             bot.log.info(f"아르바이트 '{job['title']}': 가공품이 모자람 ({', '.join(alter)}) → 가지 않고 건너뜀")
             skipped[job["title"]] = "가공 필요"
             save(None, "arb_result", f"건너뜀(가공): {job['title']}")
@@ -587,7 +606,7 @@ def _task(bot: Bot, cfg: dict) -> str:
         if not pressed and not _press_progress(bot, job["title"]):
             stuck.append(job["title"])
             continue
-        r = _work(bot, job["title"])
+        r = _work(bot, job["title"], tuple(alter))
         if r == "done":
             done.append(job["title"])
             bot.log.info(f"아르바이트 완료: {job['title']}")
@@ -595,11 +614,14 @@ def _task(bot: Bot, cfg: dict) -> str:
             skipped[job["title"]] = "전달 물품 부족"
         elif r == "alter":
             skipped[job["title"]] = "가공 필요"
+        elif r == "alter_short":
+            skipped[job["title"]] = "가공 재료 부족"
         elif r == "dungeon":
             skipped[job["title"]] = "던전 클리어 필요"
         else:  # stuck · gather_stall — 다음 실행 때 다시 해 본다
             stuck.append(job["title"] + (" (채집이 멈춤)" if r == "gather_stall" else ""))
-        save(None, "arb_result", {"done": "완료", "short": "건너뜀", "alter": "건너뜀(가공)", "dungeon": "건너뜀(던전)",
+        save(None, "arb_result", {"done": "완료", "short": "건너뜀", "alter": "건너뜀(가공)",
+                                  "alter_short": "건너뜀(가공 재료 부족)", "dungeon": "건너뜀(던전)",
                                   "gather_stall": "막힘(채집이 멈춤)"}.get(r, "막힘")
              + f": {job['title']}")
     save(None, "arb_end", "아르바이트 목록 끝")
