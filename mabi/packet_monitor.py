@@ -372,6 +372,7 @@ class PacketState:
     pal: float | None = None
     pal_max: float | None = None
     can_paladin: bool | None = None  # 이 맵에서 팔라딘 변신을 쓸 수 있나 (맵 진입 때 옴)
+    transfigure: int | None = None   # 지금 변신 번호 (0 = 안 함으로 보임, 실측 전). 맵을 옮기면 모름
     field_state: str | None = None   # 사냥터: NotInBattlefield / InProgress / WaitingForChannelTransfer(클리어)
     boss_battle: bool = False
     dead: bool | None = None         # 내 캐릭터가 쓰러짐 (부활 창 열림). 나한테만 오는 부활 가능 여부로 안다
@@ -706,6 +707,7 @@ class PacketMonitor:
                 s.abyss_matching = 0
             s.abyss_result = 0  # 새 맵 — 지난 판 결과는 끝났다 (나갈 때 0 이 오는지 실측이 없어 여기서도 지운다)
             s.raid_result, s.raid_boss, s.campfire = 0, False, False
+            s.transfigure = None
             s.dead = None  # 쓰러진 채 맵을 옮기면 부활 신호가 안 올 수 있다 → 다시 쓰러질 때까지 CLI 로
             # 마을·사냥터면 던전 밖이다. 던전을 나가는 패킷(NotInDungeon)을 놓치면 지난밤 'Cleared' 가 남아,
             # 아침에 접속 단계가 메인 화면을 던전 클리어 화면으로 알고 6명 모두 3분씩 헛돌았다 (2026-10-30 06:44)
@@ -747,6 +749,9 @@ class PacketMonitor:
             s.ult, s.ult_max, s.pal, s.pal_max = vals.get("ult"), vals.get("ult_max"), vals.get("pal"), vals.get("pal_max")
         elif key == "ultimate.can_paladin":
             s.can_paladin = bool(vals.get("on"))
+        elif key == "transfigure.current":
+            s.transfigure = vals.get("id")
+            log.info("패킷: 변신 번호 %s", s.transfigure)  # 실측 전 — 변신·해제 때 어떤 값이 오는지 남긴다
         elif key == "abyss.matching_update":
             s.abyss_matching = vals.get("state") or 0
         elif key == "abyss.matching_cancel_ok":

@@ -47,10 +47,28 @@ class BossSkillsTest(unittest.TestCase):
         bot.packets.apply("abyss.campfire", {})
         self.assertFalse(sk.tick({"IsInCombat": False}))  # 모닥불 앞에서 쉬는 중
         self.assertTrue(sk.tick({"IsInCombat": True}))
-        self.assertEqual(bot.keys, ["f5"])  # 팔라딘 먼저, 한 번에 하나
+        self.assertEqual(bot.keys, ["f5"])  # 팔라딘 먼저
+        sk.pressed.clear()
+        bot.gauge(300)  # 변신에 썼다 — 궁극기 게이지는 그대로 차 있어도
+        self.assertFalse(sk.tick({"IsInCombat": True}))
+        self.assertEqual(bot.keys, ["f5"])  # 변신 중엔 6 이 변신 해제 → 이 맵에서는 궁극기를 안 누른다
+        bot.enter(ABYSS)  # 다음 판
+        bot.packets.apply("abyss.campfire", {})
         self.assertTrue(sk.tick({"IsInCombat": True}))
         self.assertEqual(bot.keys, ["f5", "6"])
         self.assertFalse(sk.tick({"IsInCombat": True}))  # 방금 눌렀다 — RETRY 동안 안 누른다
+
+    def test_no_ultimate_while_transformed_by_packet(self):
+        bot = FakeBot()
+        bot.enter(ABYSS)
+        bot.packets.apply("abyss.campfire", {})
+        bot.gauge(300)
+        sk = BossSkills(bot, True, False, abyss_fight)
+        bot.packets.apply("transfigure.current", {"id": 7})  # 사람이 직접 변신
+        self.assertFalse(sk.tick({"IsInCombat": True}))
+        bot.packets.apply("transfigure.current", {"id": 0})
+        self.assertTrue(sk.tick({"IsInCombat": True}))
+        self.assertEqual(bot.keys, ["6"])
 
     def test_gauge_not_full(self):
         bot = FakeBot()
