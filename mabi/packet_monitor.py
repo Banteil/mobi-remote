@@ -708,6 +708,9 @@ class PacketMonitor:
             s.abyss_result = 0  # 새 맵 — 지난 판 결과는 끝났다 (나갈 때 0 이 오는지 실측이 없어 여기서도 지운다)
             s.raid_result, s.raid_boss, s.campfire = 0, False, False
             s.transfigure = None
+            # 맵을 나가면(클리어 뒤 다시 하기·나가기) 궁극기·팔라딘 게이지가 처음으로 (사용자). 새 값이 오기 전에 지난 판 값을 믿지 않게
+            if s.ult is not None:
+                s.ult = s.pal = 0.0
             s.dead = None  # 쓰러진 채 맵을 옮기면 부활 신호가 안 올 수 있다 → 다시 쓰러질 때까지 CLI 로
             # 마을·사냥터면 던전 밖이다. 던전을 나가는 패킷(NotInDungeon)을 놓치면 지난밤 'Cleared' 가 남아,
             # 아침에 접속 단계가 메인 화면을 던전 클리어 화면으로 알고 6명 모두 3분씩 헛돌았다 (2026-10-30 06:44)

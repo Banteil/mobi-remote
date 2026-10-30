@@ -58,6 +58,39 @@ class BossSkillsTest(unittest.TestCase):
         self.assertEqual(bot.keys, ["f5", "6"])
         self.assertFalse(sk.tick({"IsInCombat": True}))  # 방금 눌렀다 — RETRY 동안 안 누른다
 
+    def test_paladin_once_per_dungeon_and_gauge_reset(self):
+        bot = FakeBot()
+        bot.enter(ABYSS)
+        bot.packets.apply("abyss.campfire", {})
+        sk = BossSkills(bot, False, True, abyss_fight)
+        bot.gauge(500)
+        self.assertTrue(sk.tick({"IsInCombat": True}))
+        bot.gauge(0)  # 변신에 씀
+        self.assertFalse(sk.tick({"IsInCombat": True}))
+        sk.pressed["팔라딘 변신"] -= 30
+        bot.gauge(500)  # 같은 던전에서 다시 차도 변신은 한 번뿐
+        self.assertFalse(sk.tick({"IsInCombat": True}))
+        self.assertEqual(bot.keys, ["f5"])
+        bot.enter(ABYSS)  # 다시 하기 — 게이지가 처음으로
+        self.assertEqual((bot.packets.state.ult, bot.packets.state.pal), (0.0, 0.0))
+        bot.packets.apply("abyss.campfire", {})
+        bot.gauge(500)
+        self.assertTrue(sk.tick({"IsInCombat": True}))  # 새 던전에선 다시 한 번
+        self.assertEqual(bot.keys, ["f5", "f5"])
+
+    def test_paladin_key_missed_retries_after_transform_time(self):
+        bot = FakeBot()
+        bot.enter(ABYSS)
+        bot.packets.apply("abyss.campfire", {})
+        sk = BossSkills(bot, False, True, abyss_fight)
+        bot.gauge(500)
+        self.assertTrue(sk.tick({"IsInCombat": True}))
+        sk.pressed["팔라딘 변신"] -= 10  # 게이지가 그대로 — 그래도 변신 시간 안엔 또 누르지 않는다
+        self.assertFalse(sk.tick({"IsInCombat": True}))
+        sk.pressed["팔라딘 변신"] -= 14
+        self.assertTrue(sk.tick({"IsInCombat": True}))  # 키가 안 먹었다 → 다시
+        self.assertEqual(bot.keys, ["f5", "f5"])
+
     def test_no_ultimate_while_transformed_by_packet(self):
         bot = FakeBot()
         bot.enter(ABYSS)

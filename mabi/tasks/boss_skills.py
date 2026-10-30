@@ -8,6 +8,9 @@
 팔라딘 변신 중에는 궁극기를 쓰지 않는다 — 변신 중엔 궁극기 키(6)가 '변신 해제' 가 된다 (사용자, 2026-10-30).
 변신은 20초 간다 (사용자) — 변신 키를 누른 뒤 TRANSFORM 초 동안, 또는 패킷이 변신 중(변신 번호가 0 이 아님, 실측 전)
 이라 하면 궁극기를 누르지 않는다.
+팔라딘 변신은 던전(맵)마다 한 번 (사용자). 변신 키를 누른 뒤 게이지가 줄었거나 패킷이 변신 중이라 하면 그 맵에서는
+다시 누르지 않는다. 게이지가 그대로면 키가 안 먹은 것으로 보고 변신 시간이 지난 뒤 다시 누른다 (변신 중에 또 누르지 않게).
+맵을 나가면(클리어 뒤 다시 하기·나가기) 두 게이지가 처음으로 돌아간다 — packet_monitor 가 맵 진입 때 0 으로 둔다.
 """
 import time
 
@@ -28,6 +31,7 @@ class BossSkills:
             (("궁극기", g.get("ultimate_key", "6"), lambda st: (st.ult, st.ult_max)), ultimate),
         ) if on and s[1]]
         self.pressed: dict[str, float] = {}
+        self.paladin_map = None  # 변신을 쓴 맵 (그 맵의 entered_at) — 던전마다 한 번
 
     @classmethod
     def for_character(cls, bot: Bot, cfg: dict, slot: int | None, boss_fight) -> "BossSkills":
@@ -47,6 +51,15 @@ class BossSkills:
         return (time.monotonic() - self.pressed.get("팔라딘 변신", -1e9) < self.TRANSFORM
                 or st.transfigure not in (None, 0))
 
+    def paladin_spent(self, st) -> bool:
+        """이 던전(맵)에서 이미 변신했나. 눌렀는데 게이지가 줄었거나, 패킷이 변신 중이라 하면 썼다."""
+        if self.paladin_map != st.entered_at:
+            pressed_here = self.pressed.get("팔라딘 변신", -1e9) >= st.entered_at
+            dropped = st.pal is not None and bool(st.pal_max) and st.pal < st.pal_max
+            if st.transfigure not in (None, 0) or (pressed_here and dropped):
+                self.paladin_map = st.entered_at
+        return self.paladin_map == st.entered_at
+
     def tick(self, act: dict) -> bool:
         """판 진행 루프가 부른다 (act = 방금 받은 CLI get_activity). 하나를 눌렀으면 True."""
         if not self.skills:
@@ -62,8 +75,11 @@ class BossSkills:
         for name, key, gauge in self.skills:
             if name == "궁극기" and self.transformed(st):
                 continue
+            if name == "팔라딘 변신" and self.paladin_spent(st):
+                continue
             cur, need = gauge(st)
-            if cur is None or not need or cur < need or now - self.pressed.get(name, 0.0) < self.RETRY:
+            wait = self.TRANSFORM if name == "팔라딘 변신" else self.RETRY  # 변신 중에 또 누르지 않게
+            if cur is None or not need or cur < need or now - self.pressed.get(name, -1e9) < wait:
                 continue
             self.bot.log.info(f"보스전 {name} ({cur:.0f}/{need:.0f}) → {key}")
             self.bot.key(key)
