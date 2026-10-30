@@ -21,7 +21,7 @@ from ..bot import Bot
 class BossSkills:
     RETRY = 8  # 같은 기술을 다시 누르기까지 (초)
     TRANSFORM = 20 + 3  # 팔라딘 변신 시간 20초 + 여유 — 이 동안 궁극기 키(6)는 변신 해제
-    PENDING = 5         # 변신 키를 누른 뒤 시작 패킷을 기다리는 동안 (보통 1초)
+    PENDING = 8         # 변신 키를 누른 뒤 시작 패킷을 기다리는 동안 (보통 1~2초, 3초 걸린 적 있음 2026-10-30 17:26)
 
     def __init__(self, bot: Bot, ultimate: bool, paladin: bool, boss_fight):
         self.bot, self.boss_fight = bot, boss_fight
