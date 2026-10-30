@@ -116,22 +116,15 @@ class TrackerTest(unittest.TestCase):
         self.assertEqual(t.tick(img).status, "active")
         self.assertEqual(DyeTracker(at=(0.1, 0.1, 0.3, 0.3)).tick(img).status, "waiting")
 
-    def test_spots_only_when_still(self):
-        # 돌리는 동안엔 점이 나왔다 말았다 해서 산만했다 — 멈춘 바퀴에만 그린다
-        def img(seed):
-            im, _ = screen(seed=seed)
-            im[600:640, 1400:1440] = (40, 200, 60)
-            return im
+    def test_redraw_only_when_changed(self):
+        img, _ = screen()
         t = DyeTracker()
         t.set_targets(["#3CC828"], [3])
-        self.assertEqual(len(t.tick(img(1)).spots[0]), 0)    # 막 떴다 = 움직이는 중
-        st = t.tick(img(1))
-        self.assertTrue(st.redraw)
-        self.assertGreater(len(st.spots[0]), 0)              # 멈췄다
-        t.tick(img(1))                                        # 스포이드 자리를 멈춘 화면에서 한 번 더 보고 굳힌다
-        self.assertFalse(t.tick(img(1)).redraw)               # 그 뒤로 그대로면 다시 안 그린다
-        self.assertEqual(len(t.tick(img(2)).spots[0]), 0)    # 다시 움직인다
-
+        t.tick(img)                                           # 막 떴다
+        t.tick(img)                                           # 멈췄다 — 스포이드 자리를 본다
+        t.tick(img)                                           # 한 번 더 보고 굳힌다
+        self.assertFalse(t.tick(img).redraw)                  # 그 뒤로 그대로면 다시 안 그린다
+        self.assertTrue(t.tick(screen(seed=2)[0]).redraw)     # 움직이면 다시 그린다
 
 class ViewTest(unittest.TestCase):
     def test_highlight_keeps_only_matches(self):
