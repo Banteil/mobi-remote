@@ -531,6 +531,10 @@ def _task(bot: Bot, cfg: dict) -> str:
             if not missing_items(j):
                 bot.log.info(f"아르바이트 '{t}': 건너뛴 일인데 물품이 다 모임 → 다시 진행")
                 skipped.pop(t)
+            elif skipped[t] == "가공 필요" and (not (al := alter_missing(j, gatherable(bot))) or quick_alter(bot, al)):
+                # 가공 규칙이 바뀐 뒤(채집 가능·짧은 가공은 진행) 같은 날 다시 돌리면 앞서 건너뛴 일도 다시 본다
+                bot.log.info(f"아르바이트 '{t}': 가공 필요로 건너뛴 일인데 채집·짧은 가공으로 할 수 있음 → 다시 진행")
+                skipped.pop(t)
     if book.get("current"):
         bot.log.info(f"아르바이트 지난 기록: '{book['current']}' {book.get('stage', '')} ({book.get('at', '')}) → 이어서")
 
