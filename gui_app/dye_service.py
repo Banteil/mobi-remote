@@ -4,9 +4,8 @@
 팔레트 자리를 게임 화면 비율로 두므로 해상도가 달라도 같다. 우리 창은 캡처에서 빠지므로(exclude_from_capture)
 게임 위에 겹쳐도 찍히지 않는다.
 
-레거시는 화면(렌더러)이 getUserMedia 로 캡처하고 dye.js 로 검출했다. 웹 화면(QtWebEngine)에는 데스크톱
-캡처가 없어서 검출은 파이썬(mabi/dye)이 하고, 화면에는 레거시 mm.dye.draw 와 같은 모양의 payload 를 보낸다
-— 그래서 화면 쪽 미리보기(overlay-draw.js)와 상태 표(paintDyeInfo)는 손대지 않고 그대로 쓴다.
+검출은 파이썬(mabi/dye)이 하고 게임 위 표시 창에 그린다. 리모콘 화면(웹)에는 켜짐·팔레트 찾음만 보낸다
+— 염색하는 동안은 게임을 보고 있어 리모콘의 상태 표·미리보기는 보이지도 않았다 (2026-10-31 뺌).
 """
 import threading
 import time
@@ -191,43 +190,6 @@ class DyeService:
         ov.items = [] if st.hidden else ddraw.overlay_items(st, scale=scale, origin=(lx - g.x(), ly - g.y()),
                                                              screen_w=g.width(), measure=ov.measure)
         ov.update()
-        self.emit("mm:dye-state", {"payload": self.payload(st, scale, (lx, ly)), "info": self.info(st),
-                                   "done": st.status == "done", "text": st.text})
+        self.emit("mm:dye-state", {"found": st.palette is not None, "done": st.status == "done", "text": st.text})
         if st.status == "done":
             self._hide()
-
-    # ---- 레거시 모양 (화면 미리보기·상태 표가 그대로 읽는다) ----
-    @staticmethod
-    def payload(st, scale: float, origin) -> dict:
-        ox, oy = origin
-
-        def sx(v):
-            return D.jround(v * scale + ox)
-
-        def sy(v):
-            return D.jround(v * scale + oy)
-        if st.hidden:
-            return None
-        p = {"status": st.text, "tone": st.tone}
-        if st.palette:
-            b = st.palette
-            p["box"] = {"x": sx(b.x), "y": sy(b.y), "w": D.jround(b.w * scale), "h": D.jround(b.h * scale)}
-        if st.chips:
-            p["chips"] = [{"hex": c[0], "on": bool(c[1])} for c in st.chips]
-        if st.spots:
-            p["spots"] = [{"pts": [v for x, y in (pts.tolist() if len(pts) else []) for v in (sx(x), sy(y))]}
-                          for pts in st.spots]
-        if st.pins:
-            p["tri"] = {"pins": [{"x": sx(x), "y": sy(y)} for x, y in st.pins]}
-        if st.rings:
-            p["picks"] = [{"x": sx(r.x), "y": sy(r.y), "r": max(6, D.jround(r.r * scale)), "slot": r.slot,
-                           "hex": r.hex, "delta": r.delta} for r in st.rings]
-        return p
-
-    @staticmethod
-    def info(st) -> dict:
-        b = st.palette
-        return {"box": {"x": b.x, "y": b.y, "w": b.w, "h": b.h} if b else None,
-                "marks": [None if t is None else {"hex": t.hex, "color": t.color, "delta": t.delta, "tol": t.tol,
-                                                  "found": t.found} for t in st.targets],
-                "picks": [{"slot": r.slot} for r in st.rings]}

@@ -12,9 +12,12 @@
  * 한 바퀴마다 오는 결과('mm:dye-state')를 그리기만 한다.
  */
 
+// 칸 번호 고유색 — 게임 위 표시(mabi/dye/draw.py SLOT)와 같은 색
+const DYE_SLOT = ['#ff00ff', '#00ff00', '#00ffff'];
+
 const dyeUI = {
   on: false,
-  box: null,        // 파이썬이 찾아 둔 팔레트 (상태 표시용)
+  box: false,       // 파이썬이 팔레트를 찾았나 (상태 표시용)
   prefs: null,
 };
 
@@ -45,7 +48,7 @@ function paintDyeSlots() {
   const tols = (cur && cur.tol) || [5, 5, 5];
   $('#dye-slots').innerHTML = colors.map((c, i) => {
     const ok = /^#[0-9a-f]{6}$/i.test(c);
-    const slot = (window.dyeDraw.SLOT[i] || {}).line || '#888';
+    const slot = DYE_SLOT[i] || '#888';
     return '<div class="dye-slot">' +
       '<b class="dye-no ' + bgClass(slot) + '">' + (i + 1) + '</b>' +
       // 네모를 누르면 색 편집이 열린다. 버튼을 따로 두면 줄만 길어지고, 누를 곳이 색 옆에
@@ -183,9 +186,7 @@ async function startDye() {
 async function stopDye() {
   dyeUI.on = false;
   await mm.dye.stop().catch(() => {});
-  paintDyePreview(null);
   paintDyeState();
-  paintDyeInfo(null);
   say('염색 도우미를 껐습니다.');
 }
 
@@ -197,14 +198,12 @@ function onDyeState(m) {
     return;
   }
   if (m.stopped) {
-    if (dyeUI.on) { dyeUI.on = false; dyeUI.box = null; paintDyeState(); paintDyePreview(null); }
+    if (dyeUI.on) { dyeUI.on = false; dyeUI.box = null; paintDyeState(); }
     return;
   }
   if (m.error) { say('염색 검출 오류: ' + m.error); return; }
-  paintDyePreview(m.payload);
-  paintDyeInfo(m.info && m.info.box ? m.info : null);
-  const box = (m.info && m.info.box) || null;
-  if (!box !== !dyeUI.box) { dyeUI.box = box; paintDyeState(); }  // '팔레트 찾음' ↔ '기다리는 중'
+  const box = !!m.found;
+  if (box !== dyeUI.box) { dyeUI.box = box; paintDyeState(); }  // '팔레트 찾음' ↔ '기다리는 중'
   if (m.done) {
     dyeUI.on = false;
     paintDyeState();
@@ -212,57 +211,6 @@ function onDyeState(m) {
   }
 }
 mm.dye.onState(onDyeState);
-
-/* ── 화면 ── */
-
-function paintDyeInfo(st) {
-  const box = st && st.box;
-  $('#dye-info').innerHTML = [
-    ['팔레트', box ? box.w + ' × ' + box.h : '아직 못 찾음'],
-    ['위치', box ? box.x + ', ' + box.y : '—'],
-  ].map(([k, v]) => '<dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd>').join('');
-
-  const marks = (st && st.marks) || [];
-  // 지금 그 칸의 스포이드가 목표를 물고 있는가. 팔레트를 맞추는 동안 볼 값은 이것뿐이다.
-  const picks = (st && st.picks) || [];
-  $('#dye-found').innerHTML = marks.some(Boolean)
-    ? marks.map((m, i) => !m ? '' :
-        '<div class="dye-hit' + (m.found ? '' : ' miss') + '">' +
-        '<span class="dye-chip ' + bgClass(m.color) + '"></span>' +
-        '<b class="mono">' + esc(m.color) + '</b>' +
-        '<span class="muted">목표 ' + esc(m.hex) + '</span>' +
-        '<span class="spacer"></span>' +
-        '<span class="' + (m.found ? 'mark-ok' : 'mark-warn') + '">ΔE ' + m.delta +
-        ' <span class="muted">/ ' + m.tol + '</span></span>' +
-        (picks.some((p) => p.slot === i)
-          ? '<span class="mark-ok">스포이드 물림</span>'
-          : '<span class="muted">—</span>') +
-        '</div>').join('')
-    : '<p class="muted">표시할 것이 없습니다.</p>';
-}
-
-/**
- * 오버레이에 그려지는 것과 **같은 그림**을 리모콘 안에 작게 그린다.
- *
- * 오버레이 창은 캡처에서 빠지도록 해 두어서 사용자의 스크린샷에도 안 찍힌다.
- * 무엇이 그려지고 있는지 확인할 방법이 없으면 고칠 수도 없다.
- */
-function paintDyePreview(payload) {
-  const c = $('#dye-preview');
-  if (!c) return;
-  const W = window.screen.width, H = window.screen.height;
-  const box = c.getBoundingClientRect();
-  const k = (box.width || 640) / W;
-  const r = window.devicePixelRatio || 1;
-  c.width = Math.round(box.width * r);
-  c.height = Math.round(box.width * (H / W) * r);
-  const ctx = c.getContext('2d');
-  ctx.setTransform(r * k, 0, 0, r * k, 0, 0);
-  // 미리보기는 작아서, 선을 같은 비율로 줄이면 안 보인다. 조금 두껍게 그린다.
-  window.dyeDraw.draw(ctx, W, H, payload, 1 / k * 0.8);
-  const note = $('#dye-prev-note');
-  if (note) note.textContent = payload && payload.box ? '실시간' : '대기';
-}
 
 /* ── 스포이드 ── */
 

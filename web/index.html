@@ -319,7 +319,7 @@
       <span class="spacer"></span>
       <span id="dye-state" class="pill pill-muted">꺼짐</span>
 
-      <button class="btn btn-primary" id="dye-start">염색 시작</button>
+      <button class="btn btn-primary" id="dye-start" title="게임에서도 단축키로 켜고 끌 수 있습니다 (옵션 창 · 기본 F11)">염색 시작</button>
       <button class="btn btn-warn hidden" id="dye-stop">중지</button>
     </div>
 
@@ -337,11 +337,7 @@
       </div>
 
       <div class="card">
-        <h3>상태 <small>화면만 읽습니다</small></h3>
-        <dl id="dye-info" class="kv"></dl>
-        <div id="dye-found" class="mt10"></div>
-
-        <h3 class="mt10">염색 옵션</h3>
+        <h3>염색 옵션</h3>
         <div class="row">
           <label class="chk"><input type="checkbox" id="dye-nudge"> Ctrl+Alt+WASD로 마우스 1px 이동</label>
           <span id="dye-nudge-msg" class="muted"></span>
@@ -366,14 +362,6 @@
       </div>
     </div>
 
-    <div class="card card-wide">
-      <h3>화면에 그려지는 것 <small>게임 위에 얹히는 그림</small>
-        <span class="count" id="dye-prev-note"></span></h3>
-      <canvas id="dye-preview" class="dye-preview"></canvas>
-    </div>
-
-    <video id="dye-video" class="hidden" autoplay muted playsinline></video>
-    <canvas id="dye-canvas" class="hidden"></canvas>
   </section>
 
 
@@ -742,7 +730,6 @@
 
 <div id="toasts"></div>
 
-<script src="overlay-draw.js"></script>
 <script src="dye.js"></script>
 <script src="app.js"></script>
 <script src="craft.js"></script>
