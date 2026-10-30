@@ -124,13 +124,30 @@ class TrackerTest(unittest.TestCase):
             return im
         t = DyeTracker()
         t.set_targets(["#3CC828"], [3])
-        self.assertEqual(len(t.tick(img(1)).spots[0]), 0)    # 막 떴다 = 움직이는 중
+        self.assertFalse(any(len(p) for p in t.tick(img(1)).spots))   # 막 떴다 = 움직이는 중
         st = t.tick(img(1))
         self.assertTrue(st.redraw)
         self.assertGreater(len(st.spots[0]), 0)              # 멈췄다
         t.tick(img(1))                                        # 스포이드 자리를 멈춘 화면에서 한 번 더 보고 굳힌다
         self.assertFalse(t.tick(img(1)).redraw)               # 그 뒤로 그대로면 다시 안 그린다
-        self.assertEqual(len(t.tick(img(2)).spots[0]), 0)    # 다시 움직인다
+        st = t.tick(img(2))                                   # 다시 움직인다
+        self.assertFalse(any(len(p) for p in st.spots))
+        self.assertIsNone(st.shade)
+
+    def test_moving_keeps_frame_only(self):
+        # 돌리는 동안엔 흑백 강조·스포이드 칸 색 테가 잠깐씩 바뀌지 않게 — 틀만, 딱지는 직전 그대로
+        img1, _ = screen(seed=1)
+        t = DyeTracker()
+        t.set_targets(["#ffffff"], [5])
+        t.set_view(gray=True, light=0.4)
+        t.tick(img1)
+        still = t.tick(img1)
+        self.assertIsNotNone(still.shade)
+        moving = t.tick(screen(seed=2)[0])
+        self.assertIsNone(moving.shade)
+        self.assertTrue(all(r.slot == -1 for r in moving.rings))
+        self.assertEqual(moving.chips, still.chips)
+        self.assertEqual(moving.text, still.text)
 
 
 class ViewTest(unittest.TestCase):
@@ -154,6 +171,7 @@ class ViewTest(unittest.TestCase):
         t.set_targets(["#ffffff"], [5])
         self.assertIsNone(t.tick(img).shade)
         t.set_view(gray=True, light=0.4)
+        t.tick(img)                       # 보기를 바꾸면 한 바퀴는 움직이는 중으로 본다
         self.assertIsNotNone(t.tick(img).shade)
 
     def test_snap_area_to_border(self):
