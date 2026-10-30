@@ -37,6 +37,30 @@ class AlterMissingTest(unittest.TestCase):
             {"Description": f"말린 찻잎 {arbeit.HAVE} 3/3", "IsCompleted": True},   # 다 모음
         ]}
         self.assertEqual(arbeit.alter_missing(job), ["두유"])
+        # 가공품이어도 채집으로 구할 수 있으면 건너뛰지 않는다 (2026-10-30 멀리 다녀오실 분 — 깔끔 버섯 포자)
+        self.assertEqual(arbeit.alter_missing(job, {"두유"}), [])
+
+
+class HowtoRowTest(unittest.TestCase):
+    """'구하는 방법' 에서 가공 시설 줄보다 채집 줄을 고른다 (가공 시설이 맨 위여도)."""
+
+    def pick(self, texts):
+        from types import SimpleNamespace
+        from mabi.monitor import handlers
+        bot = mock.MagicMock()
+        bot.cfg = {"arbeit": {"howto_area": [1200, 240, 720, 700]}}
+        ctx = mock.MagicMock(n={})
+        with mock.patch.object(handlers.ocr, "find_texts", return_value=texts),                 mock.patch.object(handlers, "fast_travel"):
+            handlers.howto(bot, ctx, SimpleNamespace(frame=None))
+        return bot.click.call_args[0][0]
+
+    def test_gather_row_over_facility(self):
+        rows = [("구하는 방법", 1290, 160), ("약품", 1340, 275), ("가공 시설", 1420, 275),
+                ("깔끔 버섯", 1360, 369), ("977m", 1790, 369), ("얼음 협곡 임무 전리품", 1420, 463)]
+        self.assertEqual(self.pick(rows), (1360, 369))
+
+    def test_facility_only(self):
+        self.assertEqual(self.pick([("약품 가공 시설", 1390, 369)]), (1390, 369))
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@
     "arbeit_time_left": "남음",
     "arbeit_have_item": "보유",
     "arbeit_howto_skip": ["추천", "구하는"],
+    "arbeit_howto_facility": ["가공 시설", "제작대"],
     "dungeon_deep": "심층",
     "dungeon_enter": "입장",
     "mission_start": "시작",

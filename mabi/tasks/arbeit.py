@@ -72,26 +72,35 @@ def _item_name(desc: str) -> str:
     return re.sub(rf"\s*{HAVE}.*$", "", desc).strip()
 
 
-def ungatherable(bot: Bot, job: dict) -> list[str]:
-    """모자란 물품 중 채집으로 못 구하는 것 (가공품 등). CLI 채집 가능 목록(조회)과 대조한다.
-    사용자 규칙: 모자란 게 채집품뿐이면 채집해서 완료, 가공품이 하나라도 모자라면 포기."""
+def gatherable(bot: Bot) -> set[str]:
+    """채집으로 구할 수 있는 물품 이름 (CLI get_gatherable_items, 도구가 맞는 것). 한 번 묻고 기억한다."""
     if not hasattr(bot, "_gatherable"):
         data = bot.state.query("get_gatherable_items") or {}
         items = data.get("items", data) if isinstance(data, dict) else data
         bot._gatherable = {i.get("DisplayName") for i in items if isinstance(i, dict) and i.get("ToolOk", True)}
-    return [n for n in (_item_name(d) for d in missing_items(job)) if n not in bot._gatherable]
+    return bot._gatherable
 
 
-def alter_missing(job: dict) -> list[str]:
+def ungatherable(bot: Bot, job: dict) -> list[str]:
+    """모자란 물품 중 채집으로 못 구하는 것 (가공품 등). CLI 채집 가능 목록(조회)과 대조한다.
+    사용자 규칙: 모자란 게 채집품뿐이면 채집해서 완료, 가공품이 하나라도 모자라면 포기."""
+    can = gatherable(bot)
+    return [n for n in (_item_name(d) for d in missing_items(job)) if n not in can]
+
+
+def alter_missing(job: dict, can_gather=frozenset()) -> list[str]:
     """모자란 물품 중 가공으로만 만드는 것 (레시피 표 via=alter — 두유·말린 찻잎 등). 가공은 시간이 걸려 건너뛰는 일이라
     (사용자 규칙) 진행하기를 누르기 전에 CLI 조건과 레시피 표로 미리 가른다 (2026-10-26 사용자 제안).
-    레시피 표가 없으면 [] — 예전처럼 가공 시설 창을 보고 건너뛴다."""
+    레시피 표가 없으면 [] — 예전처럼 가공 시설 창을 보고 건너뛴다.
+    가공품이어도 채집으로 구할 수 있으면(can_gather — 깔끔 버섯 포자 등) 채집하러 간다 (사용자 규칙 2026-10-30)."""
     try:
         table = craft.data().recipes
     except RuntimeError:
         return []
     out = []
     for name in (_item_name(d) for d in missing_items(job)):
+        if name in can_gather:
+            continue
         makers = table.makers(name)
         if makers and all(r.get("via") == "alter" for r in makers):
             out.append(name)
@@ -568,7 +577,7 @@ def _task(bot: Bot, cfg: dict) -> str:
                     stuck.append("(지원 후 수락 확인 실패)")
                     break
             continue
-        if "objectives" in job and (alter := alter_missing(job)):
+        if "objectives" in job and (alter := alter_missing(job, gatherable(bot))):
             bot.log.info(f"아르바이트 '{job['title']}': 가공품이 모자람 ({', '.join(alter)}) → 가지 않고 건너뜀")
             skipped[job["title"]] = "가공 필요"
             save(None, "arb_result", f"건너뜀(가공): {job['title']}")

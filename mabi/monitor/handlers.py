@@ -330,7 +330,13 @@ def howto(bot, ctx, seen):
     채집 물품이 여러 개면 하나를 다 캐고 나서 이 창이 다시 뜬다 → 물품 하나마다 한 번 (국경 수비대 물자 보급은 세 가지)."""
     a = bot.cfg["arbeit"]
     items = ocr.find_texts(seen.frame, tuple(a["howto_area"]))
-    rows = sorted(((x, y) for t, x, y in items if not any(w in t for w in gd.words("arbeit_howto_skip"))), key=lambda r: r[1])
+    rows = sorted(((t, x, y) for t, x, y in items if not any(w in t for w in gd.words("arbeit_howto_skip"))),
+                  key=lambda r: r[2])
+    # 채집으로도 구할 수 있는 가공품은 채집 줄을 고른다 — 가공 시설 줄이 맨 위일 수 있다 (깔끔 버섯 포자: 채집·약품 가공 시설·전리품)
+    # (OCR 이 한 줄을 여러 조각으로 읽을 수 있어 같은 높이의 조각은 같은 줄로 본다)
+    fy = [y for t, _, y in rows if any(w in t for w in gd.words("arbeit_howto_facility"))]
+    other = [r for r in rows if all(abs(r[2] - y) > 30 for y in fy)]
+    rows = [(x, y) for _, x, y in (other or rows)]
     if not rows or ctx.n.get("howto", 0) >= 5:
         _esc(bot, 2)
         return Finish("short", f"구하는 방법이 없음 → {_shot(bot, 'arbeit_short')}")
