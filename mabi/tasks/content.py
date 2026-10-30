@@ -450,10 +450,10 @@ def select_zone(bot: Bot, difficulty: str, floor: int, zone: int) -> None:
 
 
 def dungeon_state(bot: Bot) -> str | None:
-    """던전 상태. 패킷이 알면 그것 (바뀌는 즉시), 모르면 CLI."""
+    """던전 상태. 패킷 상태(바뀌는 즉시 + CLI 를 물을 때마다 CLI 답으로 맞춰짐), 모르면 CLI."""
     if bot.packets.ok and bot.packets.state.dungeon_state:
         return bot.packets.state.dungeon_state
-    act = bot.state.activity() if bot.state.available() else None
+    act = bot.activity()
     return (act or {}).get("Dungeon", {}).get("State")
 
 
@@ -468,6 +468,9 @@ def wait_dungeon(bot: Bot, pred: Callable[[str], bool], timeout: float, interval
         left = end - time.monotonic()
         if p.ok and p.state.dungeon_state is not None:
             if bot.wait_packet(lambda s: pred(s.dungeon_state), max(0.0, min(left, interval))):
+                return p.state.dungeon_state
+            # 바뀌는 패킷을 놓쳤을 수 있다 → interval 마다 CLI 에도 묻는다 (답은 패킷 상태에 맞춰진다 — Bot.activity)
+            if bot.activity(max_age=0) and pred(p.state.dungeon_state):
                 return p.state.dungeon_state
         elif bot.state.available():
             st = dungeon_state(bot)

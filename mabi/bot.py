@@ -117,6 +117,8 @@ class Bot:
         self.task_id: str | None = None  # 지금 하는 숙제 id, runner 가 설정
         # 이 숙제를 지난번에 어디까지 했나 ({"stage", "at", ...}) — 도중에 끊겼으면 있다. 숙제가 보고 이어 한다
         self.resume: dict | None = None
+        self._act_cache: tuple[float, dict | None] | None = None  # (받은 때, CLI get_activity 답) — activity()
+        self._cli_checked = 0.0  # CLI 연결 여부를 마지막으로 다시 물은 때
         self.on_step = None  # 단계가 바뀔 때 (step, text) — runner 가 화면(작업 큐 카드·오버레이)에 알리려고 설정
         self._frame: np.ndarray | None = None
         # 게임을 앞으로 가져오지 않고 한다 — 화면은 가려져 있어도 찍고(PrintWindow), 키는 창에 직접 보낸다.
@@ -156,13 +158,38 @@ class Bot:
         모름으로 둔다. CLI 연결 여부도 여기서 다시 묻는다 — 처음 한 번 정한 값이 실행 내내 남아 있었다."""
         if self.packets.status != "running":
             return
-        act = self.state.activity() if self.state.available(refresh=True) else None
+        self.state.available(refresh=True)
+        self._cli_checked = time.monotonic()
+        act = self.activity(max_age=0)
         changed = self.packets.reconcile(act)
         if changed or not act:
             self.log.info(f"시작 점검 ({'CLI' if act else 'CLI 응답 없음 → 모름으로'}): "
                           + (", ".join(changed) if changed else "패킷 상태와 같음"))
         else:
             self.log.debug("시작 점검: 패킷 상태와 CLI 가 같음")
+
+    def activity(self, max_age: float = 1.0) -> dict | None:
+        """CLI get_activity. 여러 판단이 같은 순간에 따로 묻지 않게 max_age 초 안의 답은 같이 쓴다 (한 번 보는 데
+        세 번씩 묻던 것). 받을 때마다 패킷 상태의 오래 남는 값(던전·사냥터·쓰러짐)을 그 답으로 맞춘다 — 가장 믿을
+        정보는 CLI (PacketMonitor.merge_cli). 답이 없으면(로딩·캐릭터 선택·끊김) None, 이때 CLI 연결 여부를 가끔 다시 묻는다
+        — 처음 정한 값이 실행 내내 남아 끊긴 CLI 를 '로딩 중' 으로 보던 것."""
+        now = time.monotonic()
+        if self._act_cache and now - self._act_cache[0] <= max_age:
+            return self._act_cache[1]
+        if not self.state.available():
+            if now - self._cli_checked < 30:
+                return None
+            self._cli_checked = now
+            if not self.state.available(refresh=True):
+                return None
+        act = self.state.activity()
+        if act is None and now - self._cli_checked >= 10:
+            self._cli_checked = now
+            self.state.available(refresh=True)
+        self._act_cache = (time.monotonic(), act)
+        if act and self.packets.status == "running":
+            self.packets.merge_cli(act, now)
+        return act
 
     def resumed_at(self, *steps: str) -> dict | None:
         """지난번에 이 숙제가 steps 중 한 단계에서 끊겼으면 그 기록."""
@@ -263,7 +290,7 @@ class Bot:
         known = self.map_loading()
         if known is not None:
             return known
-        return self.state.available() and self.state.activity() is None
+        return self.activity(max_age=0.5) is None and self.state.available()  # 답이 없는데 CLI 는 붙어 있다
 
     def wait_loaded(self, timeout: float) -> bool | None:
         """패킷으로 맵 로딩이 끝날 때까지 (로딩 중이 아니면 바로 True). False 시간 초과, None 모름 → 화면·CLI 로."""
@@ -279,7 +306,7 @@ class Bot:
         return self.state.query("get_my_info") is not None
 
     def _act(self, act: dict | None) -> dict:
-        return act if act is not None else ((self.state.activity() if self.state.available() else None) or {})
+        return act if act is not None else (self.activity() or {})
 
     def auto_traveling(self, act: dict | None = None) -> bool:
         """자동 이동 중인가. 패킷(자동 이동 시작·끝, 나한테만 옴)이 알면 그것, 모르면 CLI IsAutoTraveling."""
@@ -333,7 +360,7 @@ class Bot:
         p = self.packets
         if cut is not None and p.ok and (p.state.fresh or p.state.in_dialogue):
             return ("dialog" if p.state.in_dialogue else "scene"), m
-        act = self.state.activity() if self.state.available() else None
+        act = self.activity()
         if act is not None and "IsDialoguePlaying" in act:
             return ("dialog" if act["IsDialoguePlaying"] else "scene"), m
         return ("scene" if m.name == self.ui.get("scene_skip") else "dialog"), m
@@ -351,7 +378,7 @@ class Bot:
         act 는 이미 받아 둔 get_activity 결과 (없으면 CLI 를 부른다)."""
         p = self.packets
         if act is None:
-            act = (self.state.activity() if self.state.available() else None) or {}
+            act = self.activity() or {}
         if p.ok and p.state.dead:
             # 일어난 신호를 못 받은 경우 ('여기서 부활' 은 아직 실측 전) — CLI 가 살아 있다고 하면 그쪽을 믿는다
             if act.get("IsDead") is False and time.monotonic() - p.state.dead_at > 5:

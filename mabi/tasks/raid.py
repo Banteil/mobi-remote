@@ -242,7 +242,7 @@ def _press_sail(bot: Bot) -> bool:
         return bool(bot.wait_packet(lambda s: s.loading or s.raid_state == "InProgress", timeout, since=since)) \
             or bool(bot.packets.find("autoplay.start_ok", since)) or bool(bot.packets.find("raid.depart", since))
 
-    act = (bot.state.activity() if bot.state.available() else None) or {}
+    act = bot.activity() or {}
     if act.get("AutoPlayTarget", "shortcut") == "shortcut" and compass_ready(bot):
         bot.key("space")
         if started(bot.input_mark, 8):
@@ -303,7 +303,7 @@ def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: No
         if cleared(bot):
             bot.log.info("패킷: 레이드 보스 처치 → 클리어")
             return "clear"
-        act = bot.state.activity() or {}
+        act = bot.activity() or {}
         if not revive and bot.is_dead(act):
             return "dead"
         seen = watch(bot, ctx, act)

@@ -77,6 +77,7 @@ class SceneSkipTest(unittest.TestCase):
         b._skip_seen = None
         b.packets.ok = False
         b.state.available.return_value = False
+        b.activity.return_value = None
         b.input.dry_run = False
         b.cfg = {"login": {"attendance_skip": "attendance_skip", "first_dialog_xy": [960, 540]},
                  "arbeit": {k: k for k in ("howto_title", "item_missing", "deliver_title", "report", "accept", "alter_button",
@@ -149,7 +150,7 @@ class SceneSkipTest(unittest.TestCase):
     def test_cli_decides_kind_without_packet(self):
         b = self.bot(background=False, shown={"dialog_skip": 0.9})
         b.state.available.return_value = True
-        b.state.activity.return_value = {"IsDialoguePlaying": False}
+        b.activity.return_value = {"IsDialoguePlaying": False}
         self.assertEqual(b.skip_button(None)[0], "scene")
 
     def test_behind_dialog_waits_then_clicks(self):

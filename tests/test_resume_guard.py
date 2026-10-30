@@ -12,6 +12,7 @@ def bot_with(state: PacketState, ok=True, act=None, space=""):
     return SimpleNamespace(
         packets=SimpleNamespace(ok=ok, state=state),
         map_loading=lambda: None if state.channel is None and not state.loading else state.loading,
+        activity=lambda *a, **k: act,
         state=SimpleNamespace(available=lambda: act is not None, activity=lambda: act,
                               query=lambda name: {"ChannelDisplayName": "어비스", "GameSpaceDisplayName": space}),
         cfg={"black_hole": {"space_keyword": "검은 구멍"}}, ui={},

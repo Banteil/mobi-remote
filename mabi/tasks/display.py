@@ -334,7 +334,7 @@ def busy(bot: Bot) -> str:
             return "레이드 안·출항선"
         if st.in_dialogue:
             return "NPC 대화 중"
-    act = (bot.state.activity() if bot.state.available() else None) or {}
+    act = bot.activity() or {}
     if (act.get("Dungeon") or {}).get("State") in ("Entering", "InProgress", "Cleared"):
         return "던전 안"
     if (act.get("Battlefield") or {}).get("IsInBattleField"):

@@ -36,6 +36,9 @@ HELLO = b"MMCG"             # 연결 첫머리 인사 블록 (메시지가 아�
 MAX_FRAME = 8 << 20         # 맵 진입 때 오는 것 중 큰 건 0.8MB 쯤
 MAX_PENDING = 512           # 순서가 뒤바뀐 조각을 이만큼까지 들고 기다린다
 OPEN_MAPS = ("Field", "BattleField", "FieldBoss", "HousingInn", "ScenarioField")  # 던전이 아닌 맵 종류
+# CLI 가 같은 뜻으로 알려 주는 오래 남는 상태 — CLI 를 물을 때마다 그 답으로 맞춘다 (merge_cli)
+CLI_FACTS = ("dungeon_state", "field_state", "dead")
+CLI_LAG = 5.0  # CLI 가 패킷보다 늦게 바뀌는 시간 (쓰러짐 약 3초, death1 실측) — 패킷이 이보다 최근에 바꿨으면 패킷을 믿는다
 SYNC_FRAMES = 3             # 중간부터 받기 시작했을 때 이만큼 연달아 말이 되면 맞춘 것으로 본다
 
 
@@ -398,6 +401,7 @@ class PacketState:
     # 출석 대화 시작 (monotonic, 0 = 없음). 날짜가 바뀐 뒤 메인 화면으로 갈 때 NPC 가 한두 마디(무작위) 한 뒤 출석부와
     # '출석부 건너뛰기' 가 뜬다. 끝 신호는 아직 모른다 → 건너뛰기를 누르거나 맵을 옮기면 지우고, 오래되면 끝난 것으로 본다
     attendance_at: float = 0.0
+    changed_at: dict = field(default_factory=dict)  # CLI_FACTS 필드 → 패킷이 마지막으로 바꾼 때 (monotonic)
     extra: dict = field(default_factory=dict)
 
     def attending(self, limit: float = 90) -> bool:
@@ -601,6 +605,35 @@ class PacketMonitor:
         with self._cond:
             self._cond.notify_all()
 
+    def merge_cli(self, act: dict, asked_at: float) -> list[str]:
+        """CLI get_activity 답이 올 때마다 오래 남는 상태(CLI_FACTS: 던전·사냥터 안팎·쓰러짐)를 그 답으로 맞춘다 — 가장
+        믿을 정보는 CLI 이고, 패킷은 바뀌는 순간을 빨리 알리는 데 쓴다. 다만 패킷이 asked_at(물은 때) 이후나 CLI_LAG
+        안에 바꾼 값은 패킷이 더 새로우니 둔다. 대화·이동·전투 같은 순간 상태는 패킷이 빠르고 CLI 와 뜻이 조금 달라
+        (메뉴 대기 등) 여기서 덮지 않는다 — 작업 시작 점검(reconcile)에서만 맞춘다. 바뀐 것 ['이름 전 → 후']."""
+        s = self.state
+        dungeon = (act.get("Dungeon") or {}).get("State") or None
+        field_in = bool((act.get("Battlefield") or {}).get("IsInBattleField"))
+        want = {
+            "dungeon_state": dungeon or s.dungeon_state,
+            # 사냥터 안이면 InProgress·WaitingForChannelTransfer 를 CLI 가 가르지 못한다 → 밖이라던 패킷만 모름으로
+            "field_state": ("NotInBattlefield" if not field_in
+                            else None if s.field_state == "NotInBattlefield" else s.field_state),
+            "dead": bool(act.get("IsDead")),
+        }
+        out = []
+        recent = min(asked_at, time.monotonic() - CLI_LAG)
+        for f, v in want.items():
+            cur = getattr(s, f)
+            if cur == v or s.changed_at.get(f, 0.0) > recent:
+                continue
+            setattr(s, f, v)
+            out.append(f"{f} {cur} → {v}")
+        if out:
+            log.info("CLI 로 맞춤: %s", ", ".join(out))
+            with self._cond:
+                self._cond.notify_all()
+        return out
+
     def reconcile(self, act: dict | None) -> list[str]:
         """새 작업을 시작할 때 (처음이든 이어 하기든 — 그 사이 사람이 무엇을 했을지 모른다): 지난 일에서 남은 상태를
         그대로 믿지 않고 지금 게임에 맞춘다. 상태가 바뀌는 패킷을 놓치면 (스트림 공백 등) 지난밤 상태가 아침까지 남는다
@@ -647,6 +680,7 @@ class PacketMonitor:
     def apply(self, key: str, vals: dict) -> None:
         """이벤트 하나를 상태에 반영하고 기다리는 쪽을 깨운다 (시험에서 직접 부르기도 한다)."""
         s = self.state
+        old = {f: getattr(s, f) for f in CLI_FACTS}
         if key == "channel.leaving":
             s.loading = True
             s.attendance_at = 0.0
@@ -781,6 +815,10 @@ class PacketMonitor:
             s.weight = vals.get("weight")
         elif key == "char.max_weight":
             s.max_weight = vals.get("max_weight")
+        now = time.monotonic()
+        for f, v in old.items():
+            if getattr(s, f) != v:
+                s.changed_at[f] = now
         with self._cond:
             self._seq += 1
             self.recent.append(Seen(self._seq, time.monotonic(), key, vals))

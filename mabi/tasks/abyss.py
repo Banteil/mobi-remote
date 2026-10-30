@@ -345,7 +345,7 @@ def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: No
         if cleared():
             bot.log.info("패킷: 어비스 결과 옴 → 클리어")
             return "clear"
-        act = bot.state.activity() or {}
+        act = bot.activity() or {}
         if act.get("IsAbyssResultSequencePlaying"):
             return "clear"
         if not revive and bot.is_dead(act):
@@ -420,7 +420,7 @@ def after_clear(bot: Bot) -> bool:
             return False  # 어비스 맵이 아니다 (필드로 나왔거나 옮기는 중)
         if st.abyss_result:
             return True  # 패킷: 이 맵에서 결과가 옴 (나가면 새 맵 진입 때 지운다)
-    act = bot.state.activity() if bot.state.available() else None
+    act = bot.activity()
     if (act or {}).get("IsAbyssResultSequencePlaying"):
         return True
     if known:

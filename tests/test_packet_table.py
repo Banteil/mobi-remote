@@ -170,7 +170,7 @@ class StatesTableTest(unittest.TestCase):
             self.skipTest(str(e))
         self.assertTrue(table.states)
         written = " ".join(s.get("field", "") for s in table.states)
-        skip = {"extra", "entered_at", "ai", "dead_at"}  # 내부용
+        skip = {"extra", "entered_at", "ai", "dead_at", "changed_at"}  # 내부용
         missing = [f.name for f in dataclasses.fields(PacketState) if f.name not in skip and f.name not in written]
         self.assertEqual(missing, [], "spec/states.json 의 states 에 적을 것")
 

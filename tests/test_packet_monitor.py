@@ -151,6 +151,22 @@ class WaitTest(unittest.TestCase):
         self.m.reconcile({"IsAutoTraveling": False, "IsInCombat": False, "Dungeon": {"State": "NotInDungeon"}})
         self.assertEqual((s.traveling, s.in_combat, s.fast_travel_ok), (False, False, None))
 
+    def test_merge_cli_fixes_stale(self):
+        """CLI 답이 오면 오래 남은 패킷 상태를 그 답으로 (가장 믿을 정보는 CLI)."""
+        self.m.apply("dungeon.state", {"state_name": "Cleared"})
+        self.m.state.changed_at["dungeon_state"] = time.monotonic() - 60  # 오래전에 바뀜
+        self.m.merge_cli({"Dungeon": {"State": "NotInDungeon"}}, time.monotonic())
+        self.assertEqual(self.m.state.dungeon_state, "NotInDungeon")
+
+    def test_merge_cli_keeps_fresh_packet(self):
+        """패킷이 방금 바꾼 값은 둔다 — CLI 가 늦다 (쓰러짐은 패킷이 약 3초 빠름)."""
+        asked = time.monotonic()
+        self.m.apply("char.dead", {"dead": True})  # 물은 뒤 패킷이 쓰러짐을 알림
+        self.m.state.dead = True
+        self.m.state.changed_at["dead"] = time.monotonic()
+        self.m.merge_cli({"IsDead": False}, asked)
+        self.assertTrue(self.m.state.dead)
+
     def test_reconcile_without_cli(self):
         """CLI 가 답하지 않으면 (캐릭터 선택·로딩) 모름으로 — 지난 상태를 믿지 않는다."""
         s = self.m.state
@@ -193,7 +209,7 @@ class FakeCli:
     def __init__(self, states):
         self.states = list(states)
 
-    def available(self):
+    def available(self, refresh=False):
         return bool(self.states)
 
     def activity(self):
@@ -205,6 +221,8 @@ class FakeBot:
     map_loading = Bot.map_loading
     is_loading = Bot.is_loading
     wait_loaded = Bot.wait_loaded
+    activity = Bot.activity
+    _act_cache, _cli_checked = None, 0.0
 
     def __init__(self, packets, cli=()):
         self.packets, self.state = packets, FakeCli(cli)

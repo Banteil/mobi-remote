@@ -1,6 +1,7 @@
 """지금 무슨 상황인가 — 점검자가 쓰는 상황 인식 한곳.
 
-순서는 패킷 → CLI → 화면이고, 위에 있는 것이 먼저다 (창이 겹치면 맨 앞 창이 위쪽 줄에 있다).
+패킷 상태는 CLI 답으로 계속 맞춰진다 (가장 믿을 정보는 CLI — Bot.activity·PacketMonitor.merge_cli, 작업 시작 점검).
+표의 순서는 패킷 → CLI → 화면이고, 위에 있는 것이 먼저다 (창이 겹치면 맨 앞 창이 위쪽 줄에 있다).
 태스크는 이 표를 보지 않는다. 새 화면을 만나면 여기에 한 줄, handlers 에 대응 하나를 넣으면 모든 태스크가 같이 쓴다.
 판정이 맞는지는 tests/fixtures/screens/<상황>/ 의 화면으로 확인한다 (tests/test_screens.py).
 """
@@ -71,7 +72,7 @@ def busy_why(bot) -> str | None:
 
 def cli_idle(bot) -> bool | None:
     """CLI 만으로 본 '멈춰 있음'. CLI 가 없으면 None."""
-    a = bot.state.activity() if bot.state.available() else None
+    a = bot.activity()
     if not a:
         return None
     return not any(a.get(k) for k in ("IsAutoPlaying", "IsAutoTraveling", "IsDialoguePlaying", "IsInCombat"))
