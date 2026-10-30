@@ -20,6 +20,7 @@ import time
 from .. import gamedata as gd
 from ..bot import Bot, StepTimeout
 from ..ocr import find_texts
+from ..place import place
 from .. import monitor
 from ..monitor import detect as d, handlers
 from . import repair, ui_text
@@ -45,18 +46,18 @@ def inside(bot: Bot) -> bool:
     """어비스 판 안인가 — 패킷이 알면 어비스 맵에 있고 로딩 중이 아니며 이 맵에서 결과가 아직 안 옴
     ('다시 하기' 뒤 지난 판 맵에 선 채 매칭을 기다리는 건 판 안이 아니다). 패킷이 모르면 CLI 의 장소 이름, 그것도 없으면
     오른쪽 맨 위 나가기 버튼 — 사냥터에도 비슷한 버튼이 있어 리모콘을 막 켰을 때 사냥터를 어비스로 봤다 (2026-10-26)."""
-    loading = bot.map_loading()
-    if loading is not None:
-        st = bot.packets.state
-        return not loading and st.channel_type == ABYSS_MAP and not st.abyss_result
+    st = bot.packets.state
+    if bot.map_loading() is not None:  # 패킷이 맵을 안다
+        pl = place(bot)
+        return not pl.loading and pl.kind == ABYSS_MAP and not st.abyss_result
     # 어비스 안에서 리모콘을 켜 패킷이 아직 맵을 모를 때도 결과·매칭 신호는 온다 — CLI 장소 이름은 결과·보상 화면과
     # '다시 하기' 뒤 매칭 중에도 어비스라서, 이것을 먼저 본다 (2026-10-27 다시 하기 뒤를 판 안으로 보고 보상 화면을
     # 기다리다 다음 판이 시작됨)
-    if bot.packets.ok and (bot.packets.state.abyss_result or bot.packets.state.abyss_matching in (1, 2, 3)):
+    if bot.packets.ok and (st.abyss_result or st.abyss_matching in (1, 2, 3)):
         return False
-    env = bot.state.query("get_current_environment") if bot.state.available() else None
-    if (name := (env or {}).get("ChannelDisplayName", "")):
-        return "어비스" in name or any(d in name for d in DUNGEONS)
+    pl = place(bot)  # CLI 로 짐작한 자리 (장소 이름이 어비스인가)
+    if pl.name:
+        return pl.kind == ABYSS_MAP
     return bot.exists(bot.ui["abyss_exit"])
 
 

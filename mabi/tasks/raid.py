@@ -18,6 +18,7 @@ import time
 from .. import gamedata as gd
 from ..bot import Bot, StepTimeout
 from .. import monitor
+from ..place import RAID_LOBBY, place
 from . import repair, ui_text
 from .content import CannotProceed, watch
 
@@ -86,10 +87,9 @@ def where(bot: Bot, raid: str) -> str:
             return "cleared"
         if bot.packets.ok and st.raid_state == "InProgress":
             return "play"
-        env =bot.state.query("get_current_environment") if bot.state.available() else None
-        title = _quest_title(bot)
-        if (env or {}).get("ChannelDisplayName") == gd.text("raid_ship"):
+        if place(bot).kind == RAID_LOBBY:  # CLI 장소 이름이 출항선
             return "ship"
+        title = _quest_title(bot)
         if title.endswith(gd.text("raid_quest_clear")):
             return "play"
         if title.endswith(gd.text("raid_quest_done")):

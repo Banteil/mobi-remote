@@ -283,11 +283,12 @@ def _leave_dungeon(bot: Bot) -> bool:
 
 
 def _in_field(bot: Bot) -> bool:
-    """사냥터 안인가. 패킷이 알면 사냥터 상태로, 모르면 진행 중인 사냥터 퀘스트(CLI)가 있는 것으로."""
+    """사냥터 안인가. 자리(place — 패킷 사냥터 상태, 패킷이 맵을 모르면 CLI 의 사냥터 안 여부)로, 그것도 모르면
+    진행 중인 사냥터 퀘스트(CLI)가 있는 것으로."""
+    from ..place import place
     from .content import hunt_quest
-    st = bot.packets.state
-    if bot.packets.ok and st.field_state is not None:
-        return st.field_state in ("InProgress", "WaitingForChannelTransfer")
+    if (inside := place(bot).in_field) is not None:
+        return inside
     return bool(hunt_quest(bot))
 
 

@@ -374,18 +374,25 @@ class Bot:
         return self.scene_skip and not self.behind()
 
     def is_dead(self, act: dict | None = None) -> bool:
-        """내 캐릭터가 쓰러졌나. 패킷의 부활 창 신호가 CLI IsDead 보다 약 3초 빠르다 (death1 실측).
-        act 는 이미 받아 둔 get_activity 결과 (없으면 CLI 를 부른다)."""
+        """내 캐릭터가 쓰러졌나. 패킷 상태가 알면 그것 — CLI 를 물을 때마다 CLI 답으로 맞춰지고 (일어난 신호를 놓쳐도
+        CLI 가 살아 있다면 고쳐진다), 패킷이 방금 바꾼 값은 둔다 (부활 창 신호가 CLI IsDead 보다 약 3초 빠르다, death1 실측).
+        모르면 CLI. act 는 이미 받아 둔 get_activity 결과 (없으면 묻는다 — 물으면서 패킷 상태도 맞춰진다)."""
         p = self.packets
         if act is None:
             act = self.activity() or {}
-        if p.ok and p.state.dead:
-            # 일어난 신호를 못 받은 경우 ('여기서 부활' 은 아직 실측 전) — CLI 가 살아 있다고 하면 그쪽을 믿는다
-            if act.get("IsDead") is False and time.monotonic() - p.state.dead_at > 5:
-                p.state.dead = None
-                return False
-            return True
+        if p.ok and p.state.dead is not None:
+            return p.state.dead
         return bool(act.get("IsDead"))
+
+    def environment(self, max_age: float = 3.0) -> dict | None:
+        """CLI get_current_environment (장소 이름 등). max_age 초 안의 답은 같이 쓴다."""
+        now = time.monotonic()
+        c = getattr(self, "_env_cache", None)
+        if c and now - c[0] <= max_age:
+            return c[1]
+        env = self.state.query("get_current_environment") if self.state.available() else None
+        self._env_cache = (now, env if isinstance(env, dict) else None)
+        return self._env_cache[1]
 
     def sleep(self, a: float, b: float | None = None) -> None:
         end = time.monotonic() + (random.uniform(a, b) if b else a)
