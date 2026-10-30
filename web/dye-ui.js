@@ -204,11 +204,6 @@ function onDyeState(m) {
   if (m.error) { say('염색 검출 오류: ' + m.error); return; }
   const box = !!m.found;
   if (box !== dyeUI.box) { dyeUI.box = box; paintDyeState(); }  // '팔레트 찾음' ↔ '기다리는 중'
-  if (m.done) {
-    dyeUI.on = false;
-    paintDyeState();
-    toast('염색이 끝나 도우미를 껐습니다', '확정 화면이 떠서 자동으로 중지했습니다.', 'ok');
-  }
 }
 mm.dye.onState(onDyeState);
 

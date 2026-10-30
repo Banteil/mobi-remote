@@ -151,11 +151,8 @@ class DyeService:
                     self.emit("mm:dye-state", {"error": str(e)})
                     time.sleep(1)
                     continue
-                if st.redraw or st.status == "done":
+                if st.redraw:
                     self.gui.state.emit(st, rect)
-                if st.status == "done":
-                    self.running = False
-                    break
                 rest = TICK - (time.monotonic() - t0)
                 if rest > 0:
                     time.sleep(rest)
@@ -190,6 +187,4 @@ class DyeService:
         ov.items = [] if st.hidden else ddraw.overlay_items(st, scale=scale, origin=(lx - g.x(), ly - g.y()),
                                                              screen_w=g.width(), measure=ov.measure)
         ov.update()
-        self.emit("mm:dye-state", {"found": st.palette is not None, "done": st.status == "done", "text": st.text})
-        if st.status == "done":
-            self._hide()
+        self.emit("mm:dye-state", {"found": st.palette is not None, "text": st.text})

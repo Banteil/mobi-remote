@@ -180,8 +180,6 @@ RING_MAX = 25      # 상한 (실측 13~15)
 RING_SHARE = 0.5   # 안쪽 으뜸 색이 이만큼은 돼야 믿는다 (커서가 덮었나)
 RING_INK = 7       # 바깥 반지름에서 이만큼 안쪽까지가 칠해진 부분 (테 5 + 여유 2)
 
-DONE_RGB = (13, 179, 118)   # 염색 확정 단추 — 한 색으로 꽉 찬 초록 면
-DONE_TOL = 24               # 세 채널 차이의 합
 RING_PAD = 5                # 동그라미 둘레 여유 — 섞인 가장자리까지
 LEADER_GAP = 4              # 이만큼까지 끊겨도 같은 선
 
@@ -507,56 +505,6 @@ def read_rings(f: Frame, rings: Iterable[Ring]) -> list[Ring]:
             out.append(Ring(ring.x, ring.y, ring.r, seen[0], seen[1]))
     return out
 
-
-def find_done_button(f: Frame, color=DONE_RGB) -> Rect | None:
-    """염색이 끝나면 뜨는 '염색 확정' 단추. 찾으면 도우미를 끌 때다.
-
-    염색 화면에도 같은 초록 '이대로 염색하기' 가 있어 색으로는 못 가른다. 크기·자리로 가른다:
-      이대로 염색하기 폭 0.39 · 가운데 x 0.255   /   염색 확정 폭 0.18 · x 0.565 · 높이 0.07
-    한 색으로 꽉 찬 면이라 소용돌이(픽셀마다 값이 다름)와 헷갈리지 않는다.
-    """
-    w, h = f.w, f.h
-    C = color
-    y0 = jround(h * 0.78)
-    if y0 >= h:
-        return None
-    r, g, b = f.rgb(slice(y0, h, 2), slice(0, w, 2))
-    same = (np.abs(r - C[0]) + np.abs(g - C[1]) + np.abs(b - C[2])) <= DONE_TOL
-    closes_at_end = w % 2 == 0     # JS 는 x<=w 를 2씩 — w 가 홀수면 오른쪽 끝까지 이어진 줄은 안 닫힌다
-    col_cache: dict[int, np.ndarray] = {}
-
-    def col(cx):
-        if cx not in col_cache:
-            cr, cg, cb = f.rgb(slice(0, h), slice(cx, cx + 1))
-            col_cache[cx] = ((np.abs(cr - C[0]) + np.abs(cg - C[1]) + np.abs(cb - C[2])) <= DONE_TOL)[:, 0]
-        return col_cache[cx]
-
-    for ri in np.flatnonzero(same.any(axis=1)):
-        y = y0 + 2 * int(ri)
-        row = same[ri].astype(np.int8)
-        pad = np.concatenate(([0], row, [0]))
-        d = np.diff(pad)
-        starts, ends = np.flatnonzero(d == 1), np.flatnonzero(d == -1)
-        for s, e in zip(starts, ends):
-            if e == len(row) and not closes_at_end:
-                continue
-            start, run = 2 * int(s), 2 * int(e - s)
-            mid = start + run / 2
-            if 0.13 <= run / w <= 0.26 and 0.45 <= mid / w <= 0.70:
-                cxp = jround(mid)
-                c = col(cxp)
-                top = bot = y
-                while top > 0 and c[top - 1]:
-                    top -= 1
-                while bot < h - 1 and c[bot + 1]:
-                    bot += 1
-                bh = bot - top + 1
-                if 0.04 <= bh / h <= 0.11:
-                    return Rect(start, top, run, bh)
-    return None
-
-
-# ── 가릴 자리 ───────────────────────────────────────────────────
 
 def skip_mask(shapes, xs: np.ndarray, ys: np.ndarray) -> np.ndarray | None:
     """격자(ys × xs)에서 가릴 자리. 선은 네모, 스포이드는 원 — 원을 네모로 가리면 21% 더 지워진다."""

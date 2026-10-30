@@ -1,11 +1,10 @@
 """염색 도우미 한 바퀴 — mobi-remote app.js 의 dyeTick 상태 기계를 UI 없이 옮긴 것.
 
   waiting  정해 둔 자리(detect.PALETTE_AT 또는 사람이 고친 비율)에 팔레트 테두리가 안 보인다.
-           그동안 확정 단추를 본다 — 두 바퀴 이어 보이면 done.
+           염색을 마쳐도 끄지 않고 여기로 돌아온다 — 연달아 염색할 때 매번 켜지 않게 (예전엔 확정 단추를 보면 껐다).
   active   테두리가 보인다 (매 바퀴 본다 — 네 변 몇 줄이라 싸다. 창을 닫으면 바로 waiting).
            16×16 지문이 거의 그대로(차이 < 1)면 아무것도 안 한다. 멈춘 화면은 정확히 0 이고 돌리는 중엔 수십.
            돌리는 동안엔 점을 그리지 않는다 — 바퀴마다 나왔다 말았다 해서 산만했다. 멈추면 그 바퀴에 그린다.
-  done     염색 확정 화면. 더는 계산하지 않는다 (reset() 으로 다시).
 
 호출 쪽은 120ms 마다 tick(frame) 을 부르고, redraw 가 True 일 때만 오버레이를 다시 그린다.
 좌표는 모두 frame 픽셀 기준 — 화면 좌표로 옮기는 것은 호출 쪽(draw.overlay_items 의 scale/origin).
@@ -18,7 +17,6 @@ import numpy as np
 
 from . import detect as D
 
-DONE_TICKS = 2        # 확정 단추를 한 번 스친 것으로 끄지 않는다
 
 
 @dataclass
@@ -34,7 +32,7 @@ class RingState:
 
 @dataclass
 class DyeState:
-    status: str                                   # 'waiting' | 'active' | 'done'
+    status: str                                   # 'waiting' | 'active'
     text: str = ""                                # 오버레이 맨 위 띠
     tone: str = "wait"                            # 'wait' | 'ok' — 띠 색
     hidden: bool = False                          # True 면 오버레이를 숨긴다 (JS mm.dye.hide)
@@ -52,7 +50,6 @@ class DyeState:
 
 
 WAIT_TEXT = "염색 감지 중…"
-DONE_TEXT = "염색이 끝나 도우미를 껐습니다"
 
 
 class DyeTracker:
@@ -73,8 +70,6 @@ class DyeTracker:
         self.lead_still = False   # 지금 lead 를 멈춘 화면에서 찾았나
         self.moving = False
         self.bands = None
-        self.done_seen = 0
-        self.done = False
         # 켜자마자는 아무것도 안 그린다 (JS 도 첫 draw 전까지 오버레이가 숨어 있다)
         self.last = DyeState("waiting", hidden=True)
 
@@ -108,22 +103,11 @@ class DyeTracker:
 
     # ── 한 바퀴 ──
     def tick(self, frame) -> DyeState:
-        if self.done:
-            return self._same()
         f = D.as_frame(frame, self.order)
 
         box = D.palette_at(f, self.at)
         if box is None:
             self.box = None
-            # 확정 단추는 팔레트가 없을 때만 본다 — 염색 화면에도 같은 색 단추가 있다
-            if D.find_done_button(f):
-                self.done_seen += 1
-                if self.done_seen >= DONE_TICKS:
-                    self.done = True
-                    self.lead = None
-                    return self._emit(DyeState("done", DONE_TEXT, "ok", hidden=True))
-            else:
-                self.done_seen = 0
             return self._emit(DyeState("waiting", WAIT_TEXT, "wait"))
         if self.box is None or (box.x, box.y, box.w, box.h) != (self.box.x, self.box.y, self.box.w, self.box.h):
             # 새로 떴다(또는 자리를 고쳤다) — 지시선·동그라미·파트 경계를 다시 찾는다
