@@ -451,8 +451,9 @@ class AbyssRepeat(Repeat):
         return where_settled(self.bot, self.a["dungeon"])
 
     def boss_fight(self, s):
-        # 어비스는 보스전 신호가 없다 (CLI 던전 상태도 NotInDungeon) — 모닥불이 나온 뒤 자동 이동해 싸우는 곳이 보스전
-        return s.campfire and s.channel_type == "InstanceAbyssDungeon"
+        # 어비스는 보스전 신호가 없다 (CLI 던전 상태도 NotInDungeon) — 모닥불 뒤 보스방에 들어가면 보스 등장 연출이 나온다.
+        # 모닥불만으로는 보스방 앞 잡몹 전투도 보스전으로 봤다 (2026-10-30). 연출 중에는 tick 이 누르지 않는다
+        return s.boss_scene and s.channel_type == "InstanceAbyssDungeon"
 
     def setup(self):
         self.bot.scene_skip = False  # 연출은 누르지 않고 기다린다 — 누르면 뒤에서 돌던 게임이 앞으로 나온다 (2026-10-25 사용자)

@@ -21,6 +21,7 @@ class FakeBot:
                     "boss_skills": {"ultimate_slots": [1], "paladin_slots": [2]}}
         self.log = logging.getLogger("test")
         self.keys = []
+        self.packets.state.me = 14000001
 
     def key(self, k):
         self.keys.append(k)
@@ -28,6 +29,14 @@ class FakeBot:
     def enter(self, kind):
         self.packets.apply("channel.leaving", {})
         self.packets.apply("channel.entering", {"channel": 1, "channel_type": kind, "channel_name": ""})
+
+    def boss(self):  # 모닥불 → 보스방 → 보스 등장 연출 (2026-10-30 실측)
+        self.packets.apply("abyss.campfire", {})
+        self.packets.apply("cutscene.play", {})
+        self.packets.apply("cutscene.end", {})
+
+    def transfigure(self):  # 변신 패킷 (시작·끝에 한 번씩, [0:4] 내 캐릭터 번호)
+        self.packets.apply("transfigure.current", {"actor": self.packets.state.me})
 
     def gauge(self, v):  # abyss1 처럼 두 게이지가 같은 값으로 오르고 궁극기는 300 에서 멈춘다
         self.packets.apply("ultimate.resource", {"ult_max": 300.0, "ult": min(v, 300.0), "pal_max": 500.0, "pal": v})
@@ -38,42 +47,79 @@ def abyss_fight(s):
 
 
 class BossSkillsTest(unittest.TestCase):
-    def test_abyss_boss_after_campfire_in_combat(self):
+    def test_abyss_boss_is_after_campfire_scene(self):
         bot = FakeBot()
         bot.enter(ABYSS)
         sk = BossSkills(bot, True, True, abyss_fight)
         bot.gauge(500)
-        self.assertFalse(sk.tick({"IsInCombat": True}))  # 모닥불 전 — 보스전 아님
+        self.assertFalse(sk.tick({"IsInCombat": True}))  # 모닥불 전
         bot.packets.apply("abyss.campfire", {})
-        self.assertFalse(sk.tick({"IsInCombat": False}))  # 모닥불 앞에서 쉬는 중
+        self.assertFalse(sk.tick({"IsInCombat": True}))  # 모닥불 뒤 보스방 앞 잡몹 — 아직 (16:49:27 에 일찍 변신했다)
+        bot.packets.apply("cutscene.play", {})
+        self.assertFalse(sk.tick({"IsInCombat": True}))  # 보스 등장 연출 중
+        bot.packets.apply("cutscene.end", {})
+        self.assertFalse(sk.tick({"IsInCombat": False}))
         self.assertTrue(sk.tick({"IsInCombat": True}))
         self.assertEqual(bot.keys, ["f5"])  # 팔라딘 먼저
-        bot.gauge(300)  # 변신에 썼다 — 궁극기 게이지는 그대로 차 있어도
-        self.assertFalse(sk.tick({"IsInCombat": True}))
-        self.assertEqual(bot.keys, ["f5"])  # 변신 중(20초)엔 6 이 변신 해제 → 궁극기를 안 누른다
-        sk.pressed["팔라딘 변신"] -= 20  # 아직 여유 시간 안
-        self.assertFalse(sk.tick({"IsInCombat": True}))
-        sk.pressed["팔라딘 변신"] -= 4  # 변신이 끝남
+
+    def test_cutscene_before_campfire_is_not_boss(self):
+        bot = FakeBot()
+        bot.enter(ABYSS)
+        bot.packets.apply("cutscene.play", {})
+        bot.packets.apply("cutscene.end", {})
+        self.assertFalse(abyss_fight(bot.packets.state))
+
+    def test_no_ultimate_while_transformed(self):
+        bot = FakeBot()
+        bot.enter(ABYSS)
+        bot.boss()
+        sk = BossSkills(bot, True, True, abyss_fight)
+        bot.gauge(500)
         self.assertTrue(sk.tick({"IsInCombat": True}))
-        self.assertEqual(bot.keys, ["f5", "6"])
+        self.assertFalse(sk.tick({"IsInCombat": True}))  # 시작 패킷 전 — 변신 중으로 본다
+        bot.transfigure()  # 변신 시작
+        bot.gauge(300)
+        self.assertFalse(sk.tick({"IsInCombat": True}))
+        self.assertEqual(bot.keys, ["f5"])  # 변신 중엔 6 이 변신 해제
+        bot.transfigure()  # 20초 뒤 끝
+        self.assertTrue(sk.tick({"IsInCombat": True}))
+        self.assertEqual(bot.keys, ["f5", "6"])  # 끝나면 궁극기 (예전엔 패킷 앞 번호를 변신 번호로 읽어 판 내내 막혔다)
         self.assertFalse(sk.tick({"IsInCombat": True}))  # 방금 눌렀다 — RETRY 동안 안 누른다
+
+    def test_end_packet_missed(self):
+        bot = FakeBot()
+        bot.enter(ABYSS)
+        bot.boss()
+        sk = BossSkills(bot, True, False, abyss_fight)
+        bot.gauge(300)
+        bot.transfigure()  # 사람이 직접 변신
+        self.assertFalse(sk.tick({"IsInCombat": True}))
+        bot.packets.state.transform_start -= 24  # 끝 패킷을 놓쳤다 — 변신 시간으로 끊는다
+        self.assertTrue(sk.tick({"IsInCombat": True}))
+        self.assertEqual(bot.keys, ["6"])
+
+    def test_party_member_transform_ignored(self):
+        bot = FakeBot()
+        bot.enter(ABYSS)
+        bot.packets.apply("transfigure.current", {"actor": 123})
+        self.assertEqual(bot.packets.state.transform_start, 0.0)
 
     def test_paladin_once_per_dungeon_and_gauge_reset(self):
         bot = FakeBot()
         bot.enter(ABYSS)
-        bot.packets.apply("abyss.campfire", {})
+        bot.boss()
         sk = BossSkills(bot, False, True, abyss_fight)
         bot.gauge(500)
         self.assertTrue(sk.tick({"IsInCombat": True}))
-        bot.gauge(0)  # 변신에 씀
-        self.assertFalse(sk.tick({"IsInCombat": True}))
+        bot.transfigure()
+        bot.transfigure()
         sk.pressed["팔라딘 변신"] -= 30
         bot.gauge(500)  # 같은 던전에서 다시 차도 변신은 한 번뿐
         self.assertFalse(sk.tick({"IsInCombat": True}))
         self.assertEqual(bot.keys, ["f5"])
         bot.enter(ABYSS)  # 다시 하기 — 게이지가 처음으로
         self.assertEqual((bot.packets.state.ult, bot.packets.state.pal), (0.0, 0.0))
-        bot.packets.apply("abyss.campfire", {})
+        bot.boss()
         bot.gauge(500)
         self.assertTrue(sk.tick({"IsInCombat": True}))  # 새 던전에선 다시 한 번
         self.assertEqual(bot.keys, ["f5", "f5"])
@@ -81,52 +127,29 @@ class BossSkillsTest(unittest.TestCase):
     def test_paladin_key_missed_retries_after_transform_time(self):
         bot = FakeBot()
         bot.enter(ABYSS)
-        bot.packets.apply("abyss.campfire", {})
+        bot.boss()
         sk = BossSkills(bot, False, True, abyss_fight)
         bot.gauge(500)
         self.assertTrue(sk.tick({"IsInCombat": True}))
-        sk.pressed["팔라딘 변신"] -= 10  # 게이지가 그대로 — 그래도 변신 시간 안엔 또 누르지 않는다
+        sk.pressed["팔라딘 변신"] -= 10  # 변신 패킷이 안 옴·게이지 그대로 — 그래도 변신 시간 안엔 또 누르지 않는다
         self.assertFalse(sk.tick({"IsInCombat": True}))
         sk.pressed["팔라딘 변신"] -= 14
         self.assertTrue(sk.tick({"IsInCombat": True}))  # 키가 안 먹었다 → 다시
         self.assertEqual(bot.keys, ["f5", "f5"])
 
-    def test_no_ultimate_while_transformed_by_packet(self):
-        bot = FakeBot()
-        bot.enter(ABYSS)
-        bot.packets.apply("abyss.campfire", {})
-        bot.gauge(300)
-        sk = BossSkills(bot, True, False, abyss_fight)
-        bot.packets.apply("transfigure.current", {"id": 7})  # 사람이 직접 변신
-        self.assertFalse(sk.tick({"IsInCombat": True}))
-        bot.packets.apply("transfigure.current", {"id": 0})
-        self.assertTrue(sk.tick({"IsInCombat": True}))
-        self.assertEqual(bot.keys, ["6"])
-
     def test_gauge_not_full(self):
         bot = FakeBot()
         bot.enter(ABYSS)
-        bot.packets.apply("abyss.campfire", {})
+        bot.boss()
         sk = BossSkills(bot, True, True, abyss_fight)
         bot.gauge(350)
         self.assertTrue(sk.tick({"IsInCombat": True}))
         self.assertEqual(bot.keys, ["6"])  # 궁극기만 찼다
 
-    def test_separate_switches(self):
-        bot = FakeBot()
-        bot.enter(ABYSS)
-        bot.packets.apply("abyss.campfire", {})
-        bot.gauge(500)
-        sk = BossSkills(bot, False, True, abyss_fight)
-        sk.tick({"IsInCombat": True})
-        sk.pressed.clear()
-        sk.tick({"IsInCombat": True})
-        self.assertEqual(bot.keys, ["f5", "f5"])  # 궁극기는 꺼짐
-
     def test_no_paladin_here_or_cutscene_or_new_map(self):
         bot = FakeBot()
         bot.enter(ABYSS)
-        bot.packets.apply("abyss.campfire", {})
+        bot.boss()
         bot.gauge(500)
         bot.packets.apply("ultimate.can_paladin", {"on": False})
         sk = BossSkills(bot, False, True, abyss_fight)
@@ -135,7 +158,8 @@ class BossSkillsTest(unittest.TestCase):
         bot.packets.apply("cutscene.play", {})
         self.assertFalse(sk.tick({"IsInCombat": True}))
         bot.packets.apply("cutscene.end", {})
-        bot.enter(ABYSS)  # 다음 판 — 모닥불은 지워진다
+        bot.enter(ABYSS)  # 다음 판 — 보스 연출 표시는 지워진다
+        bot.gauge(500)
         self.assertFalse(sk.tick({"IsInCombat": True}))
         self.assertEqual(bot.keys, [])
 

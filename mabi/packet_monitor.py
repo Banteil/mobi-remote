@@ -365,14 +365,21 @@ class PacketState:
     raid_state: str | None = None
     raid_result: int = 0             # 레이드 결과 (보스 처치 순간 레이드 번호, 맵을 옮기면 0)
     raid_boss: bool = False          # 이 맵에서 레이드 보스전이 시작됨
-    campfire: bool = False           # 이 맵에 모닥불이 나타남 — 어비스는 그 뒤 자동 이동해 싸우는 곳이 보스전 (abyss1)
+    campfire: bool = False           # 이 맵에 모닥불이 나타남 (어비스는 보스방 앞)
+    # 모닥불 뒤 연출이 나옴 = 어비스 보스 등장. 모닥불만으로는 보스방 앞 잡몹 전투까지 보스전으로 봐 변신을 33초 일찍 썼다
+    # (2026-10-30 16:49:27 F5 → 16:50:00 보스 연출)
+    boss_scene: bool = False
     # 궁극기·팔라딘 변신 게이지 (현재/필요). 둘 다 같은 값으로 오르고 궁극기는 300, 팔라딘은 500 에서 찬다. 감시를 켠 뒤 안 왔으면 None
     ult: float | None = None
     ult_max: float | None = None
     pal: float | None = None
     pal_max: float | None = None
     can_paladin: bool | None = None  # 이 맵에서 팔라딘 변신을 쓸 수 있나 (맵 진입 때 옴)
-    transfigure: int | None = None   # 지금 변신 번호 (0 = 안 함으로 보임, 실측 전). 맵을 옮기면 모름
+    # 내 캐릭터 변신: 패킷이 시작·끝에 한 번씩 온다 (2026-10-30 F5 1초 뒤 · 그 20초 뒤). 변신 중이면 시작한 때 (monotonic), 아니면 0.
+    # 끝 패킷을 놓쳐도 부르는 쪽이 변신 시간(20초)으로 끊는다
+    transform_start: float = 0.0
+    transformed_here: bool = False   # 이 맵에서 변신했다 (팔라딘 변신은 던전마다 한 번)
+    transform_seen: float = 0.0      # 내 변신 패킷(시작이든 끝이든)을 마지막으로 받은 때
     field_state: str | None = None   # 사냥터: NotInBattlefield / InProgress / WaitingForChannelTransfer(클리어)
     boss_battle: bool = False
     dead: bool | None = None         # 내 캐릭터가 쓰러짐 (부활 창 열림). 나한테만 오는 부활 가능 여부로 안다
@@ -683,7 +690,7 @@ class PacketMonitor:
             s.raid_state, s.raid_result, s.raid_boss = None, 0, False
         if s.channel_type != "InstanceAbyssDungeon":
             s.abyss_result = 0
-            s.campfire = False
+            s.campfire = s.boss_scene = False
         after = {"맵": s.channel_name, "던전": s.dungeon_state, "사냥터": s.field_state, "쓰러짐": s.dead,
                  "레이드": s.raid_state}
         return [f"{k} {before[k]} → {after[k]}" for k in before if before[k] != after[k]]
@@ -706,8 +713,8 @@ class PacketMonitor:
             if s.channel_type == "InstanceAbyssDungeon":
                 s.abyss_matching = 0
             s.abyss_result = 0  # 새 맵 — 지난 판 결과는 끝났다 (나갈 때 0 이 오는지 실측이 없어 여기서도 지운다)
-            s.raid_result, s.raid_boss, s.campfire = 0, False, False
-            s.transfigure = None
+            s.raid_result, s.raid_boss, s.campfire, s.boss_scene = 0, False, False, False
+            s.transform_start, s.transformed_here = 0.0, False
             # 맵을 나가면(클리어 뒤 다시 하기·나가기) 궁극기·팔라딘 게이지가 처음으로 (사용자). 새 값이 오기 전에 지난 판 값을 믿지 않게
             if s.ult is not None:
                 s.ult = s.pal = 0.0
@@ -753,8 +760,14 @@ class PacketMonitor:
         elif key == "ultimate.can_paladin":
             s.can_paladin = bool(vals.get("on"))
         elif key == "transfigure.current":
-            s.transfigure = vals.get("id")
-            log.info("패킷: 변신 번호 %s", s.transfigure)  # 실측 전 — 변신·해제 때 어떤 값이 오는지 남긴다
+            if s.me is not None and vals.get("actor") == s.me & 0xFFFFFFFF:  # 파티원 변신은 빼고
+                now = s.transform_seen = time.monotonic()
+                if s.transform_start and now - s.transform_start < 30:  # 변신 중에 또 옴 = 끝
+                    s.transform_start = 0.0
+                    log.info("패킷: 변신 끝")
+                else:
+                    s.transform_start, s.transformed_here = now, True
+                    log.info("패킷: 변신 시작")
         elif key == "abyss.matching_update":
             s.abyss_matching = vals.get("state") or 0
         elif key == "abyss.matching_cancel_ok":
@@ -811,6 +824,8 @@ class PacketMonitor:
             s.dead = False
         elif key == "cutscene.play":
             s.cutscene = True
+            if s.campfire:
+                s.boss_scene = True
         elif key in ("cutscene.end", "cutscene.abort"):
             s.cutscene = False
         elif key == "travel.begin":
