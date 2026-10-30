@@ -547,8 +547,7 @@ class PacketMonitor:
                 key = (src, dport)
                 st = streams.get(key)
                 if st is None or flags & 0x02:
-                    st = streams[key] = Stream(self.table.known, lambda why, k=key: self.diag.record(
-                        "stream_desync", why, server=f"{k[0]}:{k[1]}"))
+                    st = streams[key] = Stream(self.table.known, lambda why, k=key: self._desync(why, k))
                 for proto, flag, body in st.feed(seq, flags, payload):
                     self._handle(proto, flag, body)
                 if flags & 0x05:  # FIN/RST — 다른 서버로 옮겨 감
@@ -584,6 +583,24 @@ class PacketMonitor:
                 vals["name"] = appearing_name(body)
         self.apply(ev.key, vals)
 
+    def _desync(self, why: str, key) -> None:
+        """스트림 조각을 잃었다 — 그 사이 이벤트(맵 이동·던전 나감·이동 끝 …)를 놓쳤을 수 있다. 기록하고 놓치면 틀리는
+        상태를 모름으로 돌린다 (2026-10-30: 00:05 공백 뒤 지난밤 던전 Cleared 가 아침까지 남음)."""
+        self.diag.record("stream_desync", why, server=f"{key[0]}:{key[1]}")
+        self.forget(f"패킷 흐름 끊김 ({why})")
+
+    def forget(self, why: str) -> None:
+        """이벤트로만 바뀌는 상태를 모름(None)으로. 다음 패킷이 오거나, 그 전엔 CLI·화면으로 판단한다.
+        맵도 모름으로 둔다 — fresh 가 거짓이 되어 대화·컷신의 '없음' 도 믿지 않게 된다."""
+        s = self.state
+        s.channel, s.channel_type, s.channel_name = None, "", ""
+        s.dungeon_state = s.field_state = s.dead = s.traveling = s.fast_travel_ok = s.combat = None
+        s.abyss_matching, s.boss_battle, s.cutscene = 0, False, False
+        s.dialogue_npc, s.dialogue_action, s.dialogue_menu = None, "", False
+        log.info("패킷: %s → 맵·던전·이동 등 상태를 모름으로 (다음 패킷이나 CLI 로 다시 앎)", why)
+        with self._cond:
+            self._cond.notify_all()
+
     def reconcile(self, act: dict | None) -> list[str]:
         """새 작업을 시작할 때 (처음이든 이어 하기든 — 그 사이 사람이 무엇을 했을지 모른다): 지난 일에서 남은 상태를
         그대로 믿지 않고 지금 게임에 맞춘다. 상태가 바뀌는 패킷을 놓치면 (스트림 공백 등) 지난밤 상태가 아침까지 남는다
@@ -610,10 +627,15 @@ class PacketMonitor:
             elif s.field_state in (None, "NotInBattlefield"):
                 s.field_state = None  # 사냥터 안인데 패킷은 밖이라 한다 → 모름
             s.dead = bool(act.get("IsDead"))
+            s.traveling = bool(act.get("IsAutoTraveling"))
+            s.combat = "InCombat" if act.get("IsInCombat") else "NonCombat"
+            s.boss_battle = bool((act.get("Dungeon") or {}).get("IsBossBattleInProgress"))
+            if not s.traveling:
+                s.fast_travel_ok = None  # 다음 자동 이동 때 다시 온다
             if not act.get("IsDialoguePlaying"):
                 s.dialogue_npc, s.dialogue_action, s.dialogue_menu = None, "", False
         else:
-            s.dungeon_state = s.field_state = s.dead = None
+            s.dungeon_state = s.field_state = s.dead = s.traveling = s.combat = s.fast_travel_ok = None
         if s.channel_type not in ("InstanceRaid", "InstanceRaidLobby"):
             s.raid_state, s.raid_result, s.raid_boss = None, 0, False
         if s.channel_type != "InstanceAbyssDungeon":

@@ -132,7 +132,14 @@ class DailyKind(Kind):
         if any(s == "STOP" for _, s, _ in val or []):  # F12·멈추기 → 일시정지 (F12 나 ▶ 로 이어 함)
             q.set_stop("stopped")
             return False
-        return True  # 끝까지 돌았다 (실패한 숙제가 있어도 — 결과는 보고서로 본다)
+        # 끝까지 돌았어도 끝나지 않은 숙제가 있으면 '완료' 로 치우지 않는다 — 6명 모두 접속에 실패했는데 카드가
+        # 완료로 사라져 다 된 줄 알았다 (2026-10-30). 실패 카드로 남겨 ▶ 로 다시 걸면 오늘 끝난 숙제는 넘기고 남은 것만 한다
+        bad = [label for label, s, _ in val or [] if s in FAILED]
+        if bad:
+            q.note(it, f"끝까지 돌았지만 {len(bad)}건이 끝나지 않음 ({', '.join(bad[:3])}{' …' if len(bad) > 3 else ''})"
+                       " — 결과 창 확인 · ▶ 로 남은 것만 다시")
+            return False
+        return True
 
     def stop(self, reason):
         # 카드를 뺐으면 종료, 아니면 일시정지 (진행 기록으로 끊긴 자리부터 이어 한다)

@@ -11,6 +11,7 @@ status: OK / CHECK(했지만 확인 결과 남음) / MANUAL(할 수 있는 건 �
 """
 import ctypes
 import logging
+import re
 import sys
 import time
 import tomllib
@@ -113,6 +114,23 @@ def _done_view(stored) -> dict:
     if isinstance(stored, str) and stored.startswith("MANUAL"):
         return {"status": "MANUAL", "summary": stored.split(":", 1)[-1].strip()}
     return {"status": "DONE", "summary": "오늘 완료"}
+
+
+class FailStreak:
+    """다른 캐릭터에서 같은 숙제가 같은 이유로 연달아 실패했나. 그러면 원인이 캐릭터가 아니라 리모콘·게임 쪽이라
+    나머지 캐릭터도 같은 자리에서 실패한다 (2026-10-30: 6명 모두 접속 단계에서 3분씩 같은 실패) → 멈추고 사람에게."""
+
+    def __init__(self):
+        self.last: dict[str, tuple[str, int | None]] = {}  # 숙제 → (실패 이유, 캐릭터 슬롯)
+
+    def __call__(self, slot, tid: str, status: str, summary: str) -> bool:
+        if status not in ("FAIL", "ERROR"):
+            self.last.pop(tid, None)
+            return False
+        why = re.sub(r"\d+", "#", summary.split("→")[0]).strip()  # 스크린샷 이름·숫자는 빼고 비교
+        prev = self.last.get(tid)
+        self.last[tid] = (why, slot)
+        return bool(prev and prev[0] == why and prev[1] != slot)
 
 
 class Runner:
@@ -347,6 +365,10 @@ class Runner:
                 bot.to_main()
             except (StepTimeout, MissingTemplate, RuntimeError):  # RuntimeError: 게임 창이 없음 (꺼짐)
                 pass
+            except Exception:  # noqa: BLE001 — 정리 실패로 다음 숙제까지 막지 않는다 (다음 숙제가 시작 점검을 한다)
+                log.exception("실패 뒤 메인 화면으로 돌아가기 실패")
+
+        repeated = FailStreak()
 
         def step(slot, tid: str, label: str, fn) -> str:
             """숙제 하나 실행. 상태 문자열 반환."""
@@ -364,6 +386,7 @@ class Runner:
             self._emit("task_start", slot=slot, task=tid, label=label)
             t0 = time.monotonic()
             try:
+                bot.check_in()  # 숙제마다 지금 상태부터 — 앞 숙제·캐릭터에서 남은 패킷 상태를 믿고 시작하지 않는다
                 summary = fn()
                 status = "OK"
                 check = tasks.VERIFY.get(tid)
@@ -375,7 +398,9 @@ class Runner:
                             else:
                                 status, summary = "CHECK", f"{summary} — 확인 결과 아직 남음"
                     except (StepTimeout, CannotProceed, MissingTemplate) as e:
+                        # 확인을 못 했으면 끝났다고 하지 않는다 (예전엔 OK·오늘 완료로 남았다)
                         log.warning(f"{label} 완료 확인 실패: {e}")
+                        status, summary = "CHECK", f"{summary} — 완료 확인 실패: {e}"
             except StopRequested:
                 log.warning("사용자 중단")
                 status, summary = "STOP", ""
@@ -398,6 +423,7 @@ class Runner:
                 log.exception(label)
                 status, summary = "ERROR", f"{type(e).__name__}: {e} → {bot.snapshot(tid).name}"
                 box(bot, tid)
+                recover(tid)  # 알 수 없는 오류 뒤에도 다음 숙제가 낯선 화면에서 시작하지 않게
             # 도중에 게임이 꺼지면 (튕김·사람이 끔) 남은 캐릭터마다 접속을 두드리며 실패를 쌓지 않는다 → 일시정지.
             # 단계 기록은 남아 있어 게임을 켜고 다시 시작(F12)하면 이 자리부터 이어 한다
             if status in ("FAIL", "ERROR") and not bot.window.find():
@@ -408,6 +434,9 @@ class Runner:
             elif status in ("FAIL", "ERROR") and bot.run_limited():
                 log.error("게임 연속 실행 제한 창 → 일시정지 (게임을 다시 켠 뒤 이어 하기)")
                 status, summary = "STOP", "게임을 너무 오래 켜 둠 — 게임을 다시 켠 뒤 이어 하기를 누르면 이어 합니다"
+            elif repeated(slot, tid, status, summary):
+                log.error(f"{label}: 앞 캐릭터와 같은 이유로 또 실패 → 일시정지 (원인을 확인한 뒤 이어 하기)")
+                status, summary = "STOP", f"두 캐릭터 연달아 같은 실패 — 확인 필요: {summary}"
             secs = round(time.monotonic() - t0)
             log.info(f"  {status} {summary} ({secs}s)")
             # 중단·실패(튕김 등)는 그 단계에서 이어 해야 하므로 단계 기록을 남겨 둔다

@@ -134,6 +134,23 @@ class WaitTest(unittest.TestCase):
         self.m.reconcile({"Dungeon": {"State": "InProgress"}, "Battlefield": {"IsInBattleField": False}})
         self.assertEqual((self.m.state.channel_type, self.m.state.dungeon_state), ("", "InProgress"))
 
+    def test_forget_on_gap(self):
+        """패킷 흐름이 끊기면 놓쳤을 수 있는 상태를 모름으로 — 맵도 모름이라 map_loading 이 None (CLI·화면으로)."""
+        from types import SimpleNamespace
+        self.m.diag = SimpleNamespace(record=lambda *a, **k: None)
+        self.m.apply("channel.entering", {"channel": 3, "channel_type": "InstanceDungeon", "channel_name": "던전"})
+        self.m.apply("dungeon.state", {"state_name": "Cleared"})
+        self.m._desync("gap", ("1.2.3.4", 1))
+        s = self.m.state
+        self.assertEqual((s.channel, s.channel_type, s.dungeon_state, s.traveling), (None, "", None, None))
+        self.assertFalse(s.fresh)
+
+    def test_reconcile_travel_combat(self):
+        s = self.m.state
+        s.traveling, s.combat, s.fast_travel_ok = True, "InCombat", True
+        self.m.reconcile({"IsAutoTraveling": False, "IsInCombat": False, "Dungeon": {"State": "NotInDungeon"}})
+        self.assertEqual((s.traveling, s.in_combat, s.fast_travel_ok), (False, False, None))
+
     def test_reconcile_without_cli(self):
         """CLI 가 답하지 않으면 (캐릭터 선택·로딩) 모름으로 — 지난 상태를 믿지 않는다."""
         s = self.m.state
