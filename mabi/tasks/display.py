@@ -27,7 +27,7 @@ import numpy as np
 
 from .. import gamedata as gd, ocr
 from ..screen import BASE_H, BASE_W, REG_KEYS, exclusive_fullscreen, is_16_9, screen_mode
-from ..bot import Bot, StepTimeout
+from ..bot import Bot, MissingTemplate, StepTimeout
 
 WIDTH, HEIGHT = 1920, 1080
 SCALE = 80
@@ -358,6 +358,34 @@ def prepare_interface(bot: Bot, state) -> str:
     if not done:
         return f"인터페이스 PC · {SCALE}% (그대로)"
     return f"인터페이스 {_shown_style(style, scale)} → PC · {SCALE}% ({', '.join(done)})"
+
+
+class InterfaceFit:
+    """작업 하나 동안 인터페이스를 PC·80% 로 처음 한 번 맞춘다 — 일일 숙제(runner)·어비스·레이드 반복(Repeat) 공통.
+    환경 설정은 게임 안에서만 열리고, 콘텐츠 안·대화 중엔 ESC 가 나가기·매칭 취소가 돼 미룬다 (busy).
+    맞췄으면 on_fit() — 작업 큐가 다음 카드에선 다시 맞추지 않게 (예전엔 맞췄는지와 상관없이 표시해 영영 안 맞췄다).
+    되돌리기는 restore_interface (작업 끝·큐 끝)."""
+
+    def __init__(self, state, enabled: bool = True, on_fit=lambda: None):
+        self.state, self.enabled, self.on_fit = state, enabled, on_fit
+        self.tried = False
+
+    def attempt(self, bot: Bot, after_login: bool = False) -> bool:
+        """맞춰 본다. after_login: 방금 접속을 마쳐 게임 안인 것이 확실함. 이번에 시도했으면 True (실패해도)."""
+        if self.tried or not self.enabled:
+            return False
+        if not after_login and not bot.in_game():
+            return False
+        if not after_login and (why := busy(bot)):
+            bot.log.info(f"{why} → 인터페이스 맞추기는 나중에")
+            return False
+        self.tried = True
+        try:
+            bot.log.info(prepare_interface(bot, self.state))
+            self.on_fit()
+        except (DisplayFixFailed, StepTimeout, MissingTemplate) as e:
+            bot.log.warning(f"인터페이스 PC·80% 로 맞추지 못함 — 그대로 진행: {e}")
+        return True
 
 
 def restore_interface(bot: Bot, state) -> str:

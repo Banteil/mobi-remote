@@ -332,14 +332,11 @@ class DailyApi:
                 profile = prof.load_profile(self.paths.profile) or {"slots": [], "names": {}}
                 ch = next((c for c in prof.characters(profile) if c["slot"] == int(a.get("slot", 0))), None)
                 from mabi.tasks import display
-                if v.get("interface") and (why := display.busy(bot)):  # 어비스 안·매칭 중 — ESC 가 나가기·매칭 취소가 된다
-                    log.info(f"{why} → 인터페이스 맞추기는 건너뜀")
-                elif v.get("interface"):  # 화면 설정 맞추기 — 인터페이스 PC·80% (큐에서 이번 처음일 때만, 되돌리기는 큐 끝)
-                    try:
-                        log.info(display.prepare_interface(bot, prof.DailyState(self.paths.state)))
-                    except Exception as e:
-                        log.warning(f"인터페이스 PC·80% 로 맞추지 못함 — 그대로 진행: {e}")
-                res = task.repeat(bot, cfg, int(a["runs"]), float(a["minutes"]), on_event=event, character=ch, loot=meter)
+                # 화면 설정 맞추기 — 인터페이스 PC·80% (큐에서 이번 처음일 때만, 되돌리기는 큐 끝). 일일 숙제와 같은 InterfaceFit
+                fit = display.InterfaceFit(prof.DailyState(self.paths.state), enabled=bool(v.get("interface")),
+                                           on_fit=lambda: event({"type": "interface"}))
+                res = task.repeat(bot, cfg, int(a["runs"]), float(a["minutes"]), on_event=event, character=ch, loot=meter,
+                                  iface=fit)
                 event({"type": "done", **res})
             except StopRequested:
                 log.info(f"{title} 반복: 사용자 중단")

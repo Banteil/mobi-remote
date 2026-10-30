@@ -134,7 +134,6 @@ class FailStreak:
 
 
 class Runner:
-    _interface_ready = False  # 이번 실행에서 인터페이스를 PC·80% 로 맞췄나 (한 번)
 
     def __init__(self, paths: Paths, on_event: Callable[[dict], None] | None = None, force_exit: bool = True):
         self.paths = paths
@@ -218,7 +217,8 @@ class Runner:
             log.info(f"시작: 캐릭터 {len(characters)}명, 게임 날짜 {state.date}  (일시정지: {cfg['game']['stop_key'].upper()})")
             bot.check_in()
             characters = self._arrange(cfg, opts, by_slot, characters, state)
-            self._interface_ready = False
+            self._iface = display.InterfaceFit(state, enabled=not opts.dry_run and opts.display and not opts.interface_ready,
+                                               on_fit=lambda: self._emit("interface"))
             try:
                 self._loop(cfg, opts, registry, by_slot, characters, state, bot, report, results)
             finally:
@@ -279,23 +279,6 @@ class Runner:
             if slot not in [int(s) for s in cfg.get("arbeit", {}).get("slots", [])]:
                 order = [t for t in order if t != "arbeit"]
         return order
-
-    def _prepare_interface(self, bot, state, opts, after_login: bool = False) -> bool:
-        """이번 실행에서 처음이면 지금 인터페이스 설정을 기억하고 PC·80% 로 맞춘다 (템플릿·좌표가 모두 이 기준).
-        끝나면 되돌린다. 게임 안(CLI 로 확인)이거나 방금 접속했을 때만 — 환경 설정은 게임 안에서만 열린다. 맞췄으면 True."""
-        if self._interface_ready or opts.dry_run or not opts.display or opts.interface_ready:
-            return False
-        if not after_login and not bot.in_game():
-            return False
-        if not after_login and (why := display.busy(bot)):
-            log.info(f"{why} → 인터페이스 맞추기는 접속 단계가 정리한 뒤로")
-            return False
-        self._interface_ready = True
-        try:
-            log.info(display.prepare_interface(bot, state))
-        except (display.DisplayFixFailed, StepTimeout, MissingTemplate) as e:
-            log.warning(f"인터페이스 PC·80% 로 맞추지 못함 — 그대로 진행: {e}")
-        return True
 
     def _arrange(self, cfg, opts, by_slot, characters, state) -> list:
         """다시 시작할 때의 캐릭터 순서.
@@ -476,15 +459,15 @@ class Runner:
             # (예전 '지문' 방식은 자주 틀려서 뺐다 — 2026-10-22). 던전 안·클리어 화면에서 멈췄던 경우는 login.run 이 먼저 정리한다
             # 인터페이스는 접속 확인(메인 HUD 템플릿)보다 먼저 맞춘다 — PC·80% 가 아니면 HUD 가 안 맞아 접속을 못 알아본다.
             # 게임 밖(타이틀·캐릭터 선택)이면 접속한 뒤에 맞추고, 그래서 접속 확인이 실패했으면 맞춘 뒤 한 번 더 접속한다
-            self._prepare_interface(bot, state, opts)
+            self._iface.attempt(bot)
             status = step(slot, "login", f"[{who}] 접속", lambda: login.run(bot, cfg, ch))
-            if status not in ("OK", "STOP") and self._prepare_interface(bot, state, opts):
+            if status not in ("OK", "STOP") and self._iface.attempt(bot):
                 status = step(slot, "login", f"[{who}] 접속", lambda: login.run(bot, cfg, ch))
             if status == "STOP":
                 return
             if status != "OK":
                 continue  # 접속 실패 시 이 캐릭터의 숙제는 건너뛴다
-            self._prepare_interface(bot, state, opts, after_login=True)
+            self._iface.attempt(bot, after_login=True)
             bot.also_done = {t for t in registry if ch and not opts.force and state.is_done(slot, t)}
             heavy = overweight(bot, cfg)
             if heavy:

@@ -119,10 +119,10 @@ class DailyKind(Kind):
                 q.patch(it["id"], fields)
             if e.get("type") == "loot" and q.report:
                 q.report.add_loot(it, {k: e.get(k) for k in ("who", "gained", "used", "cur")})
+            if e.get("type") == "interface":  # 실제로 맞췄을 때만 — 다음 카드는 다시 맞추지 않는다
+                q.session["iface"] = True
         self._results = None
         t = api._daily_launch(opts, on_event=on_event)
-        if fit:
-            q.session["iface"] = True
         t.join()
         kind, val = api._daily_result
         self._results = val if kind == "done" else None
@@ -199,6 +199,8 @@ class AbyssKind(Kind):
         def on_event(e):
             if e.get("type") == "loot" and q.report:
                 q.report.add_loot(it, {k: e.get(k) for k in ("who", "gained", "used", "cur")})
+            if e.get("type") == "interface":
+                q.session["iface"] = True
             if e.get("clears") is not None:
                 last.update(clears=e["clears"], secs=e.get("seconds") or 0)
             if e.get("type") == self.KIND:  # 진행은 카드의 진행 줄(view)로 보인다
@@ -212,8 +214,6 @@ class AbyssKind(Kind):
         t = launch({"slot": it.get("slot"), self.PLACE: it.get(self.PLACE), "difficulty": it.get("difficulty"),
                     "runs": runs, "minutes": minutes, "revive": it.get("revive") is not False,
                     "interface": fit and not q.session.get("iface")}, on_event)
-        if fit:
-            q.session["iface"] = True
         t.join()
         q.patch(it["id"], {"doneRuns": int(it.get("doneRuns") or 0) + last["clears"],
                            "doneSecs": float(it.get("doneSecs") or 0) + last["secs"], "prog": {}})

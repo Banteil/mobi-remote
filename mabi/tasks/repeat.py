@@ -19,10 +19,10 @@ class Repeat:
     INSIDE = ()  # 콘텐츠 안이라 이름을 모를 수 있는 자리 (where 값) — 모르면 나가지 않고 이어 한 뒤 확인
 
     def __init__(self, bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lambda e: None,
-                 character: dict | None = None, loot=None):
+                 character: dict | None = None, loot=None, iface=None):
         self.bot, self.cfg, self.a = bot, cfg, cfg[self.KIND]
         self.runs, self.minutes, self.on_event = runs, minutes, on_event
-        self.character, self.loot = character, loot
+        self.character, self.loot, self.iface = character, loot, iface  # iface: display.InterfaceFit (없으면 안 맞춤)
         self.unchecked = None  # 이름을 확인 못 한 채 이어 한 캐릭터 — recheck 가 확인한다
         self.behind = bool(self.a.get("background", True))
         self.user_window = ctypes.windll.user32.GetForegroundWindow()  # 입장 뒤 되돌려 줄 창 (리모콘 등)
@@ -133,7 +133,12 @@ class Repeat:
         self.bot.auto_clear = True
         self.setup()
         self.bot.background = False
+        # 인터페이스는 접속 확인보다 먼저 (PC·80% 가 아니면 HUD 가 안 맞아 이름을 못 읽는다) — 콘텐츠 안이면 미뤘다가 접속 뒤에
+        if self.iface:
+            self.iface.attempt(self.bot)
         at = self.ensure_character(self.where())
+        if self.iface and self.iface.attempt(self.bot):
+            at = self.where()
         if self.loot:  # 이 캐릭터로 접속을 마침 — 여기서부터 얻은 것을 잰다 (queue_report.LootMeter, 닫기는 부른 쪽)
             self.loot.open(self.bot, (self.character or {}).get("name") or current_name(self.bot) or "")
         self.loop(at)

@@ -545,8 +545,8 @@ class AbyssRepeat(Repeat):
 
 
 def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lambda e: None,
-           character: dict | None = None, loot=None) -> dict:
+           character: dict | None = None, loot=None, iface=None) -> dict:
     """어비스를 반복한다 (AbyssRepeat). runs·minutes 가 0 이면 사람이 멈출 때까지 (StopRequested).
     시간이 다 되면 그 판은 마저 끝내고 보상 화면에서 나간다. character({slot, name})가 있으면 그 캐릭터로 접속해서
     한다 (지금 그 캐릭터면 다시 고르지 않는다). 반환 {clears, deaths, retries, revives, seconds}."""
-    return AbyssRepeat(bot, cfg, runs, minutes, on_event, character, loot).run()
+    return AbyssRepeat(bot, cfg, runs, minutes, on_event, character, loot, iface).run()

@@ -516,7 +516,7 @@ class RaidRepeat(Repeat):
 
 
 def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lambda e: None,
-           character: dict | None = None, loot=None) -> dict:
+           character: dict | None = None, loot=None, iface=None) -> dict:
     """레이드를 반복한다 (RaidRepeat). runs·minutes 가 0 이면 사람이 멈출 때까지. 시간이 다 되면 그 판은 마저 끝낸다.
     character({slot, name})가 있으면 그 캐릭터로 접속해서 한다. 반환 {clears, deaths, retries, revives, seconds}."""
-    return RaidRepeat(bot, cfg, runs, minutes, on_event, character, loot).run()
+    return RaidRepeat(bot, cfg, runs, minutes, on_event, character, loot, iface).run()
