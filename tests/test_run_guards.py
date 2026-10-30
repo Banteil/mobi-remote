@@ -90,5 +90,20 @@ class DeadlineTest(unittest.TestCase):
         Bot.check_stop(b)  # 정리 단계에서 또 터지지 않는다
 
 
+class LinesLeftTest(unittest.TestCase):
+    """'대화 넘기기' 그림이 안 맞아도 CLI 가 넘길 대사가 있다고 하면 대사가 남은 것 (2026-10-30 던컨 앞 7분 멈춤)."""
+
+    def test_cli_when_picture_misses(self):
+        from mabi.tasks.dialogue import lines_left
+        b = mock.MagicMock()
+        b.skip_button.return_value = None
+        b.activity.return_value = {"IsDialogueNextAvailable": True, "IsWaitingForSelection": False}
+        self.assertTrue(lines_left(b))
+        b.activity.return_value = {"IsDialogueNextAvailable": True, "IsWaitingForSelection": True}
+        self.assertFalse(lines_left(b))
+        b.activity.return_value = None
+        self.assertFalse(lines_left(b))
+
+
 if __name__ == "__main__":
     unittest.main()

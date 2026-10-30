@@ -61,9 +61,14 @@ def menu_open(bot: Bot) -> bool | None:
 
 def lines_left(bot: Bot) -> bool:
     """오른쪽 위 '대화 넘기기' 가 보이나 — 아직 넘길 대사가 있다. 패킷은 첫 대사와 같은 순간에 '메뉴' 를 알려 주지만
-    화면의 메뉴 버튼은 대사를 넘긴 뒤에야 뜬다 (2026-10-25 대장간 도착 인사) → 메뉴가 보이는지는 이것과 같이 본다."""
+    화면의 메뉴 버튼은 대사를 넘긴 뒤에야 뜬다 (2026-10-25 대장간 도착 인사) → 메뉴가 보이는지는 이것과 같이 본다.
+    버튼은 반투명이라 밝은 배경에서 그림이 안 맞는다 (2026-10-30 던컨 집 지붕 앞 0.48 → 메뉴 버튼만 기다리며 7분 넘게 멈춤)
+    → 그림에 없으면 CLI(IsDialogueNextAvailable, 선택지 대기 아님)로 본다."""
     hit = bot.skip_button()
-    return bool(hit and hit[0] == "dialog")
+    if hit and hit[0] == "dialog":
+        return True
+    act = bot.activity()
+    return bool(act and act.get("IsDialogueNextAvailable") and not act.get("IsWaitingForSelection"))
 
 
 def menu_shown(bot: Bot) -> bool | None:
