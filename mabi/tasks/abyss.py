@@ -95,11 +95,7 @@ def _travel_to_entry(bot: Bot) -> None:
     시작해 거의 늘 이렇다 — 2026-10-24 '입장하기' 만 기다리다 실패). 눌러서 입구로 가고, 멀면 빠른 이동(T)."""
     bot.log.info("어비스 입구에서 멂 → 이동하기")
     _click_text(bot, gd.text("abyss_move"), gd.region("abyss_entry_right"), what="이동하기")
-    bot.sleep(2, 3)
-    key = bot.cfg["game"].get("fast_travel_key")
-    if key and bot.fast_travel_ok():
-        bot.log.info("빠른 이동")
-        bot.key(key)
+    bot.fast_travel(wait=5)
     if not _wait_settled(bot, bot.cfg["abyss"].get("travel_timeout", 300)):
         raise CannotProceed(f"어비스 입구로 가지 못함 → {bot.snapshot('abyss_travel').name}")
 

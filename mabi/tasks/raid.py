@@ -198,11 +198,7 @@ def board(bot: Bot, raid: str, difficulty: str, at: str = "") -> None:
         bot.key("space")
         if button == "move":
             bot.log.info("선착장에서 멂 → 이동하기")
-            bot.sleep(2, 3)
-            key = bot.cfg["game"].get("fast_travel_key")
-            if key and bot.fast_travel_ok():
-                bot.log.info("빠른 이동")
-                bot.key(key)
+            bot.fast_travel(wait=5)
             # 도착하면 입장 창이 다시 뜬다 → 그 자리부터 (혼자하기·난이도를 다시 맞추고 출항하기). 창 없이 멈췄으면 메뉴에서
             at = "entry" if _travel_to_dock(bot) else ""
             continue

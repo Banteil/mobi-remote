@@ -43,3 +43,19 @@ class OutcomeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FastTravelTest(unittest.TestCase):
+    def test_waits_for_start_then_presses(self):
+        from mabi.bot import Bot
+        b = mock.MagicMock()
+        b.cfg = {"game": {"fast_travel_key": "t"}}
+        b.wait_packet.return_value = True
+        b.fast_travel_ok.return_value = True
+        self.assertTrue(Bot.fast_travel(b, wait=5))
+        b.wait_packet.assert_called_once()
+        b.key.assert_called_once_with("t")
+        b.cfg = {"game": {}}
+        b.key.reset_mock()
+        self.assertFalse(Bot.fast_travel(b))
+        b.key.assert_not_called()

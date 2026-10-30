@@ -493,13 +493,7 @@ def craft(bot, ctx, seen):
 
 
 def fast_travel(bot) -> bool:
-    """먼 곳으로 자동 이동 중이면 빠른 이동 키(T)를 누른다. 눌렀으면 True."""
-    key = bot.cfg["game"].get("fast_travel_key")
-    if key and bot.fast_travel_ok():
-        bot.log.info("빠른 이동")
-        bot.key(key)
-        return True
-    return False
+    return bot.fast_travel()  # 한 곳 (Bot.fast_travel)
 
 
 # 어느 일이든 (기다리는 중에 끼어든 창 포함)

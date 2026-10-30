@@ -198,8 +198,7 @@ def started(bot: Bot, arrive: list[str], within: float = 12) -> None:
 
 def travel(bot: Bot, arrive: list[str], timeout: float) -> None:
     """'진행하기' 등으로 시작된 자동 이동이 끝나 arrive 중 하나가 보일 때까지 대기.
-    설정에 fast_travel_key 가 있으면 이동 시작 후 한 번 눌러 빠른 이동한다."""
-    key = bot.cfg["game"].get("fast_travel_key")
+    이동이 시작되면 한 번 빠른 이동(Bot.fast_travel)."""
     # 패킷: 자동 이동 시작이 오면 바로 (빠른 이동 가능 여부도 같이 온다). 모르면 예전처럼 2~3초 뒤 CLI 로
     moved = bot.wait_packet(lambda s: s.traveling, 5, since=bot.input_mark) is True  # 진행하기를 누른 뒤 이동이 시작됐나
     if moved:
@@ -207,9 +206,7 @@ def travel(bot: Bot, arrive: list[str], timeout: float) -> None:
     else:
         bot.sleep(2, 3)
         started(bot, arrive)
-    if key and bot.fast_travel_ok():
-        bot.log.info("빠른 이동")
-        bot.key(key)
+    bot.fast_travel()
     # 이동이 끝났는데(패킷·CLI) 도착 화면이 한참 안 뜨면 엉뚱한 곳에 선 것 — 상한(timeout)까지 기다리지 않는다
     # (2026-10-26 요일 던전 입구에서 던전 창 없이 5분 서 있음)
     end = time.monotonic() + timeout

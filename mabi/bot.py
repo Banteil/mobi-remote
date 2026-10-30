@@ -332,6 +332,22 @@ class Bot:
         a = self._act(act)
         return bool(a.get("IsAutoTraveling") and a.get("AutoTravelRemainingPositionCount", 0) > 0)
 
+    def fast_travel(self, wait: float = 0) -> bool:
+        """빠른 이동(T) — 먼 곳으로 자동 이동 중이면 누른다. 눌렀으면 True. 모든 이동(숙제·아르바이트·어비스·레이드·수리)이 쓴다.
+        wait: 방금 이동을 시켰으면 시작되길 그만큼 기다린 뒤 본다 (패킷 traveling, 패킷이 모르면 2~3초).
+        예전엔 2~3초 쉬고 한 번만 봐서 이동이 늦게 시작되면 T 를 놓치고 걸어갔다."""
+        key = self.cfg["game"].get("fast_travel_key")
+        if not key:
+            return False
+        if wait:
+            moved = self.wait_packet(lambda s: s.traveling, wait, since=self.input_mark)
+            self.sleep(0.5) if moved else self.sleep(2, 3)
+        if not self.fast_travel_ok():
+            return False
+        self.log.info("빠른 이동")
+        self.key(key)
+        return True
+
     def in_combat(self, act: dict | None = None) -> bool:
         """전투 중인가. 패킷(내 캐릭터 전투 상태)이 알면 그것, 모르면 CLI IsInCombat."""
         p = self.packets

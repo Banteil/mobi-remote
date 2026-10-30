@@ -124,7 +124,6 @@ def _go_smithy(bot: Bot) -> None:
     else:
         raise CannotProceed(f"'대장간' 을 눌러도 움직이지 않음 → {bot.snapshot('repair_menu').name}")
     bot.log.info("대장간으로 이동")
-    key = bot.cfg["game"].get("fast_travel_key")
     fast = False
     end = time.monotonic() + bot.cfg["abyss"].get("travel_timeout", 300)
     while time.monotonic() < end:
@@ -133,10 +132,8 @@ def _go_smithy(bot: Bot) -> None:
             continue
         if dialogue.talking(bot):  # 도착해 대화가 열림 — 메뉴는 인사말을 넘긴 뒤에 뜬다 (_open_repair)
             return
-        if key and not fast and bot.fast_travel_ok():
-            bot.log.info("빠른 이동")
-            bot.key(key)
-            fast = True
+        if not fast:
+            fast = bot.fast_travel()
         bot.sleep(1.5, 2)
     raise CannotProceed(f"대장간 NPC 대화가 열리지 않음 → {bot.snapshot('repair_npc').name}")
 
