@@ -478,7 +478,7 @@ def exit_reward(bot: Bot) -> None:
 
 
 def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lambda e: None,
-           character: dict | None = None) -> dict:
+           character: dict | None = None, loot=None) -> dict:
     """어비스를 반복한다. runs·minutes 가 0 이면 사람이 멈출 때까지 (StopRequested).
     시간이 다 되면 그 판은 마저 끝내고 보상 화면에서 나간다. character({slot, name})가 있으면 그 캐릭터로 접속해서
     한다 (지금 그 캐릭터면 다시 고르지 않는다). 반환 {clears, deaths, retries, seconds}."""
@@ -509,7 +509,8 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
     unchecked = None  # 이름을 확인 못 한 채 이어 한 캐릭터 — 판 안에서 이름을 알면 확인한다
     if character and not _switch_character(bot, cfg, character):
         unchecked = character
-    on_event({"type": "ready"})  # 이 캐릭터로 접속을 마침 — 작업 큐가 여기서부터 얻은 것을 잰다
+    if loot:  # 이 캐릭터로 접속을 마침 — 여기서부터 얻은 것을 잰다 (queue_report.LootMeter, 닫기는 부른 쪽)
+        loot.open(bot, (character or {}).get("name") or current_name(bot) or "")
     bot.background = behind
     at = where_settled(bot, dungeon)
     stage = {"play": "play", "reward": "reward", "matching": "match"}.get(at, "entry")

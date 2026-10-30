@@ -316,6 +316,8 @@ class DailyApi:
             from mabi.bot import Bot, StopRequested
             task = importlib.import_module(f"mabi.tasks.{kind}")
             bot = None
+            from mabi.queue_report import LootMeter
+            meter = LootMeter(lambda x: event({"type": "loot", **x}))
             try:
                 self._daily_hook_log()
                 cfg = load_config(self.paths)
@@ -336,7 +338,7 @@ class DailyApi:
                         log.info(display.prepare_interface(bot, prof.DailyState(self.paths.state)))
                     except Exception as e:
                         log.warning(f"인터페이스 PC·80% 로 맞추지 못함 — 그대로 진행: {e}")
-                res = task.repeat(bot, cfg, int(a["runs"]), float(a["minutes"]), on_event=event, character=ch)
+                res = task.repeat(bot, cfg, int(a["runs"]), float(a["minutes"]), on_event=event, character=ch, loot=meter)
                 event({"type": "done", **res})
             except StopRequested:
                 log.info(f"{title} 반복: 사용자 중단")
@@ -347,6 +349,10 @@ class DailyApi:
             finally:
                 setattr(self, f"_{kind}_bot", None)
                 if bot:
+                    try:
+                        meter.close(bot)  # 멈췄어도 그때까지 얻은 것
+                    except Exception:  # noqa: BLE001 — 못 재도 끝맺음은 한다
+                        log.exception(f"{title} 반복: 얻은 것 재기 실패")
                     bot.stopper.close()
         t = threading.Thread(target=work, name=kind, daemon=True)
         setattr(self, f"_{kind}_thread", t)

@@ -430,7 +430,7 @@ def leave(bot: Bot, to_field: bool = False) -> None:
 
 
 def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lambda e: None,
-           character: dict | None = None) -> dict:
+           character: dict | None = None, loot=None) -> dict:
     """레이드를 반복한다. runs·minutes 가 0 이면 사람이 멈출 때까지. 시간이 다 되면 그 판은 마저 끝낸다.
     character({slot, name})가 있으면 그 캐릭터로 접속해서 한다. 반환 {clears, deaths, retries, revives, seconds}."""
     from .login import current_name, name_matches
@@ -465,7 +465,8 @@ def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lamb
         bot.character = character
         bot.log.info(login.run(bot, cfg, character))
         at = where_settled(bot, raid)
-    on_event({"type": "ready"})  # 이 캐릭터로 접속을 마침 — 작업 큐가 여기서부터 얻은 것을 잰다
+    if loot:  # 이 캐릭터로 접속을 마침 — 여기서부터 얻은 것을 잰다 (queue_report.LootMeter, 닫기는 부른 쪽)
+        loot.open(bot, (character or {}).get("name") or current_name(bot) or "")
     stage = {"play": "play", "cleared": "cleared", "ship": "ship"}.get(at, "entry")
     leftover = at == "cleared"  # 시작 전에 이미 잡아 둔 판 — 결과·나가기만 하고 판 수에는 넣지 않는다
     bot.log.info({"play": "이미 레이드 안 → 이 판부터", "cleared": "보스를 잡은 뒤 → 결과부터", "ship": "출항선 → 출항부터",

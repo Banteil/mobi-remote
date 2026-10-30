@@ -142,6 +142,8 @@ class Runner:
         self.force_exit = force_exit
         self.bot: Bot | None = None
         self._stop_requested = False
+        # 캐릭터마다 얻은 것 (작업 큐 결과 창) — 숙제를 시작할 때와 그 캐릭터를 끝낼 때 가방·재화를 찍어 뺀다
+        self._loot = queue_report.LootMeter(lambda x: self._emit("loot", **x))
 
     def stop(self) -> None:
         """GUI 의 중단 버튼. 봇은 다음 대기/캡처 시점에 멈춘다."""
@@ -149,20 +151,6 @@ class Runner:
         if self.bot:
             self.bot.stopper.request()
 
-    # ---- 캐릭터마다 얻은 것 (작업 큐 결과 창) — 숙제를 시작할 때와 그 캐릭터를 끝낼 때 가방·재화를 찍어 뺀다
-    _loot: tuple | None = None
-
-    def _loot_open(self, bot: Bot, who: str) -> None:
-        self._loot = (who, queue_report.snapshot(bot.state.query)) if bot.state.available() else None
-
-    def _loot_close(self, bot: Bot) -> None:
-        if not self._loot:
-            return
-        who, before = self._loot
-        self._loot = None
-        x = queue_report.loot(before, queue_report.snapshot(bot.state.query), who)
-        if x:
-            self._emit("loot", **x)
 
     def _emit(self, type_: str, **kw) -> None:
         try:
@@ -234,7 +222,7 @@ class Runner:
             try:
                 self._loop(cfg, opts, registry, by_slot, characters, state, bot, report, results)
             finally:
-                self._loot_close(bot)  # 마지막 캐릭터 (중단으로 끝나도)
+                self._loot.close(bot)  # 마지막 캐릭터 (중단으로 끝나도)
             if not any(s == "STOP" for _, s, _ in results):
                 state.clear_progress()  # 끝까지 돌았다. 중단·충돌이면 남겨 두고 다음에 거기서부터
                 # 모든 캐릭터가 끝났다 → 시작할 때 기억해 둔 인터페이스 설정으로 되돌린다 (일시정지면 이어 할 때까지 둔다)
@@ -479,7 +467,7 @@ class Runner:
             if ch and cut and cut.get("slot") == slot and cut.get("task") in order and order[0] != cut["task"]:
                 order = [cut["task"], *[t for t in order if t != cut["task"]]]
                 log.info(f"[{who}] 끊긴 숙제 '{registry[cut['task']][0]}' 부터")
-            self._loot_close(bot)  # 앞 캐릭터가 얻은 것 (다른 캐릭터로 바꾸기 전에)
+            self._loot.close(bot)  # 앞 캐릭터가 얻은 것 (다른 캐릭터로 바꾸기 전에)
             bot.character = ch
             report.character(ch)
             self._emit("character", slot=slot, name=who)
@@ -506,7 +494,7 @@ class Runner:
                     self._emit("task_end", slot=slot, task=t, label=t, status="HEAVY", summary=heavy, seconds=0)
                 continue
             bot.watch_weight = True  # 숙제 중에만 가방 무게 감시
-            self._loot_open(bot, who)
+            self._loot.open(bot, who)
             for tid in order:
                 label, fn = registry[tid]
                 if tid in bot.also_done:  # 다른 숙제 안에서 이미 끝냄 (사냥터 안 검은 구멍 등)

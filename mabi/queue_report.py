@@ -38,6 +38,27 @@ def loot(before: dict | None, after: dict | None, who: str = "") -> dict | None:
     return out if out["gained"] or out["used"] or out["cur"] else None
 
 
+class LootMeter:
+    """한 캐릭터 몫의 얻은 것. 그 캐릭터로 접속을 마친 뒤 open, 그 캐릭터를 끝낼 때(다른 캐릭터로 바꾸기 전·작업 끝) close
+    → emit({who, gained, used, cur}). 일일 숙제(runner)·어비스·레이드 반복이 같이 쓴다 — 카드 앞뒤로 재면 캐릭터를
+    바꾼 카드는 다른 캐릭터 가방끼리 뺀다 (2026-10-30 결과 창에 룬의 파편 +16만 등)."""
+
+    def __init__(self, emit):
+        self.emit, self._at = emit, None
+
+    def open(self, bot, who: str) -> None:
+        self._at = (who, snapshot(bot.state.query)) if bot.state.available() else None
+
+    def close(self, bot) -> None:
+        if not self._at:
+            return
+        who, before = self._at
+        self._at = None
+        x = loot(before, snapshot(bot.state.query), who)
+        if x:
+            self.emit(x)
+
+
 def total(loots: list[dict]) -> dict:
     """여러 loot 를 하나로 더한다."""
     out = {"gained": {}, "used": {}, "cur": {}}
