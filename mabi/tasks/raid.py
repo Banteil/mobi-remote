@@ -289,9 +289,10 @@ def sail(bot: Bot) -> None:
     raise StepTimeout(f"출항 뒤 레이드 맵에 들어가지 못함 → {bot.snapshot('raid_sail').name}")
 
 
-def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: None) -> str:
+def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: None, tick=lambda act: False) -> str:
     """레이드 맵에서 보스를 잡을 때까지. 'clear' | 'dead' | 'timeout'.
-    쓰러지면 '여기서 부활' (점검자 — abyss.revive_here, 부활 횟수를 다 쓰면 'dead'). 배고프면 먹는다."""
+    쓰러지면 '여기서 부활' (점검자 — abyss.revive_here, 부활 횟수를 다 쓰면 'dead'). 배고프면 먹는다.
+    tick(act): 확인마다 부른다 — 보스전 궁극기·팔라딘 변신 (Repeat.skills)."""
     end = time.monotonic() + run_timeout
     ctx = monitor.Ctx("raid", "레이드 진행", revive=revive)
     while True:
@@ -311,6 +312,7 @@ def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: No
             continue
         if not seen.done:
             bot.eat_if_hungry()
+            tick(act)
         if time.monotonic() > end:
             return "timeout"
 
@@ -421,6 +423,9 @@ class RaidRepeat(Repeat):
 
     def where(self):
         return where_settled(self.bot, self.a["raid"])
+
+    def boss_fight(self, s):
+        return s.raid_boss  # 보스 입장 연출 뒤 보스전 시작 패킷 (레이드는 배·맵 진입 때도 모닥불이 와서 그걸로는 못 본다)
 
     def setup(self):
         self.bot.scene_skip = True  # 레이드는 연출이 길어 넘긴다 (사용자) — 뒤에서 도는 중이면 may_skip_scene 이 막는다

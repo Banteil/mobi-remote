@@ -4,6 +4,7 @@
 - [silver.by_slot.N]  field · field_runs · dungeon · floor · black_hole_in_field
 - [run.skip_by_slot]  "N" = ["black_hole"]   (검은 구멍 끄기 — 사냥터 안 검은 구멍도 같이 끈다)
 - [weekday_dungeon.sunday_by_slot]  "N" = "골드"   (일요일 요일 던전 — 임무 게시판에서 고를 던전)
+- [arbeit] slots · [boss_skills] ultimate_slots · paladin_slots   (켠 캐릭터 슬롯 목록 — 기본은 아무도 안 함)
 화면에는 '기본값' 대신 실제로 적용되는 값을 보여 주고, 저장할 때는 공통 설정과 다른 값만 덮어쓰기로 남긴다.
 
 카드 그림은 data/portraits/<슬롯>.png. '자동 설정' 이 캐릭터 선택 화면에서 잘라 오거나 사람이 파일로 고른다.
@@ -131,6 +132,8 @@ class CharsApi:
         today = prof.DailyState(self.paths.state)
         by_tasks = doc["run"].get("tasks_by_slot", {})
         arb_slots = [int(x) for x in doc.get("arbeit", {}).get("slots", [])]
+        boss = doc.get("boss_skills", {})
+        ult_slots, pal_slots = ([int(x) for x in boss.get(k, [])] for k in ("ultimate_slots", "paladin_slots"))
         out = []
         for c in prof.characters(profile):
             k = str(c["slot"])
@@ -148,7 +151,8 @@ class CharsApi:
                 "dungeon": str(o.get("dungeon", defaults["dungeon"])), "floor": int(o.get("floor", defaults["floor"])),
                 "black_hole": "black_hole" not in list(skip.get(k, [])),
                 "sunday": str(sun_by.get(k, defaults["sunday"])),
-                "arbeit": c["slot"] in [int(x) for x in doc.get("arbeit", {}).get("slots", [])],
+                "arbeit": c["slot"] in arb_slots,
+                "ultimate": c["slot"] in ult_slots, "paladin": c["slot"] in pal_slots,
                 "level": fp.get("level") or card.get("level"), "job": fp.get("job") or card.get("job"),
                 "portrait": self._data_url(self._portrait(c["slot"])),
             })
@@ -159,7 +163,7 @@ class CharsApi:
 
     # ---- 저장 ----
     def chars_save(self, chars: list) -> dict:
-        """chars: [{slot, name, field, field_runs, dungeon, floor, black_hole, sunday}] — 화면에 보이는 실제 값."""
+        """chars: [{slot, name, field, field_runs, dungeon, floor, black_hole, sunday, arbeit, ultimate, paladin}] — 화면에 보이는 실제 값."""
         slots = [int(c["slot"]) for c in chars]
         if len(set(slots)) != len(slots):
             return {"error": "같은 슬롯이 두 번 있습니다"}
@@ -187,6 +191,11 @@ class CharsApi:
             arr = tomlkit.array()
             arr.extend(sorted(int(c["slot"]) for c in chars if c.get("arbeit")))
             doc["arbeit"]["slots"] = arr
+        if "boss_skills" in doc:  # 궁극기·팔라딘 변신은 따로따로 켠 캐릭터 목록
+            for k, want in (("ultimate_slots", "ultimate"), ("paladin_slots", "paladin")):
+                arr = tomlkit.array()
+                arr.extend(sorted(int(c["slot"]) for c in chars if c.get(want)))
+                doc["boss_skills"][k] = arr
         userconfig.save(self.paths, doc)
         return {"ok": True}
 

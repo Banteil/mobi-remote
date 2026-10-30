@@ -324,11 +324,12 @@ def revive_here(bot: Bot) -> bool:
     return False
 
 
-def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: None) -> str:
+def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: None, tick=lambda act: False) -> str:
     """어비스 안에서 끝날 때까지 지켜본다. 'clear' | 'dead' | 'timeout'.
     쓰러지면 revive 일 때 '여기서 부활' 하고 이어 한다 (못 하면 'dead' → 나가서 처음부터).
     배고프면 그때마다 음식을 먹는다 (어비스 반복은 일일 숙제의 하루 횟수 제한 없이).
-    쓰러짐('여기서 부활')과 판 중에 끼어든 창(퀘스트 클리어 창·대화)은 점검자가 (content.watch)."""
+    쓰러짐('여기서 부활')과 판 중에 끼어든 창(퀘스트 클리어 창·대화)은 점검자가 (content.watch).
+    tick(act): 확인마다 부른다 — 보스전 궁극기·팔라딘 변신 (Repeat.skills)."""
     end = time.monotonic() + run_timeout
     mark = bot.packets.mark()
     ctx = monitor.Ctx("abyss", "판 진행", revive=revive)
@@ -362,6 +363,7 @@ def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: No
             return "clear"
         if here and not seen.done:
             bot.eat_if_hungry()
+            tick(act)
         if time.monotonic() > end:
             return "timeout"
 
@@ -447,6 +449,10 @@ class AbyssRepeat(Repeat):
 
     def where(self):
         return where_settled(self.bot, self.a["dungeon"])
+
+    def boss_fight(self, s):
+        # 어비스는 보스전 신호가 없다 (CLI 던전 상태도 NotInDungeon) — 모닥불이 나온 뒤 자동 이동해 싸우는 곳이 보스전
+        return s.campfire and s.channel_type == "InstanceAbyssDungeon"
 
     def setup(self):
         self.bot.scene_skip = False  # 연출은 누르지 않고 기다린다 — 누르면 뒤에서 돌던 게임이 앞으로 나온다 (2026-10-25 사용자)

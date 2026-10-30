@@ -365,6 +365,13 @@ class PacketState:
     raid_state: str | None = None
     raid_result: int = 0             # 레이드 결과 (보스 처치 순간 레이드 번호, 맵을 옮기면 0)
     raid_boss: bool = False          # 이 맵에서 레이드 보스전이 시작됨
+    campfire: bool = False           # 이 맵에 모닥불이 나타남 — 어비스는 그 뒤 자동 이동해 싸우는 곳이 보스전 (abyss1)
+    # 궁극기·팔라딘 변신 게이지 (현재/필요). 둘 다 같은 값으로 오르고 궁극기는 300, 팔라딘은 500 에서 찬다. 감시를 켠 뒤 안 왔으면 None
+    ult: float | None = None
+    ult_max: float | None = None
+    pal: float | None = None
+    pal_max: float | None = None
+    can_paladin: bool | None = None  # 이 맵에서 팔라딘 변신을 쓸 수 있나 (맵 진입 때 옴)
     field_state: str | None = None   # 사냥터: NotInBattlefield / InProgress / WaitingForChannelTransfer(클리어)
     boss_battle: bool = False
     dead: bool | None = None         # 내 캐릭터가 쓰러짐 (부활 창 열림). 나한테만 오는 부활 가능 여부로 안다
@@ -675,6 +682,7 @@ class PacketMonitor:
             s.raid_state, s.raid_result, s.raid_boss = None, 0, False
         if s.channel_type != "InstanceAbyssDungeon":
             s.abyss_result = 0
+            s.campfire = False
         after = {"맵": s.channel_name, "던전": s.dungeon_state, "사냥터": s.field_state, "쓰러짐": s.dead,
                  "레이드": s.raid_state}
         return [f"{k} {before[k]} → {after[k]}" for k in before if before[k] != after[k]]
@@ -697,7 +705,7 @@ class PacketMonitor:
             if s.channel_type == "InstanceAbyssDungeon":
                 s.abyss_matching = 0
             s.abyss_result = 0  # 새 맵 — 지난 판 결과는 끝났다 (나갈 때 0 이 오는지 실측이 없어 여기서도 지운다)
-            s.raid_result, s.raid_boss = 0, False
+            s.raid_result, s.raid_boss, s.campfire = 0, False, False
             s.dead = None  # 쓰러진 채 맵을 옮기면 부활 신호가 안 올 수 있다 → 다시 쓰러질 때까지 CLI 로
             # 마을·사냥터면 던전 밖이다. 던전을 나가는 패킷(NotInDungeon)을 놓치면 지난밤 'Cleared' 가 남아,
             # 아침에 접속 단계가 메인 화면을 던전 클리어 화면으로 알고 6명 모두 3분씩 헛돌았다 (2026-10-30 06:44)
@@ -732,6 +740,13 @@ class PacketMonitor:
             log.info("패킷: 레이드 결과 옴")
         elif key == "raid.boss_begin":
             s.raid_boss = True
+            log.info("패킷: 레이드 보스전 시작")
+        elif key == "abyss.campfire":
+            s.campfire = True
+        elif key == "ultimate.resource":
+            s.ult, s.ult_max, s.pal, s.pal_max = vals.get("ult"), vals.get("ult_max"), vals.get("pal"), vals.get("pal_max")
+        elif key == "ultimate.can_paladin":
+            s.can_paladin = bool(vals.get("on"))
         elif key == "abyss.matching_update":
             s.abyss_matching = vals.get("state") or 0
         elif key == "abyss.matching_cancel_ok":

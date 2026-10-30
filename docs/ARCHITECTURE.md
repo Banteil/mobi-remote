@@ -29,6 +29,7 @@ mabi/
 | 인터페이스 PC·80% 맞추기 (한 번, 게임 안·콘텐츠 밖일 때) | `tasks/display.InterfaceFit` → `'interface'` 이벤트 | runner, Repeat |
 | 빠른 이동(T) — 이동 시작을 기다린 뒤 | `Bot.fast_travel(wait)` | 숙제 이동, 아르바이트(점검자), 어비스·레이드 입구, 수리 |
 | 가방이 꽉 찼나 | `Bot.overweight()` (패킷, 모르면 CLI) | runner 접속 뒤, `Bot.check_weight` |
+| 보스전 궁극기·팔라딘 변신 (캐릭터마다 따로, 판 진행 확인마다 tick) | `tasks/boss_skills.BossSkills` · 보스전인가 `Repeat.boss_fight` | Repeat(어비스·레이드만) |
 | 판 사이 수리할지 / 수리했는데 그대로인지 | `tasks/repair.due` · `repair.run` | Repeat |
 | 얻은 것 재기 (캐릭터 접속 뒤 open, 그 캐릭터 끝에 close) | `queue_report.LootMeter` → `'loot'` 이벤트 | runner, Repeat(부르는 쪽 `daily_api._repeat_launch`), 큐 Kind 들이 같은 이벤트로 받음 |
 | 지금 어디인가 | `place.place(bot)` | 복구·나가기·시작 점검 |

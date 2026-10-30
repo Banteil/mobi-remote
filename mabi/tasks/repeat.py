@@ -3,13 +3,14 @@
 판을 도는 순서는 같다: 캐릭터 확인 → (얻은 것 재기 시작) → 입장 → 판 → 결과 → 수리 → 다음 판, 판 수·시간이 차면 끝.
 종류마다 다른 것(어디인가 · 입장 · 판 안에서 나가기 · 다음 판으로)은 하위 클래스가 덮어쓴다 (abyss.AbyssRepeat ·
 raid.RaidRepeat). 공통으로 쥐는 것: 판 수·시간·사망 집계, 진행 알림, 캐릭터 확인(이름을 모르면 이어 하고 나중에
-확인), 판 사이 수리(repair.due), 게임을 뒤로 돌려주기.
+확인), 판 사이 수리(repair.due), 게임을 뒤로 돌려주기, 보스전 궁극기·팔라딘 변신(boss_skills — 보스전인가만 종류마다).
 """
 import ctypes
 import time
 
 from ..bot import Bot
 from . import login, repair
+from .boss_skills import BossSkills, slot_of
 from .login import current_name, name_matches
 
 
@@ -29,6 +30,7 @@ class Repeat:
         self.below = float(self.a.get("repair_below", 0.05) or 0)  # 이 내구도 이하면 판 사이에 수리 (0 = 안 함)
         self.repaired_from = None  # 바로 앞 수리 직전 내구도 (repair.due)
         self.stat = {"clears": 0, "deaths": 0, "retries": 0, "revives": 0}
+        self.skills = BossSkills(bot, False, False, self.boss_fight)  # 캐릭터를 확인한 뒤 그 캐릭터 설정으로 (run)
         self.t0 = time.monotonic()
 
     # ---- 종류마다 덮어쓴다
@@ -50,6 +52,10 @@ class Repeat:
         """판을 돈다 (done() 이면 돌아온다)."""
         raise NotImplementedError
 
+    def boss_fight(self, s) -> bool:
+        """지금 보스전인가 (패킷 상태 s). 보스전이면 켠 캐릭터는 궁극기·팔라딘 변신을 쓴다 (boss_skills)."""
+        return False
+
     # ---- 공통
     def done(self) -> bool:
         return bool((self.runs and self.stat["clears"] >= self.runs)
@@ -70,7 +76,8 @@ class Repeat:
         self.bot.step(step, f"{n}번째 판 진행 중")
         self.emit(stage="play")
         return play(self.bot, self.a["run_timeout"], bool(self.a.get("revive", True)),
-                    on_revive=lambda: (self.stat.__setitem__("revives", self.stat["revives"] + 1), self.emit(stage="play")))
+                    on_revive=lambda: (self.stat.__setitem__("revives", self.stat["revives"] + 1), self.emit(stage="play")),
+                    tick=self.skills.tick)
 
     def cleared(self) -> None:
         self.stat["clears"] += 1
@@ -140,8 +147,12 @@ class Repeat:
         if self.iface and self.iface.attempt(self.bot):
             at = self.where()
         self.bot.watch_weight = True  # 가방이 꽉 차면 보상을 못 받는다 → Overweight 로 멈춤 (일일 숙제와 같게, 접속 뒤부터)
+        name = (self.character or {}).get("name") or current_name(self.bot) or ""
+        self.skills = BossSkills.for_character(self.bot, self.cfg, slot_of(self.bot, self.character, name), self.boss_fight)
+        if self.skills.enabled:
+            self.bot.log.info(f"보스전에서 쓸 것: {self.skills.describe()}")
         if self.loot:  # 이 캐릭터로 접속을 마침 — 여기서부터 얻은 것을 잰다 (queue_report.LootMeter, 닫기는 부른 쪽)
-            self.loot.open(self.bot, (self.character or {}).get("name") or current_name(self.bot) or "")
+            self.loot.open(self.bot, name)
         self.loop(at)
         secs = round(time.monotonic() - self.t0)
         self.bot.log.info(f"{self.TITLE} 반복 끝: 클리어 {self.stat['clears']}판, 쓰러져 나감 {self.stat['deaths']}번 ({secs // 60}분)")
