@@ -37,7 +37,7 @@ from mabi.store import Favorites, Playlists
 from .chars_api import CharsApi
 from .daily_api import DailyApi
 from .queue_api import QueueApi
-from .dye_service import DyeService
+from .dye_service import DyeService, clean_view
 from .dye_tab import exclude_from_capture
 from .legacy_shapes import Shapes
 from .queue_overlay import OverlayService
@@ -140,6 +140,7 @@ class Api(DailyApi, CharsApi, QueueApi):
         title = load_config(self.paths)["game"]["window_title"]
         self.dyes = DyeService(self.dye, self._emit, title)
         self.dyes.win = win
+        self.dyes.set_view(self.settings.get("dyeView"))
         self.qov = OverlayService(title, self.settings.get("overlay"),
                                   self.queue.snapshot())
 
@@ -496,6 +497,24 @@ class Api(DailyApi, CharsApi, QueueApi):
         if self.dyes:
             self.dyes.retarget()
         return out
+
+    def dye_view(self, v=None):
+        """염색 보기 설정 — 흑백 강조·밝기·팔레트 자리. v 가 없으면 지금 값만."""
+        cur = clean_view(self.cfg_get().get("dyeView"))
+        if v is None:
+            return cur
+        view = clean_view({**cur, **(v if isinstance(v, dict) else {})})
+        self._save_settings({"dyeView": view})
+        if self.dyes:
+            self.dyes.set_view(view)
+        self._emit("mm:dye-view", view)
+        return view
+
+    def dye_edit_area(self):
+        """게임 위에 팔레트 자리를 그리는 창을 띄운다. 다 그리면 저장 (오른쪽 클릭은 기본 자리로)."""
+        if not self.dyes:
+            return {"error": "창이 아직 없습니다"}
+        return self._on_gui(lambda: self.dyes.edit_area(lambda area: self.dye_view({"area": area})))
 
     def dye_start(self):
         return self.dyes.start() if self.dyes else {"error": "창이 아직 없습니다"}

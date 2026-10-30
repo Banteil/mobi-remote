@@ -214,6 +214,52 @@ def palette_at(f: Frame, at=PALETTE_AT) -> Palette | None:
     return b
 
 
+
+def snap_area(f: Frame, rect: Rect, reach: int | None = None) -> Rect:
+    """사람이 대충 그린 사각형을 가까운 테두리 안쪽 경계에 맞춘다 — 변마다 ±reach 안에서 '바깥 줄은 어둡고
+    안쪽 줄은 아닌' 자리 중 가장 뚜렷한 곳. 그런 곳이 없는 변은 그린 대로 둔다."""
+    R = reach or max(8, jround(f.h * 0.02))
+    x0, y0, x1, y1 = rect.x, rect.y, rect.x + rect.w, rect.y + rect.h   # x1, y1 은 바로 바깥
+    ys = np.arange(jround(y0 + rect.h * 0.2), jround(y0 + rect.h * 0.8), 2)
+    xs = np.arange(jround(x0 + rect.w * 0.2), jround(x0 + rect.w * 0.8), 2)
+    ys, xs = ys[(ys >= 0) & (ys < f.h)], xs[(xs >= 0) & (xs < f.w)]
+    if not len(ys) or not len(xs):
+        return rect
+
+    def best(lo, hi, dark_of, outward):
+        """[lo, hi] 안의 경계 v (v 가 안쪽 첫 줄, v+outward 가 바깥 줄)."""
+        top, at = 0.5, None   # 절반 넘게 갈려야 경계로 본다
+        for v in range(lo, hi + 1):
+            out, inn = dark_of(v + outward), dark_of(v)
+            if out is None or inn is None:
+                continue
+            if out - inn > top:
+                top, at = out - inn, v
+        return at
+
+    def col(x):
+        return (f.maxc(ys, np.array([x])) < DARK_MAX).mean() if 0 <= x < f.w else None
+
+    def row(y):
+        return (f.maxc(np.array([y]), xs) < DARK_MAX).mean() if 0 <= y < f.h else None
+
+    L = best(x0 - R, x0 + R, col, -1)
+    T = best(y0 - R, y0 + R, row, -1)
+    Rr = best(x1 - 1 - R, x1 - 1 + R, col, 1)
+    B = best(y1 - 1 - R, y1 - 1 + R, row, 1)
+    nx0 = x0 if L is None else L
+    ny0 = y0 if T is None else T
+    nx1 = x1 if Rr is None else Rr + 1
+    ny1 = y1 if B is None else B + 1
+    if nx1 - nx0 < 20 or ny1 - ny0 < 20:
+        return rect
+    return Rect(nx0, ny0, nx1 - nx0, ny1 - ny0)
+
+
+def area_of(f: Frame, rect: Rect) -> tuple[float, float, float, float]:
+    """화면 픽셀 사각형 → 게임 화면 대비 비율 (PALETTE_AT 꼴)."""
+    return rect.x / f.w, rect.y / f.h, rect.w / f.w, rect.h / f.h
+
 # ── 색 선택 UI (흰 지시선 + 스포이드 동그라미) ────────────────────
 
 @dataclass
@@ -719,6 +765,37 @@ def picks(rings: Sequence[Ring], targets: Sequence[Target]) -> list[Pick]:
         out.append(Pick(ring.x, ring.y, ring.r, slot, ring.hex,
                         None if slot < 0 else jround(best * 10) / 10))
     return out
+
+
+# ── 흑백 강조 ───────────────────────────────────────────────────
+
+SHADE_STEP = 2   # 반 해상도로 계산하고 늘려 그린다 — 749px 팔레트에 30ms 안쪽
+
+
+def highlight(f: Frame, box: Rect, targets: Sequence[Target], skip=None, light: float = 0.35) -> np.ndarray | None:
+    """팔레트를 흑백으로 깔고 목표 오차 안에 드는 자리만 제 색으로 남긴 그림 (RGB, box 의 1/SHADE_STEP 크기).
+    점 몇 개보다 "어느 구역이 그 색인가" 가 한눈에 보인다 (염색 도우미 v2.0 의 흑백 밝기). light: 흑백의 밝기 0~1.
+    가릴 자리(skip — 지시선·동그라미·틀 바깥)는 흑백으로 둔다. 목표가 없으면 None."""
+    if not targets:
+        return None
+    b = clamp_rect(box, f)
+    xs = np.arange(b.x, b.x + b.w, SHADE_STEP)
+    ys = np.arange(b.y, b.y + b.h, SHADE_STEP)
+    r, g, bb = f.rgb(ys, xs)
+    L, A, B = lab_arrays(r, g, bb)
+    hit = np.zeros(L.shape, dtype=bool)
+    for t in targets:
+        tol = t.tol_or_default
+        if tol:
+            hit |= _d2(L, A, B, t.lab) <= tol * tol
+    sk = skip_mask(skip, xs, ys)
+    if sk is not None:
+        hit &= ~sk
+    gray = (r * 0.299 + g * 0.587 + bb * 0.114) * max(0.0, min(1.0, light))
+    out = np.repeat(gray[..., None], 3, axis=2)
+    rgb = np.stack([r, g, bb], axis=-1)
+    out[hit] = rgb[hit]
+    return np.ascontiguousarray(out.astype(np.uint8))
 
 
 # ── 바뀌었는지 ───────────────────────────────────────────────────

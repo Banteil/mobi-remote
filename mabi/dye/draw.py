@@ -83,6 +83,17 @@ class CircleP:
 
 
 @dataclass
+class ImageP:
+    """그림 (RGB uint8 HxWx3) 을 (x, y, w, h) 에 늘려 그린다 — 흑백 강조."""
+    x: float
+    y: float
+    w: float
+    h: float
+    rgb: object
+    kind: str = "image"
+
+
+@dataclass
 class DotsP:
     """채운 정사각형 점들 (한 변 size, 가운데 정렬). 한 묶음을 한 색으로."""
     points: list[tuple[float, float]]
@@ -135,6 +146,8 @@ def overlay_items(state, presets=None, *, scale: float = 1.0, origin=(0, 0), scr
 
     if state.palette is not None:
         b = state.palette
+        if getattr(state, "shade", None) is not None:
+            out.append(ImageP(X(b.x), Y(b.y), round(b.w * scale), round(b.h * scale), state.shade))
         _palette_box(out, (X(b.x), Y(b.y), round(b.w * scale), round(b.h * scale)), s)
 
     # 점 — 오차 안에 든 자리마다. 칸마다 제 고유색, 어두운 받침을 먼저.

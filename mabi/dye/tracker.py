@@ -47,6 +47,7 @@ class DyeState:
     chips: list[tuple[str, bool]] = field(default_factory=list)   # (목표 hex, 스포이드가 물었나)
     all_caught: bool = False
     pins: list[tuple[int, int]] | None = None     # 스포이드가 셋일 때 삼각형 꼭짓점
+    shade: np.ndarray | None = None               # 흑백 강조 그림 (RGB, 팔레트의 1/SHADE_STEP 크기) — 켰을 때만
 
 
 WAIT_TEXT = "염색 감지 중…"
@@ -58,6 +59,7 @@ class DyeTracker:
         """at: 팔레트 자리 (x, y, w, h) 게임 화면 대비 비율. 없으면 detect.PALETTE_AT."""
         self.at = tuple(at) if at else D.PALETTE_AT
         self.order = order
+        self.gray, self.light = False, 0.35
         self._targets: list[D.Target] = []
         self.reset()
 
@@ -81,6 +83,12 @@ class DyeTracker:
         self._targets = [t for t in ts if t]
         self._slot_of = [i for i, t in enumerate(ts) if t]  # 계산 순번 → 원래 칸 번호
         self._n_slots = len(ts)
+        self.sig = None
+
+    def set_view(self, at=None, gray: bool = False, light: float = 0.35) -> None:
+        """팔레트 자리(비율, 없으면 기본)와 흑백 강조. 바뀌면 다음 바퀴에 다시 그린다."""
+        self.at = tuple(at) if at else D.PALETTE_AT
+        self.gray, self.light = bool(gray), float(light)
         self.sig = None
 
     @property
@@ -170,4 +178,5 @@ class DyeTracker:
             chips=[(t.hex, so[k] in caught, so[k]) for k, t in enumerate(targets)],
             all_caught=all_caught,
             pins=[(r.x, r.y) for r in rings] if len(rings) == 3 else None,
+            shade=D.highlight(f, box, targets, skip, self.light) if self.gray else None,
         ))

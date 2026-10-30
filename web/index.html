@@ -347,6 +347,22 @@
           <span id="dye-nudge-msg" class="muted"></span>
         </div>
         <p class="hint">켜 둔 동안 다른 프로그램에서는 이 조합이 듣지 않습니다.</p>
+        <div class="row mt10">
+          <label class="chk"><input type="checkbox" id="dye-gray"> 흑백 강조 — 맞는 색만 남기고 나머지는 흑백</label>
+        </div>
+        <div class="row">
+          <span class="muted">흑백 밝기</span>
+          <input type="range" id="dye-light" min="5" max="90" step="5">
+          <span id="dye-light-v" class="muted"></span>
+        </div>
+        <div class="row mt10">
+          <span class="muted">팔레트 자리</span>
+          <span id="dye-area" class="muted"></span>
+          <span class="spacer"></span>
+          <button class="btn btn-tiny" id="dye-area-edit" title="게임 위에서 팔레트 안쪽을 드래그해 정합니다">자리 고치기</button>
+          <button class="btn btn-tiny" id="dye-area-reset">기본 자리로</button>
+        </div>
+        <p class="hint">팔레트 자리는 정해져 있어 보통 고칠 일이 없습니다. 잡는 자리가 어긋날 때만 고치세요.</p>
       </div>
     </div>
 

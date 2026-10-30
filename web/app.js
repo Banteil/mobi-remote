@@ -1598,6 +1598,28 @@ function wire() {
     if (!r || !r.ok) $('#dye-nudge-msg').textContent = (r && r.error) || '켜지 못했습니다';
   })();
 
+  /*
+   * 보기 설정 — 흑백 강조·밝기·팔레트 자리. 파이썬이 저장하고 돌던 도우미에 바로 건다.
+   */
+  function paintDyeView(v) {
+    if (!v) return;
+    $('#dye-gray').checked = !!v.gray;
+    $('#dye-light').value = v.light;
+    $('#dye-light-v').textContent = v.light + '%';
+    $('#dye-area').textContent = v.area ? '직접 정함' : '기본';
+    $('#dye-area-reset').disabled = !v.area;
+  }
+  mm.dye.view().then(paintDyeView).catch(() => {});
+  mm.dye.onView(paintDyeView);
+  $('#dye-gray').addEventListener('change', (e) => mm.dye.view({ gray: e.target.checked }));
+  $('#dye-light').addEventListener('input', (e) => { $('#dye-light-v').textContent = e.target.value + '%'; });
+  $('#dye-light').addEventListener('change', (e) => mm.dye.view({ light: Number(e.target.value) }));
+  $('#dye-area-edit').addEventListener('click', async () => {
+    const r = await mm.dye.editArea().catch((err) => ({ error: err.message }));
+    if (r && r.error) toast('자리를 고칠 수 없습니다', r.error, 'bad');
+  });
+  $('#dye-area-reset').addEventListener('click', () => mm.dye.view({ area: null }));
+
   $('#dye-start').addEventListener('click', startDye);
   $('#dye-stop').addEventListener('click', stopDye);
   $('#dye-preset').addEventListener('change', async (e) => {

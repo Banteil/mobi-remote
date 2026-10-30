@@ -13,17 +13,30 @@ import time
 
 import mss
 import numpy as np
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QRectF, Signal
 
 from mabi.dye import draw as ddraw
 from mabi.dye import detect as D
 from mabi.dye.tracker import DyeTracker
 from mabi.window import GameWindow
 
-from .dye_tab import Overlay, exclude_from_capture
+from .dye_tab import AreaEditor, Overlay, exclude_from_capture
 from .queue_overlay import to_logical
 
 TICK = 0.12
+LIGHT = (5, 90, 35)  # 흑백 밝기 % (최소, 최대, 기본)
+
+
+def clean_view(v) -> dict:
+    """보기 설정 (설정 파일 dyeView): gray 흑백 강조, light 흑백 밝기 %, area 팔레트 자리 비율 (None = 기본)."""
+    v = v if isinstance(v, dict) else {}
+    a = v.get("area")
+    ok = (isinstance(a, (list, tuple)) and len(a) == 4
+          and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in a)
+          and 0 <= a[0] < 1 and 0 <= a[1] < 1 and 0.05 <= a[2] <= 1 and 0.05 <= a[3] <= 1)
+    lt = v.get("light")
+    lt = LIGHT[2] if not isinstance(lt, (int, float)) or isinstance(lt, bool) else int(min(LIGHT[1], max(LIGHT[0], lt)))
+    return {"gray": v.get("gray") is True, "light": lt, "area": [round(float(x), 5) for x in a] if ok else None}
 
 
 class _ToGui(QObject):
@@ -44,6 +57,8 @@ class DyeService:
         self.running = False
         self.tracker: DyeTracker | None = None
         self.win = None  # 메인 창 (캡처에서 뺀다)
+        self.view = clean_view(None)
+        self.editor: AreaEditor | None = None
 
     # ---- 제어 (작업 스레드에서 불려도 된다) ----
     def start(self) -> dict:
@@ -52,6 +67,7 @@ class DyeService:
         cur = self.presets.current() or {}
         self.tracker = DyeTracker()
         self.tracker.set_targets(cur.get("colors"), cur.get("tol"))
+        self.set_view(self.view)
         self.running = True
         self.thread = threading.Thread(target=self._loop, name="dye", daemon=True)
         self.thread.start()
@@ -69,6 +85,43 @@ class DyeService:
         if self.tracker:
             cur = self.presets.current() or {}
             self.tracker.set_targets(cur.get("colors"), cur.get("tol"))
+
+    def set_view(self, view: dict) -> None:
+        self.view = clean_view(view)
+        if self.tracker:
+            v = self.view
+            self.tracker.set_view(v["area"], v["gray"], v["light"] / 100)
+
+    def edit_area(self, on_done) -> dict:
+        """화면 스레드에서. 게임 위에 그리기 창을 띄운다. 다 그리면 가까운 테두리에 맞춰 on_done(비율 | None)."""
+        rect = self._rect()
+        if rect is None:
+            return {"error": "게임 창을 찾지 못했습니다"}
+        _, lx, ly, r = to_logical(rect)
+
+        def done(area):
+            if area is not None:
+                area = self._snap(area)
+            on_done(area)
+        if self.editor:
+            self.editor.close()
+        self.editor = AreaEditor(QRectF(lx, ly, rect[2] / r, rect[3] / r), self.view["area"] or D.PALETTE_AT, done)
+        self.editor.show()
+        exclude_from_capture(self.editor)  # 맞출 때 찍는 화면에 우리 창이 섞이지 않게
+        self.editor.activateWindow()
+        self.editor.setFocus()
+        return {"ok": True}
+
+    def _snap(self, area):
+        """그린 사각형(비율)을 지금 게임 화면의 가까운 테두리에 맞춘다. 못 찍으면 그린 대로."""
+        rect = self._rect()
+        if rect is None:
+            return area
+        with mss.mss() as sct:
+            img = np.asarray(sct.grab({"left": rect[0], "top": rect[1], "width": rect[2], "height": rect[3]}))
+        f = D.Frame(img)
+        px = D.Rect(D.jround(area[0] * f.w), D.jround(area[1] * f.h), D.jround(area[2] * f.w), D.jround(area[3] * f.h))
+        return list(D.area_of(f, D.snap_area(f, px)))
 
     def _rect(self):
         """게임 창 클라이언트 영역 (x, y, w, h) 실제 픽셀. 없거나 내려가 있으면 None."""
