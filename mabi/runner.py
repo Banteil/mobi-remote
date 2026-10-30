@@ -25,7 +25,7 @@ from .bot import AuthBlocked, Bot, MissingTemplate, Overweight, StepTimeout, Sto
 from .paths import Paths
 from .report import RunReport
 from .tasks import display, login
-from .tasks.content import CannotProceed
+from .tasks.content import CannotProceed, leave_dungeon
 
 log = logging.getLogger("mabi")
 
@@ -361,6 +361,12 @@ class Runner:
             """실패한 숙제 뒤 메인 화면으로. 접속 실패는 게임 밖 화면이라 건드리지 않는다."""
             if tid == "login":
                 return
+            try:
+                leave_dungeon(bot)  # 던전 안에서 실패했으면 다음 숙제를 밖에서 시작하게
+            except (StepTimeout, MissingTemplate, RuntimeError):
+                pass
+            except Exception:  # noqa: BLE001
+                log.exception("실패 뒤 던전에서 나가기 실패")
             try:
                 bot.to_main()
             except (StepTimeout, MissingTemplate, RuntimeError):  # RuntimeError: 게임 창이 없음 (꺼짐)

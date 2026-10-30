@@ -24,6 +24,44 @@ def ensure_auto(bot: Bot) -> None:
         bot.log.info("자동 전투 켬")
 
 
+def leave_dungeon(bot: Bot) -> bool:
+    """일반 던전(공물·은동전·요일) 안이면 나간다 — 어비스와 같은 오른쪽 맨 위 나가기 → '던전에서 퇴장하시겠습니까?'
+    나가기(Space) → 밖의 메인 화면까지. 나왔으면 True, 던전 밖이면 False.
+    실패한 숙제 뒤 정리(runner.recover)가 부른다: 공물 던전이 자동 이동 끼임으로 시간을 넘긴 뒤 던전 안에 남아
+    다음 일일 미션의 채집까지 실패했다 (2026-10-30 10:49)."""
+    from ..place import DUNGEON, place
+    if place(bot).kind != DUNGEON:
+        return False
+    ui = bot.ui
+    for _ in range(3):
+        if not bot.exists(ui["abyss_exit"]):
+            bot.key("esc")  # 창이 가리고 있으면 닫아 본다
+            bot.sleep(1.0, 1.5)
+            continue
+        bot.click(ui["abyss_exit"])
+        try:
+            bot.wait(ui["abyss_exit_dialog"], timeout=5)
+        except StepTimeout:
+            continue
+        bot.sleep(0.6, 0.9)
+        bot.key("space")
+        break
+    else:
+        raise StepTimeout(f"던전에서 나가지 못함 → {bot.snapshot('dungeon_leave').name}")
+    end = time.monotonic() + bot.cfg["timing"]["loading"]
+    bot.wait_packet(lambda s: s.loading, 15, since=bot.input_mark)
+    while place(bot).kind == DUNGEON or not bot.at_main():
+        if time.monotonic() > end:
+            raise StepTimeout("던전에서 나온 뒤 메인 화면이 나오지 않음")
+        if bot.map_loading():
+            bot.wait_loaded(end - time.monotonic())
+            continue
+        bot.clear_blockers(ocr=True)
+        bot.sleep(2)
+    bot.log.info("실패한 숙제 뒤 던전에서 나옴")
+    return True
+
+
 def watch(bot: Bot, ctx, act: dict | None = None, ocr: bool = False):
     """던전·사냥터·어비스 안에서 기다리는 동안 한 번 본다 — 쓰러짐('여기서 부활', ctx.revive)과 끼어든 창은 점검자가.
     패킷이 없으면 쓰러짐을 CLI(act — 이미 받아 둔 get_activity)로 본다. 점검자가 본 것(Seen)을 돌려준다.

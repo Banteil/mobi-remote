@@ -105,5 +105,29 @@ class LinesLeftTest(unittest.TestCase):
         self.assertFalse(lines_left(b))
 
 
+class LeaveDungeonTest(unittest.TestCase):
+    """실패한 숙제 뒤 일반 던전 안에 남지 않는다 (2026-10-30 공물 던전 끼임 뒤 채집 실패)."""
+
+    def test_outside_does_nothing(self):
+        from mabi.tasks import content
+        b = mock.MagicMock()
+        with mock.patch("mabi.place.place", return_value=SimpleNamespace(kind=None)):
+            self.assertFalse(content.leave_dungeon(b))
+        b.click.assert_not_called()
+
+    def test_inside_exits(self):
+        from mabi.place import DUNGEON
+        from mabi.tasks import content
+        b = mock.MagicMock()
+        b.cfg = {"timing": {"loading": 60}}
+        b.map_loading.return_value = False
+        b.at_main.return_value = True
+        kinds = iter([DUNGEON, None])
+        with mock.patch("mabi.place.place", side_effect=lambda _: SimpleNamespace(kind=next(kinds))):
+            self.assertTrue(content.leave_dungeon(b))
+        b.click.assert_called_once()
+        b.key.assert_called_with("space")
+
+
 if __name__ == "__main__":
     unittest.main()
