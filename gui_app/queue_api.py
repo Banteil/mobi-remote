@@ -177,7 +177,7 @@ class AbyssKind(Kind):
             f"{clears}/{runs}판" if runs else f"클리어 {clears}",
             f"{int(secs) // 60}분" + (f"/{minutes:g}분" if minutes else "")] if s)
         v["stat"] = " · ".join(s for s in [f"부활 {p['revives']}" if p.get("revives") else "",
-                                           f"사망으로 나감 {p['deaths']}" if p.get("deaths") else ""] if s)
+                                           f"쓰러져 나감 {p['deaths']}" if p.get("deaths") else ""] if s)
         v["bar"] = [clears, runs] if runs else [int(secs), int(minutes * 60)] if minutes else None
         return v
 

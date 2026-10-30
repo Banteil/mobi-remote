@@ -353,13 +353,13 @@ Q_KINDS.abyss = {
 mm.daily.onAbyss((e) => {
   if (!e) return;
   const t = e.seconds != null ? ' · ' + Math.floor(e.seconds / 60) + '분' : '';
-  const stat = e.clears != null ? '클리어 ' + e.clears + (e.revives ? ' · 부활 ' + e.revives : '') + ' · 사망으로 나감 ' + e.deaths + t : '';
+  const stat = e.clears != null ? '클리어 ' + e.clears + (e.revives ? ' · 부활 ' + e.revives : '') + ' · 쓰러져 나감 ' + e.deaths + t : '';
   if (stat) $('#ab-stat').textContent = stat;
   if (e.type === 'start') {
     paintAbyssRunning(true);
     $('#ab-msg').textContent = '시작';
   } else if (e.type === 'abyss') {
-    $('#ab-msg').textContent = { match: '매칭 중', play: '진행 중', clear: '클리어' }[e.stage] || '';
+    $('#ab-msg').textContent = { match: '매칭 중', play: '진행 중', clear: '클리어', repair: '장비 수리' }[e.stage] || '';
   } else if (e.type === 'done') {
     paintAbyssRunning(false);
     $('#ab-msg').textContent = e.stopped ? '멈춤' : '끝';

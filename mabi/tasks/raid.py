@@ -12,15 +12,15 @@
 연출은 넘기지 않고 기다린다 — '장면 넘기기' 는 클릭이라 뒤에서 돌던 게임이 앞으로 나온다 (2026-10-28 사용자).
 게임을 앞에 둔 채 돌리면(background 끔) 넘긴다.
 """
-import ctypes
 import time
 
 from .. import gamedata as gd
 from ..bot import Bot, StepTimeout
 from .. import monitor
 from ..place import RAID_LOBBY, place
-from . import repair, ui_text
+from . import ui_text
 from .content import CannotProceed, watch
+from .repeat import Repeat
 
 RAIDS = ["카브락", "에이렐", "화이트 서큐버스"]
 DIFFICULTIES = {"카브락": ["입문", "어려움"], "에이렐": ["어려움", "매우 어려움"], "화이트 서큐버스": ["어려움", "매우 어려움"]}
@@ -429,131 +429,94 @@ def leave(bot: Bot, to_field: bool = False) -> None:
     raise StepTimeout("레이드에서 나온 뒤 메인 화면이 나오지 않음")
 
 
-def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lambda e: None,
-           character: dict | None = None, loot=None) -> dict:
-    """레이드를 반복한다. runs·minutes 가 0 이면 사람이 멈출 때까지. 시간이 다 되면 그 판은 마저 끝낸다.
-    character({slot, name})가 있으면 그 캐릭터로 접속해서 한다. 반환 {clears, deaths, retries, revives, seconds}."""
-    from .login import current_name, name_matches
-    from . import login
-    r_cfg = cfg["raid"]
-    raid, difficulty = r_cfg["raid"], r_cfg.get("difficulty", "")
-    behind = bool(r_cfg.get("background", True))
-    user_window = ctypes.windll.user32.GetForegroundWindow()
-    t0 = time.monotonic()
-    stat = {"clears": 0, "deaths": 0, "retries": 0, "revives": 0}
-    below = float(r_cfg.get("repair_below", 0.05) or 0)
-    repaired_from = None  # 마지막 수리 직전 내구도 (repair.due)
+class RaidRepeat(Repeat):
+    """레이드 반복 (혼자하기). 판이 끝나면 결과 → 출항선으로 나가 다시 출항한다."""
+    KIND, TITLE = "raid", "레이드"
+    INSIDE = ("play", "cleared", "ship")
 
-    def done() -> bool:
-        return bool((runs and stat["clears"] >= runs) or (minutes and time.monotonic() - t0 >= minutes * 60))
+    def target(self):
+        return self.a["raid"] + (" / " + self.a["difficulty"] if self.a.get("difficulty") else "")
 
-    def emit(**kw):
-        on_event({"type": "raid", **stat, "seconds": round(time.monotonic() - t0), **kw})
+    def where(self):
+        return where_settled(self.bot, self.a["raid"])
 
-    goal = (f"{runs}판" if runs else "") + (" · " if runs and minutes else "") + (f"{minutes:g}분" if minutes else "")
-    bot.log.info(f"레이드 반복 시작: {raid}{' / ' + difficulty if difficulty else ''} — {goal or '멈출 때까지'}")
-    bot.check_in()
-    bot.auto_clear = True
-    bot.scene_skip = True  # 레이드는 연출이 길어 넘긴다 (사용자) — 뒤에서 도는 중이면 may_skip_scene 이 막는다
-    bot.background = False
-    at = where_settled(bot, raid)
-    unchecked = None  # 이름을 확인 못 한 채 이어 한 캐릭터 — 다음 입장 때 확인한다
-    name = current_name(bot)
-    if character and not name and at in ("play", "cleared", "ship"):
-        # 이름은 메인 화면·패킷(맵에 들어갈 때)으로만 안다 — 모른다고 다른 캐릭터로 보고 나가면 같은 캐릭터의 판을 버린다
-        bot.log.info("레이드 안이라 캐릭터 이름을 모름 → 그대로 잇고 다음 입장 때 확인")
-        unchecked = character
-    elif character and not name_matches(name, character.get("name", "")):
+    def setup(self):
+        self.bot.scene_skip = True  # 레이드는 연출이 길어 넘긴다 (사용자) — 뒤에서 도는 중이면 may_skip_scene 이 막는다
+
+    def leave_for_switch(self, at):
         if at in ("play", "cleared"):
-            bot.log.info(f"다른 캐릭터로 레이드 안 → 나간 뒤 {character['name']} 로 접속")
             if at == "cleared":
-                finish_result(bot)
-            leave(bot, to_field=True)
-        bot.character = character
-        bot.log.info(login.run(bot, cfg, character))
-        at = where_settled(bot, raid)
-    if loot:  # 이 캐릭터로 접속을 마침 — 여기서부터 얻은 것을 잰다 (queue_report.LootMeter, 닫기는 부른 쪽)
-        loot.open(bot, (character or {}).get("name") or current_name(bot) or "")
-    stage = {"play": "play", "cleared": "cleared", "ship": "ship"}.get(at, "entry")
-    leftover = at == "cleared"  # 시작 전에 이미 잡아 둔 판 — 결과·나가기만 하고 판 수에는 넣지 않는다
-    bot.log.info({"play": "이미 레이드 안 → 이 판부터", "cleared": "보스를 잡은 뒤 → 결과부터", "ship": "출항선 → 출항부터",
-                  "entry": "레이드 입장 창 → 그 자리부터", "list": "레이드 목록 → 그 자리부터",
-                  "menu": "메뉴가 열려 있음 → 그 자리부터"}.get(at, f"{at} → 메뉴에서 입장"))
+                finish_result(self.bot)
+            leave(self.bot, to_field=True)
 
-    def to_back():
-        if behind:
-            bot.background = True
-            bot.window.give_back(user_window)
+    def _next(self) -> str:
+        return "ship" if _map(self.bot) in (LOBBY_MAP, None) else "entry"
 
-    while True:
-        if stage == "entry":
-            bot.step("raid_open", f"레이드 입장 ({raid})")
-            emit(stage="entry")
-            bot.background = False
-            if unchecked and not name_matches(current_name(bot), unchecked.get("name", "")):
-                bot.log.warning(f"다른 캐릭터로 이어 했음 → {unchecked['name']} 로 접속")
-                bot.character = unchecked
-                bot.log.info(login.run(bot, cfg, unchecked))
-            unchecked = None
-            board(bot, raid, difficulty, at=at)
-            at = ""
-            stage = "ship"
-        if stage == "ship" and _boarded != (raid, difficulty):
-            bot.log.info(f"어느 레이드의 출항선인지 모름 (태운 것 {_boarded or '없음'}) → 내려서 '{raid}' 로 다시 입장")
-            bot.background = False
-            leave_ship(bot)
-            stage = "entry"
-            continue
-        if stage == "ship":
-            bot.step("raid_sail", "출항")
-            emit(stage="sail")
-            sail(bot)
-            to_back()
-            stage = "play"
-        if stage == "play":
-            # 출항(sail) 뒤에만 뒤로 보냈더니, 레이드 안에서 이어 하면 판 내내 게임을 앞으로 가져왔다 (2026-10-28)
-            to_back()
-            n = stat["clears"] + stat["deaths"] + stat["retries"] + 1
-            bot.step("raid_play", f"{n}번째 판 진행 중")
-            emit(stage="play")
-            r = play(bot, r_cfg["run_timeout"], bool(r_cfg.get("revive", True)),
-                     on_revive=lambda: (stat.__setitem__("revives", stat["revives"] + 1), emit(stage="play")))
-            if r in ("dead", "timeout"):
-                stat["deaths" if r == "dead" else "retries"] += 1
-                bot.log.warning("쓰러짐(부활 횟수를 다 씀) → 나가서 다시 출항" if r == "dead" else
-                                f"{r_cfg['run_timeout'] / 60:.0f}분 안에 끝나지 않음 → 나가서 다시 출항 "
-                                f"→ {bot.snapshot('raid_timeout').name}")
-                leave(bot)
-                stage = "ship" if _map(bot) in (LOBBY_MAP, None) else "entry"
-                if done():
-                    break
-                continue
-            stage = "cleared"
-        if stage == "cleared":
-            finish_result(bot)
-            if leftover:
-                bot.log.info("시작 전에 끝나 있던 판 → 나가서 다시 출항 (판 수에 넣지 않음)")
-                leftover = False
-            else:
-                stat["clears"] += 1
-                secs = round(time.monotonic() - t0)
-                bot.log.info(f"클리어 {stat['clears']}판 (부활 {stat['revives']} · 쓰러져 나감 {stat['deaths']} · 경과 {secs // 60}분 {secs % 60}초)")
-                emit(stage="clear")
-            if not done() and repair.due(bot, below, repaired_from):  # 마지막 판 뒤엔 수리하러 가지 않는다 (어비스와 같게)
-                bot.log.info(f"장비 내구도 {repair.durability(bot) * 100:.0f}% (기준 {below * 100:g}%) → 나가서 수리")
-                emit(stage="repair")
-                repaired_from = repair.durability(bot)
+    def loop(self, at):
+        bot, a = self.bot, self.a
+        raid, difficulty = a["raid"], a.get("difficulty", "")
+        stage = {"play": "play", "cleared": "cleared", "ship": "ship"}.get(at, "entry")
+        leftover = at == "cleared"  # 시작 전에 이미 잡아 둔 판 — 결과·나가기만 하고 판 수에는 넣지 않는다
+        bot.log.info({"play": "이미 레이드 안 → 이 판부터", "cleared": "보스를 잡은 뒤 → 결과부터", "ship": "출항선 → 출항부터",
+                      "entry": "레이드 입장 창 → 그 자리부터", "list": "레이드 목록 → 그 자리부터",
+                      "menu": "메뉴가 열려 있음 → 그 자리부터"}.get(at, f"{at} → 메뉴에서 입장"))
+        while True:
+            if stage == "entry":
+                bot.step("raid_open", f"레이드 입장 ({raid})")
+                self.emit(stage="entry")
                 bot.background = False
-                leave(bot, to_field=True)
-                repair.run(bot)
-                stat["repairs"] = stat.get("repairs", 0) + 1
+                self.recheck("main")  # 이름을 모른 채 이어 했으면 입장 전에 확인 (메인이라 나갈 것 없이 접속만)
+                board(bot, raid, difficulty, at=at)
+                at = ""
+                stage = "ship"
+            if stage == "ship" and _boarded != (raid, difficulty):
+                bot.log.info(f"어느 레이드의 출항선인지 모름 (태운 것 {_boarded or '없음'}) → 내려서 '{raid}' 로 다시 입장")
+                bot.background = False
+                leave_ship(bot)
                 stage = "entry"
                 continue
-            repaired_from = None
-            leave(bot)
-            if done():
-                break
-            stage = "ship" if _map(bot) in (LOBBY_MAP, None) else "entry"
-    secs = round(time.monotonic() - t0)
-    bot.log.info(f"레이드 반복 끝: 클리어 {stat['clears']}판, 쓰러져 나감 {stat['deaths']}번 ({secs // 60}분)")
-    return {**stat, "seconds": secs}
+            if stage == "ship":
+                bot.step("raid_sail", "출항")
+                self.emit(stage="sail")
+                sail(bot)
+                stage = "play"
+            if stage == "play":
+                # 출항(sail) 뒤에만 뒤로 보냈더니, 레이드 안에서 이어 하면 판 내내 게임을 앞으로 가져왔다 (2026-10-28)
+                self.to_back()
+                r = self.play_round(play, "raid_play")
+                if r in ("dead", "timeout"):
+                    self.stat["deaths" if r == "dead" else "retries"] += 1
+                    bot.log.warning("쓰러짐(부활 횟수를 다 씀) → 나가서 다시 출항" if r == "dead" else
+                                    f"{a['run_timeout'] / 60:.0f}분 안에 끝나지 않음 → 나가서 다시 출항 "
+                                    f"→ {bot.snapshot('raid_timeout').name}")
+                    leave(bot)
+                    stage = self._next()
+                    if self.done():
+                        break
+                    continue
+                stage = "cleared"
+            if stage == "cleared":
+                finish_result(bot)
+                if leftover:
+                    bot.log.info("시작 전에 끝나 있던 판 → 나가서 다시 출항 (판 수에 넣지 않음)")
+                    leftover = False
+                else:
+                    self.cleared()
+
+                def go_out():
+                    bot.background = False
+                    leave(bot, to_field=True)
+                if self.repair_between(go_out):
+                    stage = "entry"
+                    continue
+                leave(bot)
+                if self.done():
+                    break
+                stage = self._next()
+
+
+def repeat(bot: Bot, cfg: dict, runs: int = 0, minutes: float = 0, on_event=lambda e: None,
+           character: dict | None = None, loot=None) -> dict:
+    """레이드를 반복한다 (RaidRepeat). runs·minutes 가 0 이면 사람이 멈출 때까지. 시간이 다 되면 그 판은 마저 끝낸다.
+    character({slot, name})가 있으면 그 캐릭터로 접속해서 한다. 반환 {clears, deaths, retries, revives, seconds}."""
+    return RaidRepeat(bot, cfg, runs, minutes, on_event, character, loot).run()

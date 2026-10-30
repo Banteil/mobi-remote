@@ -210,8 +210,8 @@ class DailyApi:
         기억해 둔 게 없으면 아무것도 안 한다. 끝나면 'mm:display' {restored, message}."""
         if self._display_thread and self._display_thread.is_alive():
             return {"error": "화면 설정 작업 중입니다"}
-        if self._alive(self._daily_thread) or self._alive(self._abyss_thread):
-            return {"error": "숙제·어비스가 도는 중입니다"}
+        if (why := self._busy_reason()):  # 숙제·어비스·레이드 중 무엇이든 (예전엔 레이드를 빠뜨렸다)
+            return {"error": why}
 
         def work():
             from mabi.bot import Bot
