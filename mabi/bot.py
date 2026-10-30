@@ -507,8 +507,10 @@ class Bot:
         self.input.key("shift")
         self.sleep(0.3)
 
-    def click_xy(self, x: int, y: int) -> None:
-        """기준(1920x1080) 좌표를 누른다. 게임 해상도가 달라도 비율대로 실제 자리를 누른다 (Screen.to_screen)."""
+    def click_xy(self, x: int, y: int) -> bool:
+        """기준(1920x1080) 좌표를 누른다. 게임 해상도가 달라도 비율대로 실제 자리를 누른다 (Screen.to_screen).
+        눌렀으면 True. 게임 창을 앞으로 못 가져오면 누르지 않고 False — 그대로 누르면 다른 창을 누른다. 조용히 넘기면
+        부른 쪽은 눌렀다고 믿으므로, 연달아 SKIP_LIMIT 번 못 누르면 StepTimeout 으로 알린다 (구조 점검 2026-10-30, 뒤에서 도는 반복은 빼고)."""
         self.input_mark = self.packets.mark()  # 누르기 직전 패킷 번호 — wait_packet(since=) 로 '누른 뒤' 를 본다
         self.box.input(f"클릭 ({x}, {y})")
         if self.background and not self.window.is_foreground() and not self.input.dry_run:
@@ -517,21 +519,33 @@ class Bot:
             if not self.window.is_foreground():
                 # 사람이 다른 창에서 입력 중이면 Windows 가 앞으로 가져오기를 막는다 — 그대로 누르면 그 창을 누른다
                 # (2026-10-28 레이드 나가기 4번 헛클릭). 이번 클릭은 건너뛰고 부른 쪽이 다시 시도하게 둔다
-                self.log.warning(f"게임 창을 앞으로 가져오지 못해 ({x}, {y}) 클릭을 건너뜀")
-                self.sleep(2.0)
-                return
+                return self._click_skipped(x, y)
             self.input.click(*self.screen.to_screen(x, y))
             self.sleep(0.3)
             self.window.give_back(prev)
             self.pause()
-            return
+            self._skipped_clicks = 0
+            return True
         self.ensure_focus()
         if not self.window.is_foreground() and not self.input.dry_run:
-            self.log.warning(f"게임 창을 앞으로 가져오지 못해 ({x}, {y}) 클릭을 건너뜀")
-            self.sleep(2.0)
-            return
+            return self._click_skipped(x, y)
         self.input.click(*self.screen.to_screen(x, y))
         self.pause()
+        self._skipped_clicks = 0
+        return True
+
+    SKIP_LIMIT = 5
+
+    def _click_skipped(self, x: int, y: int) -> bool:
+        n = self._skipped_clicks = getattr(self, "_skipped_clicks", 0) + 1
+        self.log.warning(f"게임 창을 앞으로 가져오지 못해 ({x}, {y}) 클릭을 건너뜀 ({n}/{self.SKIP_LIMIT})")
+        # 뒤에서 도는 반복(어비스·레이드)은 사람이 다른 창을 쓰는 게 정상이라 기다렸다 다시 누르게 둔다
+        if n >= self.SKIP_LIMIT and not self.background:
+            self._skipped_clicks = 0
+            raise StepTimeout(f"게임 창을 앞으로 가져오지 못해 {n}번 연달아 누르지 못함 (다른 창이 입력을 잡고 있음?)"
+                              f" → {self.snapshot('click_skipped').name}")
+        self.sleep(2.0)
+        return False
 
     def hover_off(self, x: int = 300, y: int = 540) -> None:
         """커서를 버튼이 없는 자리(왼쪽 가운데)로 치운다. 누른 버튼 위에 커서가 남아 있으면 마우스를 올린 효과로

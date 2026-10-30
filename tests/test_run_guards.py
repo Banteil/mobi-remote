@@ -48,5 +48,30 @@ class DailyCardTest(unittest.TestCase):
         self.assertTrue(ok)
 
 
+class SkippedClickTest(unittest.TestCase):
+    """게임 창을 앞으로 못 가져와 누르지 못한 클릭은 조용히 넘기지 않는다 (연달아 5번이면 StepTimeout)."""
+
+    def bot(self, background):
+        from mabi.bot import Bot
+        b = mock.MagicMock()
+        b.background, b.input.dry_run, b._skipped_clicks, b.SKIP_LIMIT = background, False, 0, 5
+        b.window.is_foreground.return_value = False
+        b._click_skipped = lambda x, y: Bot._click_skipped(b, x, y)
+        return b, Bot
+
+    def test_front_task_raises_after_limit(self):
+        from mabi.bot import StepTimeout
+        b, Bot = self.bot(background=False)
+        for _ in range(4):
+            self.assertFalse(Bot.click_xy(b, 10, 10))
+        with self.assertRaises(StepTimeout):
+            Bot.click_xy(b, 10, 10)
+
+    def test_background_repeat_keeps_waiting(self):
+        b, Bot = self.bot(background=True)
+        for _ in range(8):
+            self.assertFalse(Bot.click_xy(b, 10, 10))
+
+
 if __name__ == "__main__":
     unittest.main()
