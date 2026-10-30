@@ -36,6 +36,8 @@ mabi/
 | 작업 시작 점검 (지난 패킷 상태를 믿지 않고 CLI 로 맞춤) | `bot.check_in()` | 모든 작업 시작·이어 하기 |
 | NPC 대화·메뉴·확인 창 처리 | `monitor` + `Ctx` (대사 내용이 아니라 메뉴·단계·버튼 글자로 판단) | 아르바이트·숙제 |
 | 화면 글자 찾기·누르기 | `tasks/ui_text` | 곳곳 |
+| 게임 화면(실제 픽셀) 위에 Qt 창 겹치기 — 게임이 있는 모니터·배율 | `queue_overlay.to_logical` | 작업 큐 오버레이, 염색 표시 |
+| 염색 팔레트가 떠 있나·색 찾을 범위 (자리는 게임 화면 비율로 정해 둠, 테두리로 확인) | `dye.detect.palette_at` · `frame_skip` | `dye.tracker.DyeTracker` |
 | 큐 카드 한 종류 | `workqueue.Kind` 를 상속 (`own_loot`, `run`, `view`, `where` …) | `queue_api` |
 
 ## 새 기능을 짤 때
