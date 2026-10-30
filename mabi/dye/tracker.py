@@ -152,8 +152,10 @@ class DyeTracker:
         # 커서에 가려 못 읽을 때 쓰는 '직전 값'이 처음 잰 색에 머물지 않도록 읽은 색을 되쓴다 (리모콘 app.js:3320)
         self.lead.rings = list(rings)
         skip = self.lead.skip + [D.frame_skip(box)]
-        found = D.find_colors(f, box, targets, skip=skip)
-        spots = D.find_spots(f, box, targets, skip=skip)
+        # 표본 격자 하나를 색 찾기·점·흑백 강조가 같이 쓴다 (Lab 바꾸기를 한 번만)
+        grid = D.Grid(f, box, D.grid_step(box, 150000), skip)
+        found = D.find_colors(f, box, targets, grid=grid)
+        spots = D.find_spots(f, box, targets, grid=grid)
         pk = D.picks(rings, targets)
 
         so = getattr(self, "_slot_of", list(range(len(targets))))
@@ -178,5 +180,5 @@ class DyeTracker:
             chips=[(t.hex, so[k] in caught, so[k]) for k, t in enumerate(targets)],
             all_caught=all_caught,
             pins=[(r.x, r.y) for r in rings] if len(rings) == 3 else None,
-            shade=D.highlight(f, box, targets, skip, self.light) if self.gray else None,
+            shade=D.highlight(f, box, targets, light=self.light, grid=grid) if self.gray else None,
         ))

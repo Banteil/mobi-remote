@@ -37,20 +37,23 @@ _LIN32 = np.empty(256, dtype=np.float32)
 for _i in range(256):
     _v = _i / 255
     _LIN32[_i] = _v / 12.92 if _v <= 0.04045 else ((_v + 0.055) / 1.055) ** 2.4
-LINEAR = _LIN32.astype(np.float64)
+
+
+_F = np.float32
 
 
 def _labf(t):
-    return np.where(t > 0.008856, np.cbrt(t), 7.787 * t + 16 / 116)
+    return np.where(t > _F(0.008856), np.cbrt(t), _F(7.787) * t + _F(16 / 116))
 
 
 def lab_arrays(r, g, b):
-    """sRGB(정수 배열) → CIE Lab (D65). RGB 거리는 어두운 쪽·초록 언저리에서 눈과 어긋난다."""
-    R, G, B = LINEAR[r], LINEAR[g], LINEAR[b]
-    X = _labf((R * 0.4124 + G * 0.3576 + B * 0.1805) / 0.95047)
-    Y = _labf(R * 0.2126 + G * 0.7152 + B * 0.0722)
-    Z = _labf((R * 0.0193 + G * 0.1192 + B * 0.9505) / 1.08883)
-    return 116 * Y - 16, 500 * (X - Y), 200 * (Y - Z)
+    """sRGB(정수 배열) → CIE Lab (D65). RGB 거리는 어두운 쪽·초록 언저리에서 눈과 어긋난다.
+    float32 로 계산한다 — float64 의 절반 아래 시간 (749px 팔레트 표본 14만 점 24 → 11ms), 차이 ΔE 0.0001."""
+    R, G, B = _LIN32[r], _LIN32[g], _LIN32[b]
+    X = _labf((R * _F(0.4124) + G * _F(0.3576) + B * _F(0.1805)) / _F(0.95047))
+    Y = _labf(R * _F(0.2126) + G * _F(0.7152) + B * _F(0.0722))
+    Z = _labf((R * _F(0.0193) + G * _F(0.1192) + B * _F(0.9505)) / _F(1.08883))
+    return _F(116) * Y - _F(16), _F(500) * (X - Y), _F(200) * (Y - Z)
 
 
 def to_lab(r: int, g: int, b: int) -> tuple[float, float, float]:
@@ -594,25 +597,43 @@ def _d2(L, A, B, lab):
     return dL * dL + da * da + db * db
 
 
+class Grid:
+    """팔레트 안 step 간격 표본과 그 Lab·가릴 자리. Lab 바꾸기가 가장 비싸다(749px 팔레트 표본 14만 점에 16ms) —
+    한 바퀴에 한 번 만들어 색 찾기·점·흑백 강조가 같이 쓴다 (따로 하면 세 번, 흑백 강조를 켜면 끌 때 렉이 걸렸다)."""
+
+    def __init__(self, f: Frame, rect, step: int, skip=None):
+        box = clamp_rect(rect, f)
+        self.step, self.skip = max(1, step), skip
+        self.xs = np.arange(box.x, box.x + box.w, self.step)
+        self.ys = np.arange(box.y, box.y + box.h, self.step)
+        self.r, self.g, self.b = f.rgb(self.ys, self.xs)
+        self.L, self.A, self.B = lab_arrays(self.r, self.g, self.b)
+        self.sk = skip_mask(skip, self.xs, self.ys)
+
+    def d2(self, t: Target) -> np.ndarray:
+        return _d2(self.L, self.A, self.B, t.lab)
+
+
+def grid_step(rect, samples: int) -> int:
+    """뽑을 표본 수에서 거꾸로 정한 간격 — 팔레트가 크든 작든 시간이 같다."""
+    return max(1, jround(math.sqrt((rect.w * rect.h) / samples)))
+
+
 def find_colors(f: Frame, rect, targets: Sequence[Target], skip=None,
-                samples: int = 150000, tolerance: float | None = None) -> list[ColorHit]:
+                samples: int = 150000, tolerance: float | None = None, grid: Grid | None = None) -> list[ColorHit]:
     """목표색마다 가장 가까운 지점.
 
     건너뛰기 폭은 뽑을 표본 수에서 거꾸로 정한다 — 팔레트가 크든 작든 시간이 같다.
     15만 점이면 전수와 거의 같다 (전수 ΔE 0.4 / 15만 점 ΔE 0.8, 눈으로는 구분 불가).
-    찾은 자리 주변(±s)만 원해상도로 다시 본다.
+    찾은 자리 주변(±s)만 원해상도로 다시 본다. grid 를 주면 그 표본을 쓴다 (skip 도 grid 의 것).
     """
-    box = clamp_rect(rect, f)
-    s = max(1, jround(math.sqrt((box.w * box.h) / (samples or 150000))))
-    xs = np.arange(box.x, box.x + box.w, s)
-    ys = np.arange(box.y, box.y + box.h, s)
-    r, g, b = f.rgb(ys, xs)
-    L, A, B = lab_arrays(r, g, b)
-    sk = skip_mask(skip, xs, ys)
+    G = grid or Grid(f, rect, grid_step(clamp_rect(rect, f), samples or 150000), skip)
+    s, skip, xs, ys, sk = G.step, G.skip, G.xs, G.ys, G.sk
+    r, g, b = G.r, G.g, G.b
 
     out = []
     for t in targets:
-        d = _d2(L, A, B, t.lab)
+        d = G.d2(t)
         if sk is not None:
             d = np.where(sk, np.inf, d)
         i = int(np.argmin(d))
@@ -650,29 +671,24 @@ def _refine(f: Frame, b, t: Target, s: int, skip):
 
 
 def find_spots(f: Frame, rect, targets: Sequence[Target], skip=None,
-               samples: int = 60000, cap: int = 700) -> list[np.ndarray]:
+               samples: int = 60000, cap: int = 700, grid: Grid | None = None) -> list[np.ndarray]:
     """오차 안에 드는 모든 지점 — 목표마다 (k,2) int 배열 [x,y], 래스터 순서.
 
     가장 가까운 한 점만 찍으면 "여기밖에 없나?" 하고 헷갈린다. 같은 색이 여러 군데 흩어져 있다.
     너무 많으면 그리는 쪽이 느려 상한을 두고, 넘치면 고르게 솎는다 (앞만 자르면 위쪽에 몰린다).
-    오차 0 이면 점을 뿌리지 않는다.
+    오차 0 이면 점을 뿌리지 않는다. grid 를 주면 그 표본을 쓴다.
     """
-    box = clamp_rect(rect, f)
-    s = max(1, jround(math.sqrt((box.w * box.h) / (samples or 60000))))
+    G = grid or Grid(f, rect, grid_step(clamp_rect(rect, f), samples or 60000), skip)
     cap = cap or 700
-    xs = np.arange(box.x, box.x + box.w, s)
-    ys = np.arange(box.y, box.y + box.h, s)
-    r, g, b = f.rgb(ys, xs)
-    L, A, B = lab_arrays(r, g, b)
-    sk = skip_mask(skip, xs, ys)
-    X, Y = np.meshgrid(xs, ys)
+    sk = G.sk
+    X, Y = np.meshgrid(G.xs, G.ys)
     out = []
     for t in targets:
         tol = t.tol_or_default
         if not tol:
             out.append(np.zeros((0, 2), dtype=np.int32))
             continue
-        hit = _d2(L, A, B, t.lab) <= tol * tol
+        hit = G.d2(t) <= tol * tol
         if sk is not None:
             hit &= ~sk
         pts = np.stack([X[hit], Y[hit]], axis=1).astype(np.int32)
@@ -769,26 +785,25 @@ def picks(rings: Sequence[Ring], targets: Sequence[Target]) -> list[Pick]:
 
 # ── 흑백 강조 ───────────────────────────────────────────────────
 
-SHADE_STEP = 2   # 반 해상도로 계산하고 늘려 그린다 — 749px 팔레트에 30ms 안쪽
+SHADE_STEP = 2   # grid 없이 부를 때 간격 — 반 해상도로 계산하고 늘려 그린다
 
 
-def highlight(f: Frame, box: Rect, targets: Sequence[Target], skip=None, light: float = 0.35) -> np.ndarray | None:
-    """팔레트를 흑백으로 깔고 목표 오차 안에 드는 자리만 제 색으로 남긴 그림 (RGB, box 의 1/SHADE_STEP 크기).
+def highlight(f: Frame, box: Rect, targets: Sequence[Target], skip=None, light: float = 0.35,
+              grid: Grid | None = None) -> np.ndarray | None:
+    """팔레트를 흑백으로 깔고 목표 오차 안에 드는 자리만 제 색으로 남긴 그림 (RGB, box 의 1/간격 크기).
     점 몇 개보다 "어느 구역이 그 색인가" 가 한눈에 보인다 (염색 도우미 v2.0 의 흑백 밝기). light: 흑백의 밝기 0~1.
-    가릴 자리(skip — 지시선·동그라미·틀 바깥)는 흑백으로 둔다. 목표가 없으면 None."""
+    가릴 자리(skip — 지시선·동그라미·틀 바깥)는 흑백으로 둔다. 목표가 없으면 None. grid 를 주면 그 간격 그대로.
+    """
     if not targets:
         return None
-    b = clamp_rect(box, f)
-    xs = np.arange(b.x, b.x + b.w, SHADE_STEP)
-    ys = np.arange(b.y, b.y + b.h, SHADE_STEP)
-    r, g, bb = f.rgb(ys, xs)
-    L, A, B = lab_arrays(r, g, bb)
-    hit = np.zeros(L.shape, dtype=bool)
+    G = grid or Grid(f, box, SHADE_STEP, skip)
+    r, g, bb = G.r, G.g, G.b
+    hit = np.zeros(G.L.shape, dtype=bool)
     for t in targets:
         tol = t.tol_or_default
         if tol:
-            hit |= _d2(L, A, B, t.lab) <= tol * tol
-    sk = skip_mask(skip, xs, ys)
+            hit |= G.d2(t) <= tol * tol
+    sk = G.sk
     if sk is not None:
         hit &= ~sk
     gray = (r * 0.299 + g * 0.587 + bb * 0.114) * max(0.0, min(1.0, light))
