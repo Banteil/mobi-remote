@@ -24,7 +24,7 @@ def _qc(c) -> QColor:
 
 
 class Overlay(QWidget):
-    """주 모니터 전체를 덮는 투명·클릭 통과·항상 위 창. 받은 도형만 그린다."""
+    """게임이 있는 모니터 전체를 덮는 투명·클릭 통과·항상 위 창. 받은 도형만 그린다."""
 
     def __init__(self):
         super().__init__(None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
@@ -35,8 +35,9 @@ class Overlay(QWidget):
         self.font = QFont("Malgun Gothic")
         self.font.setWeight(QFont.DemiBold)
 
-    def place(self) -> None:
-        self.setGeometry(QGuiApplication.primaryScreen().geometry())  # 작업 표시줄까지
+    def place(self, screen=None) -> None:
+        """게임이 있는 모니터 전체를 덮는다 (작업 표시줄까지)."""
+        self.setGeometry((screen or QGuiApplication.primaryScreen()).geometry())
 
     def measure(self, text: str, px: int) -> float:
         f = QFont(self.font)

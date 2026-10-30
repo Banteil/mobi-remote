@@ -107,6 +107,20 @@ def _game_rect(title: str):
     return pt.x, pt.y, rc.right, rc.bottom
 
 
+def to_logical(rect):
+    """게임 화면 (x, y, w, h) 실제 픽셀 → (그 모니터, 왼쪽 위 논리 x, y, 배율). 게임이 있는 모니터의 배율로 나눈다
+    (Qt 좌표는 논리 픽셀이다). 작업 큐 오버레이와 염색 표시가 같이 쓴다."""
+    gx, gy, gw, gh = rect
+    screen = QGuiApplication.primaryScreen()
+    for s in QGuiApplication.screens():
+        g, r = s.geometry(), s.devicePixelRatio()
+        if g.x() <= gx + gw / 2 < g.x() + g.width() * r and g.y() <= gy + gh / 2 < g.y() + g.height() * r:
+            screen = s
+            break
+    g, r = screen.geometry(), screen.devicePixelRatio()
+    return screen, g.x() + (gx - g.x()) / r, g.y() + (gy - g.y()) / r, r
+
+
 def _size(kind: str, px: int) -> float:
     """줄 모양별 글자 크기 (높이 계산과 그리기가 같이 쓴다)."""
     return px * (1.15 if kind == "title" else 1 if kind == "text" else 0.85)
@@ -251,17 +265,9 @@ class OverlayService(QObject):
         w.update()
 
     def _place(self, rect, pw: float, ph: float) -> tuple[float, float]:
-        """게임 화면(실제 픽셀)의 구석 → Qt 좌표(논리 픽셀). 게임이 있는 모니터의 배율로 나눈다."""
-        gx, gy, gw, gh = rect
-        screen = QGuiApplication.screenAt(QGuiApplication.primaryScreen().geometry().center())
-        for s in QGuiApplication.screens():
-            g, r = s.geometry(), s.devicePixelRatio()
-            if g.x() <= gx + gw / 2 < g.x() + g.width() * r and g.y() <= gy + gh / 2 < g.y() + g.height() * r:
-                screen = s
-                break
-        g, r = screen.geometry(), screen.devicePixelRatio()
-        lx, ly = g.x() + (gx - g.x()) / r, g.y() + (gy - g.y()) / r
-        lw, lh = gw / r, gh / r
+        """게임 화면(실제 픽셀)의 구석 → Qt 좌표(논리 픽셀)."""
+        _, lx, ly, r = to_logical(rect)
+        lw, lh = rect[2] / r, rect[3] / r
         dx, dy = self.cfg["dx"] / r, self.cfg["dy"] / r
         c = self.cfg["corner"]
         x = lx + dx if c in ("bl", "tl") else lx + lw - dx - pw

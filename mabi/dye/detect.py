@@ -1,16 +1,15 @@
-"""염색 도우미 — 팔레트를 찾고 원하는 색이 어디 있는지 짚는다. (순수 계산)
+"""염색 도우미 — 팔레트에서 원하는 색이 어디 있는지 짚는다. (순수 계산)
 
 mobi-remote app/renderer/dye.js 를 그대로 옮긴 것이다. 임계값·순서·동점 처리까지 같게 두었다.
 화면 픽셀만 읽고 게임에는 아무것도 보내지 않는다. 그리지도 않는다 — 게임 없이 시험할 수 있게.
 
 입력: HxWx3 또는 HxWx4 uint8. 채널 순서는 Frame(order=) 로 준다. 기본 'bgr' —
 mss(BGRA)·OpenCV(BGR) 를 그대로 받는다. 'rgb' 면 RGB/RGBA. 알파는 보지 않는다.
-좌표는 모두 그 이미지의 픽셀 좌표.
+좌표는 모두 그 이미지의 픽셀 좌표. 이미지는 게임 창 클라이언트 영역이다 (팔레트 자리를 게임 화면 비율로 둔다).
 
-── 팔레트를 어떻게 찾나 ──
-화면에서 유일하게 "채도가 있으면서 옆 픽셀과 색이 확 다른" 덩어리다.
-실측 (1920x1080, 20px 칸 이웃 색차 중앙값): 팔레트 안 19.4 / 나머지 0.1 / 캐릭터 0.2 / 테두리 3.3.
-100배 차이라 임계값 하나로 갈린다. 비교 간격·칸 크기는 화면 폭에 비례(1920 기준 2px / 20px).
+── 팔레트는 어디 ──
+게임 UI 라 자리가 정해져 있다 (PALETTE_AT). 그 자리를 두른 어두운 테두리가 보이면 염색 화면이다.
+색은 틀 안쪽에서만 찾는다 — 테두리·섞인 가장자리·둥근 모서리는 뺀다 (frame_skip).
 
 ── 벡터화 ──
 표본 자리(간격 s 격자)는 JS 와 똑같다. 난수 표본은 쓰지 않는다 — 결정적 격자 그대로.
@@ -22,7 +21,6 @@ import math
 from dataclasses import dataclass, field
 from typing import Iterable, Sequence
 
-import cv2
 import numpy as np
 
 
@@ -131,11 +129,6 @@ def as_frame(img, order: str = "bgr") -> Frame:
     return img if isinstance(img, Frame) else Frame(img, order)
 
 
-def scale_of(f: Frame) -> int:
-    """해상도가 달라도 같은 것을 보도록 1920 기준 값을 폭에 맞춰 늘린다. 1920 → 2."""
-    return max(1, jround(f.w / 960))
-
-
 @dataclass
 class Rect:
     x: int
@@ -154,16 +147,22 @@ def clamp_rect(rect, f: Frame) -> Rect:
     return Rect(x, y, max(1, min(f.w - x, rw)), max(1, min(f.h - y, rh)))
 
 
-# ── 팔레트 찾기 ─────────────────────────────────────────────────
+# ── 팔레트 자리 ─────────────────────────────────────────────────
 
-DIFF_MIN = 4       # 팔레트 안 19.4 / 바깥 0.1~0.2
-# 칸이 "색이 있다"고 볼 최소 채도. 한때 0.20 이었다가 틀렸다 — 온통 회색인 팔레트(0.14)가 있고
-# 게임 UI(0.43)가 오히려 높다. 채도로는 못 가르므로 "새까맣지만 않으면" 수준만 남긴다.
-SAT_MIN = 0.06
+# 염색 화면의 팔레트 틀은 게임 UI 라 늘 같은 자리다 — 끌기·확대·회전은 틀 안의 무늬만 움직인다.
+# 실측 (2026-10-31, 1920x1080 게임 화면 60장 모두 같음): 안쪽 x 1075~1823 · y 283~1031, 어두운 테두리 13px,
+# 안쪽 모서리 반지름 약 36, 안쪽 가장자리 1줄은 배경과 섞인다.
+# 예전엔 화면에서 "알록달록한 덩어리" 를 찾았는데, 틀 바깥에도 같은 무늬가 흐리게 깔려 있어 경계를 엉뚱하게
+# 잡거나(60장 중 49장 못 찾음) 테두리까지 범위에 넣어 검정 목표가 테두리에 찍혔다.
+# 그래서 자리는 정해 두고(게임 화면 대비 비율 — 사람이 고칠 수 있다), 그 자리를 두른 테두리가 보이는지만 본다.
+PALETTE_AT = (1075 / 1920, 283 / 1080, 749 / 1920, 749 / 1080)   # (x, y, w, h) 게임 화면 대비
+BORDER_W = 13 / 1080   # 테두리 굵기 (화면 높이 대비)
+CORNER_R = 36 / 1080   # 안쪽 둥근 모서리 반지름
+EDGE_IN = 2 / 1080     # 안쪽 가장자리 섞인 줄 — 색 찾기에서 뺀다
 
-DARK_MAX = 70      # 이보다 어두우면 테두리 후보
-DARK_RATIO = 0.75  # 그 줄의 이 비율 이상이 어두우면 테두리
-DIM_MAX = 60       # 상자 속을 볼 때 이보다 어두우면 "배경"
+DARK_MAX = 70      # 이보다 어두우면 테두리
+DARK_RATIO = 0.75  # 한 변의 이 비율 이상이 어두우면 테두리가 있다 (실측 100%, 무늬 위 0~8%)
+INNER_DARK = 0.3   # 안쪽이 이보다 많이 어두우면 팔레트가 아니다 — 진짜 1~2%, 화면 전환 중·어두운 창 위에선 테두리 자리도 어둡다
 
 # 색 선택 UI 는 순백으로 그려진다. 248/6 이면 지시선 100% 통과, 소용돌이 0.00~0.01%.
 # 느슨하면(200/22) 흰 테와 안쪽 흰 계열 색이 안 갈려 동그라미 측정이 통째로 어긋났다.
@@ -186,232 +185,33 @@ LEADER_GAP = 4              # 이만큼까지 끊겨도 같은 선
 
 @dataclass
 class Palette(Rect):
-    fill: float = 0.0
-    ratio: float = 1.0
-    texture: dict | None = None
+    corner: int = 0   # 안쪽 둥근 모서리 반지름 (px)
+    inset: int = 0    # 안쪽 가장자리에서 뺄 폭 (px)
 
 
-def detect_palette(f: Frame, exclude: Sequence | None = None, min_side: float = 0.40,
-                   min_fill: float = 0.45, max_dark: float = 0.12) -> Palette | None:
-    """팔레트로 보이는 사각형. 못 찾으면 None.
+def palette_rect(f: Frame, at=PALETTE_AT) -> Palette:
+    """비율 자리(at) → 이 화면의 팔레트 안쪽 사각형. 크기 값은 화면 높이에 비례 (게임 UI 는 해상도에 비례한다)."""
+    x, y, w, h = at
+    return Palette(jround(x * f.w), jround(y * f.h), max(1, jround(w * f.w)), max(1, jround(h * f.h)),
+                   corner=jround(CORNER_R * f.h), inset=max(1, jround(EDGE_IN * f.h)))
 
-    exclude: [Rect,...] 안은 보지 않는다. 우리 창(히트맵·색 견본)이 팔레트만큼 알록달록해서
-    빼 주지 않으면 앱 창과 팔레트가 한 덩어리로 붙는다 (실측). JS 는 창을 캡처에서 빼는 쪽을 썼다.
-    """
-    step = scale_of(f)
-    cell = max(8, step * 10)              # 1920 → 20px
-    cx, cy = f.w // cell, f.h // cell
-    if cx < 4 or cy < 4:
+
+def palette_at(f: Frame, at=PALETTE_AT) -> Palette | None:
+    """정해 둔 자리에 팔레트가 떠 있나 — 네 변 바로 바깥이 모두 어두운 테두리면 그 사각형, 아니면 None.
+    둥근 모서리에 안 걸리게 변마다 가운데 60% 만, 테두리 굵기 한가운데 줄을 본다."""
+    b = palette_rect(f, at)
+    off = max(1, jround(BORDER_W * f.h / 2))
+    if b.x - off < 0 or b.y - off < 0 or b.x + b.w + off >= f.w or b.y + b.h + off >= f.h:
         return None
-
-    skip = np.zeros((cy, cx), dtype=bool)
-    for e in exclude or ():
-        if not e:
-            continue
-        gx0, gx1 = max(0, math.floor(e.x / cell)), min(cx - 1, math.floor((e.x + e.w) / cell))
-        gy0, gy1 = max(0, math.floor(e.y / cell)), min(cy - 1, math.floor((e.y + e.h) / cell))
-        if gx0 <= gx1 and gy0 <= gy1:
-            skip[gy0:gy1 + 1, gx0:gx1 + 1] = True
-
-    # 칸마다 step 간격 표본 → 채도 평균, 오른쪽 이웃(step 옆)과의 색차 평균
-    offs = np.arange(0, cell, step)
-    m = len(offs)
-    dvalid = offs + step < cell
-    md = int(dvalid.sum())
-    if cell % step == 0:
-        # 칸이 step 의 배수(늘 그렇다: cell = step*10)면 표본은 화면 전체의 step 격자 그대로 —
-        # 슬라이스 한 번으로 뽑고, 오른쪽 이웃은 한 칸 옆 표본이다.
-        r, g, b = f.rgb(slice(0, cy * cell, step), slice(0, cx * cell, step))
-        okcol = np.tile(dvalid, cx)[:-1]
-        r1, g1, b1 = r[:, :-1][:, okcol], g[:, :-1][:, okcol], b[:, :-1][:, okcol]
-        r2, g2, b2 = r[:, 1:][:, okcol], g[:, 1:][:, okcol], b[:, 1:][:, okcol]
-    else:
-        Y = (np.arange(cy)[:, None] * cell + offs[None, :]).ravel()
-        X = (np.arange(cx)[:, None] * cell + offs[None, :]).ravel()
-        Xd = (np.arange(cx)[:, None] * cell + offs[dvalid][None, :]).ravel()
-        r, g, b = f.rgb(Y, X)
-        r1, g1, b1 = f.rgb(Y, Xd)
-        r2, g2, b2 = f.rgb(Y, Xd + step)
-    mx = np.maximum(np.maximum(r, g), b)
-    mn = np.minimum(np.minimum(r, g), b)
-    sat = np.where(mx > 0, (mx - mn) / np.maximum(mx, 1), 0.0)
-    sat_c = sat.reshape(cy, m, cx, m).sum(axis=(1, 3)) / (m * m)
-
-    dd = (np.abs(r2 - r1) + np.abs(g2 - g1) + np.abs(b2 - b1)) / 3
-    if md:
-        diff_c = dd.reshape(cy, m, cx, md).sum(axis=(1, 3)) / (m * md)
-        on = (~skip) & (diff_c >= DIFF_MIN) & (sat_c >= SAT_MIN)
-    else:
-        on = np.zeros((cy, cx), dtype=bool)
-
-    # 팔레트 안에도 넓은 단색 소용돌이가 있어 몇 칸은 빠진다. 사방 중 셋 이상 차 있으면 메운다.
-    fill = on.copy()
-    o = on.astype(np.int8)
-    around = np.zeros_like(o)
-    around[1:-1, 1:-1] = o[1:-1, 2:] + o[1:-1, :-2] + o[2:, 1:-1] + o[:-2, 1:-1]
-    hole = np.zeros_like(on)
-    hole[1:-1, 1:-1] = True
-    fill |= hole & ~on & ~skip & (around >= 3)
-
-    best = best_blob(fill)
-    if best is None:
+    xs = np.arange(jround(b.x + b.w * 0.2), jround(b.x + b.w * 0.8), 2)
+    ys = np.arange(jround(b.y + b.h * 0.2), jround(b.y + b.h * 0.8), 2)
+    sides = (f.maxc(np.array([b.y - off]), xs), f.maxc(np.array([b.y + b.h - 1 + off]), xs),
+             f.maxc(ys, np.array([b.x - off])), f.maxc(ys, np.array([b.x + b.w - 1 + off])))
+    if not all((s < DARK_MAX).mean() >= DARK_RATIO for s in sides):
         return None
-
-    # 지시선·말풍선처럼 가늘게 삐져나온 것이 경계를 부풀린다. 0.5 는 너무 매서웠다
-    # (755px 팔레트가 380px 로 줄었다) — 0.3 미만 줄만 잘라 낸다.
-    x0, y0, x1, y1 = best["x0"], best["y0"], best["x1"], best["y1"]
-    F = fill
-
-    def row_fill(y):
-        return int(F[y, x0:x1 + 1].sum()) / (x1 - x0 + 1)
-
-    def col_fill(x):
-        return int(F[y0:y1 + 1, x].sum()) / (y1 - y0 + 1)
-
-    while y0 < y1 and row_fill(y0) < 0.3:
-        y0 += 1
-    while y1 > y0 and row_fill(y1) < 0.3:
-        y1 -= 1
-    while x0 < x1 and col_fill(x0) < 0.3:
-        x0 += 1
-    while x1 > x0 and col_fill(x1) < 0.3:
-        x1 -= 1
-    # 자르기는 지시선을 떼려는 것이지 팔레트를 깎으려는 것이 아니다. 바깥이 0.2 이상 차 있으면 되돌린다.
-    while y0 > best["y0"] and row_fill(y0 - 1) >= 0.2:
-        y0 -= 1
-    while y1 < best["y1"] and row_fill(y1 + 1) >= 0.2:
-        y1 += 1
-    while x0 > best["x0"] and col_fill(x0 - 1) >= 0.2:
-        x0 -= 1
-    while x1 < best["x1"] and col_fill(x1 + 1) >= 0.2:
-        x1 += 1
-
-    filled = int(F[y0:y1 + 1, x0:x1 + 1].sum())
-    bw, bh = (x1 - x0 + 1) * cell, (y1 - y0 + 1) * cell
-    box = Palette(x0 * cell, y0 * cell, bw, bh,
-                  fill=filled / ((x1 - x0 + 1) * (y1 - y0 + 1)), ratio=bw / bh)
-
-    # 팔레트는 아주 큰 물건이다. 짧은 변 대비 실측 0.694(전체화면)/0.966(잘라 낸 그림),
-    # 옷 고르는 화면의 아이콘 뭉치 0.259. 0.40 이면 진짜는 1.7배 여유로 통과.
-    mside = min(f.w, f.h) * (min_side or 0.40)
-    if box.w < mside or box.h < mside:
+    if (f.maxc(ys[::8], xs[::8]) < DARK_MAX).mean() > INNER_DARK:
         return None
-    if box.fill < (min_fill or 0.45):
-        return None
-    # 거의 정사각형이다. 1.5:1 같은 것은 무언가 붙은 것.
-    if box.ratio < 0.75 or box.ratio > 1.33:
-        return None
-
-    # 색으로 잡은 경계는 실제보다 넓다. 어두운 테두리에 맞춘다. 테두리가 없으면 팔레트가 아니다 —
-    # 예전엔 그대로 썼다가 길드홀 같은 평범한 화면에서도 "팔레트 감지"가 떴다 (실측).
-    edged = snap_to_border(f, box, mside)
-    if edged is None:
-        return None
-
-    # 안쪽이 정말 소용돌이인가. 진짜 22~37, 가짜 12.8~14.2 → 18.
-    # 어두운 자리 비율(밝기 60 미만): 진짜 1~2%, 아이템 패널 62%·아이콘 격자 49% → 0.12.
-    # 채도는 보지 않는다 — 진짜가 가짜보다 낮을 수 있다.
-    tex = texture(f, edged)
-    if tex["diff"] < 18:
-        return None
-    if tex["dark"] > (max_dark or 0.12):
-        return None
-    edged.texture = tex
-    return edged
-
-
-def texture(f: Frame, b: Rect) -> dict:
-    """상자 안이 얼마나 알록달록하고 잘게 변하나. 팔레트인지 가리는 마지막 관문.
-
-    비교 간격은 상자 크기에 맞춘다. 화면 폭에 맞추면 잘라 낸 그림에서 색차가 절반으로 나와
-    멀쩡한 팔레트를 놓쳤다 (실측 37.0 → 15.7).
-    """
-    step = max(2, jround(min(b.w, b.h) / 190))
-    ys = slice(b.y, b.y + b.h, step)
-    r, g, bb = f.rgb(ys, slice(b.x, b.x + b.w - step, step))
-    r2, g2, b2 = f.rgb(ys, slice(b.x + step, b.x + b.w, step))
-    k = min(r.shape[1], r2.shape[1])
-    r, g, bb, r2, g2, b2 = r[:, :k], g[:, :k], bb[:, :k], r2[:, :k], g2[:, :k], b2[:, :k]
-    n = r.size
-    if not n:
-        return {"sat": 0.0, "diff": 0.0, "dark": 0.0}
-    mx = np.maximum(np.maximum(r, g), bb)
-    mn = np.minimum(np.minimum(r, g), bb)
-    sat = np.where(mx > 0, (mx - mn) / np.maximum(mx, 1), 0.0)
-    diff = (np.abs(r2 - r) + np.abs(g2 - g) + np.abs(b2 - bb)) / 3
-    return {"sat": float(sat.sum() / n), "diff": float(diff.sum() / n),
-            "dark": float((mx < DIM_MAX).sum() / n)}
-
-
-def snap_to_border(f: Frame, box: Rect, min_side: float = 0) -> Palette | None:
-    """색으로 잡은 경계를 팔레트의 어두운 테두리에 맞춘다.
-
-    소용돌이는 상자 바깥에도 깔려 있어 색만 보면 실제보다 크다 (755px → 1000px).
-    상자에는 거의 검은 두꺼운 테두리가 있다 (세로 테두리 줄 어두운 비율 100%, 안쪽 0~8%).
-    한가운데에서 바깥으로 한 줄씩 나가 처음 만나는 어두운 줄이 테두리 — 둥근 모서리에 안 걸리고
-    바깥 어두운 배경보다 안쪽 테두리를 먼저 만난다.
-    줄인 뒤 크기를 다시 본다 — 칸 사이가 다 어두운 아이콘 격자는 작은 네모로 줄어든다.
-    """
-    cx, cy = box.x + (box.w >> 1), box.y + (box.h >> 1)
-    # 가운데 60% 만 본다. 끝자락은 둥근 모서리라 어차피 어둡다.
-    by0, by1 = jround(box.y + box.h * 0.2), jround(box.y + box.h * 0.8)
-    bx0, bx1 = jround(box.x + box.w * 0.2), jround(box.x + box.w * 0.8)
-    sy = max(1, jround((by1 - by0) / 40))
-    sx = max(1, jround((bx1 - bx0) / 40))
-    ys = np.arange(by0, by1, sy)
-    xs = np.arange(bx0, bx1, sx)
-    ys = ys[(ys >= 0) & (ys < f.h)]
-    xs = xs[(xs >= 0) & (xs < f.w)]
-    col_dark = (f.maxc(ys, np.arange(f.w)) < DARK_MAX).sum(axis=0) / len(ys) if len(ys) else np.zeros(f.w)
-    row_dark = (f.maxc(np.arange(f.h), xs) < DARK_MAX).sum(axis=1) / len(xs) if len(xs) else np.zeros(f.h)
-
-    # 사각형 크기의 60% 밖까지는 안 나간다 — 못 찾으면 포기.
-    reach = jround(max(box.w, box.h) * 0.6)
-
-    def scan(frm, d, limit, arr):
-        for k in range(1, reach):
-            v = frm + d * k
-            if v < 1 or v > limit - 2:
-                return None
-            if arr[v] >= DARK_RATIO:
-                return v
-        return None
-
-    left, right = scan(cx, -1, f.w, col_dark), scan(cx, 1, f.w, col_dark)
-    top, bottom = scan(cy, -1, f.h, row_dark), scan(cy, 1, f.h, row_dark)
-    if left is None or right is None or top is None or bottom is None:
-        return None
-    out = Palette(left, top, right - left, bottom - top)
-    mn = max(40, min_side or 0)
-    if out.w < mn or out.h < mn:
-        return None
-    out.ratio = out.w / out.h
-    if out.ratio < 0.8 or out.ratio > 1.25:
-        return None
-    out.fill = getattr(box, "fill", 0.0)
-    return out
-
-
-def best_blob(on: np.ndarray) -> dict | None:
-    """팔레트다운 덩어리. 크기 × 네모반듯함² 으로 고른다.
-
-    가장 큰 것을 고르다 앱 창과 팔레트가 붙은 덩어리를 집었다. 붙어서 길쭉해지면 점수가 깎인다.
-    동점이면 래스터 순서로 먼저 나온 덩어리 (JS 와 같다).
-    """
-    n_lab, labels, stats, _ = cv2.connectedComponentsWithStats(on.astype(np.uint8), connectivity=4)
-    if n_lab <= 1:
-        return None
-    flat = labels.ravel()
-    first = np.full(n_lab, flat.size, dtype=np.int64)
-    np.minimum.at(first, flat, np.arange(flat.size))
-    best = None
-    for lab in sorted(range(1, n_lab), key=lambda i: first[i]):
-        x, y, w, h, n = (int(v) for v in stats[lab])
-        square = min(w, h) / max(w, h)
-        score = n * square * square
-        if best is None or score > best["score"]:
-            best = {"n": n, "x0": x, "y0": y, "x1": x + w - 1, "y1": y + h - 1, "score": score}
-    return best
+    return b
 
 
 # ── 색 선택 UI (흰 지시선 + 스포이드 동그라미) ────────────────────
@@ -429,6 +229,21 @@ class SkipCircle:
     cx: int
     cy: int
     r: int
+
+
+@dataclass
+class SkipOutside:
+    """이 둥근 사각형 바깥은 팔레트가 아니다 — 틀 테두리·섞인 가장자리·둥근 모서리 (검정 목표가 테두리에 찍혔다)."""
+    x: int
+    y: int
+    w: int
+    h: int
+    r: int
+
+
+def frame_skip(box: Palette) -> SkipOutside:
+    i = box.inset
+    return SkipOutside(box.x + i, box.y + i, box.w - 2 * i, box.h - 2 * i, max(0, box.corner - i))
 
 
 @dataclass
@@ -704,6 +519,12 @@ def skip_mask(shapes, xs: np.ndarray, ys: np.ndarray) -> np.ndarray | None:
     for s in shapes:
         if isinstance(s, SkipCircle):
             m |= (X - s.cx) ** 2 + (Y - s.cy) ** 2 <= s.r * s.r
+        elif isinstance(s, SkipOutside):
+            out = (X < s.x) | (X >= s.x + s.w) | (Y < s.y) | (Y >= s.y + s.h)
+            # 모서리: 반지름 r 원의 중심보다 바깥 쪽에 있으면서 그 원 밖
+            cx = np.clip(X, s.x + s.r, s.x + s.w - 1 - s.r)
+            cy = np.clip(Y, s.y + s.r, s.y + s.h - 1 - s.r)
+            m |= out | ((X - cx) ** 2 + (Y - cy) ** 2 > s.r * s.r)
         else:
             m |= (X >= s.x) & (X < s.x + s.w) & (Y >= s.y) & (Y < s.y + s.h)
     return m

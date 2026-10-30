@@ -1,4 +1,8 @@
-"""염색 도우미의 파이썬 쪽: 주 모니터 캡처 → DyeTracker → 게임 위 표시 창(Qt) + 화면(웹)에 상태 보내기.
+"""염색 도우미의 파이썬 쪽: 게임 창 캡처 → DyeTracker → 게임 위 표시 창(Qt) + 화면(웹)에 상태 보내기.
+
+게임 창 클라이언트 영역만 찍는다 (예전엔 주 모니터 전체 — 게임이 다른 모니터·창모드면 어긋났다).
+팔레트 자리를 게임 화면 비율로 두므로 해상도가 달라도 같다. 우리 창은 캡처에서 빠지므로(exclude_from_capture)
+게임 위에 겹쳐도 찍히지 않는다.
 
 레거시는 화면(렌더러)이 getUserMedia 로 캡처하고 dye.js 로 검출했다. 웹 화면(QtWebEngine)에는 데스크톱
 캡처가 없어서 검출은 파이썬(mabi/dye)이 하고, 화면에는 레거시 mm.dye.draw 와 같은 모양의 payload 를 보낸다
@@ -10,26 +14,28 @@ import time
 import mss
 import numpy as np
 from PySide6.QtCore import QObject, Signal
-from PySide6.QtGui import QGuiApplication
 
 from mabi.dye import draw as ddraw
 from mabi.dye import detect as D
 from mabi.dye.tracker import DyeTracker
+from mabi.window import GameWindow
 
 from .dye_tab import Overlay, exclude_from_capture
+from .queue_overlay import to_logical
 
 TICK = 0.12
 
 
 class _ToGui(QObject):
-    state = Signal(object, float, float)
+    state = Signal(object, object)
     stopped = Signal()
 
 
 class DyeService:
-    def __init__(self, presets, emit):
-        """presets: PresetStore · emit(채널, 값): 화면 이벤트."""
+    def __init__(self, presets, emit, title: str):
+        """presets: PresetStore · emit(채널, 값): 화면 이벤트 · title: 게임 창 제목."""
         self.presets, self.emit = presets, emit
+        self.game = GameWindow(title)
         self.overlay: Overlay | None = None
         self.gui = _ToGui()
         self.gui.state.connect(self._paint)
@@ -64,13 +70,24 @@ class DyeService:
             cur = self.presets.current() or {}
             self.tracker.set_targets(cur.get("colors"), cur.get("tol"))
 
+    def _rect(self):
+        """게임 창 클라이언트 영역 (x, y, w, h) 실제 픽셀. 없거나 내려가 있으면 None."""
+        try:
+            r = self.game.client_rect()
+        except RuntimeError:
+            return None
+        return (r.left, r.top, r.width, r.height) if r.width > 0 and r.height > 0 else None
+
     # ---- 캡처 루프 ----
     def _loop(self) -> None:
         with mss.mss() as sct:
-            mon = sct.monitors[1]
             while self.running:
                 t0 = time.monotonic()
-                img = np.asarray(sct.grab(mon))
+                rect = self._rect()
+                if rect is None:
+                    time.sleep(1)
+                    continue
+                img = np.asarray(sct.grab({"left": rect[0], "top": rect[1], "width": rect[2], "height": rect[3]}))
                 try:
                     st = self.tracker.tick(img)
                 except Exception as e:  # 한 바퀴 실패로 도우미가 죽지 않게
@@ -78,7 +95,7 @@ class DyeService:
                     time.sleep(1)
                     continue
                 if st.redraw or st.status == "done":
-                    self.gui.state.emit(st, float(img.shape[1]), float(img.shape[0]))
+                    self.gui.state.emit(st, rect)
                 if st.status == "done":
                     self.running = False
                     break
@@ -87,11 +104,12 @@ class DyeService:
                     time.sleep(rest)
 
     # ---- 화면 스레드 ----
-    def _ensure_overlay(self) -> Overlay:
+    def _ensure_overlay(self, screen) -> Overlay:
         if self.overlay is None:
             self.overlay = Overlay()
+        if self.overlay.geometry() != screen.geometry():
+            self.overlay.place(screen)  # 게임이 있는 모니터 전체
         if not self.overlay.isVisible():
-            self.overlay.place()
             self.overlay.show()
             exclude_from_capture(self.overlay)
             if self.win:
@@ -106,14 +124,16 @@ class DyeService:
             exclude_from_capture(self.win, False)
         self.emit("mm:dye-state", {"stopped": True})
 
-    def _paint(self, st, fw: float, fh: float) -> None:
-        ov = self._ensure_overlay()
-        g = QGuiApplication.primaryScreen().geometry()
-        scale = g.width() / fw if fw else 1.0
-        ov.items = [] if st.hidden else ddraw.overlay_items(st, scale=scale, origin=(g.x(), g.y()),
+    def _paint(self, st, rect) -> None:
+        # 캡처는 게임 창 실제 픽셀, 그리기는 그 모니터의 논리 픽셀
+        screen, lx, ly, r = to_logical(rect)
+        ov = self._ensure_overlay(screen)
+        g = screen.geometry()
+        scale = 1 / r
+        ov.items = [] if st.hidden else ddraw.overlay_items(st, scale=scale, origin=(lx - g.x(), ly - g.y()),
                                                              screen_w=g.width(), measure=ov.measure)
         ov.update()
-        self.emit("mm:dye-state", {"payload": self.payload(st, scale, (g.x(), g.y())), "info": self.info(st),
+        self.emit("mm:dye-state", {"payload": self.payload(st, scale, (lx, ly)), "info": self.info(st),
                                    "done": st.status == "done", "text": st.text})
         if st.status == "done":
             self._hide()

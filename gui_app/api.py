@@ -136,10 +136,11 @@ class Api(DailyApi, CharsApi, QueueApi):
         """WebWindow 가 화면 스레드에서 부른다."""
         self.win = win
         self._gui = _GuiCall()
-        self.dyes = DyeService(self.dye, self._emit)
-        self.dyes.win = win
         from mabi.runner import load_config
-        self.qov = OverlayService(load_config(self.paths)["game"]["window_title"], self.settings.get("overlay"),
+        title = load_config(self.paths)["game"]["window_title"]
+        self.dyes = DyeService(self.dye, self._emit, title)
+        self.dyes.win = win
+        self.qov = OverlayService(title, self.settings.get("overlay"),
                                   self.queue.snapshot())
 
     def initial(self) -> dict:
