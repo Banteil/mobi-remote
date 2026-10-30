@@ -248,8 +248,9 @@ class GoalKind(Kind):
     target 은 새로 만들 개수다. 엔진은 "몇 개를 들고 있으면 끝인가" 로 보므로 시작할 때의 보유량(base)을 더해 넘긴다.
     base 는 큐가 이 카드를 처음 집어 들 때 잡고, 일시정지했다 이어 갈 때는 그대로 둔다 (다시 잡으면 한 일이 없던 것이 된다).
     """
-    MAX_STEPS = 300
+    MAX_STEPS = 300  # 실행한 걸음 수 상한. 가공을 기다리는 것은 세지 않는다 (5분짜리 가공 100번이면 기다림만 100번)
     STUCK_LIMIT = 4  # 같은 걸음이 이만큼 연달아 나오면 헛도는 것으로 본다
+    COLLECT_RETRY = 10  # 수령이 '완료된 게 없다' 로 거절되면 이만큼 기다렸다 다시 판단 (초)
 
     def __init__(self, api):
         self.api = api
@@ -274,7 +275,11 @@ class GoalKind(Kind):
                 base = 0
             q.patch(it["id"], {"base": base})
         spent, done, last_key, repeat, ok = 0, 0, "", 0, False
-        for _ in range(self.MAX_STEPS):
+        steps = 0
+        while True:
+            if steps >= self.MAX_STEPS:
+                q.note(it, f"걸음 상한({self.MAX_STEPS})에 닿아 멈춤 — 만든 {_num(it.get('made'))}개")
+                break
             if q.stop:
                 break
             r = api.goal_next(name, (it.get("base") or 0) + int(it.get("target") or 0))  # 수량은 도중에 바뀔 수 있다 (✎)
@@ -308,6 +313,7 @@ class GoalKind(Kind):
                 if not self._wait(q, it, st):
                     break
                 continue
+            steps += 1
             got = self._execute(q, it, st, done + 1)
             if got is None:
                 break  # 실패했고 이어갈 수 없다
@@ -346,6 +352,10 @@ class GoalKind(Kind):
         if r.get("ok"):
             return int(r.get("wingsSpent") or 0)
         if kind == "collect":
+            # 조회는 '완료' 인데 수령은 몇 초 동안 '완료된 게 없다' 고 할 때가 있다 (2026-10-30 20:56:54 — 12초 뒤엔 받음).
+            # 기다렸다 다시 판단한다. 계속 이러면 STUCK_LIMIT 에서 멈춘다
+            if r.get("error") == "no_completed_work":
+                return 0 if self._wait(q, it, {"seconds": self.COLLECT_RETRY}) else None
             return None
         if r.get("error") == "invalid_count":
             return 0  # 상한을 넘겼다 — 엔진이 maxCount 를 배웠으니 다음 걸음에서 맞춰 부른다

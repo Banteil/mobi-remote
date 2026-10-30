@@ -56,10 +56,14 @@ def card(**kw):
 
 
 class GoalKindTest(unittest.TestCase):
-    def run_goal(self, api, it=None):
+    def run_goal(self, api, it=None, wait=False, kind=None):
         q = FakeQ()
         q.item = it or card()
-        return GoalKind(api).run(q, q.item), q
+        g = kind or GoalKind(api)
+        self.waited = []
+        if wait:  # 실제로 기다리지 않는다
+            g._wait = lambda q, it, st: self.waited.append(st.get("seconds")) or True
+        return g.run(q, q.item), q
 
     def test_gather_craft_done(self):
         api = FakeApi([(3, {"kind": "gather", "name": "철광석", "why": "철광석 채집"}),
@@ -136,6 +140,36 @@ class GoalKindTest(unittest.TestCase):
         ok = GoalKind(api).run(q, q.item)
         self.assertFalse(ok)
         self.assertEqual(len(api.calls), 1)
+
+    def test_collect_not_ready_waits_and_retries(self):
+        # 조회는 완료인데 수령은 아직 없다고 할 때가 있다 — 실패로 끝내지 않고 기다렸다 다시
+        api = FakeApi([(0, {"kind": "collect", "name": "진액", "facility": "약품"}),
+                       (0, {"kind": "collect", "name": "진액", "facility": "약품"}),
+                       (10, {"kind": "done"})],
+                      exec_results=[{"ok": False, "error": "no_completed_work"}, {"ok": True}])
+        ok, q = self.run_goal(api, wait=True)
+        self.assertTrue(ok)
+        self.assertEqual(self.waited, [GoalKind.COLLECT_RETRY])
+
+    def test_collect_never_ready_stops(self):
+        api = FakeApi([(0, {"kind": "collect", "name": "진액"})] * 10,
+                      exec_results=[{"ok": False, "error": "no_completed_work"}] * 10)
+        ok, q = self.run_goal(api, wait=True)
+        self.assertFalse(ok)
+        self.assertEqual(len(api.calls), 4)
+        self.assertIn("진전이 없어", q.notes[-1])
+
+    def test_waits_do_not_count_toward_step_limit(self):
+        steps = []
+        for i in range(4):
+            steps += [(i, {"kind": "wait", "seconds": 300}), (i, {"kind": "alter", "name": f"진액{i}"})]
+        api = FakeApi(steps + [(4, {"kind": "alter", "name": "진액9"})])
+        g = GoalKind(api)
+        g.MAX_STEPS = 4
+        ok, q = self.run_goal(api, wait=True, kind=g)
+        self.assertFalse(ok)
+        self.assertEqual(len(api.calls), 4)  # 기다림 4번은 세지 않았다
+        self.assertIn("걸음 상한", q.notes[-1])
 
     def test_resume_keeps_base(self):
         api = FakeApi([(8, {"kind": "done"})], base_have=99)
