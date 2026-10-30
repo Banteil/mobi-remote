@@ -12,12 +12,13 @@
  * 한 바퀴마다 오는 결과('mm:dye-state')를 그리기만 한다.
  */
 
-// 칸 번호 고유색 — 게임 위 표시(mabi/dye/draw.py SLOT)와 같은 색
-const DYE_SLOT = ['#ff00ff', '#00ff00', '#00ffff'];
+// 칸 번호 표시 색 — 게임 위 점·스포이드 테·딱지와 같은 색. 번호를 눌러 바꾼다 (보기 설정 marks)
+const DYE_MARKS = ['#FF00FF', '#00FF00', '#00FFFF'];
 
 const dyeUI = {
   on: false,
   box: false,       // 파이썬이 팔레트를 찾았나 (상태 표시용)
+  marks: DYE_MARKS.slice(),
   prefs: null,
 };
 
@@ -48,9 +49,10 @@ function paintDyeSlots() {
   const tols = (cur && cur.tol) || [5, 5, 5];
   $('#dye-slots').innerHTML = colors.map((c, i) => {
     const ok = /^#[0-9a-f]{6}$/i.test(c);
-    const slot = DYE_SLOT[i] || '#888';
+    const slot = dyeUI.marks[i] || '#888';
     return '<div class="dye-slot">' +
-      '<b class="dye-no ' + bgClass(slot) + '">' + (i + 1) + '</b>' +
+      '<button class="dye-no ' + bgClass(slot) + '" data-dye-mark="' + i + '"' +
+      ' title="눌러서 표시 색 바꾸기 — 게임 위 점·스포이드 테 색">' + (i + 1) + '</button>' +
       // 네모를 누르면 색 편집이 열린다. 버튼을 따로 두면 줄만 길어지고, 누를 곳이 색 옆에
       // 있는 편이 "이 칸의 색을 정한다"는 뜻에 더 가깝다.
       '<button class="dye-chip' + (ok ? '' : ' empty') + ' ' + lineClass(slot) + '"' +
@@ -59,7 +61,7 @@ function paintDyeSlots() {
       '<input class="mono" data-dye-hex="' + i + '" value="' + esc(c) + '" placeholder="#RRGGBB" maxlength="7">' +
       '<span class="dye-tol">' +
       '<input type="range" min="0" max="20" step="1" data-dye-tol="' + i + '" value="' + tols[i] + '">' +
-      '<b class="mono" data-dye-tolv="' + i + '">' + tols[i] + '</b>' +
+      '<input type="number" class="dye-tol-n" min="0" max="40" step="1" data-dye-toln="' + i + '" value="' + tols[i] + '">' +
       '</span>' +
       '<button class="q-btn" data-dye-clear="' + i + '" title="비우기">✕</button>' +
       '</div>';
@@ -524,10 +526,23 @@ async function setDyeColor(slot, hex) {
   paintDyeSlots();
 }
 
+async function pickDyeMark(slot) {
+  const hex = await openColorPicker(dyeUI.marks[slot], (slot + 1) + '번 표시 색');
+  if (!hex) return;
+  const marks = dyeUI.marks.slice();
+  marks[slot] = hex;
+  await mm.dye.view({ marks: marks });   // 저장되면 mm:dye-view 로 다시 그린다
+}
+
+/** 오차 — 슬라이더(0~20)나 숫자 칸(0~40, 직접 입력)에서. 둘을 맞춰 두고 저장한다. */
 async function setDyeTol(slot, v) {
   const cur = dyeCurrent();
   if (!cur) return;
+  const n = Math.max(0, Math.min(40, Math.round(Number(v)) || 0));
+  const box = $('[data-dye-toln="' + slot + '"]'), bar = $('[data-dye-tol="' + slot + '"]');
+  if (box) box.value = n;
+  if (bar) bar.value = n;
   const tol = (cur.tol || [5, 5, 5]).slice();
-  tol[slot] = Number(v);
+  tol[slot] = n;
   dyeUI.prefs = await mm.dye.update(cur.id, { tol: tol });
 }

@@ -853,18 +853,19 @@ tr.sec .muted { font-weight: 400; letter-spacing: 0; margin-left: 4px; }
 #dye-tol { flex: 1; }
 
 /* 색마다의 허용 오차 — 슬라이더와 숫자를 한 덩어리로 */
-.dye-tol { display: flex; align-items: center; gap: 6px; flex: none; width: 118px; }
+.dye-tol { display: flex; align-items: center; gap: 6px; flex: none; width: 140px; }
 
 /* 슬라이더 칸 위에 붙는 머리말. 아래 줄과 같은 flex 구성이라 자리가 저절로 맞는다. */
 .dye-slot-head { margin-bottom: 4px; }
 .dye-head-gap { flex: 1; }
 .dye-head-tol {
-  flex: none; width: 118px; text-align: center;
+  flex: none; width: 140px; text-align: center;
   font-size: 11px; color: var(--fg-mute); letter-spacing: .02em;
 }
 .dye-head-x { visibility: hidden; pointer-events: none; }
 .dye-tol input[type="range"] { flex: 1; min-width: 0; }
-.dye-tol b { width: 18px; text-align: right; color: var(--fg-dim); font-size: 12px; }
+/* 직접 입력 (0~40 — 슬라이더는 자주 쓰는 0~20) */
+.dye-slot .dye-tol input.dye-tol-n { flex: none; width: 46px; min-width: 0; padding: 2px 4px; text-align: right; font-size: 12px; }
 .dye-slot input.mono { flex: 1; min-width: 92px; }
 
 /* 칸 번호 — 오버레이의 고유색과 같은 색을 리모콘에도 */
@@ -872,7 +873,9 @@ tr.sec .muted { font-weight: 400; letter-spacing: 0; margin-left: 4px; }
   width: 20px; height: 20px; flex: none; border-radius: 5px;
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 11px; font-weight: 700; color: #10131a;
+  border: 0; padding: 0; cursor: pointer;
 }
+.dye-no:hover { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* 사슬 끝까지 세운 가공 차례 */
 .plan-steps { margin: 6px 0 0; padding-left: 20px; }

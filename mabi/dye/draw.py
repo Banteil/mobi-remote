@@ -34,7 +34,9 @@ def dark(a: float) -> RGBA:
 
 # 1·2·3번 칸 고유색. 찾는 색 그 자체로 찍으면 회색 위에 회색 점이 된다.
 # sRGB 에서 가장 진한 마젠타·초록·시안 — 빨강은 팔레트 박스가 쓴다. 서로도 가장 멀다.
-SLOT = [rgba("#ff00ff"), rgba("#00ff00"), rgba("#00ffff")]
+# 사람이 바꿀 수 있다 (보기 설정 marks → overlay_items(slots=…)). 이것은 기본값.
+MARKS = ["#FF00FF", "#00FF00", "#00FFFF"]
+SLOT = [rgba(h) for h in MARKS]
 PALETTE_RED = rgba("#ff2d2d")
 BANNER_BG = (16, 19, 26, round(0.86 * 255))
 TONE_LINE = {"ok": (78, 201, 138, round(0.9 * 255)), "wait": (210, 170, 70, round(0.9 * 255))}
@@ -121,16 +123,18 @@ def _approx_measure(text: str, px: int) -> float:
 
 
 def overlay_items(state, presets=None, *, scale: float = 1.0, origin=(0, 0), screen_w: float = 1920,
-                  k: float = 1.0, measure: Callable[[str, int], float] | None = None) -> list:
+                  k: float = 1.0, measure: Callable[[str, int], float] | None = None, slots=None) -> list:
     """DyeState → 그릴 도형 목록 (그리는 순서).
 
     scale/origin: 캡처 좌표 → 화면 좌표 (JS toScreen: round(v*scale + origin)).
     screen_w: 오버레이 폭 (띠·딱지 가운데 정렬용). k: 축소 배율 (미리보기는 1보다 작다).
     measure(text, px) → 글자 폭. Qt 는 QFontMetricsF(QFont('Pretendard', px, 600)).horizontalAdvance.
     presets: 쓰지 않는다 — 딱지는 JS 와 같게 실제로 찾는 목표(state.chips)에서 만든다.
+    slots: 1·2·3번 칸 표시 색 ['#RRGGBB'×3] (없으면 MARKS) — 점·스포이드 테·딱지 테.
     """
     if state is None or state.hidden:
         return []
+    SLOT = [rgba(h) for h in (slots or MARKS)]  # noqa: N806 — 아래에서 모듈 SLOT 대신 쓴다
     m = measure or _approx_measure
     s = k or 1
     ox, oy = origin
@@ -143,7 +147,7 @@ def overlay_items(state, presets=None, *, scale: float = 1.0, origin=(0, 0), scr
 
     out: list = []
     _banner(out, screen_w, state.text, state.tone, s, m)
-    _chips(out, screen_w, state.chips, s, 54 * s, m)
+    _chips(out, screen_w, state.chips, s, 54 * s, m, SLOT)
 
     if state.palette is not None:
         b = state.palette
@@ -193,7 +197,7 @@ def _banner(out, W, text, tone, k, m):
     out.append(TextP(x + 27 * k, y + h / 2 + 1, text, px, TEXT))
 
 
-def _chips(out, W, chips, k, top, m):
+def _chips(out, W, chips, k, top, m, SLOT=SLOT):
     """찾는 세 색. 스포이드에 잡힌 칸은 글씨가 또렷하고 테가 굵다."""
     if not chips:
         return

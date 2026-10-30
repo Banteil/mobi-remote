@@ -1608,6 +1608,7 @@ function wire() {
     $('#dye-light-v').textContent = v.light + '%';
     $('#dye-area').textContent = v.area ? '직접 정함' : '기본';
     $('#dye-area-reset').disabled = !v.area;
+    if (v.marks && v.marks.join() !== dyeUI.marks.join()) { dyeUI.marks = v.marks.slice(); paintDyeSlots(); }
   }
   mm.dye.view().then(paintDyeView).catch(() => {});
   mm.dye.onView(paintDyeView);
@@ -1647,17 +1648,18 @@ function wire() {
     dyeUI.prefs = await mm.dye.remove(cur.id);
     paintDyePresets(); paintDyeSlots();
   });
-  // 오차 슬라이더는 칸마다 새로 그려지므로 위임으로 받는다
+  // 오차 슬라이더·숫자 칸은 칸마다 새로 그려지므로 위임으로 받는다. 끄는 동안은 숫자만 따라가고 놓으면 저장.
   document.addEventListener('input', (e) => {
     const t = e.target;
     if (!(t instanceof HTMLElement) || t.dataset.dyeTol === undefined) return;
-    const v = $('[data-dye-tolv="' + t.dataset.dyeTol + '"]');
-    if (v) v.textContent = t.value;
+    const v = $('[data-dye-toln="' + t.dataset.dyeTol + '"]');
+    if (v) v.value = t.value;
   });
   document.addEventListener('change', (e) => {
     const t = e.target;
-    if (!(t instanceof HTMLElement) || t.dataset.dyeTol === undefined) return;
-    setDyeTol(+t.dataset.dyeTol, t.value);
+    if (!(t instanceof HTMLElement)) return;
+    if (t.dataset.dyeTol !== undefined) setDyeTol(+t.dataset.dyeTol, t.value);
+    else if (t.dataset.dyeToln !== undefined) setDyeTol(+t.dataset.dyeToln, t.value);
   });
 
   $('#q-play').addEventListener('click', qPlayAll);
@@ -1857,6 +1859,7 @@ function wire() {
 
     // 별표가 먼저다. 칩 안에 들어 있어서, 뒤로 밀리면 표정을 실행해 버린다.
     if (t.dataset.dyePick !== undefined) return void pickDyeColor(+t.dataset.dyePick);
+    if (t.dataset.dyeMark !== undefined) return void pickDyeMark(+t.dataset.dyeMark);
     if (t.dataset.dyeClear !== undefined) return void setDyeColor(+t.dataset.dyeClear, '');
 
     if (t.dataset.qDel !== undefined) return void qRemove(t.dataset.qDel);

@@ -7,6 +7,7 @@
 검출은 파이썬(mabi/dye)이 하고 게임 위 표시 창에 그린다. 리모콘 화면(웹)에는 켜짐·팔레트 찾음만 보낸다
 — 염색하는 동안은 게임을 보고 있어 리모콘의 상태 표·미리보기는 보이지도 않았다 (2026-10-31 뺌).
 """
+import re
 import threading
 import time
 
@@ -27,15 +28,20 @@ LIGHT = (5, 90, 35)  # 흑백 밝기 % (최소, 최대, 기본)
 
 
 def clean_view(v) -> dict:
-    """보기 설정 (설정 파일 dyeView): gray 흑백 강조, light 흑백 밝기 %, area 팔레트 자리 비율 (None = 기본)."""
+    """보기 설정 (설정 파일 dyeView): gray 흑백 강조, light 흑백 밝기 %, area 팔레트 자리 비율 (None = 기본),
+    marks 1·2·3번 칸 표시 색 (점·스포이드 테·딱지 — 잘못된 칸은 기본색)."""
     v = v if isinstance(v, dict) else {}
+    mk = v.get("marks") if isinstance(v.get("marks"), list) else []
+    marks = [str(mk[i]).upper() if i < len(mk) and isinstance(mk[i], str) and re.fullmatch(r"#[0-9a-fA-F]{6}", mk[i])
+             else ddraw.MARKS[i] for i in range(3)]
     a = v.get("area")
     ok = (isinstance(a, (list, tuple)) and len(a) == 4
           and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in a)
           and 0 <= a[0] < 1 and 0 <= a[1] < 1 and 0.05 <= a[2] <= 1 and 0.05 <= a[3] <= 1)
     lt = v.get("light")
     lt = LIGHT[2] if not isinstance(lt, (int, float)) or isinstance(lt, bool) else int(min(LIGHT[1], max(LIGHT[0], lt)))
-    return {"gray": v.get("gray") is True, "light": lt, "area": [round(float(x), 5) for x in a] if ok else None}
+    return {"gray": v.get("gray") is True, "light": lt, "area": [round(float(x), 5) for x in a] if ok else None,
+            "marks": marks}
 
 
 class _ToGui(QObject):
@@ -185,6 +191,7 @@ class DyeService:
         g = screen.geometry()
         scale = 1 / r
         ov.items = [] if st.hidden else ddraw.overlay_items(st, scale=scale, origin=(lx - g.x(), ly - g.y()),
-                                                             screen_w=g.width(), measure=ov.measure)
+                                                             screen_w=g.width(), measure=ov.measure,
+                                                             slots=self.view["marks"])
         ov.update()
         self.emit("mm:dye-state", {"found": st.palette is not None, "text": st.text})

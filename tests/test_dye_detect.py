@@ -165,7 +165,9 @@ class ViewTest(unittest.TestCase):
 class CleanViewTest(unittest.TestCase):
     def test_defaults_and_limits(self):
         from gui_app.dye_service import clean_view
-        self.assertEqual(clean_view(None), {"gray": False, "light": 35, "area": None})
+        self.assertEqual(clean_view(None), {"gray": False, "light": 35, "area": None,
+                                            "marks": ["#FF00FF", "#00FF00", "#00FFFF"]})
+        self.assertEqual(clean_view({"marks": ["#ff8800", "red", None]})["marks"], ["#FF8800", "#00FF00", "#00FFFF"])
         self.assertEqual(clean_view({"gray": True, "light": 500})["light"], 90)
         self.assertIsNone(clean_view({"area": [0.5, 0.2, 0.01, 0.5]})["area"])   # 너무 작다
         self.assertIsNone(clean_view({"area": [0.5, 0.2, "x", 0.5]})["area"])
@@ -193,6 +195,18 @@ class DyeKeyTest(unittest.TestCase):
         self.assertTrue(a.dyes.running)
         a._dye_key()
         self.assertFalse(a.dyes.running)
+
+
+class SlotColorTest(unittest.TestCase):
+    def test_custom_slot_colors(self):
+        from mabi.dye import draw
+        from mabi.dye.tracker import DyeState, RingState
+        st = DyeState("active", "x", "ok", rings=[RingState(10, 10, 14, "#000000", 1, 0, 0)],
+                      chips=[("#123456", True, 0)])
+        items = draw.overlay_items(st, slots=["#112233", "#445566", "#778899"])
+        colors = {getattr(getattr(it, "stroke", None), "color", None) for it in items}
+        self.assertIn(draw.rgba("#112233"), colors)          # 스포이드 테·딱지 테
+        self.assertNotIn(draw.SLOT[0], colors)
 
 
 if __name__ == "__main__":
