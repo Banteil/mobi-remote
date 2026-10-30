@@ -71,6 +71,11 @@ class DyeService:
         self.running = True
         self.thread = threading.Thread(target=self._loop, name="dye", daemon=True)
         self.thread.start()
+        try:
+            self.game.focus()  # 리모콘에서 켜면 바로 게임에서 팔레트를 만질 수 있게
+        except RuntimeError:
+            pass  # 게임이 없으면 뜰 때까지 기다린다 (_loop)
+        self.emit("mm:dye-state", {"started": True})  # 단축키로 켰을 때도 화면 단추가 따라오게
         return {"ok": True}
 
     def stop(self) -> dict:

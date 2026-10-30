@@ -469,24 +469,30 @@ class QueueApi:
             q.resume_top()
 
     def _q_hotkey(self) -> None:
-        """일시정지 키(F12) 하나로 작업 큐 전체를 다룬다 — 앱이 켜져 있는 동안 늘 본다.
+        """앱 단축키를 앱이 켜져 있는 동안 늘 본다 — 일시정지 키(F12)와 염색 도우미 키(F11, _dye_key 가 있을 때).
+        일시정지 키(F12) 하나로 작업 큐 전체를 다룬다.
           큐가 돌고 있으면 → 무엇이 돌든 일시정지 (지금 명령도 끊는다 — ■ 와 같다)
           쉬고 있으면     → 맨 위 일시정지 카드를 이어 한다
         예전에는 숙제·어비스가 저마다 F12 를 봐서 행동·목표 카드는 F12 로 안 멈췄고, 이어 하기 감시는 숙제가
         멈출 때만 켜져 리모콘을 다시 켜면 안 들었다 (2026-10-24). 숙제·어비스 안의 중단 감시는 그대로 두지만,
         키 상태를 읽기만 하므로(GetAsyncKeyState 0x8000) 서로 눌림을 빼앗지 않는다."""
         from mabi.inputs import key_pressed, vk_of
-        vk, checked, down = None, 0.0, False
+        keys, checked, down = {}, 0.0, set()
         while True:
             try:
                 if time.monotonic() - checked > 3:  # 설정에서 키를 바꿀 수 있다
-                    vk, checked = vk_of(load_config(self.paths)["game"].get("stop_key", "f12")), time.monotonic()
-                now = key_pressed(vk)
-                if now and not down:
-                    self._q_stop_key()
+                    g = load_config(self.paths)["game"]
+                    keys = {vk_of(g.get("stop_key", "f12")): self._q_stop_key}
+                    dye = getattr(self, "_dye_key", None)
+                    if dye and g.get("dye_key"):
+                        keys.setdefault(vk_of(g["dye_key"]), dye)  # 같은 키면 일시정지가 먼저
+                    checked = time.monotonic()
+                now = {vk for vk in keys if key_pressed(vk)}
+                for vk in now - down:
+                    keys[vk]()
                 down = now
             except Exception:  # noqa: BLE001 — 감시가 죽으면 F12 가 영영 안 든다
-                log.exception("F12 감시 오류")
+                log.exception("단축키 감시 오류")
                 time.sleep(1)
             time.sleep(0.03)
 

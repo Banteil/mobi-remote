@@ -401,6 +401,7 @@ class DailyApi:
             "fields": [n for n, p in doc["places"].items() if int(p["index"]) == 2],
             "field": str(s["field"]),
             "stop_key": str(doc["game"].get("stop_key", "f12")),
+            "dye_key": str(doc["game"].get("dye_key", "f11")),
             "pause_on_touch": bool(doc["game"].get("pause_on_touch", True)),
             "fit_display": bool(doc["run"].get("fit_display", True)),
             "paths": {k: over.get(k, "") for k in ("data", "logs", "shots")},
@@ -426,6 +427,13 @@ class DailyApi:
             if k not in [f"f{i}" for i in range(1, 13)]:  # 게임이 쓰는 글자·Home/End 키와 겹치지 않게 F 키만
                 return {"error": f"일시정지 키는 F1~F12 중에서: {k}"}
             doc["game"]["stop_key"] = k
+        if v.get("dye_key"):
+            k = str(v["dye_key"]).lower()
+            if k not in [f"f{i}" for i in range(1, 13)]:
+                return {"error": f"염색 도우미 키는 F1~F12 중에서: {k}"}
+            if k == str(doc["game"].get("stop_key", "f12")).lower():
+                return {"error": "염색 도우미 키가 일시정지 키와 같습니다"}
+            doc["game"]["dye_key"] = k
         if "pause_on_touch" in v:
             doc["game"]["pause_on_touch"] = bool(v["pause_on_touch"])
         if "fit_display" in v:

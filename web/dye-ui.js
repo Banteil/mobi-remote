@@ -192,6 +192,10 @@ async function stopDye() {
 /** 파이썬이 한 바퀴마다 보내는 상태 — payload 는 레거시 mm.dye.draw 와 같은 모양이다 */
 function onDyeState(m) {
   if (!m) return;
+  if (m.started) {
+    if (!dyeUI.on) { dyeUI.on = true; paintDyeState(); say('염색 대기 — 팔레트가 뜨면 표시합니다.'); }
+    return;
+  }
   if (m.stopped) {
     if (dyeUI.on) { dyeUI.on = false; dyeUI.box = null; paintDyeState(); paintDyePreview(null); }
     return;

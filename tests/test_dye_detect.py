@@ -179,5 +179,28 @@ class CleanViewTest(unittest.TestCase):
         self.assertEqual(clean_view({"area": [0.56, 0.26, 0.39, 0.69]})["area"], [0.56, 0.26, 0.39, 0.69])
 
 
+class DyeKeyTest(unittest.TestCase):
+    def test_toggles(self):
+        # 염색 도우미 키 — 켜져 있으면 끄고 꺼져 있으면 켠다
+        from gui_app.api import Api
+
+        class Dyes:
+            running = False
+
+            def start(self):
+                self.running = True
+                return {"ok": True}
+
+            def stop(self):
+                self.running = False
+                return {"ok": True}
+        a = Api.__new__(Api)
+        a.dyes = Dyes()
+        a._dye_key()
+        self.assertTrue(a.dyes.running)
+        a._dye_key()
+        self.assertFalse(a.dyes.running)
+
+
 if __name__ == "__main__":
     unittest.main()

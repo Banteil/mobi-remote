@@ -522,6 +522,17 @@ class Api(DailyApi, CharsApi, QueueApi):
     def dye_stop(self):
         return self.dyes.stop() if self.dyes else {"ok": True}
 
+    def _dye_key(self):
+        """염색 도우미 키(설정 game.dye_key) — 켜져 있으면 끄고, 꺼져 있으면 켠다 (queue_api 단축키 감시가 부른다)."""
+        if not self.dyes:
+            return
+        if self.dyes.running:
+            log.info("염색 도우미 키 → 끔")
+            self.dye_stop()
+        else:
+            log.info("염색 도우미 키 → 켬")
+            self.dye_start()
+
     def _grab(self, with_overlay: bool):
         """주 모니터 한 장. 레거시는 리모콘 창을 잠깐 숨겼지만(Electron 캡처는 제외가 안 들었다) mss(BitBlt)에는
         캡처 제외가 들으므로 창을 숨기지 않고 제외만 건다 — 창이 깜빡이지 않는다."""

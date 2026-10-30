@@ -215,8 +215,10 @@ function paintStopKey() {
 async function loadPathSettings() {
   const s = await mm.daily.settings();
   dl.settings = Object.assign(dl.settings || {}, { stop_key: s.stop_key });
-  $('#opt-stop-key').innerHTML = Array.from({ length: 12 }, (_, i) => 'f' + (i + 1)).map((k) =>
-    '<option value="' + k + '"' + (k === s.stop_key ? ' selected' : '') + '>' + k.toUpperCase() + '</option>').join('');
+  const fkeys = (cur) => Array.from({ length: 12 }, (_, i) => 'f' + (i + 1)).map((k) =>
+    '<option value="' + k + '"' + (k === cur ? ' selected' : '') + '>' + k.toUpperCase() + '</option>').join('');
+  $('#opt-stop-key').innerHTML = fkeys(s.stop_key);
+  $('#opt-dye-key').innerHTML = fkeys(s.dye_key);
   $('#opt-pause-touch').checked = s.pause_on_touch !== false;
   $('#opt-fit-display').checked = s.fit_display !== false;
   ['data', 'logs', 'shots'].forEach((k) => { $('#dl-p-' + k).value = s.paths[k] || ''; });
@@ -226,6 +228,7 @@ async function loadPathSettings() {
 async function savePathSettings() {
   const r = await mm.daily.saveSettings({
     stop_key: $('#opt-stop-key').value,
+    dye_key: $('#opt-dye-key').value,
     pause_on_touch: $('#opt-pause-touch').checked,
     paths: { data: $('#dl-p-data').value, logs: $('#dl-p-logs').value, shots: $('#dl-p-shots').value },
   });
