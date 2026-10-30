@@ -1,4 +1,5 @@
 """실패를 숨기지 않는 장치 — 같은 실패 연달아 멈춤 (runner.FailStreak), 실패 있는 일일 카드는 완료로 치우지 않음."""
+import itertools
 import unittest
 from types import SimpleNamespace
 from unittest import mock
@@ -106,25 +107,27 @@ class LinesLeftTest(unittest.TestCase):
 
 
 class LeaveDungeonTest(unittest.TestCase):
-    """실패한 숙제 뒤 일반 던전 안에 남지 않는다 (2026-10-30 공물 던전 끼임 뒤 채집 실패)."""
+    """실패한 숙제 뒤 콘텐츠 안에 남지 않는다 (2026-10-30 공물 던전 끼임 뒤 채집 실패) — exits.leave_instance."""
 
     def test_outside_does_nothing(self):
-        from mabi.tasks import content
+        from mabi.tasks import exits
         b = mock.MagicMock()
         with mock.patch("mabi.place.place", return_value=SimpleNamespace(kind=None)):
-            self.assertFalse(content.leave_dungeon(b))
+            self.assertFalse(exits.leave_instance(b))
         b.click.assert_not_called()
 
     def test_inside_exits(self):
         from mabi.place import DUNGEON
-        from mabi.tasks import content
+        from mabi.tasks import exits
         b = mock.MagicMock()
         b.cfg = {"timing": {"loading": 60}}
         b.map_loading.return_value = False
         b.at_main.return_value = True
-        kinds = iter([DUNGEON, None])
+        b.ui = {"abyss_exit": "exit", "abyss_exit_dialog": "dialog"}
+        b.exists.side_effect = lambda name, **k: name == "exit"  # 나가기 버튼만 보이고 확인 창은 누른 뒤에
+        kinds = itertools.chain([DUNGEON, DUNGEON], itertools.repeat(None))  # 자리 보기 → 안 → 나옴
         with mock.patch("mabi.place.place", side_effect=lambda _: SimpleNamespace(kind=next(kinds))):
-            self.assertTrue(content.leave_dungeon(b))
+            self.assertTrue(exits.leave_instance(b))
         b.click.assert_called_once()
         b.key.assert_called_with("space")
 

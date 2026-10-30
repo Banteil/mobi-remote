@@ -20,6 +20,7 @@ from .. import monitor
 from ..place import RAID_LOBBY, place
 from . import ui_text
 from .content import CannotProceed, watch
+from .exits import Exit
 from .repeat import Repeat
 
 RAIDS = ["카브락", "에이렐", "화이트 서큐버스"]
@@ -344,89 +345,74 @@ def finish_result(bot: Bot) -> None:
     raise StepTimeout(f"레이드 결과 화면을 넘기지 못함 → {bot.snapshot('raid_result').name}")
 
 
-def leave_ship(bot: Bot) -> None:
-    """출항선에서 내린다: 나가기 → '출항선에서 퇴장하시겠습니까?' 나가기(Space) → 필드 메인 화면까지.
+class RaidExit(Exit):
+    """레이드 맵에서 나간다: 나가기(X) → '레이드에서 나가시겠습니까?' → 출항선으로 이동(Space) 또는 '파티&던전 나가기'(필드)."""
+    NAME, SNAP, HOTKEY = "레이드", "raid_leave", "x"  # X 는 결과 화면이 떠 있을 땐 안 먹는다 → 아이콘
+
+    def __init__(self, to_field: bool = False):
+        self.to_field = to_field
+
+    def inside(self, bot):
+        return _map(bot) in (RAID_MAP, None)
+
+    def gone(self, bot):
+        return _map(bot) not in (RAID_MAP, "loading")
+
+    def dialog(self, bot, timeout):
+        return ui_text.wait(bot, gd.text("raid_leave_ship"), gd.region("raid_leave_buttons"), timeout=timeout)
+
+    def confirm(self, bot, hit):
+        if self.to_field:
+            _click_text(bot, gd.text("raid_leave_field"), gd.region("raid_leave_buttons"), what="파티&던전 나가기")
+        else:
+            super().confirm(bot, hit)  # 출항선으로 이동
+
+
+class ShipExit(Exit):
+    """출항선에서 내린다: 나가기(X) → '출항선에서 퇴장하시겠습니까?' 나가기(Space) → 필드 메인 화면까지.
     어느 레이드의 배인지 모를 때(리모콘을 켜기 전에 탔거나 다른 레이드 카드) 메뉴에서 다시 들어가려고."""
-    for _ in range(3):
-        if _map(bot) not in (LOBBY_MAP, None):
-            break
-        if not bot.exists(bot.ui["abyss_exit"]):
-            bot.clear_blockers(ocr=True)
-            bot.sleep(1.0, 1.5)
-            continue
-        bot.key("x")  # 나가기 단축키 (leave 와 같음) — 안 뜨면 아이콘 클릭
-        if not ui_text.wait(bot, gd.text("raid_ship_leave"), gd.region("raid_ship_leave"), timeout=4, exact=False):
-            bot.click(bot.ui["abyss_exit"])
-            if not ui_text.wait(bot, gd.text("raid_ship_leave"), gd.region("raid_ship_leave"), timeout=5, exact=False):
-                continue
-        bot.sleep(0.5, 0.8)
+    NAME, SNAP, HOTKEY = "출항선", "raid_ship_leave", "x"
+
+    def inside(self, bot):
+        return _map(bot) in (LOBBY_MAP, None)
+
+    def gone(self, bot):
+        return _map(bot) not in (LOBBY_MAP, "loading")
+
+    def dialog(self, bot, timeout):
+        return ui_text.wait(bot, gd.text("raid_ship_leave"), gd.region("raid_ship_leave"), timeout=timeout, exact=False)
+
+    def confirm(self, bot, hit):
         bot.key("space")
         if not bot.wait_packet(lambda s: s.loading, 6, since=bot.input_mark):
-            # Space 가 안 먹고 창이 남았으면 '나가기' 버튼을 누른다 (leave 와 같은 일, 2026-10-28)
+            # Space 가 안 먹고 창이 남았으면 '나가기' 버튼을 누른다 (2026-10-28)
             btn = ui_text.find(bot, gd.text("raid_ship_leave_ok"), gd.region("raid_ship_leave_buttons"))
             if btn:
                 bot.log.info("Space 를 눌러도 출항선에서 안 내림 → '나가기' 클릭")
                 bot.click(btn)
-        break
-    else:
-        raise StepTimeout(f"출항선에서 내리지 못함 → {bot.snapshot('raid_ship_leave').name}")
-    bot.wait_packet(lambda s: s.loading, 15, since=bot.input_mark)
-    if not _wait_settled(bot, bot.cfg["timing"]["loading"]):
-        raise StepTimeout("출항선에서 내린 뒤 메인 화면이 나오지 않음")
+
+    def uncover(self, bot):
+        bot.clear_blockers(ocr=True)
+
+
+def leave_ship(bot: Bot) -> None:
+    ShipExit().run(bot)
 
 
 def leave(bot: Bot, to_field: bool = False) -> None:
-    """레이드 맵에서 나간다: 나가기 → '레이드에서 나가시겠습니까?' → 출항선으로 이동(Space) 또는 '파티&던전 나가기'(필드).
-    다 나와 메인 화면이 보일 때까지."""
-    want = LOBBY_MAP
-    deadline = time.monotonic() + 120  # 횟수가 아니라 시간으로 — 사람이 PC 를 쓰는 동안 클릭이 몇 번 건너뛰어져도 버틴다
-    while True:
-        if time.monotonic() > deadline:
-            raise StepTimeout(f"레이드에서 나가지 못함 → {bot.snapshot('raid_leave').name}")
-        if _map(bot) not in (RAID_MAP, None):
-            break
-        # 확인 창이 이미 떠 있으면(지난 시도의 Space 가 안 먹음) 나가기 아이콘을 또 누르지 않고 그 창부터
-        hit = ui_text.find(bot, gd.text("raid_leave_ship"), gd.region("raid_leave_buttons"))
-        if not hit:
-            if not bot.exists(bot.ui["abyss_exit"]):
-                bot.key("esc")  # 부활 창·결과 화면 등이 가리면 닫아 본다
-                bot.sleep(1.0, 1.5)
-                continue
-            # 나가기 단축키 X — 클릭과 달리 뒤에서 도는 게임을 앞으로 가져오지 않는다 (결과 화면이 떠 있을 땐 안 먹음)
-            bot.key("x")
-            hit = ui_text.wait(bot, gd.text("raid_leave_ship"), gd.region("raid_leave_buttons"), timeout=4)
-            if not hit:
-                bot.click(bot.ui["abyss_exit"])
-                hit = ui_text.wait(bot, gd.text("raid_leave_ship"), gd.region("raid_leave_buttons"), timeout=5)
-            if not hit:
-                continue
-            bot.sleep(0.5, 0.8)
-        if to_field:
-            _click_text(bot, gd.text("raid_leave_field"), gd.region("raid_leave_buttons"), what="파티&던전 나가기")
-            want = "Field"
-            break
-        bot.key("space")  # 출항선으로 이동
-        if not bot.wait_packet(lambda s: s.loading, 6, since=bot.input_mark) and \
-                ui_text.find(bot, gd.text("raid_leave_ship"), gd.region("raid_leave_buttons")):
-            # 29판을 잘 돌다가 이 창에서만 Space 를 안 받고 창이 그대로 남았다 — 마우스로는 바로 넘어감 (2026-10-28)
-            bot.log.info("Space 를 눌러도 출항선으로 안 넘어감 → '출항선으로 이동' 클릭")
-            bot.click(hit)
-        break
-    bot.wait_packet(lambda s: s.loading, 15, since=bot.input_mark)
-    end = time.monotonic() + bot.cfg["timing"]["loading"]
-    while time.monotonic() < end:
-        m = _map(bot)
-        if m == "loading":
-            bot.wait_loaded(end - time.monotonic())
-            continue
-        if m not in (RAID_MAP, "loading") and bot.at_main():
-            if m and want == LOBBY_MAP and m != LOBBY_MAP:
-                bot.log.warning(f"출항선이 아닌 곳({m})으로 나옴")
-            return
-        if m != RAID_MAP and not bot.is_loading():
-            bot.clear_blockers(ocr=True)
-        bot.sleep(2)
-    raise StepTimeout("레이드에서 나온 뒤 메인 화면이 나오지 않음")
+    """레이드 맵에서 나간다 (RaidExit) — 출항선으로, to_field 면 필드로. 다 나와 메인 화면이 보일 때까지."""
+    RaidExit(to_field).run(bot)
+
+
+def get_out(bot: Bot, at: str | None = None) -> None:
+    """레이드 어디에 있든(판 안·결과·출항선) 필드로 — 캐릭터를 바꾸거나 실패 뒤 정리할 때 (exits.leave_instance)."""
+    at = at or where_settled(bot, bot.cfg["raid"]["raid"])
+    if at == "cleared":
+        finish_result(bot)
+    if at in ("play", "cleared"):
+        leave(bot, to_field=True)
+    elif at == "ship":
+        leave_ship(bot)
 
 
 class RaidRepeat(Repeat):
@@ -444,10 +430,7 @@ class RaidRepeat(Repeat):
         self.bot.scene_skip = True  # 레이드는 연출이 길어 넘긴다 (사용자) — 뒤에서 도는 중이면 may_skip_scene 이 막는다
 
     def leave_for_switch(self, at):
-        if at in ("play", "cleared"):
-            if at == "cleared":
-                finish_result(self.bot)
-            leave(self.bot, to_field=True)
+        get_out(self.bot, at)
 
     def _next(self) -> str:
         return "ship" if _map(self.bot) in (LOBBY_MAP, None) else "entry"

@@ -25,7 +25,8 @@ from .bot import AuthBlocked, Bot, MissingTemplate, Overweight, StepTimeout, Sto
 from .paths import Paths
 from .report import RunReport
 from .tasks import display, login
-from .tasks.content import CannotProceed, leave_dungeon
+from .tasks.content import CannotProceed
+from .tasks.exits import leave_instance
 
 log = logging.getLogger("mabi")
 
@@ -333,7 +334,7 @@ class Runner:
             if tid == "login":
                 return
             try:
-                leave_dungeon(bot)  # 던전 안에서 실패했으면 다음 숙제를 밖에서 시작하게
+                leave_instance(bot)  # 던전·어비스·레이드 안에서 실패했으면 다음 숙제를 밖에서 시작하게
             except (StepTimeout, MissingTemplate, RuntimeError):
                 pass
             except Exception:  # noqa: BLE001

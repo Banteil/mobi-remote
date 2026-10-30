@@ -24,6 +24,7 @@ from .. import monitor
 from ..monitor import detect as d, handlers
 from . import ui_text
 from .content import CannotProceed, touch_prompt_visible, watch
+from .exits import DungeonExit, Exit
 from .repeat import Repeat
 
 DIFFICULTIES = ["입문", "어려움", "매우 어려움", "매우 어려움2"]
@@ -244,43 +245,42 @@ def wait_entered(bot: Bot, timeout: float) -> bool:
     return True
 
 
-def leave(bot: Bot) -> bool:
-    """어비스 안에서 나간다: 오른쪽 맨 위 나가기 → '던전에서 퇴장하시겠습니까?' 나가기(Space). 나왔으면 True.
-    나가기 전에 판이 끝났으면(쓰러진 사이 파티가 보스를 잡음 — 결과가 옴) 나가지 않고 False → 부르는 쪽이 클리어로 잇는다.
+class AbyssExit(Exit):
+    """어비스 안에서 나간다: 오른쪽 맨 위 나가기 → '던전에서 퇴장하시겠습니까?' 나가기(Space).
+    나가기 전에 판이 끝났으면(쓰러진 사이 파티가 보스를 잡음 — 결과가 옴) 나가지 않는다 → 부르는 쪽이 클리어로 잇는다.
     판 밖이라고 ESC 만 누르다 '나가지 못함' 으로 멈췄다 (2026-10-26 사용자 제보)."""
-    ui = bot.ui
-    for _ in range(3):
-        if after_clear(bot):
-            bot.log.info("나가기 전에 판이 끝남 (어비스 결과) → 나가지 않고 클리어로")
-            return False
-        if not inside(bot):
-            bot.key("esc")  # 부활 창 등이 가리고 있으면 닫아 본다
-            bot.sleep(1.0, 1.5)
-            continue
-        bot.click(ui["abyss_exit"])
-        try:
-            bot.wait(ui["abyss_exit_dialog"], timeout=5)
-        except StepTimeout:
-            continue
-        bot.sleep(0.6, 0.9)
-        bot.key("space")
-        break
-    else:
-        raise StepTimeout(f"어비스에서 나가지 못함 → {bot.snapshot('abyss_leave').name}")
-    # 밖(필드)으로 나와 메인 화면이 보일 때까지 — 패킷이 있으면 맵을 떠나기 시작하는 순간(길어야 15초)을 기다렸다가,
-    # 로딩 동안은 화면을 보지 않는다
-    end = time.monotonic() + bot.cfg["timing"]["loading"]
-    bot.wait_packet(lambda s: s.loading, 15, since=bot.input_mark)  # 나가기(Space)를 누른 뒤 한 번이라도 로딩
-    while inside(bot) or not bot.at_main():
-        if time.monotonic() > end:
-            raise StepTimeout("어비스에서 나온 뒤 메인 화면이 나오지 않음")
-        if bot.map_loading():
-            bot.wait_loaded(end - time.monotonic())
-            continue
-        if not inside(bot) and not bot.is_loading():
-            bot.clear_blockers(ocr=True)  # 나오면서 뜬 퀘스트 완료 창
-        bot.sleep(2)
-    return True
+    NAME, SNAP = "어비스", "abyss_leave"
+
+    def inside(self, bot):
+        return inside(bot)
+
+    def dialog(self, bot, timeout):
+        return DungeonExit.dialog(self, bot, timeout)
+
+    def finished_before(self, bot):
+        return after_clear(bot)
+
+
+def leave(bot: Bot) -> bool:
+    """어비스 판 안에서 나간다 (AbyssExit). 나왔으면 True, 나가기 전에 판이 끝났으면 False."""
+    return AbyssExit().run(bot)
+
+
+def get_out(bot: Bot, at: str | None = None) -> None:
+    """어비스 어디에 있든(매칭 중·판 안·보상 화면) 밖으로 — 캐릭터를 바꾸거나 실패 뒤 정리할 때 (exits.leave_instance)."""
+    at = at or where_settled(bot, bot.cfg["abyss"]["dungeon"])
+    if at == "matching":  # 매칭은 들어간 뒤 나간다
+        bot.step("abyss_match", "우연한 만남 매칭 중")
+        if wait_entered(bot, bot.cfg["abyss"]["match_timeout"]):
+            at = "play"
+    if at == "play":
+        if not leave(bot):  # 나가기 전에 판이 끝남 → 보상 화면에서 나간다
+            to_reward(bot)
+            exit_reward(bot)
+    elif at == "reward":
+        bot.key("esc")  # 보상 화면 '나가기' — 판은 이미 끝났다
+        bot.sleep(3, 4)
+        _wait_settled(bot, bot.cfg["timing"]["loading"])
 
 
 def revives_left(bot: Bot) -> int | None:
@@ -456,19 +456,7 @@ class AbyssRepeat(Repeat):
         self.bot.scene_skip = False  # 연출은 누르지 않고 기다린다 — 누르면 뒤에서 돌던 게임이 앞으로 나온다 (2026-10-25 사용자)
 
     def leave_for_switch(self, at):
-        bot = self.bot
-        if at == "matching":  # 이름은 메인 화면 왼쪽 위에서만 읽힌다 — 들어간 뒤 나간다
-            bot.step("abyss_match", "우연한 만남 매칭 중")
-            if wait_entered(bot, self.a["match_timeout"]):
-                at = "play"
-        if at == "play":
-            if not leave(bot):  # 나가기 전에 판이 끝남 → 보상 화면에서 나간다
-                to_reward(bot)
-                exit_reward(bot)
-        elif at == "reward":
-            bot.key("esc")  # 보상 화면 '나가기' — 판은 이미 끝났다
-            bot.sleep(3, 4)
-            _wait_settled(bot, bot.cfg["timing"]["loading"])
+        get_out(self.bot, at)
 
     def loop(self, at):
         bot, a = self.bot, self.a
