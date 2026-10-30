@@ -126,6 +126,18 @@ class TrackerTest(unittest.TestCase):
         self.assertFalse(t.tick(img).redraw)                  # 그 뒤로 그대로면 다시 안 그린다
         self.assertTrue(t.tick(screen(seed=2)[0]).redraw)     # 움직이면 다시 그린다
 
+    def test_still_option_hides_spots_while_moving(self):
+        def img(seed):
+            im, _ = screen(seed=seed)
+            im[600:640, 1400:1440] = (40, 200, 60)
+            return im
+        t = DyeTracker()
+        t.set_targets(["#3CC828"], [3])
+        self.assertGreater(len(t.tick(img(1)).spots[0]), 0)  # 끄면(기본) 움직여도 그린다
+        t.set_view(still=True)
+        self.assertEqual(len(t.tick(img(1)).spots[0]), 0)    # 켜면 움직이는 바퀴엔 안 그린다
+        self.assertGreater(len(t.tick(img(1)).spots[0]), 0)  # 멈추면 그린다
+
 class ViewTest(unittest.TestCase):
     def test_highlight_keeps_only_matches(self):
         img, b = screen()
@@ -166,7 +178,7 @@ class CleanViewTest(unittest.TestCase):
     def test_defaults_and_limits(self):
         from gui_app.dye_service import clean_view
         self.assertEqual(clean_view(None), {"gray": False, "light": 35, "area": None,
-                                            "marks": ["#FF00FF", "#00FF00", "#00FFFF"]})
+                                            "marks": ["#FF00FF", "#00FF00", "#00FFFF"], "still": False})
         self.assertEqual(clean_view({"marks": ["#ff8800", "red", None]})["marks"], ["#FF8800", "#00FF00", "#00FFFF"])
         self.assertEqual(clean_view({"gray": True, "light": 500})["light"], 90)
         self.assertIsNone(clean_view({"area": [0.5, 0.2, 0.01, 0.5]})["area"])   # 너무 작다

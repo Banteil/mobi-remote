@@ -1604,6 +1604,7 @@ function wire() {
   function paintDyeView(v) {
     if (!v) return;
     $('#dye-gray').checked = !!v.gray;
+    $('#dye-still').checked = !!v.still;
     $('#dye-light').value = v.light;
     $('#dye-light-v').textContent = v.light + '%';
     $('#dye-area').textContent = v.area ? '직접 정함' : '기본';
@@ -1613,6 +1614,7 @@ function wire() {
   mm.dye.view().then(paintDyeView).catch(() => {});
   mm.dye.onView(paintDyeView);
   $('#dye-gray').addEventListener('change', (e) => mm.dye.view({ gray: e.target.checked }));
+  $('#dye-still').addEventListener('change', (e) => mm.dye.view({ still: e.target.checked }));
   $('#dye-light').addEventListener('input', (e) => { $('#dye-light-v').textContent = e.target.value + '%'; });
   $('#dye-light').addEventListener('change', (e) => mm.dye.view({ light: Number(e.target.value) }));
   $('#dye-area-edit').addEventListener('click', async () => {

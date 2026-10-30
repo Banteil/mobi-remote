@@ -4,7 +4,8 @@
            염색을 마쳐도 끄지 않고 여기로 돌아온다 — 연달아 염색할 때 매번 켜지 않게 (예전엔 확정 단추를 보면 껐다).
   active   테두리가 보인다 (매 바퀴 본다 — 네 변 몇 줄이라 싸다. 창을 닫으면 바로 waiting).
            16×16 지문이 거의 그대로(차이 < 1)면 아무것도 안 한다. 멈춘 화면은 정확히 0 이고 돌리는 중엔 수십.
-           돌리는 동안 점을 숨겨 봤지만 크게 나아지지 않아 되돌렸다 (2026-10-31) — 점은 매 바퀴 그대로 그린다.
+           still 을 켜면 돌리거나 크기를 바꾸는 동안엔 점을 찾지도 그리지도 않는다 — 그 바퀴가 가벼워
+           렉이 덜하다 (사용자). 멈추면 그 바퀴에 그린다. 끄면 매 바퀴 그린다 (기본).
 
 호출 쪽은 120ms 마다 tick(frame) 을 부르고, redraw 가 True 일 때만 오버레이를 다시 그린다.
 좌표는 모두 frame 픽셀 기준 — 화면 좌표로 옮기는 것은 호출 쪽(draw.overlay_items 의 scale/origin).
@@ -57,7 +58,7 @@ class DyeTracker:
         """at: 팔레트 자리 (x, y, w, h) 게임 화면 대비 비율. 없으면 detect.PALETTE_AT."""
         self.at = tuple(at) if at else D.PALETTE_AT
         self.order = order
-        self.gray, self.light = False, 0.35
+        self.gray, self.light, self.still = False, 0.35, False
         self._targets: list[D.Target] = []
         self.reset()
 
@@ -84,10 +85,10 @@ class DyeTracker:
         self._n_slots = len(ts)
         self.sig = None
 
-    def set_view(self, at=None, gray: bool = False, light: float = 0.35) -> None:
-        """팔레트 자리(비율, 없으면 기본)와 흑백 강조. 바뀌면 다음 바퀴에 다시 그린다."""
+    def set_view(self, at=None, gray: bool = False, light: float = 0.35, still: bool = False) -> None:
+        """팔레트 자리(비율, 없으면 기본)와 흑백 강조, still = 움직이는 동안 점 끄기. 바뀌면 다음 바퀴에 다시 그린다."""
         self.at = tuple(at) if at else D.PALETTE_AT
-        self.gray, self.light = bool(gray), float(light)
+        self.gray, self.light, self.still = bool(gray), float(light), bool(still)
         self.sig = None
 
     @property
@@ -148,7 +149,7 @@ class DyeTracker:
         # 표본 격자 하나를 색 찾기·점·흑백 강조가 같이 쓴다 (Lab 바꾸기를 한 번만)
         grid = D.Grid(f, box, D.grid_step(box, 150000), skip)
         found = D.find_colors(f, box, targets, grid=grid)
-        spots = D.find_spots(f, box, targets, grid=grid)
+        spots = [] if moved and self.still else D.find_spots(f, box, targets, grid=grid)
         pk = D.picks(rings, targets)
 
         so = getattr(self, "_slot_of", list(range(len(targets))))
@@ -158,7 +159,9 @@ class DyeTracker:
         # 원래 칸 번호 자리에 놓는다 (빈 칸은 None / 빈 점 묶음)
         found_at, spots_at = [None] * n, [np.empty((0, 2), dtype=int) for _ in range(n)]
         for k, i in enumerate(so):
-            found_at[i], spots_at[i] = found[k], spots[k]
+            found_at[i] = found[k]
+            if spots:
+                spots_at[i] = spots[k]
         return self._emit(DyeState(
             "active",
             status + ("  ·  셋 다 잡았습니다" if all_caught else ""),

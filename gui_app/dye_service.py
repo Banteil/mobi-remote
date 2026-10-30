@@ -29,7 +29,7 @@ LIGHT = (5, 90, 35)  # 흑백 밝기 % (최소, 최대, 기본)
 
 def clean_view(v) -> dict:
     """보기 설정 (설정 파일 dyeView): gray 흑백 강조, light 흑백 밝기 %, area 팔레트 자리 비율 (None = 기본),
-    marks 1·2·3번 칸 표시 색 (점·스포이드 테·딱지 — 잘못된 칸은 기본색)."""
+    marks 1·2·3번 칸 표시 색 (점·스포이드 테·딱지 — 잘못된 칸은 기본색), still 돌리는 동안 점 끄기."""
     v = v if isinstance(v, dict) else {}
     mk = v.get("marks") if isinstance(v.get("marks"), list) else []
     marks = [str(mk[i]).upper() if i < len(mk) and isinstance(mk[i], str) and re.fullmatch(r"#[0-9a-fA-F]{6}", mk[i])
@@ -41,7 +41,7 @@ def clean_view(v) -> dict:
     lt = v.get("light")
     lt = LIGHT[2] if not isinstance(lt, (int, float)) or isinstance(lt, bool) else int(min(LIGHT[1], max(LIGHT[0], lt)))
     return {"gray": v.get("gray") is True, "light": lt, "area": [round(float(x), 5) for x in a] if ok else None,
-            "marks": marks}
+            "marks": marks, "still": v.get("still") is True}
 
 
 class _ToGui(QObject):
@@ -100,7 +100,7 @@ class DyeService:
         self.view = clean_view(view)
         if self.tracker:
             v = self.view
-            self.tracker.set_view(v["area"], v["gray"], v["light"] / 100)
+            self.tracker.set_view(v["area"], v["gray"], v["light"] / 100, v["still"])
 
     def edit_area(self, on_done) -> dict:
         """화면 스레드에서. 게임 위에 그리기 창을 띄운다. 다 그리면 가까운 테두리에 맞춰 on_done(비율 | None)."""
