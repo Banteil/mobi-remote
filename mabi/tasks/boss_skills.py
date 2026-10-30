@@ -6,8 +6,8 @@
 게이지가 차 있는데 눌러도 안 줄면 RETRY 초마다 다시 누른다 (게임이 키를 놓치거나 아직 못 쓰는 순간).
 
 팔라딘 변신 중에는 궁극기를 쓰지 않는다 — 변신 중엔 궁극기 키(6)가 '변신 해제' 가 된다 (사용자, 2026-10-30).
-변신이 언제 끝나는지는 아직 모르므로(실측 전) 보수적으로: 이 맵에서 변신 키를 한 번이라도 눌렀으면, 또는 패킷이
-변신 중(변신 번호가 0 이 아님)이라 하면 그 맵을 나갈 때까지 궁극기를 누르지 않는다.
+변신은 20초 간다 (사용자) — 변신 키를 누른 뒤 TRANSFORM 초 동안, 또는 패킷이 변신 중(변신 번호가 0 이 아님, 실측 전)
+이라 하면 궁극기를 누르지 않는다.
 """
 import time
 
@@ -17,6 +17,7 @@ from ..bot import Bot
 
 class BossSkills:
     RETRY = 8  # 같은 기술을 다시 누르기까지 (초)
+    TRANSFORM = 20 + 3  # 팔라딘 변신 시간 20초 + 여유 — 이 동안 궁극기 키(6)는 변신 해제
 
     def __init__(self, bot: Bot, ultimate: bool, paladin: bool, boss_fight):
         self.bot, self.boss_fight = bot, boss_fight
@@ -27,7 +28,6 @@ class BossSkills:
             (("궁극기", g.get("ultimate_key", "6"), lambda st: (st.ult, st.ult_max)), ultimate),
         ) if on and s[1]]
         self.pressed: dict[str, float] = {}
-        self.paladin_map = None  # 변신 키를 누른 맵 (그 맵의 entered_at) — 그 맵에서는 궁극기를 안 쓴다
 
     @classmethod
     def for_character(cls, bot: Bot, cfg: dict, slot: int | None, boss_fight) -> "BossSkills":
@@ -44,7 +44,8 @@ class BossSkills:
 
     def transformed(self, st) -> bool:
         """팔라딘 변신 중일 수 있나 — 그러면 궁극기 키가 변신 해제라 누르면 안 된다."""
-        return self.paladin_map == st.entered_at or st.transfigure not in (None, 0)
+        return (time.monotonic() - self.pressed.get("팔라딘 변신", -1e9) < self.TRANSFORM
+                or st.transfigure not in (None, 0))
 
     def tick(self, act: dict) -> bool:
         """판 진행 루프가 부른다 (act = 방금 받은 CLI get_activity). 하나를 눌렀으면 True."""
@@ -67,8 +68,6 @@ class BossSkills:
             self.bot.log.info(f"보스전 {name} ({cur:.0f}/{need:.0f}) → {key}")
             self.bot.key(key)
             self.pressed[name] = now
-            if name == "팔라딘 변신":
-                self.paladin_map = st.entered_at
             return True  # 한 번에 하나 — 다음 것은 다음 확인 때 (게이지가 줄었는지 보고)
         return False
 

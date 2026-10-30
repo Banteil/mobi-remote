@@ -48,12 +48,12 @@ class BossSkillsTest(unittest.TestCase):
         self.assertFalse(sk.tick({"IsInCombat": False}))  # 모닥불 앞에서 쉬는 중
         self.assertTrue(sk.tick({"IsInCombat": True}))
         self.assertEqual(bot.keys, ["f5"])  # 팔라딘 먼저
-        sk.pressed.clear()
         bot.gauge(300)  # 변신에 썼다 — 궁극기 게이지는 그대로 차 있어도
         self.assertFalse(sk.tick({"IsInCombat": True}))
-        self.assertEqual(bot.keys, ["f5"])  # 변신 중엔 6 이 변신 해제 → 이 맵에서는 궁극기를 안 누른다
-        bot.enter(ABYSS)  # 다음 판
-        bot.packets.apply("abyss.campfire", {})
+        self.assertEqual(bot.keys, ["f5"])  # 변신 중(20초)엔 6 이 변신 해제 → 궁극기를 안 누른다
+        sk.pressed["팔라딘 변신"] -= 20  # 아직 여유 시간 안
+        self.assertFalse(sk.tick({"IsInCombat": True}))
+        sk.pressed["팔라딘 변신"] -= 4  # 변신이 끝남
         self.assertTrue(sk.tick({"IsInCombat": True}))
         self.assertEqual(bot.keys, ["f5", "6"])
         self.assertFalse(sk.tick({"IsInCombat": True}))  # 방금 눌렀다 — RETRY 동안 안 누른다
