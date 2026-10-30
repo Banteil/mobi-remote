@@ -116,6 +116,21 @@ class TrackerTest(unittest.TestCase):
         self.assertEqual(t.tick(img).status, "active")
         self.assertEqual(DyeTracker(at=(0.1, 0.1, 0.3, 0.3)).tick(img).status, "waiting")
 
+    def test_spots_only_when_still(self):
+        # 돌리는 동안엔 점이 나왔다 말았다 해서 산만했다 — 멈춘 바퀴에만 그린다
+        def img(seed):
+            im, _ = screen(seed=seed)
+            im[600:640, 1400:1440] = (40, 200, 60)
+            return im
+        t = DyeTracker()
+        t.set_targets(["#3CC828"], [3])
+        self.assertEqual(len(t.tick(img(1)).spots[0]), 0)    # 막 떴다 = 움직이는 중
+        st = t.tick(img(1))
+        self.assertTrue(st.redraw)
+        self.assertGreater(len(st.spots[0]), 0)              # 멈췄다
+        self.assertFalse(t.tick(img(1)).redraw)               # 그대로면 다시 안 그린다
+        self.assertEqual(len(t.tick(img(2)).spots[0]), 0)    # 다시 움직인다
+
 
 class ViewTest(unittest.TestCase):
     def test_highlight_keeps_only_matches(self):
@@ -151,34 +166,6 @@ class ViewTest(unittest.TestCase):
         img, _ = screen(border=False)
         r = D.Rect(500, 300, 400, 400)
         self.assertEqual(D.snap_area(D.Frame(img), r), r)
-
-
-class GuideTest(unittest.TestCase):
-    def setUp(self):
-        img, _ = screen()
-        img[500:510, 1300:1310] = (40, 200, 60)   # 목표 #3CC828 가까운 자리
-        img[900:910, 1100:1110] = (40, 200, 60)   # 먼 자리
-        img[500:510, 1700:1710] = (40, 200, 60)   # 다른 파트 판
-        self.f = D.Frame(img)
-        self.box = D.palette_at(self.f)
-        self.grid = D.Grid(self.f, self.box, 2, [D.frame_skip(self.box)])
-        self.t = [D.target("#3CC828", 3)]
-
-    def test_nearest_in_own_band(self):
-        ring = D.Ring(1350, 520, 14, (0, 0, 0), 1.0)
-        g = D.guides(self.grid, [ring], self.t, [0], bands=[(1075, 1500)])
-        self.assertEqual(len(g), 1)
-        self.assertTrue(1300 <= g[0].tx < 1310 and 500 <= g[0].ty < 510)
-        self.assertAlmostEqual(g[0].dist, ((g[0].tx - 1350) ** 2 + (g[0].ty - 520) ** 2) ** 0.5)
-        # 다른 판(1700)이 더 가까워도 그 판의 색은 이 스포이드가 못 집는다
-        ring2 = D.Ring(1690, 520, 14, (0, 0, 0), 1.0)
-        g2 = D.guides(self.grid, [ring2], self.t, [0], bands=[(1075, 1500)])
-        self.assertTrue(g2[0].tx < 1500)
-
-    def test_no_pair_or_no_match(self):
-        ring = D.Ring(1350, 520, 14, (0, 0, 0), 1.0)
-        self.assertEqual(D.guides(self.grid, [ring], self.t, [-1]), [])
-        self.assertEqual(D.guides(self.grid, [ring], [D.target("#0000FE", 1)], [0]), [])
 
 
 class CleanViewTest(unittest.TestCase):

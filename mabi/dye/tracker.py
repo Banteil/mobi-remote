@@ -3,7 +3,8 @@
   waiting  정해 둔 자리(detect.PALETTE_AT 또는 사람이 고친 비율)에 팔레트 테두리가 안 보인다.
            그동안 확정 단추를 본다 — 두 바퀴 이어 보이면 done.
   active   테두리가 보인다 (매 바퀴 본다 — 네 변 몇 줄이라 싸다. 창을 닫으면 바로 waiting).
-           16×16 지문이 거의 그대로(차이 < 1)면 아무것도 안 한다.
+           16×16 지문이 거의 그대로(차이 < 1)면 아무것도 안 한다. 멈춘 화면은 정확히 0 이고 돌리는 중엔 수십.
+           돌리는 동안엔 점을 그리지 않는다 — 바퀴마다 나왔다 말았다 해서 산만했다. 멈추면 그 바퀴에 그린다.
   done     염색 확정 화면. 더는 계산하지 않는다 (reset() 으로 다시).
 
 호출 쪽은 120ms 마다 tick(frame) 을 부르고, redraw 가 True 일 때만 오버레이를 다시 그린다.
@@ -47,7 +48,6 @@ class DyeState:
     chips: list[tuple[str, bool]] = field(default_factory=list)   # (목표 hex, 스포이드가 물었나)
     all_caught: bool = False
     pins: list[tuple[int, int]] | None = None     # 스포이드가 셋일 때 삼각형 꼭짓점
-    guides: list[D.Guide] = field(default_factory=list)   # 동그라미 → 가장 가까운 목표 색 자리 (slot 은 원래 칸 번호)
     shade: np.ndarray | None = None               # 흑백 강조 그림 (RGB, 팔레트의 1/SHADE_STEP 크기) — 켰을 때만
 
 
@@ -69,6 +69,9 @@ class DyeTracker:
         self.box: D.Palette | None = None
         self.sig = None
         self.lead: D.Leaders | None = None
+        self.lead_ok = False   # 멈춘 화면에서 두 번 이어 같은 자리로 찾았나 — 열리는 중에 찾으면 엉뚱한 자리를 잡는다
+        self.lead_still = False   # 지금 lead 를 멈춘 화면에서 찾았나
+        self.moving = False
         self.bands = None
         self.done_seen = 0
         self.done = False
@@ -124,14 +127,14 @@ class DyeTracker:
             return self._emit(DyeState("waiting", WAIT_TEXT, "wait"))
         if self.box is None or (box.x, box.y, box.w, box.h) != (self.box.x, self.box.y, self.box.w, self.box.h):
             # 새로 떴다(또는 자리를 고쳤다) — 지시선·동그라미·파트 경계를 다시 찾는다
-            self.box, self.sig, self.lead, self.bands = box, None, None, None
+            self.box, self.sig, self.lead, self.bands, self.lead_ok = box, None, None, None, False
 
-        # 무늬가 달라졌을 때만 다시 훑는다
+        # 무늬가 달라졌거나, 막 멈췄거나, 동그라미 자리가 아직 안 굳었을 때만 다시 훑는다
         sig = D.signature(f, box)
-        moved = D.signature_diff(self.sig, sig)
-        if self.sig is not None and moved < 1:
+        moved = self.sig is None or D.signature_diff(self.sig, sig) >= 1
+        if not moved and not self.moving and self.lead_ok:
             return self._same()
-        self.sig = sig
+        self.sig, self.moving = sig, moved
 
         box = self.box
         status = f"팔레트 감지 — {box.w} × {box.h}"
@@ -140,10 +143,15 @@ class DyeTracker:
             # 색을 안 정했어도 어디를 팔레트로 보고 있는지는 보여 준다
             return self._emit(DyeState("active", status + " · 색을 정해 주세요", "ok", palette=box))
 
-        # 흰 지시선·동그라미는 팔레트 색이 아니다. 자리는 한 번만 찾는다 — UI 는 붙박이고
-        # 움직이는 것은 그 아래 팔레트다. 매번 찾으면 한두 픽셀씩 떨린다.
-        if self.lead is None:
-            self.lead = D.find_leaders(f, box)
+        # 흰 지시선·동그라미는 팔레트 색이 아니다. 자리는 멈춘 화면에서 두 번 이어 같게 나오면 굳힌다 — UI 는
+        # 붙박이고 움직이는 것은 그 아래 팔레트다. 매번 찾으면 한두 픽셀씩 떨리고, 열리는 중의 화면에서 찾으면
+        # 엉뚱한 자리가 두세 번 이어 나온다 (실측: 멈춘 화면 81장 중 77장 같은 자리, 처음 몇 장은 다른 자리).
+        if not self.lead_ok and (self.lead is None or not moved):
+            new = D.find_leaders(f, box)
+            same = self.lead is not None and [(r.x, r.y) for r in new.rings] == [(r.x, r.y) for r in self.lead.rings]
+            self.lead_ok = same and self.lead_still and not moved
+            if not self.lead_ok:
+                self.lead, self.bands, self.lead_still = new, None, not moved
         if self.bands is None and self.lead.rings:
             self.bands = D.find_bands(f, box, len(self.lead.rings))
 
@@ -156,20 +164,19 @@ class DyeTracker:
         # 표본 격자 하나를 색 찾기·점·흑백 강조가 같이 쓴다 (Lab 바꾸기를 한 번만)
         grid = D.Grid(f, box, D.grid_step(box, 150000), skip)
         found = D.find_colors(f, box, targets, grid=grid)
-        spots = D.find_spots(f, box, targets, grid=grid)
+        spots = [] if moved else D.find_spots(f, box, targets, grid=grid)
         pk = D.picks(rings, targets)
 
         so = getattr(self, "_slot_of", list(range(len(targets))))
         n = max(getattr(self, "_n_slots", len(targets)), len(targets))
         caught = {so[p.slot] for p in pk if p.slot >= 0}
-        # 동그라미 k(왼쪽부터) 는 칸 k 와 짝 — 이미 그 색을 물었으면 안내하지 않는다
-        pair = [so.index(k) if k in so and pk[k].slot != so.index(k) else -1 for k in range(len(rings))]
-        gd = [replace(g, slot=so[g.slot]) for g in D.guides(grid, rings, targets, pair, self.bands)]
         all_caught = len(targets) >= 3 and all(i in caught for i in range(3))
         # 원래 칸 번호 자리에 놓는다 (빈 칸은 None / 빈 점 묶음)
         found_at, spots_at = [None] * n, [np.empty((0, 2), dtype=int) for _ in range(n)]
         for k, i in enumerate(so):
-            found_at[i], spots_at[i] = found[k], spots[k]
+            found_at[i] = found[k]
+            if spots:
+                spots_at[i] = spots[k]
         return self._emit(DyeState(
             "active",
             status + ("  ·  셋 다 잡았습니다" if all_caught else ""),
@@ -181,7 +188,6 @@ class DyeTracker:
             targets=found_at,
             spots=spots_at,
             bands=self.bands,
-            guides=gd,
             chips=[(t.hex, so[k] in caught, so[k]) for k, t in enumerate(targets)],
             all_caught=all_caught,
             pins=[(r.x, r.y) for r in rings] if len(rings) == 3 else None,

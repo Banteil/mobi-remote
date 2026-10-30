@@ -783,46 +783,6 @@ def picks(rings: Sequence[Ring], targets: Sequence[Target]) -> list[Pick]:
     return out
 
 
-# ── 맞추기 안내 ─────────────────────────────────────────────────
-
-@dataclass
-class Guide:
-    x: int          # 동그라미 한가운데 — 게임이 실제로 집는 한 점
-    y: int
-    tx: int         # 그 파트 목표 색이 오차 안에 드는 가장 가까운 자리
-    ty: int
-    slot: int       # 목표 번호 (targets 기준)
-    dist: float     # 픽셀
-
-
-def guides(grid: Grid, rings: Sequence[Ring], targets: Sequence[Target], ring_target: Sequence[int],
-           bands=None) -> list[Guide]:
-    """동그라미마다 짝 목표(ring_target[k] — targets 번호, 없으면 -1)의 오차 안 자리 중 그 동그라미에서 가장 가까운 곳.
-    염색 UI 는 동그라미가 붙박이고 아래 무늬를 끌어 맞춘다 — 그 자리를 동그라미 한가운데로 끌어 오면 된다.
-    파트 판이 갈라져 있으면(bands) 그 파트 판 안에서만 찾는다 (다른 판의 색은 그 스포이드가 못 집는다).
-    오차 안 자리가 없으면 빠진다."""
-    out = []
-    X, Y = grid.xs[None, :], grid.ys[:, None]
-    for k, ring in enumerate(rings):
-        j = ring_target[k] if k < len(ring_target) else -1
-        if j < 0 or j >= len(targets) or not targets[j].tol_or_default:
-            continue
-        tol = targets[j].tol_or_default
-        hit = grid.d2(targets[j]) <= tol * tol
-        if grid.sk is not None:
-            hit &= ~grid.sk
-        if bands and k < len(bands):
-            lo, hi = bands[k]
-            hit &= (X >= lo) & (X < hi)
-        if not hit.any():
-            continue
-        d = np.where(hit, (X - ring.x) ** 2 + (Y - ring.y) ** 2, np.inf)
-        i = int(np.argmin(d))
-        iy, ix = divmod(i, len(grid.xs))
-        out.append(Guide(ring.x, ring.y, int(grid.xs[ix]), int(grid.ys[iy]), j, math.sqrt(float(d.flat[i]))))
-    return out
-
-
 # ── 흑백 강조 ───────────────────────────────────────────────────
 
 SHADE_STEP = 2   # grid 없이 부를 때 간격 — 반 해상도로 계산하고 늘려 그린다
