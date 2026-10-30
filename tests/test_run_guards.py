@@ -73,5 +73,22 @@ class SkippedClickTest(unittest.TestCase):
             self.assertFalse(Bot.click_xy(b, 10, 10))
 
 
+class DeadlineTest(unittest.TestCase):
+    """숙제 하나가 시간 상한을 넘기면 check_stop 이 StepTimeout 을 낸다 (한 번만)."""
+
+    def test_deadline(self):
+        import time
+        from mabi.bot import Bot, StepTimeout
+        b = mock.MagicMock()
+        b.stopper.stopped.is_set.return_value = False
+        b.deadline = time.monotonic() + 60
+        Bot.check_stop(b)  # 아직 안 넘음
+        b.deadline = time.monotonic() - 1
+        with self.assertRaises(StepTimeout):
+            Bot.check_stop(b)
+        self.assertIsNone(b.deadline)
+        Bot.check_stop(b)  # 정리 단계에서 또 터지지 않는다
+
+
 if __name__ == "__main__":
     unittest.main()

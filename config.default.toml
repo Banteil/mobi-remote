@@ -26,6 +26,7 @@ roi_margin = 80             # 템플릿을 잘라낸 위치 주변 몇 px 까지
 [run]
 fit_display = true                    # 작업(숙제·어비스·레이드) 시작 전 화면 설정(테두리 없는 전체화면·16:9·인터페이스 PC 80%)을 맞추고 큐가 끝나면 되돌림 (옵션 창)
 food_max = 2                          # 숙제 중 캐릭터마다 하루에 음식을 먹는 횟수 (배고프면 B). 넘으면 먹지 않는다
+task_timeout_min = 45                 # 숙제 하나의 시간 상한 (분). 넘으면 그 숙제를 실패로 끝내고 다음으로 (지금까지 가장 긴 것 약 22분)
 # 캐릭터마다 접속 후 실행할 숙제 순서 (python run.py --list 로 id 확인)
 order = ["weekday_dungeon", "silver", "tribute", "black_hole", "daily_mission", "arbeit"]
 

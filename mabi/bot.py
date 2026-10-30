@@ -119,6 +119,7 @@ class Bot:
         self.resume: dict | None = None
         self._act_cache: tuple[float, dict | None] | None = None  # (받은 때, CLI get_activity 답) — activity()
         self._cli_checked = 0.0  # CLI 연결 여부를 마지막으로 다시 물은 때
+        self.deadline: float | None = None  # 지금 숙제의 시간 상한 (monotonic, runner 가 정함) — check_stop 이 본다
         self.on_step = None  # 단계가 바뀔 때 (step, text) — runner 가 화면(작업 큐 카드·오버레이)에 알리려고 설정
         self._frame: np.ndarray | None = None
         # 게임을 앞으로 가져오지 않고 한다 — 화면은 가려져 있어도 찍고(PrintWindow), 키는 창에 직접 보낸다.
@@ -200,6 +201,10 @@ class Bot:
     def check_stop(self) -> None:
         if self.stopper.stopped.is_set():
             raise StopRequested()
+        if self.deadline and time.monotonic() > self.deadline:
+            # 숙제 하나의 시간 상한 (runner 가 정함). 안쪽 대기마다 상한이 있어도 그것들이 되풀이되면 끝없이 늘어진다
+            self.deadline = None
+            raise StepTimeout(f"숙제가 시간 상한 안에 끝나지 않음 → {self.snapshot('task_timeout').name}")
         self.check_weight()
         self.check_interrupt()
 

@@ -387,7 +387,11 @@ class Runner:
             t0 = time.monotonic()
             try:
                 bot.check_in()  # 숙제마다 지금 상태부터 — 앞 숙제·캐릭터에서 남은 패킷 상태를 믿고 시작하지 않는다
-                summary = fn()
+                bot.deadline = time.monotonic() + float(cfg["run"].get("task_timeout_min", 45)) * 60
+                try:
+                    summary = fn()
+                finally:
+                    bot.deadline = None
                 status = "OK"
                 check = tasks.VERIFY.get(tid)
                 if check and tid not in bot.also_done and not bot.verified:
