@@ -128,7 +128,8 @@ class TrackerTest(unittest.TestCase):
         st = t.tick(img(1))
         self.assertTrue(st.redraw)
         self.assertGreater(len(st.spots[0]), 0)              # 멈췄다
-        self.assertFalse(t.tick(img(1)).redraw)               # 그대로면 다시 안 그린다
+        t.tick(img(1))                                        # 스포이드 자리를 멈춘 화면에서 한 번 더 보고 굳힌다
+        self.assertFalse(t.tick(img(1)).redraw)               # 그 뒤로 그대로면 다시 안 그린다
         self.assertEqual(len(t.tick(img(2)).spots[0]), 0)    # 다시 움직인다
 
 
