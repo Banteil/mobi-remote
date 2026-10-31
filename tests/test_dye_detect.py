@@ -178,8 +178,7 @@ class CleanViewTest(unittest.TestCase):
     def test_defaults_and_limits(self):
         from gui_app.dye_service import clean_view
         self.assertEqual(clean_view(None), {"gray": False, "light": 35, "area": None,
-                                            "marks": ["#FF00FF", "#00FF00", "#00FFFF"], "still": False,
-                                            "guide": False})
+                                            "marks": ["#FF00FF", "#00FF00", "#00FFFF"], "still": False})
         self.assertEqual(clean_view({"marks": ["#ff8800", "red", None]})["marks"], ["#FF8800", "#00FF00", "#00FFFF"])
         self.assertEqual(clean_view({"gray": True, "light": 500})["light"], 90)
         self.assertIsNone(clean_view({"area": [0.5, 0.2, 0.01, 0.5]})["area"])   # 너무 작다

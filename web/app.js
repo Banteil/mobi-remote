@@ -1605,7 +1605,6 @@ function wire() {
     if (!v) return;
     $('#dye-gray').checked = !!v.gray;
     $('#dye-still').checked = !!v.still;
-    $('#dye-guide').checked = !!v.guide;
     $('#dye-light').value = v.light;
     $('#dye-light').disabled = !v.gray;
     $('#dye-light-v').textContent = v.light + '%';
@@ -1617,7 +1616,6 @@ function wire() {
   mm.dye.onView(paintDyeView);
   $('#dye-gray').addEventListener('change', (e) => mm.dye.view({ gray: e.target.checked }));
   $('#dye-still').addEventListener('change', (e) => mm.dye.view({ still: e.target.checked }));
-  $('#dye-guide').addEventListener('change', (e) => mm.dye.view({ guide: e.target.checked }));
   $('#dye-light').addEventListener('input', (e) => { $('#dye-light-v').textContent = e.target.value + '%'; });
   $('#dye-light').addEventListener('change', (e) => mm.dye.view({ light: Number(e.target.value) }));
   $('#dye-area-edit').addEventListener('click', async () => {
@@ -1628,7 +1626,6 @@ function wire() {
 
   $('#dye-start').addEventListener('click', startDye);
   $('#dye-stop').addEventListener('click', stopDye);
-  $('#dye-auto').addEventListener('click', autoDye);
   $('#dye-preset').addEventListener('change', async (e) => {
     dyeUI.prefs = await mm.dye.select(e.target.value);
     paintDyeSlots();

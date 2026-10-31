@@ -95,13 +95,6 @@ class DyeTracker:
     def targets(self) -> list[D.Target]:
         return list(self._targets)
 
-    def slot_targets(self) -> list[D.Target | None]:
-        """프리셋 칸 순서의 목표 (빈 칸·잘못된 값은 None)."""
-        out: list[D.Target | None] = [None] * getattr(self, "_n_slots", len(self._targets))
-        for t, i in zip(self._targets, getattr(self, "_slot_of", range(len(self._targets)))):
-            out[i] = t
-        return out
-
     def _emit(self, st: DyeState) -> DyeState:
         self.last = st
         return st

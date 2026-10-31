@@ -84,7 +84,7 @@
     dye: {
       prefs: c('dye.prefs'), add: c('dye.add'), update: c('dye.update'), remove: c('dye.remove'), select: c('dye.select'),
       // 레거시는 화면(렌더러)이 캡처·검출을 했다. 이제 파이썬이 하고 결과만 mm:dye-state 로 보낸다
-      start: c('dye.start'), stop: c('dye.stop'), shot: c('dye.shot'), snap: c('dye.snap'), autofit: c('dye.autofit'),
+      start: c('dye.start'), stop: c('dye.stop'), shot: c('dye.shot'), snap: c('dye.snap'),
       view: c('dye.view'), editArea: c('dye.edit_area'), onView: (cb) => on('mm:dye-view', cb),
       onState: (cb) => on('mm:dye-state', cb),
     },
