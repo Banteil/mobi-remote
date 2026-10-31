@@ -9,7 +9,9 @@
 
 맞출 자리 안내·자동 맞추기 (mabi/dye/autofit): 팔레트가 막 열린 첫 안정 화면(늘 위치 0·회전 0·배율 1)으로
 팔레트를 복원해 두고, 화면이 멈출 때마다 지금 상태를 재 '해 텍셀이 지금 어디 있나'를 그린다. 계산은 몇 초씩
-걸려 작업 스레드(_Jobs)에서 한다. 켜기 전에 이미 열려 있던 팔레트는 시작 상태를 몰라 안내하지 않는다.
+걸려 작업 스레드(_Jobs)에서 한다 — 일하다 틈틈이 쉬어(fit.Duty) 캡처·흑백 강조가 밀리지 않게.
+안내를 끄면 시작 화면만 잡아 두고 계산하지 않는다 (자동 맞추기를 누르면 그때 한다).
+켜기 전에 이미 열려 있던 팔레트는 시작 상태를 몰라 안내하지 않는다.
 """
 import logging
 import re
@@ -23,6 +25,7 @@ from PySide6.QtCore import QObject, QRectF, Signal
 from mabi.dye import autofit as AF
 from mabi.dye import draw as ddraw
 from mabi.dye import detect as D
+from mabi.dye import fit as FT
 from mabi.dye import materials as MT
 from mabi.dye.tracker import DyeTracker
 from mabi.window import GameWindow
@@ -53,7 +56,9 @@ def clean_view(v) -> dict:
     lt = v.get("light")
     lt = LIGHT[2] if not isinstance(lt, (int, float)) or isinstance(lt, bool) else int(min(LIGHT[1], max(LIGHT[0], lt)))
     return {"gray": v.get("gray") is True, "light": lt, "area": [round(float(x), 5) for x in a] if ok else None,
-            "marks": marks, "still": v.get("still") is True, "guide": v.get("guide") is True}
+            "marks": marks, "still": v.get("still") is True,
+            # 맞출 자리 안내는 보류 — 상시 계산 대신 단축키로 지금 화면 기준 계산하는 쪽으로 다시 설계한다 (2026-10-31)
+            "guide": False}
 
 
 class _ToGui(QObject):
@@ -81,6 +86,7 @@ class _Jobs:
             self.todo.clear()
 
     def _run(self) -> None:
+        FT.pausing(FT.Duty())
         while True:
             with self.cv:
                 while not self.todo:
@@ -142,6 +148,7 @@ class DyeService:
             self.auto_stop.set()
         if self.thread:
             self.thread.join(2)
+        self._fit_reset(closed=False)   # 돌던 계산도 끊는다 (세션이 바뀌면 멈춘다)
         self.gui.stopped.emit()
         return {"ok": True}
 
@@ -158,6 +165,8 @@ class DyeService:
         if self.tracker:
             v = self.view
             self.tracker.set_view(v["area"], v["gray"], v["light"] / 100, v["still"])
+            if v["guide"]:
+                self._kick()   # 안내를 이제 켰으면 잡아 둔 시작 화면으로 계산
 
     def edit_area(self, on_done) -> dict:
         """화면 스레드에서. 게임 위에 그리기 창을 띄운다. 다 그리면 가까운 테두리에 맞춰 on_done(비율 | None)."""
@@ -236,6 +245,8 @@ class DyeService:
         self._opened = 0.0
         self._still = 0
         self._building = False
+        self._start = None            # 시작 화면 (frame, box, rings, skip) — 계산은 필요할 때
+        self._want_auto = False       # 자리를 찾으면 바로 자동 맞추기
 
     def _repaint(self) -> None:
         if self.tracker and self._rect_last and self.running:
@@ -260,22 +271,21 @@ class DyeService:
             fresh = self._fresh and self._key is None   # 자리만 바뀐 것(자리 고치기)은 처음이 아니다
             self._fit_reset(closed=False)
             self._key, self._fresh, self._opened = key, fresh, time.monotonic()
-        if self.sess is None:
-            if self._building or not tr.lead or not tr.lead.rings:
+        if self._start is None:
+            if not tr.lead or not tr.lead.rings:
                 return
             if not self._fresh:
                 self.fit_text = "자리 안내는 팔레트를 열기 전에 염색 도우미를 켜 두어야 합니다"
                 return
             self._still = self._still + 1 if (tr.lead_ok and not tr.moving) else 0
             if self._still >= START_STILL and time.monotonic() - self._opened >= START_AFTER:
-                self._building = True
-                frame = np.array(img[..., :3])
-                box, rings, skip = b, list(tr.lead.rings), list(tr.lead.skip)
-                self.fit_text = "팔레트 읽는 중…"
-                self.jobs.put("build", lambda: self._build(frame, box, rings, skip))
+                self._start = (np.array(img[..., :3]), b, list(tr.lead.rings), list(tr.lead.skip))
+                self.emit("mm:dye-state", {"found": True, "fit": True})
+                if self.view["guide"]:
+                    self._kick()
             return
-        if self.auto_stop is not None:   # 자동 맞추기 중엔 그쪽이 잰다
-            return
+        if self.sess is None or self.auto_stop is not None or not self.view["guide"]:
+            return                    # 아직 계산 전·자동 맞추기 중(그쪽이 잰다)·안내 꺼짐
         if tr.moving:
             if self.guide and self.guide.get("points"):
                 self.guide = {**self.guide, "points": []}   # 움직이는 동안엔 지난 점이 틀리다
@@ -294,9 +304,23 @@ class DyeService:
                 self._refs = {}
         return self._refs or None
 
+    def _kick(self) -> None:
+        """잡아 둔 시작 화면으로 팔레트 읽기 → 자리 찾기 (이미 했거나 하는 중이면 그대로)."""
+        if self._start is None or self.sess is not None or self._building:
+            return
+        self._building = True
+        frame, box, rings, skip = self._start
+        self._say("팔레트 읽는 중…")
+        self.jobs.put("build", lambda: self._build(frame, box, rings, skip))
+
     def _build(self, frame, box, rings, skip) -> None:
         t0 = time.monotonic()
-        sess = AF.Session(frame, box, rings, skip, self._materials())
+        try:
+            sess = AF.Session(frame, box, rings, skip, self._materials())
+        except Exception:
+            self._building = False
+            self._say("팔레트를 읽지 못했습니다")
+            raise
         if self._key != (box.x, box.y, box.w, box.h):
             return                    # 그새 닫혔다
         log.info("염색 팔레트 복원 %.1fs, 재질 %s", time.monotonic() - t0, sess.mats)
@@ -319,7 +343,16 @@ class DyeService:
             log.info("염색 자리 찾기 %.1fs: %s", time.monotonic() - t0,
                      f"회전 {sess.goal[0]:.1f}° 배율 {sess.goal[1]:.3f} 오차 ×{sess.approx:g}" if ok else "없음")
             self.guide = sess.guide(sess.last)
-            self._say("")
+            self.fit_text = ""
+            stop = self.auto_stop
+            if self._want_auto and stop is not None and not stop.is_set():
+                self._want_auto = False
+                if ok:
+                    threading.Thread(target=self._auto_run, args=(sess, stop), name="dye-auto", daemon=True).start()
+                    return
+                self.auto_stop = None
+                self.emit("mm:dye-state", {"auto": False})
+            self._repaint()
         self.jobs.put("solve", run)
 
     def _pose(self, frame, caught) -> None:
@@ -339,20 +372,24 @@ class DyeService:
         sess = self.sess
         if not self.running:
             return {"error": "염색 도우미가 꺼져 있습니다"}
-        if sess is None:
+        if self._start is None:
             return {"error": "팔레트를 열기 전에 염색 도우미를 켜 두어야 합니다" if self._key and not self._fresh
                     else "팔레트를 아직 읽지 못했습니다"}
-        if sess.goal is None:
+        if sess is not None and sess.goal is None and not self.fit_text:
             return {"error": "이 색 조합이 되는 자리를 찾지 못했습니다"}
         stop = threading.Event()
         self.auto_stop = stop
-        threading.Thread(target=self._auto_run, args=(sess, stop), name="dye-auto", daemon=True).start()
+        self.emit("mm:dye-state", {"auto": True})
+        if sess is not None and sess.goal is not None:
+            threading.Thread(target=self._auto_run, args=(sess, stop), name="dye-auto", daemon=True).start()
+        else:                         # 아직 계산 전·중 — 자리를 찾으면 바로 시작
+            self._want_auto = True
+            self._kick()
         return {"ok": True}
 
     def _auto_run(self, sess, stop) -> None:
         from mabi.inputs import ManualInputWatcher
         watch = ManualInputWatcher(lambda: self.game.hwnd, lambda what: stop.set())
-        self.emit("mm:dye-state", {"auto": True})
 
         def show(gd):
             self.guide = gd
@@ -427,5 +464,4 @@ class DyeService:
                                                              screen_w=g.width(), measure=ov.measure,
                                                              slots=self.view["marks"], guide=guide)
         ov.update()
-        self.emit("mm:dye-state", {"found": st.palette is not None, "text": st.text,
-                                   "fit": bool(self.sess and self.sess.goal is not None)})
+        self.emit("mm:dye-state", {"found": st.palette is not None, "text": st.text, "fit": self._start is not None})

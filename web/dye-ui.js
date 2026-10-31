@@ -15,6 +15,9 @@
 // 칸 번호 표시 색 — 게임 위 점·스포이드 테·딱지와 같은 색. 번호를 눌러 바꾼다 (보기 설정 marks)
 const DYE_MARKS = ['#FF00FF', '#00FF00', '#00FFFF'];
 
+// 자동 맞추기 단추: 보류 (단축키로 지금 화면 기준 계산하는 쪽으로 다시 설계)
+const DYE_AUTOFIT = false;
+
 const dyeUI = {
   on: false,
   box: false,       // 파이썬이 팔레트를 찾았나 (상태 표시용)
@@ -89,7 +92,7 @@ function paintDyeState() {
   $('#dye-start').classList.toggle('hidden', dyeUI.on);
   $('#dye-stop').classList.toggle('hidden', !dyeUI.on);
   const auto = $('#dye-auto');
-  auto.classList.toggle('hidden', !dyeUI.on);
+  auto.classList.toggle('hidden', !DYE_AUTOFIT || !dyeUI.on);
   auto.disabled = !dyeUI.auto && !dyeUI.fit;
   auto.textContent = dyeUI.auto ? '자동 멈추기' : '자동 맞추기';
 }

@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import math
+import threading
 import time
 
 import numpy as np
@@ -29,6 +30,36 @@ TEX = 254
 SCALE_MIN, SCALE_MAX = 0.5, 3.0     # 시트 DyeMiniGameConstants PaletteSizeMin/Max
 WHEEL = 1.01                        # 휠 한 칸 배율
 MATS = ("Cloth", "Leather", "Metal", "Wood")
+
+
+# ---------------------------------------------------------------- 양보
+class Duty:
+    """계산 스레드가 work 초 일할 때마다 rest 초 쉰다. 파이썬은 GIL 하나라 리모콘(캡처·흑백 강조) 옆에서
+    몇 초씩 쉬지 않고 계산하면 저쪽 numpy 호출마다 GIL 을 기다려 한 바퀴가 25ms → 780ms 로 밀렸다.
+    4ms/2ms 면 54ms (2026-10-31 측정, sleep(0) 양보는 619ms 로 소용없었다)."""
+
+    def __init__(self, work=0.004, rest=0.002):
+        self.work, self.rest = work, rest
+        self.t = time.perf_counter()
+
+    def __call__(self):
+        if time.perf_counter() - self.t > self.work:
+            time.sleep(self.rest)
+            self.t = time.perf_counter()
+
+
+_pause = threading.local()
+
+
+def pausing(duty):
+    """이 스레드에서 하는 계산은 반복마다 duty() 로 쉰다 (None 이면 쉬지 않음)."""
+    _pause.fn = duty
+
+
+def _yield():
+    fn = getattr(_pause, "fn", None)
+    if fn:
+        fn()
 
 
 # ---------------------------------------------------------------- 계산식
@@ -220,6 +251,7 @@ def _support(obs, known, R, kk, dmap, nb):
     iy, ix = np.mgrid[0:TEX, 0:TEX]
     sup = np.zeros((TEX, TEX), np.float32)
     for dy, dx in list(nb) + [(0, 0)]:
+        _yield()
         ny, nx = (iy + dy) % TEX, (ix + dx) % TEX
         rv = R[kk[ny, nx], (ny + dmap[..., 1]) % TEX, (nx + dmap[..., 0]) % TEX]
         sup += (np.abs(rv - obs[ny, nx]).max(-1) <= TOL) & known[ny, nx]
@@ -245,6 +277,7 @@ def swap_map(bgr, known, st, refs, rounds=6):
         for d0 in (-1, 0, 1):
             for d1 in (-1, 0, 1):
                 for d2 in (-1, 0, 1):
+                    _yield()
                     qk = ((oq[:, 0] + d0) << 12) | ((oq[:, 1] + d1) << 6) | (oq[:, 2] + d2)
                     lo, hi = np.searchsorted(ks, qk, "left"), np.searchsorted(ks, qk, "right")
                     cnt = hi - lo
@@ -264,6 +297,7 @@ def swap_map(bgr, known, st, refs, rounds=6):
         ty, tx = T[:, 0] // TEX, T[:, 0] % TEX
         sup = np.zeros(len(T), np.int32)
         for dy, dx in _NB:
+            _yield()
             ny, nx = (ty + dy) % TEX, (tx + dx) % TEX
             rv = R[st[ny, nx], (ny + T[:, 2]) % TEX, (nx + T[:, 1]) % TEX]
             sup += (np.abs(rv - obs[ny, nx]).max(-1) <= TOL) & known[ny, nx]
@@ -370,6 +404,7 @@ def refine(c, pal: Palette, m, rng=None, n=20000, free_scale=False):
     scale = m[2]
 
     def score(p, r, sc_=None, a_=a, b_=b, o_=obs):
+        _yield()
         u, v = uv_of(a_, b_, p, r, sc_ or scale)
         eq = np.abs(pal.color_at(u, v, a_).astype(np.int16) - o_).max(-1) <= 3
         kn = pal.known_at(u, v, a_)
@@ -449,6 +484,7 @@ def pose(c, pal: Palette, last=None, scale=None):
     a, b, obs = (xs[k] + 0.5) / S, 1 - (ys[k] + 0.5) / S, c[ys[k], xs[k]].astype(np.int16)
     best = None
     for s in cands:
+        _yield()
         mm = measure(c, pal, scale=s)
         if mm is None:
             continue
@@ -491,6 +527,7 @@ def solve(pal: Palette, drops, targets_lab, tols, scales=None, rots=None, margin
         if deadline and time.monotonic() > deadline:
             break
         for rot in rots:
+            _yield()
             r = np.radians(-rot)
             c, s = np.cos(r), np.sin(r)
             ok = np.ones(len(w0x), bool)
