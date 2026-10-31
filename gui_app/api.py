@@ -138,7 +138,7 @@ class Api(DailyApi, CharsApi, QueueApi):
         self._gui = _GuiCall()
         from mabi.runner import load_config
         title = load_config(self.paths)["game"]["window_title"]
-        self.dyes = DyeService(self.dye, self._emit, title)
+        self.dyes = DyeService(self.dye, self._emit, title, cache_dir=self.paths.data / "dye_materials")
         self.dyes.win = win
         self.dyes.set_view(self.settings.get("dyeView"))
         self.qov = OverlayService(title, self.settings.get("overlay"),
@@ -521,6 +521,10 @@ class Api(DailyApi, CharsApi, QueueApi):
 
     def dye_stop(self):
         return self.dyes.stop() if self.dyes else {"ok": True}
+
+    def dye_autofit(self):
+        """자동 맞추기 시작 (돌고 있으면 멈춤) — 마우스로 팔레트를 돌리고 끈다. 확정 단추는 누르지 않는다."""
+        return self.dyes.autofit() if self.dyes else {"error": "창이 아직 없습니다"}
 
     def _dye_key(self):
         """염색 도우미 키(설정 game.dye_key) — 켜져 있으면 끄고, 꺼져 있으면 켠다 (queue_api 단축키 감시가 부른다)."""

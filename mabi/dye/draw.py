@@ -123,7 +123,8 @@ def _approx_measure(text: str, px: int) -> float:
 
 
 def overlay_items(state, presets=None, *, scale: float = 1.0, origin=(0, 0), screen_w: float = 1920,
-                  k: float = 1.0, measure: Callable[[str, int], float] | None = None, slots=None) -> list:
+                  k: float = 1.0, measure: Callable[[str, int], float] | None = None, slots=None,
+                  guide=None) -> list:
     """DyeState → 그릴 도형 목록 (그리는 순서).
 
     scale/origin: 캡처 좌표 → 화면 좌표 (JS toScreen: round(v*scale + origin)).
@@ -131,6 +132,7 @@ def overlay_items(state, presets=None, *, scale: float = 1.0, origin=(0, 0), scr
     measure(text, px) → 글자 폭. Qt 는 QFontMetricsF(QFont('Pretendard', px, 600)).horizontalAdvance.
     presets: 쓰지 않는다 — 딱지는 JS 와 같게 실제로 찾는 목표(state.chips)에서 만든다.
     slots: 1·2·3번 칸 표시 색 ['#RRGGBB'×3] (없으면 MARKS) — 점·스포이드 테·딱지 테.
+    guide: 맞출 자리 안내 {'points': [(칸, x, y, 스포이드 x, y)], 'text', 'done'} (캡처 좌표) — autofit.Session.guide.
     """
     if state is None or state.hidden:
         return []
@@ -148,6 +150,8 @@ def overlay_items(state, presets=None, *, scale: float = 1.0, origin=(0, 0), scr
     out: list = []
     _banner(out, screen_w, state.text, state.tone, s, m)
     _chips(out, screen_w, state.chips, s, 54 * s, m, SLOT)
+    if guide and guide.get("text"):
+        _banner(out, screen_w, guide["text"], "ok" if guide.get("done") else "wait", s, m, y=86 * s)
 
     if state.palette is not None:
         b = state.palette
@@ -172,6 +176,15 @@ def overlay_items(state, presets=None, *, scale: float = 1.0, origin=(0, 0), scr
                              Stroke((255, 255, 255, round(0.55 * 255)), 1.5 * s),
                              under=Stroke(dark(0.45), 3.5 * s), closed=True, dash=(5 * s, 5 * s)))
 
+    # 맞출 자리 — 해 텍셀이 지금 있는 곳. 스포이드에서 그 점까지 점선, 점은 칸 색 동그라미.
+    # 회전·크기가 맞으면 점들이 스포이드 배치와 같은 모양이 되고, 끌어서 겹치면 끝.
+    for slot, gx, gy, rx, ry in (guide or {}).get("points", []):
+        col = SLOT[slot] if slot < len(SLOT) else SLOT[0]
+        out.append(PolylineP([(X(rx), Y(ry)), (X(gx), Y(gy))], Stroke(col[:3] + (round(0.8 * 255),), 2 * s),
+                             under=Stroke(dark(0.5), 4.5 * s), dash=(6 * s, 4 * s)))
+        out.append(CircleP(X(gx), Y(gy), 9 * s, stroke=Stroke(col, 3 * s), under=Stroke(dark(0.7), 6 * s)))
+        out.append(CircleP(X(gx), Y(gy), 2.5 * s, fill=col))
+
     # 지금 고른 색이 목표에 맞은 스포이드만 — 흰 테 안쪽 가장자리를 따라 칸 색 테
     for rg in state.rings:
         if rg.slot < 0:
@@ -184,13 +197,13 @@ def overlay_items(state, presets=None, *, scale: float = 1.0, origin=(0, 0), scr
     return out
 
 
-def _banner(out, W, text, tone, k, m):
+def _banner(out, W, text, tone, k, m, y=None):
     """화면 맨 위 가운데 — 지금 무엇을 하는 중인지 한 줄. 게임을 보는 동안에도 보여야 한다."""
     if not text:
         return
     px = round(15 * k)
     w = m(text, px) + 34 * k
-    x, y, h = (W - w) / 2, 14 * k, 34 * k
+    x, y, h = (W - w) / 2, 14 * k if y is None else y, 34 * k
     tone = "ok" if tone == "ok" else "wait"
     out.append(RectP(x, y, w, h, radius=17 * k, fill=BANNER_BG, stroke=Stroke(TONE_LINE[tone], 1.5 * k)))
     out.append(CircleP(x + 16 * k, y + h / 2, 4.5 * k, fill=TONE_DOT[tone]))

@@ -18,6 +18,8 @@ const DYE_MARKS = ['#FF00FF', '#00FF00', '#00FFFF'];
 const dyeUI = {
   on: false,
   box: false,       // 파이썬이 팔레트를 찾았나 (상태 표시용)
+  fit: false,       // 맞출 자리를 찾았나 (자동 맞추기 단추)
+  auto: false,      // 자동 맞추기 중
   marks: DYE_MARKS.slice(),
   prefs: null,
 };
@@ -86,6 +88,15 @@ function paintDyeState() {
   pill.className = 'pill ' + st[1];
   $('#dye-start').classList.toggle('hidden', dyeUI.on);
   $('#dye-stop').classList.toggle('hidden', !dyeUI.on);
+  const auto = $('#dye-auto');
+  auto.classList.toggle('hidden', !dyeUI.on);
+  auto.disabled = !dyeUI.auto && !dyeUI.fit;
+  auto.textContent = dyeUI.auto ? '자동 멈추기' : '자동 맞추기';
+}
+
+async function autoDye() {
+  const r = await mm.dye.autofit().catch((e) => ({ error: e.message }));
+  if (r && r.error) toast('자동 맞추기를 할 수 없습니다', r.error, 'bad');
 }
 
 /* ══ 새 판 알림 ═════════════════════════════════════════════════
@@ -204,8 +215,10 @@ function onDyeState(m) {
     return;
   }
   if (m.error) { say('염색 검출 오류: ' + m.error); return; }
+  if (m.auto !== undefined) { dyeUI.auto = !!m.auto; paintDyeState(); return; }
   const box = !!m.found;
-  if (box !== dyeUI.box) { dyeUI.box = box; paintDyeState(); }  // '팔레트 찾음' ↔ '기다리는 중'
+  const fit = !!m.fit;
+  if (box !== dyeUI.box || fit !== dyeUI.fit) { dyeUI.box = box; dyeUI.fit = fit; paintDyeState(); }  // '팔레트 찾음' ↔ '기다리는 중'
 }
 mm.dye.onState(onDyeState);
 

@@ -321,6 +321,7 @@
 
       <button class="btn btn-primary" id="dye-start" title="게임에서도 단축키로 켜고 끌 수 있습니다 (옵션 창 · 기본 F11)">염색 시작</button>
       <button class="btn btn-warn hidden" id="dye-stop">중지</button>
+      <button class="btn hidden" id="dye-auto" title="팔레트를 마우스로 돌리고 끌어 찾을 색 자리에 맞춥니다. 확정은 직접 누르세요. 게임에서 아무 키나 누르면 멈춥니다">자동 맞추기</button>
     </div>
 
     <div class="grid2">
@@ -349,6 +350,10 @@
         <div class="row">
           <label class="chk"><input type="checkbox" id="dye-gray"> 흑백 강조 — 맞는 색만 남기고 나머지는 흑백</label>
         </div>
+        <div class="row">
+          <label class="chk"><input type="checkbox" id="dye-guide"> 맞출 자리 안내 — 세 색이 한꺼번에 맞는 자리를 점으로, 할 일을 한 줄로</label>
+        </div>
+        <p class="hint">안내와 자동 맞추기는 팔레트를 열기 전에 염색 도우미를 켜 두어야 합니다 (처음 화면으로 팔레트를 읽습니다).</p>
         <div class="row">
           <span class="muted">흑백 밝기</span>
           <input type="range" id="dye-light" min="5" max="90" step="5">
