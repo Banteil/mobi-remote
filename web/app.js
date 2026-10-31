@@ -1607,8 +1607,9 @@ function wire() {
     $('#dye-still').checked = !!v.still;
     $('#dye-guide').checked = !!v.guide;
     $('#dye-light').value = v.light;
+    $('#dye-light').disabled = !v.gray;
     $('#dye-light-v').textContent = v.light + '%';
-    $('#dye-area').textContent = v.area ? '직접 정함' : '기본';
+    $('#dye-area').textContent = v.area ? '직접 정한 자리' : '기본 자리';
     $('#dye-area-reset').disabled = !v.area;
     if (v.marks && v.marks.join() !== dyeUI.marks.join()) { dyeUI.marks = v.marks.slice(); paintDyeSlots(); }
   }

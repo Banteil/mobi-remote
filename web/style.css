@@ -1007,3 +1007,11 @@ input[type="number"].num-in { min-width: 0; width: 72px; }
 .ab-row select { min-width: 0; }
 .ab-gap { margin-left: 12px; }
 .dl-log.ab-log { min-height: 360px; max-height: 60vh; }
+
+/* 염색 옵션 — 묶음마다 작은 제목, 설명은 title 풍선으로 */
+.opt-group { display: flex; flex-direction: column; gap: 6px; }
+.opt-group + .opt-group { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--edge); }
+.opt-sub { font-size: 11px; color: var(--fg-mute); }
+.opt-num { min-width: 32px; text-align: right; font-variant-numeric: tabular-nums; }
+#dye-light { width: 110px; }
+#dye-light:disabled, #dye-light:disabled + .opt-num { opacity: .4; }
