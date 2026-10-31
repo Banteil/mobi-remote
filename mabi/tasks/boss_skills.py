@@ -1,6 +1,7 @@
 """보스전 궁극기·팔라딘 변신 — 어비스·레이드 반복(Repeat)의 판 진행 중에 쓴다. 일반 던전·숙제에서는 쓰지 않는다.
 
-캐릭터마다 따로 켠다 ([boss_skills] ultimate_slots · paladin_slots, 캐릭터 탭). 키는 [game] ultimate_key · paladin_key.
+기본값([boss_skills] ultimate · paladin, 어비스·레이드 탭)을 따르고, 캐릭터 탭에서 따로 정한 캐릭터만 다르게
+(ultimate_slots · paladin_slots = 따로 켬, ultimate_off_slots · paladin_off_slots = 따로 끔 — on_for). 키는 [game] ultimate_key · paladin_key.
 쓰는 때: 보스전(종류마다 Repeat.boss_fight — 레이드는 보스전 시작 패킷, 어비스는 모닥불 뒤 보스 등장 연출 뒤) · 전투 중(CLI IsInCombat,
 모르면 패킷) · 게이지가 참(패킷 ultimate.resource) · 컷신·쓰러짐·로딩이 아님. 게임 키만 누르고 패킷은 보내지 않는다.
 게이지가 차 있는데 눌러도 안 줄면 RETRY 초마다 다시 누른다 (게임이 키를 놓치거나 아직 못 쓰는 순간).
@@ -20,6 +21,19 @@ import time
 
 from .. import profile as prof
 from ..bot import Bot
+
+KINDS = ("ultimate", "paladin")
+
+
+def on_for(boss: dict, kind: str, slot: int | None) -> bool:
+    """이 캐릭터(슬롯)가 kind(ultimate · paladin)를 쓰나. 캐릭터 탭에서 따로 켜거나 끈 게 먼저, 아니면 기본값.
+    슬롯을 모르면(지금 접속한 캐릭터를 못 알아봄) 기본값."""
+    if slot is not None:
+        if slot in [int(x) for x in boss.get(f"{kind}_slots", [])]:
+            return True
+        if slot in [int(x) for x in boss.get(f"{kind}_off_slots", [])]:
+            return False
+    return bool(boss.get(kind, False))
 
 
 class BossSkills:
@@ -41,8 +55,7 @@ class BossSkills:
     @classmethod
     def for_character(cls, bot: Bot, cfg: dict, slot: int | None, boss_fight) -> "BossSkills":
         c = cfg.get("boss_skills", {})
-        on = lambda k: slot is not None and slot in [int(x) for x in c.get(k, [])]  # noqa: E731
-        return cls(bot, on("ultimate_slots"), on("paladin_slots"), boss_fight)
+        return cls(bot, on_for(c, "ultimate", slot), on_for(c, "paladin", slot), boss_fight)
 
     @property
     def enabled(self) -> bool:

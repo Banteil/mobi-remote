@@ -270,6 +270,37 @@ class DailyApi:
     _raid_bot = None
     _raid_result: dict = {}
 
+    # ---- 보스전 기본값 (어비스·레이드 탭) — 캐릭터 탭에서 따로 정하지 않은 캐릭터에 ----
+    def daily_bossSettings(self) -> dict:  # noqa: N802
+        from mabi.tasks import boss_skills
+        b = self._doc().get("boss_skills", {})
+        profile = prof.load_profile(self.paths.profile) or {"slots": [], "names": {}}
+        chars = prof.characters(profile)
+
+        def follow(kind) -> int:  # 이 기본값을 따르는 캐릭터 수
+            own = {int(x) for s in ("_slots", "_off_slots") for x in b.get(kind + s, [])}
+            return sum(c["slot"] not in own for c in chars)
+        return {**{k: bool(b.get(k, False)) for k in boss_skills.KINDS},
+                "follow": {**{k: follow(k) for k in boss_skills.KINDS}, "total": len(chars)}}
+
+    def daily_saveBoss(self, v: dict) -> dict:  # noqa: N802
+        """보스전 기본값 저장. 새 기본값과 같아진 캐릭터별 설정은 지운다 (그 캐릭터는 기본값을 따름)."""
+        from mabi.tasks import boss_skills
+        doc = self._doc()
+        if "boss_skills" not in doc:
+            doc["boss_skills"] = tomlkit.table()
+        b = doc["boss_skills"]
+        for kind in boss_skills.KINDS:
+            if kind not in v:
+                continue
+            on = bool(v[kind])
+            b[kind] = on
+            same = kind + ("_slots" if on else "_off_slots")
+            if same in b:
+                b[same] = tomlkit.array()
+        userconfig.save(self.paths, doc)
+        return {"ok": True}
+
     def daily_raidSettings(self) -> dict:  # noqa: N802
         from mabi.tasks import raid
         r = load_config(self.paths)["raid"]

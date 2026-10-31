@@ -306,6 +306,25 @@ async function loadAbyss() {
   $('#ab-revive').checked = a.revive !== false;
   paintAbyssRunning(a.running);
   loadRaid(a.chars);
+  loadBoss();
+}
+
+/* 보스전 기본값 (궁극기·팔라딘 변신) — 숙제 기본값처럼 캐릭터 탭에서 따로 정하지 않은 캐릭터에 */
+async function loadBoss() {
+  const b = await mm.daily.bossSettings();
+  if (!b) return;
+  $('#ab-def-ult').checked = !!b.ultimate;
+  $('#ab-def-pal').checked = !!b.paladin;
+  const f = b.follow || {};
+  const fol = (n) => (f.total ? n + '명 적용' : '');
+  $('#ab-follow-ult').textContent = fol(f.ultimate);
+  $('#ab-follow-pal').textContent = fol(f.paladin);
+}
+
+async function saveBoss() {
+  const r = await mm.daily.saveBoss({ ultimate: $('#ab-def-ult').checked, paladin: $('#ab-def-pal').checked });
+  $('#ab-boss-msg').textContent = r && r.error ? r.error : '저장했습니다';
+  if (!(r && r.error)) await loadBoss();
 }
 
 /** 어비스·레이드 탭 공통: 시작/멈춤 버튼 (pre = '#ab' · '#rd') */
@@ -457,6 +476,7 @@ $('#qr-body').addEventListener('click', async (e) => {
 });
 $('#dl-stop').addEventListener('click', () => { mm.daily.stop(false); say('일시정지 — 지금 동작이 끝나면 멈춥니다'); });
 $('#dl-save').addEventListener('click', saveDailySettings);
+$('#ab-boss-save').addEventListener('click', saveBoss);
 $('#opt-paths-save').addEventListener('click', savePathSettings);
 $('#dl-table').addEventListener('change', (e) => {
   const b = e.target;

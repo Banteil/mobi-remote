@@ -230,5 +230,21 @@ class BossSkillsTest(unittest.TestCase):
         self.assertIs(play.call_args.kwargs["tick"], rep.skills.tick)
 
 
+
+class DefaultTest(unittest.TestCase):
+    """기본값(어비스·레이드 탭)을 따르고 캐릭터 탭에서 따로 켜거나 끈 캐릭터만 다르게 (boss_skills.on_for)."""
+
+    def test_default_and_overrides(self):
+        from mabi.tasks.boss_skills import on_for
+        b = {"ultimate": True, "paladin": False, "ultimate_off_slots": [2], "paladin_slots": [3]}
+        self.assertTrue(on_for(b, "ultimate", 1))
+        self.assertFalse(on_for(b, "ultimate", 2))
+        self.assertTrue(on_for(b, "ultimate", None))   # 캐릭터를 모르면 기본값
+        self.assertFalse(on_for(b, "paladin", 1))
+        self.assertTrue(on_for(b, "paladin", 3))
+        self.assertFalse(on_for({"ultimate_slots": [1]}, "ultimate", 2))  # 예전 설정(기본값 없음) = 켠 캐릭터만
+        self.assertTrue(on_for({"ultimate_slots": [1]}, "ultimate", 1))
+
+
 if __name__ == "__main__":
     unittest.main()
