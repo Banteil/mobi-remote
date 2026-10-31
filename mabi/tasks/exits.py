@@ -1,4 +1,4 @@
-"""콘텐츠(일반 던전·어비스·레이드·출항선) 안에서 나가기의 공통 틀.
+"""콘텐츠(일반 던전·어비스·레이드·출항선)·보관함 구역 안에서 나가기의 공통 틀.
 
 순서는 같다: 오른쪽 위 나가기(단축키 또는 아이콘) → 확인 창 → 확인(Space, 안 먹으면 버튼 클릭) → 로딩 → 밖 메인 화면.
 종류마다 다른 것(안인가 · 확인 창 알아보기 · 확인 방법 · 나가기 전에 판이 끝났나)만 하위 클래스가 덮어쓴다
@@ -114,12 +114,42 @@ class DungeonExit(Exit):
             return None
 
 
+class HousingExit(Exit):
+    """여관 안쪽 보관함 구역·마이 홈: 오른쪽 위 나가기 (던전과 같은 아이콘) → 확인 창이 뜨면 확인, 바로 로딩이면 그대로.
+    여기서 접속을 끊은 캐릭터는 숙제 이동이 안 돼 헤맨다 — 숙제 시작(login)·실패 뒤 정리(recover)가 먼저 꺼낸다."""
+    NAME, SNAP = "보관함 구역", "housing_leave"
+    LOADING = "loading"   # 확인 창 없이 바로 맵을 떠나기 시작함
+
+    def inside(self, bot):
+        from ..place import HOUSINGS, place
+        return place(bot).kind in HOUSINGS
+
+    def dialog(self, bot, timeout):
+        end = time.monotonic() + max(0.0, timeout)
+        while True:
+            if bot.map_loading():
+                return self.LOADING
+            if hit := bot.exists(bot.ui["abyss_exit_dialog"]):
+                return hit
+            if time.monotonic() >= end:
+                return None
+            bot.sleep(0.4, 0.6)
+
+    def confirm(self, bot, hit):
+        if hit == self.LOADING:
+            return
+        super().confirm(bot, hit)
+
+
 def leave_instance(bot: Bot) -> bool:
-    """지금 콘텐츠(일반 던전·어비스·레이드·출항선) 안이면 맞는 나가기로 밖 메인 화면까지. 나갔으면 True, 밖이면 False.
+    """지금 콘텐츠(일반 던전·어비스·레이드·출항선)·보관함 구역 안이면 맞는 나가기로 밖 메인 화면까지.
+    나갔으면 True, 밖이면 False.
     사냥터·검은 구멍은 나가지 않는다 (끝날 때까지 기다리는 것이 숙제 규칙 — login._leave_dungeon)."""
-    from ..place import ABYSS, DUNGEON, RAID, RAID_LOBBY, place
+    from ..place import ABYSS, DUNGEON, HOUSINGS, RAID, RAID_LOBBY, place
     kind = place(bot).kind
-    if kind == DUNGEON:
+    if kind in HOUSINGS:
+        HousingExit().run(bot)
+    elif kind == DUNGEON:
         DungeonExit().run(bot)
     elif kind == ABYSS:
         from . import abyss

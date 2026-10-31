@@ -249,10 +249,11 @@ def _leave_dungeon(bot: Bot) -> bool:
     """던전 안이거나 클리어/보상 화면에 남아 있으면 (중단·충돌 뒤 다시 시작한 경우) 마무리하고 나온다."""
     from .content import after_clear, dungeon_state, game_space, hunt_quest, inside_space, play_dungeon, wait_field, wait_until
     from .exits import leave_instance
-    from ..place import ABYSS, RAID, RAID_LOBBY, place
+    from ..place import ABYSS, HOUSINGS, RAID, RAID_LOBBY, place
     ui = bot.ui
-    # 어비스·레이드·출항선 안이면 나온다 — 그 판은 숙제가 아니다 (반복 카드가 멈춘 뒤 숙제 카드가 이어 시작한 경우)
-    if place(bot).kind in (ABYSS, RAID, RAID_LOBBY):
+    # 어비스·레이드·출항선 안이면 나온다 — 그 판은 숙제가 아니다 (반복 카드가 멈춘 뒤 숙제 카드가 이어 시작한 경우).
+    # 여관 보관함 구역·마이 홈에서 접속을 끊었으면 거기서는 숙제 이동이 안 된다 → 먼저 나온다
+    if place(bot).kind in (ABYSS, RAID, RAID_LOBBY, *HOUSINGS):
         return leave_instance(bot)
     # 끊긴 숙제가 요일 던전이면 보상 화면에서 추가 루팅까지 (그냥 나가면 숙제 쪽은 일일 달성만 보고 끝내 추가 루팅이 빠진다)
     prog = bot.daily.progress() if bot.daily else None

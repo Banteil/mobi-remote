@@ -53,5 +53,39 @@ class ExitTest(unittest.TestCase):
             self.assertFalse(exits.leave_instance(mock.MagicMock()))
 
 
+class HousingExitTest(unittest.TestCase):
+    """여관 보관함 구역·마이 홈 — 오른쪽 위 나가기. 확인 창 없이 바로 로딩이면 Space 를 누르지 않는다."""
+
+    def test_leaves_without_dialog(self):
+        b = make_bot()
+        b.ui = {"abyss_exit": "exit", "abyss_exit_dialog": "dlg"}
+        inside = iter([True, False])
+        with mock.patch.object(exits.HousingExit, "inside", lambda self, bot: next(inside, False)):
+            b.map_loading.side_effect = [False, True] + [False] * 50   # 누르자 로딩 시작
+            b.wait_loaded.return_value = None
+            self.assertTrue(exits.HousingExit().run(b))
+        b.click.assert_called_once_with("exit")
+        b.key.assert_not_called()
+
+    def test_leave_instance_picks_housing(self):
+        for kind in ("HousingInn", "Housing"):
+            with mock.patch("mabi.place.place", return_value=mock.Mock(kind=kind)),                     mock.patch.object(exits.HousingExit, "run") as run:
+                self.assertTrue(exits.leave_instance(mock.MagicMock()))
+                run.assert_called_once()
+
+
+class HousingPlaceTest(unittest.TestCase):
+    def test_cli_housing(self):
+        # 패킷이 맵을 모를 때 CLI get_current_environment 의 Housing.IsInHousing 으로
+        from mabi import place as P
+        b = mock.MagicMock()
+        b.map_loading.return_value = None
+        b.activity.return_value = {"Dungeon": {"State": "NotInDungeon"}, "Battlefield": {"IsInBattleField": False}}
+        b.environment.return_value = {"ChannelDisplayName": "", "Housing": {"IsInHousing": True}}
+        self.assertEqual(P.place(b).kind, P.HOUSING)
+        b.environment.return_value = {"ChannelDisplayName": "반호르", "Housing": {"IsInHousing": False}}
+        self.assertIsNone(P.place(b).kind)
+
+
 if __name__ == "__main__":
     unittest.main()

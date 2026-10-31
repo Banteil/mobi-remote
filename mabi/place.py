@@ -17,6 +17,11 @@ RAID = "InstanceRaid"
 RAID_LOBBY = "InstanceRaidLobby"
 DUNGEON = "InstanceDungeon"
 FIELD = "BattleField"
+# 여관 안쪽 보관함 구역·마이 홈 — 메인 화면처럼 보이지만 오른쪽 위 나가기가 있는 따로 된 구역.
+# 여기서 접속을 끊은 캐릭터로 숙제를 시작하면 이동이 안 돼 헤맨다 → 먼저 나온다 (exits.HousingExit)
+HOUSING_INN = "HousingInn"
+HOUSING = "Housing"
+HOUSINGS = (HOUSING_INN, HOUSING)
 ABYSS_NAMES = ("어비스", "허상의 정박지", "광기의 동굴", "흩어진 물길")
 
 
@@ -28,11 +33,6 @@ class Place:
     name: str = ""            # 장소 이름 (패킷이면 맵 이름, CLI 면 ChannelDisplayName)
     dungeon: str | None = None  # 던전 상태 NotInDungeon / Entering / InProgress / Cleared
     in_field: bool | None = None  # 사냥터 안 (클리어 뒤 채널 옮김 대기 포함)
-
-
-def env_name(bot) -> str:
-    """CLI 장소 이름 (ChannelDisplayName). 답이 없으면 ''."""
-    return (bot.environment() or {}).get("ChannelDisplayName", "") or ""
 
 
 def place(bot) -> Place:
@@ -49,9 +49,12 @@ def place(bot) -> Place:
         return Place(None, None, "", "", s.dungeon_state if p.ok else None, None)
     dungeon = (act.get("Dungeon") or {}).get("State")
     in_field = bool((act.get("Battlefield") or {}).get("IsInBattleField"))
-    name = env_name(bot)
+    env = bot.environment() or {}
+    name = env.get("ChannelDisplayName", "") or ""
     kind = None
-    if in_field:
+    if (env.get("Housing") or {}).get("IsInHousing"):
+        kind = HOUSING  # CLI 로는 여관 보관함과 마이 홈을 가르지 못한다 — 나가는 법은 같다
+    elif in_field:
         kind = FIELD
     elif name and any(n in name for n in ABYSS_NAMES):
         kind = ABYSS
