@@ -270,5 +270,30 @@ class SlotColorTest(unittest.TestCase):
         self.assertNotIn(draw.SLOT[0], colors)
 
 
+class LabelTest(unittest.TestCase):
+    """스포이드 말풍선 hex 글자 (detect.read_label) — 실제 캡처(1920x1080)의 말풍선 줄만 잘라 둔 그림으로.
+    판정은 고리 안 색이 아니라 이 글자로 한다: 고리 안은 #242320 이어도 #222222 로 칠해진다."""
+    FIX = __import__("pathlib").Path(__file__).resolve().parent / "fixtures" / "dye_labels"
+    BOX = D.Rect(1075, 283, 749, 749)
+    XS = (1199, 1449, 1698)
+
+    def read(self, name):
+        img = np.zeros((1080, 1920, 3), np.uint8)
+        img[120:260, 1130:1770] = cv2.imread(str(self.FIX / name))
+        return [D.read_label(D.Frame(img), self.BOX, x) for x in self.XS]
+
+    def test_reads_hex(self):
+        self.assertEqual(self.read("a.png"), ["#BDAFA8", "#432E32", "#747757"])
+        self.assertEqual(self.read("b.png"), ["#628386", "#242320", "#96A345"])
+        self.assertEqual(self.read("d.png"), ["#9C476B", "#251F21", "#6B82CF"])
+
+    def test_covered_is_none(self):
+        self.assertEqual(self.read("c.png"), [None, "#242320", "#0B9DBD"])   # 왼쪽은 다른 창이 가림
+
+    def test_bubble_rect(self):
+        b = D.bubble_rect(self.BOX, 1449)
+        self.assertEqual((b.x, b.y, b.w, b.h), (1389, 125, 120, 122))
+
+
 if __name__ == "__main__":
     unittest.main()

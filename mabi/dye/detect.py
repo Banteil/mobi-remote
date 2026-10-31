@@ -23,6 +23,8 @@ from typing import Iterable, Sequence
 
 import numpy as np
 
+from .hex_font import GH, GLYPHS, GW, KEYS
+
 
 def jround(v: float) -> int:
     """JS Math.round (.5 는 위로). 파이썬 round 는 짝수 쪽이라 결과가 달라진다."""
@@ -181,6 +183,12 @@ RING_SHARE = 0.5   # 안쪽 으뜸 색이 이만큼은 돼야 믿는다 (커서�
 RING_INK = 7       # 바깥 반지름에서 이만큼 안쪽까지가 칠해진 부분 (테 5 + 여유 2)
 
 RING_PAD = 5                # 동그라미 둘레 여유 — 섞인 가장자리까지
+# 스포이드 말풍선 (749px 팔레트 기준 px — x 는 지시선 가운데, y 는 팔레트 위 변에서). 실측 1920x1080 (2026-10-31)
+BUBBLE = (-60, -158, 120, 122)    # 말풍선 몸통 (아래 꼬리는 빼고)
+LABEL = (-54, -70, 108, 28)       # 그 안의 hex 글자 줄
+LABEL_DARK = 150                  # 글자 = 흰 바탕에서 이보다 어두운 점
+LABEL_FIT = 0.03                  # 견본과 차이 상한 (맞게 읽은 글자 실측 0.017 이하)
+LABEL_SURE = 1.3                  # 둘째로 닮은 글자와 차이 배 하한 (실측 1.8 이상)
 LEADER_GAP = 4              # 이만큼까지 끊겨도 같은 선
 
 
@@ -504,6 +512,45 @@ def read_rings(f: Frame, rings: Iterable[Ring]) -> list[Ring]:
         else:
             out.append(Ring(ring.x, ring.y, ring.r, seen[0], seen[1]))
     return out
+
+
+def bubble_rect(box: Rect, x: int) -> Rect:
+    """지시선 x 의 스포이드 말풍선 몸통 자리."""
+    s = box.w / 749
+    dx, dy, w, h = BUBBLE
+    return Rect(jround(x + dx * s), jround(box.y + dy * s), jround(w * s), jround(h * s))
+
+
+def read_label(f: Frame, box: Rect, x: int) -> str | None:
+    """지시선 x 의 스포이드 말풍선에 적힌 '#RRGGBB'. 못 읽으면 None (커서·다른 창이 가림, 말풍선이 없음).
+
+    고른 색 판정은 고리 안 색이 아니라 이 글자로 한다 — 게임이 고리 안을 대충 칠해, 무손실 캡처 25장에서 말풍선이
+    #242320 일 때 고리 안은 늘 #222222 였고 다른 색도 1~3 씩 어긋났다. 오차 5 경계의 어두운 색은 그 차이로 판정이
+    뒤집혔다 (점 위에 스포이드를 둬서 실제로 4.7 을 집었는데 '안 맞음', 2026-10-31 사용자).
+    글자는 굵은 고정 글꼴 — 칸마다 잘라 hex_font 견본과 가장 닮은 것 (둘째와 충분히 다를 때만)."""
+    import cv2
+    s = box.w / 749
+    dx, dy, w, h = LABEL
+    x0, y0 = max(0, jround(x + dx * s)), max(0, jround(box.y + dy * s))
+    x1, y1 = min(f.w, jround(x + (dx + w) * s)), min(f.h, jround(box.y + (dy + h) * s))
+    if x1 - x0 < 16 or y1 - y0 < 8:
+        return None
+    g = f.img[y0:y1, x0:x1, :3].astype(np.float32).mean(axis=2)
+    n, _, st, _ = cv2.connectedComponentsWithStats((g < LABEL_DARK).astype(np.uint8), connectivity=8)
+    comps = [st[i] for i in range(1, n) if st[i][4] >= 4]
+    hmax = max((c[3] for c in comps), default=0)
+    comps = sorted((c for c in comps if c[3] >= hmax * 0.7), key=lambda c: c[0])  # 말풍선 둥근 귀퉁이 조각은 뺀다
+    if len(comps) != 7:
+        return None
+    out = ""
+    for cx, cy, cw, ch, _ in comps:
+        im = cv2.resize(1 - g[cy:cy + ch, cx:cx + cw] / 255, (GW, GH), interpolation=cv2.INTER_AREA)
+        d = ((GLYPHS - im) ** 2).mean(axis=(1, 2))
+        o = np.argsort(d)
+        if d[o[0]] > LABEL_FIT or d[o[1]] < d[o[0]] * LABEL_SURE:
+            return None
+        out += KEYS[o[0]]
+    return out if out[0] == "#" and "#" not in out[1:] else None
 
 
 def skip_mask(shapes, xs: np.ndarray, ys: np.ndarray) -> np.ndarray | None:

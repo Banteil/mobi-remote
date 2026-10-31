@@ -25,10 +25,11 @@ class RingState:
     x: int
     y: int
     r: int
-    hex: str             # 안쪽 색 = 그 파트가 지금 고른 색
+    hex: str             # 그 파트가 지금 고른 색 — 말풍선 글자, 못 읽으면 고리 안 색
     share: float         # 으뜸 색 비율 (0.5 미만이면 처음 잰 색을 그대로 씀)
     slot: int            # 맞은 목표 번호 (targets 기준), 없으면 -1
     delta: float | None
+    bubble: D.Rect | None = None   # 말풍선 글자를 읽었으면 그 말풍선 자리 (맞으면 둘레에 칸 색 테)
 
 
 @dataclass
@@ -145,6 +146,9 @@ class DyeTracker:
         rings = D.read_rings(f, self.lead.rings)
         # 커서에 가려 못 읽을 때 쓰는 '직전 값'이 처음 잰 색에 머물지 않도록 읽은 색을 되쓴다 (리모콘 app.js:3320)
         self.lead.rings = list(rings)
+        # 판정은 말풍선 글자로 — 고리 안 색은 게임이 대충 칠한다 (detect.read_label). 못 읽으면 고리 안 색
+        labels = [D.read_label(f, box, r.x) for r in rings]
+        rings = [r if lb is None else D.Ring(r.x, r.y, r.r, D.hex_to_rgb(lb), 1.0) for r, lb in zip(rings, labels)]
         skip = self.lead.skip + [D.frame_skip(box)]
         # 표본 격자 하나를 색 찾기·점·흑백 강조가 같이 쓴다 (Lab 바꾸기를 한 번만)
         grid = D.Grid(f, box, D.grid_step(box, 150000), skip)
@@ -168,8 +172,9 @@ class DyeTracker:
             "ok",
             palette=box,
             lines=list(self.lead.lines),
-            rings=[RingState(r.x, r.y, r.r, r.hex, r.share, so[p.slot] if p.slot >= 0 else -1, p.delta)
-                   for r, p in zip(rings, pk)],
+            rings=[RingState(r.x, r.y, r.r, r.hex, r.share, so[p.slot] if p.slot >= 0 else -1, p.delta,
+                             D.bubble_rect(box, r.x) if lb else None)
+                   for r, p, lb in zip(rings, pk, labels)],
             targets=found_at,
             spots=spots_at,
             bands=self.bands,

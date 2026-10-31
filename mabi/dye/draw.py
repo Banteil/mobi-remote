@@ -172,10 +172,16 @@ def overlay_items(state, presets=None, *, scale: float = 1.0, origin=(0, 0), scr
                              Stroke((255, 255, 255, round(0.55 * 255)), 1.5 * s),
                              under=Stroke(dark(0.45), 3.5 * s), closed=True, dash=(5 * s, 5 * s)))
 
-    # 지금 고른 색이 목표에 맞은 스포이드만 — 흰 테 안쪽 가장자리를 따라 칸 색 테
+    # 지금 고른 색이 목표에 맞은 스포이드만 — 말풍선 둘레와 흰 테 안쪽 가장자리를 따라 칸 색 테
     for rg in state.rings:
         if rg.slot < 0:
             continue
+        col = SLOT[rg.slot] if rg.slot < len(SLOT) else SLOT[0]
+        bb = getattr(rg, "bubble", None)
+        if bb is not None:
+            g = 3 * s  # 말풍선 흰 가장자리 바깥으로
+            out.append(RectP(X(bb.x) - g, Y(bb.y) - g, round(bb.w * scale) + 2 * g, round(bb.h * scale) + 2 * g,
+                             radius=24 * scale + g, stroke=Stroke(col, 3 * s), under=Stroke(dark(0.55), 5.5 * s)))
         pr = max(6, round(rg.r * scale))
         r = max(3, pr - 8 * s)
         out.append(CircleP(X(rg.x), Y(rg.y), r,
