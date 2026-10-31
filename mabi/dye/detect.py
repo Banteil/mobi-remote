@@ -561,6 +561,25 @@ class Grid:
     def d2(self, t: Target) -> np.ndarray:
         return _d2(self.L, self.A, self.B, t.lab)
 
+    def inside(self, t: Target) -> np.ndarray:
+        """오차 안이면서 상하좌우 이웃 표본(한 칸 = step px)도 모두 오차 안인 자리 — 점·흑백 강조에 쓴다.
+        화면은 팔레트 그림을 늘려 그리며 텍셀 경계를 섞는데 스포이드는 그 자리 텍셀 색을 집는다. 화면 픽셀만
+        보면 경계에 섞인 색·가는 줄 가장자리까지 점이 찍혀, 점 위에 스포이드를 둬도 안 잡혔다 (실기 화면을
+        팔레트 복원으로 재 보니 점 자리의 65% 만 실제로 잡힘 → 이웃 조건 88%, 2026-10-31).
+        가릴 자리(고리·지시선) 이웃은 따지지 않는다. 이렇게 하면 하나도 안 남는 가는 색은 그대로 둔다 (없는 것보다 낫다)."""
+        tol = t.tol_or_default
+        hit = self.d2(t) <= tol * tol
+        ok = hit if self.sk is None else (hit | self.sk)
+        core = hit.copy()
+        core[1:, :] &= ok[:-1, :]
+        core[:-1, :] &= ok[1:, :]
+        core[:, 1:] &= ok[:, :-1]
+        core[:, :-1] &= ok[:, 1:]
+        if self.sk is not None:
+            core &= ~self.sk
+            hit &= ~self.sk
+        return core if core.any() else hit
+
 
 def grid_step(rect, samples: int) -> int:
     """뽑을 표본 수에서 거꾸로 정한 간격 — 팔레트가 크든 작든 시간이 같다."""
@@ -620,7 +639,7 @@ def _refine(f: Frame, b, t: Target, s: int, skip):
 
 def find_spots(f: Frame, rect, targets: Sequence[Target], skip=None,
                samples: int = 60000, cap: int = 700, grid: Grid | None = None) -> list[np.ndarray]:
-    """오차 안에 드는 모든 지점 — 목표마다 (k,2) int 배열 [x,y], 래스터 순서.
+    """오차 안에 드는 모든 지점 (경계에 섞인 색은 빼고 안쪽만 — Grid.inside) — 목표마다 (k,2) int 배열 [x,y], 래스터 순서.
 
     가장 가까운 한 점만 찍으면 "여기밖에 없나?" 하고 헷갈린다. 같은 색이 여러 군데 흩어져 있다.
     너무 많으면 그리는 쪽이 느려 상한을 두고, 넘치면 고르게 솎는다 (앞만 자르면 위쪽에 몰린다).
@@ -628,17 +647,13 @@ def find_spots(f: Frame, rect, targets: Sequence[Target], skip=None,
     """
     G = grid or Grid(f, rect, grid_step(clamp_rect(rect, f), samples or 60000), skip)
     cap = cap or 700
-    sk = G.sk
     X, Y = np.meshgrid(G.xs, G.ys)
     out = []
     for t in targets:
-        tol = t.tol_or_default
-        if not tol:
+        if not t.tol_or_default:
             out.append(np.zeros((0, 2), dtype=np.int32))
             continue
-        hit = G.d2(t) <= tol * tol
-        if sk is not None:
-            hit &= ~sk
+        hit = G.inside(t)
         pts = np.stack([X[hit], Y[hit]], axis=1).astype(np.int32)
         n = len(pts)
         if n > cap:
@@ -748,12 +763,8 @@ def highlight(f: Frame, box: Rect, targets: Sequence[Target], skip=None, light: 
     r, g, bb = G.r, G.g, G.b
     hit = np.zeros(G.L.shape, dtype=bool)
     for t in targets:
-        tol = t.tol_or_default
-        if tol:
-            hit |= G.d2(t) <= tol * tol
-    sk = G.sk
-    if sk is not None:
-        hit &= ~sk
+        if t.tol_or_default:
+            hit |= G.inside(t)   # 점과 같은 기준 — 스포이드를 둬서 실제로 잡히는 안쪽만
     gray = (r * 0.299 + g * 0.587 + bb * 0.114) * max(0.0, min(1.0, light))
     out = np.repeat(gray[..., None], 3, axis=2)
     rgb = np.stack([r, g, bb], axis=-1)

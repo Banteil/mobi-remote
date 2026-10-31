@@ -153,6 +153,24 @@ class ViewTest(unittest.TestCase):
         self.assertTrue(far[0] == far[1] == far[2])          # 나머지는 흑백
         self.assertIsNone(D.highlight(f, box, []))
 
+    def test_inside_drops_edges_keeps_thin(self):
+        """점·흑백 강조는 이웃까지 오차 안인 안쪽만 — 경계에 섞인 색엔 스포이드를 둬도 안 잡힌다.
+        이웃 조건으로 하나도 안 남는 가는 색은 그대로 둔다."""
+        img = np.full((40, 40, 3), 200, np.uint8)
+        img[10:30, 10:30] = (40, 200, 60)
+        G = D.Grid(D.Frame(img), D.Rect(0, 0, 40, 40), 2)
+        t = D.target("#3CC828", 3)
+        hit = G.d2(t) <= 9
+        core = G.inside(t)
+        self.assertTrue((core <= hit).all())
+        self.assertLess(core.sum(), hit.sum())          # 가장자리 표본은 빠진다
+        self.assertFalse(core[5, 5:15].any())           # 덩어리 맨 윗줄(y=10)
+        self.assertTrue(core[10, 10])                   # 한가운데는 남는다
+        img = np.full((40, 40, 3), 200, np.uint8)
+        img[:, 20:22] = (40, 200, 60)                   # 표본 한 줄짜리 가는 색
+        G = D.Grid(D.Frame(img), D.Rect(0, 0, 40, 40), 2)
+        self.assertTrue((G.inside(t) == (G.d2(t) <= 9)).all())
+
     def test_tracker_shade_only_when_on(self):
         img, _ = screen()
         t = DyeTracker()
