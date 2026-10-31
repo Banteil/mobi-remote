@@ -115,7 +115,8 @@ class DungeonExit(Exit):
 
 
 class HousingExit(Exit):
-    """여관 안쪽 보관함 구역·마이 홈: 오른쪽 위 나가기 (던전과 같은 아이콘) → 확인 창이 뜨면 확인, 바로 로딩이면 그대로.
+    """여관 안쪽 보관함 구역·마이 홈: 오른쪽 위 나가기 (던전과 같은 아이콘) → 아래 '반호르 여관에서 나가시겠습니까?'
+    (마을 이름이 들어가 글자 대신 초록 'Space 나가기' 버튼으로 본다) → Space, 안 먹으면 그 버튼.
     여기서 접속을 끊은 캐릭터는 숙제 이동이 안 돼 헤맨다 — 숙제 시작(login)·실패 뒤 정리(recover)가 먼저 꺼낸다."""
     NAME, SNAP = "보관함 구역", "housing_leave"
     LOADING = "loading"   # 확인 창 없이 바로 맵을 떠나기 시작함
@@ -129,7 +130,7 @@ class HousingExit(Exit):
         while True:
             if bot.map_loading():
                 return self.LOADING
-            if hit := bot.exists(bot.ui["abyss_exit_dialog"]):
+            if hit := bot.exists(bot.ui["housing_exit_ok"]):
                 return hit
             if time.monotonic() >= end:
                 return None

@@ -58,7 +58,7 @@ class HousingExitTest(unittest.TestCase):
 
     def test_leaves_without_dialog(self):
         b = make_bot()
-        b.ui = {"abyss_exit": "exit", "abyss_exit_dialog": "dlg"}
+        b.ui = {"abyss_exit": "exit", "housing_exit_ok": "dlg"}
         inside = iter([True, False])
         with mock.patch.object(exits.HousingExit, "inside", lambda self, bot: next(inside, False)):
             b.map_loading.side_effect = [False, True] + [False] * 50   # 누르자 로딩 시작
@@ -85,6 +85,8 @@ class HousingPlaceTest(unittest.TestCase):
         self.assertEqual(P.place(b).kind, P.HOUSING)
         b.environment.return_value = {"ChannelDisplayName": "반호르", "Housing": {"IsInHousing": False}}
         self.assertIsNone(P.place(b).kind)
+        b.environment.return_value = {"ChannelDisplayName": "반호르 여관", "Housing": {"IsInHousing": False}}
+        self.assertEqual(P.place(b).kind, P.HOUSING_INN)   # 여관 보관함은 IsInHousing 이 false — 이름으로
 
 
 if __name__ == "__main__":

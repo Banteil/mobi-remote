@@ -110,6 +110,7 @@ dungeon_retry = "dungeon_retry"         # 던전 보상 화면의 '다시 하기
 dungeon_retry_enter = "dungeon_retry_enter"  # 다시 하기 후 임무 화면의 '입장하기'
 abyss_exit = "abyss_exit"               # 어비스 안 오른쪽 맨 위 나가기 버튼 (보이면 어비스 안)
 abyss_exit_dialog = "abyss_exit_dialog" # '던전에서 퇴장하시겠습니까?' (Space = 나가기)
+housing_exit_ok = "housing_exit_ok"     # 여관 보관함·마이 홈 '…에서 나가시겠습니까?' 의 초록 'Space 나가기'
 confirm_green = "confirm_green"       # '퀘스트 클리어' 등의 초록 '확인'
 dialog_skip = "dialog_skip"           # NPC 대화의 '대화 넘기기' (사냥터 클리어 후 등)
 guide_title = "guide_title"           # '/' 콘텐츠 가이드 창 제목

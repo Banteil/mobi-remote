@@ -22,6 +22,7 @@ FIELD = "BattleField"
 HOUSING_INN = "HousingInn"
 HOUSING = "Housing"
 HOUSINGS = (HOUSING_INN, HOUSING)
+INN_SUFFIX = "여관"   # CLI 장소 이름 '반호르 여관' — 여관 보관함 구역에선 CLI Housing.IsInHousing 이 false (2026-10-31 실측)
 ABYSS_NAMES = ("어비스", "허상의 정박지", "광기의 동굴", "흩어진 물길")
 
 
@@ -53,7 +54,9 @@ def place(bot) -> Place:
     name = env.get("ChannelDisplayName", "") or ""
     kind = None
     if (env.get("Housing") or {}).get("IsInHousing"):
-        kind = HOUSING  # CLI 로는 여관 보관함과 마이 홈을 가르지 못한다 — 나가는 법은 같다
+        kind = HOUSING  # 마이 홈
+    elif name.endswith(INN_SUFFIX):
+        kind = HOUSING_INN
     elif in_field:
         kind = FIELD
     elif name and any(n in name for n in ABYSS_NAMES):
