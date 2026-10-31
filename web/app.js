@@ -1571,10 +1571,10 @@ function wire() {
    * 시작하면 무엇이 문제인지 알아내기 어렵다.
    */
   /*
-   * Ctrl+Alt+WASD 로 커서 1px.
+   * Ctrl+WASD 로 커서 1px.
    *
-   * 전역 단축키라 켜 둔 동안 다른 프로그램에서도 이 조합을 못 쓴다. 그래서 켜고 끄는
-   * 것을 사람이 쥔다. 설정에 남아 다음에 켤 때 그대로 걸린다.
+   * 전역 단축키라 걸어 둔 동안 다른 프로그램에서 이 조합을 못 쓴다. 그래서 켜 둬도 실제로는
+   * 염색 팔레트가 떠 있는 동안만 건다 (파이썬 _dye_active). 설정에 남아 다음에도 그대로.
    */
   $('#dye-nudge').addEventListener('change', async (e) => {
     const on = e.target.checked;

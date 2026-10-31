@@ -53,7 +53,7 @@ PySide6 GUI(`gui.py`, `gui_app/`)로 옮기고, 일일 숙제 엔진(`mabi/`)과
   Lab ΔE(CIE76) 로 목표색 최근접점·허용 범위 점 찾기 — dye.js 알고리즘 그대로 numpy 로
 - 오버레이: 투명·클릭 통과·항상 위 창(Qt `WindowTransparentForInput` + `FramelessWindowHint` + `WindowStaysOnTopHint`)
 - 프리셋(dye-presets.json 형식 유지), 색 편집(SV 판, HEX/RGB, 화면에서 집기 + 돋보기), 화면 저장
-- 커서 1px 이동: 같은 프로세스에서 RegisterHotKey (Ctrl+Alt+WASD) — 별도 헬퍼 불필요
+- 커서 1px 이동: 같은 프로세스에서 RegisterHotKey (Ctrl+WASD, 염색 팔레트가 떠 있는 동안만) — 별도 헬퍼 불필요
 - **픽셀 조작 = 키보드로 마우스 1px 이동** (Ctrl+Alt+WASD). 리모콘은 별도 관리자 PowerShell 헬퍼로 어정쩡하게 구현돼 있다 →
   같은 프로세스에서 RegisterHotKey + SetCursorPos 로 바로. 스포이드를 목표 색 점에 정확히 맞출 때 쓴다
 

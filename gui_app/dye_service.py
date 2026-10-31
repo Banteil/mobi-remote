@@ -64,6 +64,8 @@ class DyeService:
         self.win = None  # 메인 창 (캡처에서 뺀다)
         self.view = clean_view(None)
         self.editor: AreaEditor | None = None
+        self.on_active = None  # on_active(bool): 팔레트가 뜨고 사라질 때 (커서 1px 단축키를 그동안만 건다)
+        self.active = False
 
     # ---- 제어 (작업 스레드에서 불려도 된다) ----
     def start(self) -> dict:
@@ -87,6 +89,7 @@ class DyeService:
         self.running = False
         if self.thread:
             self.thread.join(2)
+        self._set_active(False)
         self.gui.stopped.emit()
         return {"ok": True}
 
@@ -157,11 +160,22 @@ class DyeService:
                     self.emit("mm:dye-state", {"error": str(e)})
                     time.sleep(1)
                     continue
+                self._set_active(st.palette is not None)
                 if st.redraw:
                     self.gui.state.emit(st, rect)
                 rest = TICK - (time.monotonic() - t0)
                 if rest > 0:
                     time.sleep(rest)
+
+    def _set_active(self, on: bool) -> None:
+        if on == self.active:
+            return
+        self.active = on
+        if self.on_active:
+            try:
+                self.on_active(on)
+            except Exception:
+                pass
 
     # ---- 화면 스레드 ----
     def _ensure_overlay(self, screen) -> Overlay:

@@ -140,6 +140,7 @@ class Api(DailyApi, CharsApi, QueueApi):
         title = load_config(self.paths)["game"]["window_title"]
         self.dyes = DyeService(self.dye, self._emit, title)
         self.dyes.win = win
+        self.dyes.on_active = self._dye_active
         self.dyes.set_view(self.settings.get("dyeView"))
         self.qov = OverlayService(title, self.settings.get("overlay"),
                                   self.queue.snapshot())
@@ -581,15 +582,21 @@ class Api(DailyApi, CharsApi, QueueApi):
         png, bounds = self._grab(False)
         return {"dataUrl": "data:image/png;base64," + base64.b64encode(png).decode("ascii"), "bounds": bounds}
 
-    # ---------------------------------------------------------------- 커서 1px (Ctrl+Alt+WASD)
+    # ---------------------------------------------------------------- 커서 1px (Ctrl+WASD)
     def _on_nudge_error(self, msg):
         self._nudge_err = msg
 
     def cursor_nudge(self, on):
-        """전역 단축키라 켜 둔 동안 다른 프로그램에서도 이 조합을 못 쓴다 — 켜고 끄는 건 사람이 쥔다."""
+        """켜 두기 (설정 dyeNudge 는 화면이 저장한다). 전역 단축키라 걸어 둔 동안 다른 프로그램에서 이 조합이
+        안 들으므로 실제로는 염색 팔레트가 떠 있는 동안만 건다 (_dye_active)."""
         if not on:
             self.nudge.stop()
             return {"ok": True}
+        if self.dyes and self.dyes.active:
+            return self._nudge_on()
+        return {"ok": True}
+
+    def _nudge_on(self) -> dict:
         self._nudge_err = None
         try:
             self.nudge.start()
@@ -598,6 +605,17 @@ class Api(DailyApi, CharsApi, QueueApi):
         if not self.nudge.running:
             return {"ok": False, "error": self._nudge_err or "단축키를 등록하지 못했습니다"}
         return {"ok": True, **({"warning": self._nudge_err} if self._nudge_err else {})}
+
+    def _dye_active(self, on: bool) -> None:
+        """염색 팔레트가 떴다/사라졌다 (DyeService 캡처 스레드). 커서 1px 를 켜 뒀으면 그동안만 단축키를 건다."""
+        if not on:
+            self.nudge.stop()
+            return
+        if self.cfg_get().get("dyeNudge") is not True:
+            return
+        r = self._nudge_on()
+        if not r.get("ok") or r.get("warning"):
+            log.warning("커서 1px 단축키: %s", r.get("error") or r.get("warning"))
 
     # ---------------------------------------------------------------- 창
     def win_narrow(self, px=0):

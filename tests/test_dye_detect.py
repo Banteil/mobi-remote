@@ -209,6 +209,37 @@ class DyeKeyTest(unittest.TestCase):
         self.assertFalse(a.dyes.running)
 
 
+class NudgeOnlyWhileDyeingTest(unittest.TestCase):
+    def test_hotkeys_follow_palette(self):
+        # 커서 1px 를 켜 둬도 단축키는 염색 팔레트가 떠 있는 동안만 건다
+        from gui_app.api import Api
+
+        class Nudge:
+            running = False
+
+            def start(self):
+                self.running = True
+
+            def stop(self):
+                self.running = False
+
+        class Dyes:
+            active = False
+        a = Api.__new__(Api)
+        a.nudge, a.dyes, a._nudge_err = Nudge(), Dyes(), None
+        cfg = {"dyeNudge": True}
+        a.cfg_get = lambda: cfg
+        self.assertTrue(a.cursor_nudge(True)["ok"])
+        self.assertFalse(a.nudge.running)          # 팔레트 없음 → 아직 안 건다
+        a._dye_active(True)
+        self.assertTrue(a.nudge.running)
+        a._dye_active(False)
+        self.assertFalse(a.nudge.running)
+        cfg["dyeNudge"] = False
+        a._dye_active(True)
+        self.assertFalse(a.nudge.running)          # 꺼 뒀으면 팔레트가 떠도 안 건다
+
+
 class SlotColorTest(unittest.TestCase):
     def test_custom_slot_colors(self):
         from mabi.dye import draw
