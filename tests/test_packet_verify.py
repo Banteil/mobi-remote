@@ -42,15 +42,28 @@ class BlackHoleTest(unittest.TestCase):
                 screen.assert_called_once()
 
 
-    def test_run_opens_guide_once(self):
-        # 일일 달성 체크로 먼저 확인하지 않고 바로 가기만 연다 — 카드가 없으면 끝 (실행기가 확인)
+    def run_bh(self, achieved: bool):
+        """가이드를 한 번만 연다 — 일일 달성 체크(남았나)를 보고, 남았으면 같은 가이드에서 바로 가기."""
         bot = bot_with(dimensions_cleared=[])
         bot.state = SimpleNamespace(available=lambda: True)
         bot.resumed_at = lambda *a: False
         bot.step = lambda *a, **k: None
-        with mock.patch.object(black_hole, "game_space", return_value="이멘 마하"),                 mock.patch.object(black_hole, "daily_achieved", side_effect=AssertionError("일일 달성 체크를 열면 안 됨")),                 mock.patch.object(black_hole, "open_guide_card", return_value=False) as guide:
-            self.assertEqual(black_hole.run(bot, {"black_hole": {"space_keyword": "검은 구멍", "card": "c"}}), "검은 구멍 카드 없음")
-            guide.assert_called_once()
+        bot.to_main = lambda: None
+        cfg = {"black_hole": {"space_keyword": "검은 구멍", "card": "c", "achieved": "a"}}
+        with mock.patch.object(black_hole, "game_space", return_value="이멘 마하"),                 mock.patch.object(black_hole, "open_guide") as opened,                 mock.patch.object(black_hole, "achieved_mark", return_value=achieved),                 mock.patch.object(black_hole, "open_guide_card", return_value=False) as card:
+            out = black_hole.run(bot, cfg)
+        opened.assert_called_once()
+        return out, card
+
+    def test_run_skips_when_done_today(self):
+        out, card = self.run_bh(True)
+        self.assertEqual(out, "완료 (일일 달성 체크)")
+        card.assert_not_called()
+
+    def test_run_goes_when_left(self):
+        out, card = self.run_bh(False)
+        self.assertEqual(out, "검은 구멍 카드 없음")
+        card.assert_called_once_with(mock.ANY, "c", opened=True)
 
 
 class WeekdayTest(unittest.TestCase):
