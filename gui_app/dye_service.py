@@ -24,6 +24,14 @@ from .dye_tab import AreaEditor, Overlay, exclude_from_capture
 from .queue_overlay import to_logical
 
 TICK = 0.12
+GATE_TEXT = "염색 미니게임을 기다리는 중…"
+
+
+def _minigame_open() -> bool | None:
+    """염색 미니게임이 열려 있나 (패킷 — 열림 알림 뒤, 끝·취소·맵 떠남 전). 패킷을 못 보면 None → 예전처럼 화면으로."""
+    from mabi import packet_monitor
+    pm = packet_monitor.current()
+    return pm.dye_open() if pm else None
 LIGHT = (5, 90, 35)  # 흑백 밝기 % (최소, 최대, 기본)
 
 
@@ -149,6 +157,15 @@ class DyeService:
         with mss.mss() as sct:
             while self.running:
                 t0 = time.monotonic()
+                if _minigame_open() is False:
+                    # 미니게임이 안 열렸으면 화면을 보지 않는다 — 비슷한 어두운 테두리 창을 팔레트로 잡지 않게 (2026-11-02 사용자)
+                    st = self.tracker.idle(GATE_TEXT)
+                    self._set_active(False)
+                    rect = self._rect()
+                    if st.redraw and rect is not None:
+                        self.gui.state.emit(st, rect)
+                    time.sleep(0.25)
+                    continue
                 rect = self._rect()
                 if rect is None:
                     time.sleep(1)

@@ -411,6 +411,8 @@ class PacketState:
     combat: str | None = None        # 내 전투 상태 NonCombat / CombatReady / InCombat / CombatEnd. 내 번호를 알아야 안다
     entered_at: float = 0.0          # 마지막 맵 진입 (monotonic)
     dimensions_cleared: list | None = None  # 깬 검은 구멍들이 나타난 시각 (ms). 맵에 들어갈 때마다 온다
+    dye_open_at: float | None = None   # 염색 미니게임이 열린 때 (monotonic). 끝·취소·맵 떠남이면 None
+    dye_known: bool = False            # 감시를 켠 뒤 염색 열림·끝이나 맵 이동을 봤나 (못 봤으면 켜기 전 상태를 모른다)
     # 퀘스트 창 '추천' 항목 종류 (RecommendedActivityType). 2(요일 던전)면 요일 던전을 아직 안 한 것.
     # 2 가 빠지는 건 클리어(Add 6 → Remove 2)일 수도, 가방 정리(5)에 밀린 것(weight1 13:12:45)일 수도 있어 완료 신호로 못 쓴다
     recommend: int | None = None
@@ -462,6 +464,18 @@ class PacketMonitor:
     def ok(self) -> bool:
         """신호를 믿어도 되는가 (돌고 있고 최근 30초 안에 서버 패킷을 받음 — 로딩 중엔 몇 초씩 조용하다)."""
         return self.status == "running" and time.monotonic() - self.last_rx < 30
+
+    DYE_LIMIT = 240   # 미니게임 제한 2분 + '적용하시겠습니까?' 창 여유. 끝 신호를 놓쳐도 이만큼 지나면 닫힌 것으로
+
+    def dye_open(self) -> bool | None:
+        """염색 미니게임이 열려 있나 (패킷). 표에 염색 신호가 없거나 감시가 안 돌면 None — 부르는 쪽은 화면으로만 본다."""
+        if self.status != "running" or self.table is None or self.table.by_key("dye.open") is None:
+            return None
+        t = self.state.dye_open_at
+        if t is None and not self.state.dye_known and time.monotonic() - getattr(self, "started_at", 0) < self.DYE_LIMIT:
+            # 감시를 켜기 전에 이미 열려 있었을 수 있다 (미니게임 중에 리모콘을 켬) — 열림 알림을 못 봤으니 화면으로 본다
+            return None
+        return t is not None and time.monotonic() - t < self.DYE_LIMIT
 
     def at_charselect(self) -> bool | None:
         """캐릭터 선택 화면인가 (로그아웃 뒤 아직 게임 서버에 안 들어감). 모르면 None.
@@ -552,6 +566,7 @@ class PacketMonitor:
             log.info("패킷 감시 꺼짐: %s", e)
             return
         self.status = "running"
+        self.started_at = time.monotonic()
         log.info("패킷 감시 시작 (%s)", cap.device)
         streams: dict[tuple, Stream] = {}
         try:
@@ -702,6 +717,7 @@ class PacketMonitor:
         old = {f: getattr(s, f) for f in CLI_FACTS}
         if key == "channel.leaving":
             s.loading = True
+            s.dye_open_at, s.dye_known = None, True
             s.attendance_at = 0.0
         elif key == "channel.entering":
             s.loading = False
@@ -819,6 +835,10 @@ class PacketMonitor:
                 log.info("패킷: %s", "쓰러짐" if s.dead else "부활")
         elif key == "dimension.cleared":
             s.dimensions_cleared = vals.get("times")
+        elif key in ("dye.open", "dye.start"):
+            s.dye_open_at, s.dye_known = time.monotonic(), True
+        elif key in ("dye.finish", "dye.cancel", "dye.abort", "dye.cancel_free"):
+            s.dye_open_at, s.dye_known = None, True
         elif key == "recommend.add":
             s.recommend = vals.get("type")
         elif key == "revive.count":
@@ -871,6 +891,11 @@ class PacketMonitor:
 
 _shared: PacketMonitor | None = None
 _shared_lock = threading.Lock()
+
+
+def current() -> PacketMonitor | None:
+    """이미 켜진 공유 감시 (없으면 None — 켜지 않는다. 설정에서 패킷 감시를 끈 경우)."""
+    return _shared
 
 
 def shared(logs_dir: Path) -> PacketMonitor:

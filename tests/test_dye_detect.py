@@ -309,3 +309,48 @@ class LabelTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MinigameGateTest(unittest.TestCase):
+    """염색 도우미는 패킷으로 미니게임이 열렸을 때만 화면을 본다 (packet_monitor.dye_open)."""
+
+    def monitor(self):
+        from types import SimpleNamespace
+        from mabi import packet_monitor as pmod
+        pm = pmod.PacketMonitor.__new__(pmod.PacketMonitor)
+        pm.status, pm.state = "running", pmod.PacketState()
+        pm.started_at = 0.0
+        pm.table = SimpleNamespace(by_key=lambda k: object() if k == "dye.open" else None)
+        return pm
+
+    def test_open_until_end_or_limit(self):
+        import time
+        pm = self.monitor()
+        self.assertFalse(pm.dye_open())
+        pm.state.dye_open_at = time.monotonic()
+        self.assertTrue(pm.dye_open())
+        pm.state.dye_open_at = time.monotonic() - pm.DYE_LIMIT - 1   # 끝 신호를 놓쳐도 상한이 지나면 닫힘
+        self.assertFalse(pm.dye_open())
+
+    def test_unknown_without_packets(self):
+        from types import SimpleNamespace
+        pm = self.monitor()
+        pm.table = SimpleNamespace(by_key=lambda k: None)   # 염색 신호가 없는 옛 표
+        self.assertIsNone(pm.dye_open())
+        pm = self.monitor()
+        pm.status = "no_npcap"
+        self.assertIsNone(pm.dye_open())
+
+    def test_idle_redraws_once(self):
+        t = DyeTracker()
+        self.assertTrue(t.idle("기다림").redraw)
+        self.assertFalse(t.idle("기다림").redraw)
+
+    def test_just_started_is_unknown(self):
+        """미니게임 중에 리모콘을 켜면 열림 알림을 못 봤다 — 켠 뒤 상한 시간 안에는 화면으로 본다."""
+        import time
+        pm = self.monitor()
+        pm.started_at = time.monotonic()
+        self.assertIsNone(pm.dye_open())
+        pm.state.dye_known = True       # 그 뒤 끝·맵 이동을 봤으면 패킷을 믿는다
+        self.assertFalse(pm.dye_open())

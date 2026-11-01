@@ -103,6 +103,14 @@ class DyeTracker:
     def _same(self) -> DyeState:
         return replace(self.last, redraw=False)
 
+    def idle(self, text: str) -> DyeState:
+        """화면을 보지 않고 기다림 (염색 미니게임이 안 열림 — 패킷). 같은 글이면 다시 그리지 않는다."""
+        self.box = None
+        last = getattr(self, "last", None)
+        if last is not None and last.status == "waiting" and last.text == text:
+            return self._same()
+        return self._emit(DyeState("waiting", text, "wait"))
+
     # ── 한 바퀴 ──
     def tick(self, frame) -> DyeState:
         f = D.as_frame(frame, self.order)
