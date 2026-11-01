@@ -281,6 +281,29 @@ def read_button(frame, region) -> tuple[int | None, str, str]:
     return (int(nums[-1]) if nums else None), win, ko
 
 
+# 임무 화면 왼쪽 '더블 루팅' 칸 (1920 기준) — 꺼져 있으면 '도전' 버튼, 켜면 '선택됨'. 사냥터·던전 임무 화면이 같다
+DOUBLE_LOOT_AREA = (40, 420, 660, 300)
+
+
+def mission_button(bot: Bot, expect_cost: int) -> tuple[int | None, str, str]:
+    """임무 화면 입장 버튼 (가격, Windows 글자, 한글 글자). 가격이 expect_cost(소탕 + 더블 루팅)보다 적으면 더블 루팅이
+    꺼진 것 → '도전' 을 눌러 켜고 다시 읽는다. 켜짐 여부는 게임이 캐릭터·장소마다 기억해서 어떤 캐릭터는 꺼진 채
+    열려 은동전 숙제를 통째로 건너뛰었다 (2026-11-01 사용자: 꺼져 있으면 켜기). 그래도 다르면 부르는 쪽이 멈춘다."""
+    from ..ocr import find_texts, nospace
+    ui = bot.ui
+    price, win, ko = read_button(bot.frame(), ui["mission_button_region"])
+    if price is None or price >= expect_cost:
+        return price, win, ko
+    on = nospace(gd.text("double_loot_on"))
+    hit = next(((x, y) for t, x, y in find_texts(bot.frame(), DOUBLE_LOOT_AREA) if nospace(t) == on), None)
+    if hit is None:
+        return price, win, ko
+    bot.log.info(f"입장 비용 {price} — 더블 루팅 꺼짐 → '도전' 눌러 켬")
+    bot.click(hit)
+    bot.sleep(0.8, 1.2)
+    return read_button(bot.frame(), ui["mission_button_region"])
+
+
 def has_word(word: str, *texts: str) -> bool:
     """한글 단어가 읽은 글자들 중 하나에 있는지 (띄어쓰기 무시)."""
     from ..ocr import nospace
@@ -502,7 +525,7 @@ def enter_from_dungeon_window(bot: Bot, clear_timeout: float, extra_loot: int = 
     bot.wait_any(missions, timeout=15)
     bot.sleep(0.8, 1.2)
     if expect_cost is not None:
-        price, win, ko = read_button(bot.frame(), ui["mission_button_region"])
+        price, win, ko = mission_button(bot, expect_cost)
         if price != expect_cost or not has_word(gd.text("dungeon_enter"), win, ko):
             raise CannotProceed(f"입장 버튼 '{win}' / '{ko}' — 비용 {expect_cost} 이 아님 (더블 루팅 꺼짐?) "
                                 f"→ {bot.snapshot('mission_cost').name}")

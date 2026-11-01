@@ -10,7 +10,7 @@
 from .. import gamedata as gd
 from ..bot import Bot, StepTimeout
 from . import black_hole
-from .content import (CannotProceed, enter_from_dungeon_window, go_to_place, has_word, play_field, read_button,
+from .content import (CannotProceed, enter_from_dungeon_window, go_to_place, has_word, mission_button, play_field, read_button,
                       select_zone)
 
 
@@ -97,7 +97,7 @@ def field_once(bot: Bot, c: dict, again: bool = False, more: bool = False) -> st
             bot.log.warning(f"사냥터 창이 닫힘, 다시 이동 → {bot.snapshot('field_window').name}")
     select_recommended(bot)
     # 처음엔 '20 입장하기', 새 임무 선택으로 돌아오면 '20 임무 시작'. 가격은 Windows OCR, 글자는 둘 중 하나
-    price, win, ko = read_button(bot.frame(), ui["mission_button_region"])
+    price, win, ko = mission_button(bot, c["dungeon_cost"])
     if price != c["dungeon_cost"] or not has_word(gd.text("dungeon_enter"), win, ko) and not has_word(gd.text("mission_start"), win, ko):
         raise CannotProceed(f"사냥터 입장 버튼 '{win}' / '{ko}' — 비용 {c['dungeon_cost']} 이 아님 "
                             f"→ {bot.snapshot('field_cost').name}")
