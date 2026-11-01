@@ -481,6 +481,10 @@ def craft_go(bot, ctx, seen):
         return Finish("short", f"제작 재료 부족 → {_shot(bot, 'arbeit_craft')}")
     except StepTimeout:
         pass
+    # 한 번에 1개씩 만든다 — 5개가 필요한 일(두꺼운 가죽 갑옷 상의)은 구하는 방법 → 제작을 거듭하므로, 만들 때마다
+    # 창·구하는 방법 횟수를 새로 센다 (아니면 세 번째쯤 '제작 창 버튼을 알아보지 못함' 으로 끝난다, 2026-11-01)
+    ctx.n["craft"] = ctx.n["howto"] = 0
+    ctx.event("crafted")
     bot.sleep(0.5, 1)
     fast_travel(bot)
     return "제작"

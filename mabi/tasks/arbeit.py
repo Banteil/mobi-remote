@@ -369,6 +369,9 @@ def _work(bot: Bot, title: str, alter=()) -> str:
             if ctx.take("gather"):  # 점검자가 '구하는 방법' 으로 채집하러 보냈다
                 gather, last_check = Progress(stall=a["gather_timeout"]), time.monotonic()
                 work.poke()
+            if ctx.take("crafted"):  # 제작은 1개씩 — 진행하기를 거듭 누르는 것도 진척으로 센다
+                pushes = 0
+                work.poke()
             if ctx.take("confirmed") and _finished(bot, title):  # 퀘스트 클리어 확인
                 return "done"
             if seen.done:
