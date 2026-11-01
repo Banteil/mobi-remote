@@ -88,6 +88,18 @@ class FrameSkipTest(unittest.TestCase):
         self.assertTrue(hit.found)
         self.assertTrue(1400 <= hit.x < 1420 and 600 <= hit.y < 620)
 
+    def test_tolerance_is_per_channel(self):
+        """오차 = 칸마다 차이 중 가장 큰 것 (염색 도우미 v2.0.0 과 같게). #56524F 는 #505050 에서 R 이 6 차이."""
+        img, b = screen()
+        img[600:620, 1400:1420] = (0x4F, 0x52, 0x56)   # BGR
+        f = D.Frame(img)
+        box = D.palette_at(f)
+        for tol, want in ((3, False), (5, False), (6, True)):
+            hit = D.find_colors(f, box, [D.target("#505050", tol)], skip=[D.frame_skip(box)])[0]
+            self.assertEqual(hit.found, want, tol)
+        self.assertEqual(hit.delta, 6)
+        self.assertEqual(D.rgb_diff((0x56, 0x52, 0x4F), (0x50, 0x50, 0x50)), 6)
+
     def test_rounded_corner_skipped(self):
         b = D.Palette(100, 100, 200, 200, corner=30, inset=2)
         s = D.frame_skip(b)
@@ -160,7 +172,7 @@ class ViewTest(unittest.TestCase):
         img[10:30, 10:30] = (40, 200, 60)
         G = D.Grid(D.Frame(img), D.Rect(0, 0, 40, 40), 2)
         t = D.target("#3CC828", 3)
-        hit = G.d2(t) <= 9
+        hit = G.diff(t) <= 3
         core = G.inside(t)
         self.assertTrue((core <= hit).all())
         self.assertLess(core.sum(), hit.sum())          # 가장자리 표본은 빠진다
@@ -169,7 +181,7 @@ class ViewTest(unittest.TestCase):
         img = np.full((40, 40, 3), 200, np.uint8)
         img[:, 20:22] = (40, 200, 60)                   # 표본 한 줄짜리 가는 색
         G = D.Grid(D.Frame(img), D.Rect(0, 0, 40, 40), 2)
-        self.assertTrue((G.inside(t) == (G.d2(t) <= 9)).all())
+        self.assertTrue((G.inside(t) == (G.diff(t) <= 3)).all())
 
     def test_tracker_shade_only_when_on(self):
         img, _ = screen()

@@ -150,7 +150,7 @@ class DyeTracker:
         labels = [D.read_label(f, box, r.x) for r in rings]
         rings = [r if lb is None else D.Ring(r.x, r.y, r.r, D.hex_to_rgb(lb), 1.0) for r, lb in zip(rings, labels)]
         skip = self.lead.skip + [D.frame_skip(box)]
-        # 표본 격자 하나를 색 찾기·점·흑백 강조가 같이 쓴다 (Lab 바꾸기를 한 번만)
+        # 표본 격자 하나를 색 찾기·점·흑백 강조가 같이 쓴다
         grid = D.Grid(f, box, D.grid_step(box, 150000), skip)
         found = D.find_colors(f, box, targets, grid=grid)
         spots = [] if moved and self.still else D.find_spots(f, box, targets, grid=grid)

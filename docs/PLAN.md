@@ -50,7 +50,7 @@ PySide6 GUI(`gui.py`, `gui_app/`)로 옮기고, 일일 숙제 엔진(`mabi/`)과
 ### 4단계 — 염색 도우미 ✅ (실제 게임 확인 전)
 - 캡처: mss 로 주 모니터 120ms 주기 (Electron 처럼 창 보호가 필요하면 `SetWindowDisplayAffinity`)
 - 팔레트 검출(격자 색차·채도, 덩어리 점수, 테두리 스냅, 질감 관문), 스포이드 선·동그라미 찾기, 최빈색 읽기,
-  Lab ΔE(CIE76) 로 목표색 최근접점·허용 범위 점 찾기 — dye.js 알고리즘 그대로 numpy 로
+  목표색 최근접점·허용 범위 점 찾기 — dye.js 알고리즘 그대로 numpy 로 (오차는 처음엔 Lab ΔE76, 2026-11-02부터 RGB 칸마다 ±오차)
 - 오버레이: 투명·클릭 통과·항상 위 창(Qt `WindowTransparentForInput` + `FramelessWindowHint` + `WindowStaysOnTopHint`)
 - 프리셋(dye-presets.json 형식 유지), 색 편집(SV 판, HEX/RGB, 화면에서 집기 + 돋보기), 화면 저장
 - 커서 1px 이동: 같은 프로세스에서 RegisterHotKey (Ctrl+WASD, 염색 팔레트가 떠 있는 동안만) — 별도 헬퍼 불필요

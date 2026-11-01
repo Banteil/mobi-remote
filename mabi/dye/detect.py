@@ -33,34 +33,22 @@ def jround(v: float) -> int:
 
 # ── 색 ──────────────────────────────────────────────────────────
 
-# 0~255 는 256가지뿐이라 미리 구한다. 픽셀마다 pow 세 번이 가장 비쌌다(실측 — 절반 아래로).
-# JS 는 Float32Array 라 float32 로 반올림된 값을 쓴다. 같게 맞춘다.
-_LIN32 = np.empty(256, dtype=np.float32)
-for _i in range(256):
-    _v = _i / 255
-    _LIN32[_i] = _v / 12.92 if _v <= 0.04045 else ((_v + 0.055) / 1.055) ** 2.4
+# 오차 = R·G·B 칸마다 차이 중 가장 큰 것. "오차 3" = 세 칸 모두 ±3 안.
+# 사용자가 쓰던 '염색 도우미 v2.0.0' 이 이렇게 잰다 (exe 정적 분석 — 칸마다 목표±오차 범위로 cv::inRange).
+# 예전엔 Lab ΔE76 이었는데 같은 숫자가 다른 뜻이라 헷갈렸다 (#505050 ↔ #56524F: ΔE 2.8 이라 오차 3 안, RGB 로는 R 이 6 차이).
+_TIE = 1024   # 오차가 같으면 세 칸 차이 합이 작은 쪽 — 가장 가까운 점 고를 때만 (합 ≤ 765 < 1024)
 
 
-_F = np.float32
+def rgb_key(r, g, b, rgb):
+    """정수 배열 R,G,B 와 목표 rgb 의 거리 열쇠 = 오차 × _TIE + 차이 합. 오차는 열쇠 // _TIE."""
+    r, g, b = (np.asarray(v, dtype=np.int32) for v in (r, g, b))   # Frame.rgb 는 int16 — × _TIE 가 넘친다
+    dr, dg, db = np.abs(r - rgb[0]), np.abs(g - rgb[1]), np.abs(b - rgb[2])
+    return np.maximum(np.maximum(dr, dg), db) * _TIE + dr + dg + db
 
 
-def _labf(t):
-    return np.where(t > _F(0.008856), np.cbrt(t), _F(7.787) * t + _F(16 / 116))
-
-
-def lab_arrays(r, g, b):
-    """sRGB(정수 배열) → CIE Lab (D65). RGB 거리는 어두운 쪽·초록 언저리에서 눈과 어긋난다.
-    float32 로 계산한다 — float64 의 절반 아래 시간 (749px 팔레트 표본 14만 점 24 → 11ms), 차이 ΔE 0.0001."""
-    R, G, B = _LIN32[r], _LIN32[g], _LIN32[b]
-    X = _labf((R * _F(0.4124) + G * _F(0.3576) + B * _F(0.1805)) / _F(0.95047))
-    Y = _labf(R * _F(0.2126) + G * _F(0.7152) + B * _F(0.0722))
-    Z = _labf((R * _F(0.0193) + G * _F(0.1192) + B * _F(0.9505)) / _F(1.08883))
-    return _F(116) * Y - _F(16), _F(500) * (X - Y), _F(200) * (Y - Z)
-
-
-def to_lab(r: int, g: int, b: int) -> tuple[float, float, float]:
-    L, A, B = lab_arrays(np.array([r]), np.array([g]), np.array([b]))
-    return float(L[0]), float(A[0]), float(B[0])
+def rgb_diff(a, b) -> int:
+    """두 색의 오차 — 칸마다 차이 중 가장 큰 것."""
+    return max(abs(int(a[0]) - b[0]), abs(int(a[1]) - b[1]), abs(int(a[2]) - b[2]))
 
 
 def hex_to_rgb(s) -> tuple[int, int, int] | None:
@@ -81,7 +69,6 @@ def rgb_to_hex(r, g, b) -> str:
 class Target:
     hex: str
     rgb: tuple[int, int, int]
-    lab: tuple[float, float, float]
     tol: float | None = None   # 색마다 오차를 따로 든다. 없으면 호출 쪽 기본(5)
 
     @property
@@ -95,7 +82,7 @@ def target(hex_: str, tol=None) -> Target | None:
     if not rgb:
         return None
     t = tol if isinstance(tol, (int, float)) and not isinstance(tol, bool) else None
-    return Target(rgb_to_hex(*rgb), rgb, to_lab(*rgb), t)
+    return Target(rgb_to_hex(*rgb), rgb, t)
 
 
 # ── 프레임 ──────────────────────────────────────────────────────
@@ -582,19 +569,13 @@ class ColorHit:
     x: int
     y: int
     color: str        # 그 자리의 실제 색
-    delta: float      # ΔE76, 소수 첫째 자리
+    delta: float      # 오차 (칸마다 차이 중 가장 큰 것)
     tol: float
-    found: bool       # delta <= tol (반올림 전 값으로)
-
-
-def _d2(L, A, B, lab):
-    dL, da, db = L - lab[0], A - lab[1], B - lab[2]
-    return dL * dL + da * da + db * db
+    found: bool       # delta <= tol
 
 
 class Grid:
-    """팔레트 안 step 간격 표본과 그 Lab·가릴 자리. Lab 바꾸기가 가장 비싸다(749px 팔레트 표본 14만 점에 16ms) —
-    한 바퀴에 한 번 만들어 색 찾기·점·흑백 강조가 같이 쓴다 (따로 하면 세 번, 흑백 강조를 켜면 끌 때 렉이 걸렸다)."""
+    """팔레트 안 step 간격 표본과 가릴 자리. 한 바퀴에 한 번 만들어 색 찾기·점·흑백 강조가 같이 쓴다."""
 
     def __init__(self, f: Frame, rect, step: int, skip=None):
         box = clamp_rect(rect, f)
@@ -602,11 +583,14 @@ class Grid:
         self.xs = np.arange(box.x, box.x + box.w, self.step)
         self.ys = np.arange(box.y, box.y + box.h, self.step)
         self.r, self.g, self.b = f.rgb(self.ys, self.xs)
-        self.L, self.A, self.B = lab_arrays(self.r, self.g, self.b)
         self.sk = skip_mask(skip, self.xs, self.ys)
 
-    def d2(self, t: Target) -> np.ndarray:
-        return _d2(self.L, self.A, self.B, t.lab)
+    def key(self, t: Target) -> np.ndarray:
+        return rgb_key(self.r, self.g, self.b, t.rgb)
+
+    def diff(self, t: Target) -> np.ndarray:
+        """표본마다 오차."""
+        return self.key(t) // _TIE
 
     def inside(self, t: Target) -> np.ndarray:
         """오차 안이면서 상하좌우 이웃 표본(한 칸 = step px)도 모두 오차 안인 자리 — 점·흑백 강조에 쓴다.
@@ -615,7 +599,7 @@ class Grid:
         팔레트 복원으로 재 보니 점 자리의 65% 만 실제로 잡힘 → 이웃 조건 88%, 2026-10-31).
         가릴 자리(고리·지시선) 이웃은 따지지 않는다. 이렇게 하면 하나도 안 남는 가는 색은 그대로 둔다 (없는 것보다 낫다)."""
         tol = t.tol_or_default
-        hit = self.d2(t) <= tol * tol
+        hit = self.diff(t) <= tol
         ok = hit if self.sk is None else (hit | self.sk)
         core = hit.copy()
         core[1:, :] &= ok[:-1, :]
@@ -638,7 +622,7 @@ def find_colors(f: Frame, rect, targets: Sequence[Target], skip=None,
     """목표색마다 가장 가까운 지점.
 
     건너뛰기 폭은 뽑을 표본 수에서 거꾸로 정한다 — 팔레트가 크든 작든 시간이 같다.
-    15만 점이면 전수와 거의 같다 (전수 ΔE 0.4 / 15만 점 ΔE 0.8, 눈으로는 구분 불가).
+    15만 점이면 전수와 거의 같다. 찾은 자리 둘레는 원해상도로 다시 본다.
     찾은 자리 주변(±s)만 원해상도로 다시 본다. grid 를 주면 그 표본을 쓴다 (skip 도 grid 의 것).
     """
     G = grid or Grid(f, rect, grid_step(clamp_rect(rect, f), samples or 150000), skip)
@@ -647,7 +631,7 @@ def find_colors(f: Frame, rect, targets: Sequence[Target], skip=None,
 
     out = []
     for t in targets:
-        d = G.d2(t)
+        d = G.key(t).astype(np.float64)
         if sk is not None:
             d = np.where(sk, np.inf, d)
         i = int(np.argmin(d))
@@ -657,11 +641,9 @@ def find_colors(f: Frame, rect, targets: Sequence[Target], skip=None,
         else:   # 전부 가려졌다 — JS 는 처음 값(0,0,검정,∞)을 그대로 남긴다
             best = (math.inf, 0, 0, (0, 0, 0))
         fine = _refine(f, best, t, s, skip)
-        delta = math.sqrt(fine[0])
+        delta = float(fine[0] // _TIE) if math.isfinite(fine[0]) else math.inf
         tol = t.tol if t.tol is not None else (5 if tolerance is None else tolerance)
-        out.append(ColorHit(t.hex, fine[1], fine[2], rgb_to_hex(*fine[3]),
-                            jround(delta * 10) / 10 if math.isfinite(delta) else math.inf,
-                            tol, delta <= tol))
+        out.append(ColorHit(t.hex, fine[1], fine[2], rgb_to_hex(*fine[3]), delta, tol, delta <= tol))
     return out
 
 
@@ -673,7 +655,7 @@ def _refine(f: Frame, b, t: Target, s: int, skip):
     y0, y1 = max(0, by - s), min(f.h - 1, by + s)
     xs, ys = np.arange(x0, x1 + 1), np.arange(y0, y1 + 1)
     r, g, bb = f.rgb(ys, xs)
-    d = _d2(*lab_arrays(r, g, bb), t.lab)
+    d = rgb_key(r, g, bb, t.rgb).astype(np.float64)
     sk = skip_mask(skip, xs, ys)
     if sk is not None:
         d = np.where(sk, np.inf, d)
@@ -782,14 +764,12 @@ def picks(rings: Sequence[Ring], targets: Sequence[Target]) -> list[Pick]:
     """동그라미 안쪽 색이 목표 오차 안이면 그 칸. 둘 이상이면 더 가까운 쪽 (같으면 앞 칸)."""
     out = []
     for ring in rings:
-        lab = to_lab(*ring.rgb)
         slot, best = -1, math.inf
         for i, t in enumerate(targets):
-            d = math.sqrt((lab[0] - t.lab[0]) ** 2 + (lab[1] - t.lab[1]) ** 2 + (lab[2] - t.lab[2]) ** 2)
+            d = rgb_diff(ring.rgb, t.rgb)
             if d <= t.tol_or_default and d < best:
                 best, slot = d, i
-        out.append(Pick(ring.x, ring.y, ring.r, slot, ring.hex,
-                        None if slot < 0 else jround(best * 10) / 10))
+        out.append(Pick(ring.x, ring.y, ring.r, slot, ring.hex, None if slot < 0 else float(best)))
     return out
 
 
@@ -808,7 +788,7 @@ def highlight(f: Frame, box: Rect, targets: Sequence[Target], skip=None, light: 
         return None
     G = grid or Grid(f, box, SHADE_STEP, skip)
     r, g, bb = G.r, G.g, G.b
-    hit = np.zeros(G.L.shape, dtype=bool)
+    hit = np.zeros(G.r.shape, dtype=bool)
     for t in targets:
         if t.tol_or_default:
             hit |= G.inside(t)   # 점과 같은 기준 — 스포이드를 둬서 실제로 잡히는 안쪽만
