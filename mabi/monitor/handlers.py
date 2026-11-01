@@ -333,6 +333,10 @@ def howto(bot, ctx, seen):
     items = ocr.find_texts(seen.frame, tuple(a["howto_area"]))
     rows = sorted(((t, x, y) for t, x, y in items if not any(w in t for w in gd.words("arbeit_howto_skip"))),
                   key=lambda r: r[2])
+    # 거래소 줄은 고르지 않는다 — 사는 건 사람 몫. 제작품(두꺼운 가죽 갑옷 상의)은 맨 위가 방어구 제작대인데 아래 규칙이
+    # 시설 줄을 빼는 바람에 거래소를 눌러 1분씩 서 있다 막힘으로 끝났다 (2026-11-01)
+    my = [y for t, _, y in rows if any(w in t for w in gd.words("arbeit_howto_market"))]
+    rows = [r for r in rows if all(abs(r[2] - y) > 30 for y in my)]
     # 채집으로도 구할 수 있는 가공품은 채집 줄을 고른다 — 가공 시설 줄이 맨 위일 수 있다 (깔끔 버섯 포자: 채집·약품 가공 시설·전리품)
     # (OCR 이 한 줄을 여러 조각으로 읽을 수 있어 같은 높이의 조각은 같은 줄로 본다)
     fy = [y for t, _, y in rows if any(w in t for w in gd.words("arbeit_howto_facility"))]
@@ -348,6 +352,12 @@ def howto(bot, ctx, seen):
         _esc(bot, 2)
         return Finish("short", f"구하는 방법이 없음 → {_shot(bot, 'arbeit_short')}")
     ctx.n["howto"] = ctx.n.get("howto", 0) + 1
+    if not other:  # 채집 줄이 없고 제작대·가공 시설뿐 → 게임 안내대로 시설로 (제작 창은 craft, 가공 창은 alter 가 맡는다)
+        ctx.note("arb_craft", "시설로")
+        bot.click(rows[0])
+        bot.sleep(2, 2.5)
+        fast_travel(bot)
+        return "구하는 방법 → 시설"
     ctx.note("arb_gather", "채집 중")
     bot.click(rows[0])
     bot.sleep(2, 2.5)
