@@ -333,9 +333,10 @@ def howto(bot, ctx, seen):
     items = ocr.find_texts(seen.frame, tuple(a["howto_area"]))
     rows = sorted(((t, x, y) for t, x, y in items if not any(w in t for w in gd.words("arbeit_howto_skip"))),
                   key=lambda r: r[2])
-    # 거래소 줄은 고르지 않는다 — 사는 건 사람 몫. 제작품(두꺼운 가죽 갑옷 상의)은 맨 위가 방어구 제작대인데 아래 규칙이
-    # 시설 줄을 빼는 바람에 거래소를 눌러 1분씩 서 있다 막힘으로 끝났다 (2026-11-01)
-    my = [y for t, _, y in rows if any(w in t for w in gd.words("arbeit_howto_market"))]
+    # 거래소·던전 클리어(전리품) 줄은 고르지 않는다 — 사는 건 사람 몫, 던전은 요일 던전 숙제 몫. 제작품(두꺼운 가죽 갑옷
+    # 상의)은 '방어구 제작대 · 거래소 · ○○ 던전 1층 클리어 …' 순인데 아래 규칙이 시설 줄을 빼는 바람에 거래소를 눌러
+    # 1분씩 서 있다 막힘으로 끝났다 (2026-11-01)
+    my = [y for t, _, y in rows if any(w in t for w in (*gd.words("arbeit_howto_market"), *gd.words("arbeit_howto_dungeon")))]
     rows = [r for r in rows if all(abs(r[2] - y) > 30 for y in my)]
     # 채집으로도 구할 수 있는 가공품은 채집 줄을 고른다 — 가공 시설 줄이 맨 위일 수 있다 (깔끔 버섯 포자: 채집·약품 가공 시설·전리품)
     # (OCR 이 한 줄을 여러 조각으로 읽을 수 있어 같은 높이의 조각은 같은 줄로 본다)

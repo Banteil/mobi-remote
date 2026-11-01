@@ -15,6 +15,7 @@
     "arbeit_have_item": "보유",
     "arbeit_howto_skip": ["추천", "구하는"],
     "arbeit_howto_market": ["거래소"],
+    "arbeit_howto_dungeon": ["클리어"],
     "arbeit_howto_facility": ["가공 시설", "제작대"],
     "dungeon_deep": "심층",
     "dungeon_enter": "입장",
