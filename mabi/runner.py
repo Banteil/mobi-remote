@@ -367,8 +367,8 @@ class Runner:
             self._emit("task_end", slot=slot, task=tid, label=label, status=status, summary=summary, seconds=secs)
             return status
 
-        # 지난번에 끊긴 자리 — 그 캐릭터는 그 숙제부터 한다 (앞 숙제 중 실패해서 다시 할 게 있어도 끊긴 일이 먼저)
-        cut = state.progress()
+        # 끊긴 숙제도 정해진 순서대로 — 앞 숙제가 실패해 남았으면 그것부터. 끊긴 숙제는 제 차례에 끊긴 단계부터 이어 한다.
+        # (예전엔 끊긴 일을 맨 앞으로 당겨 일일 미션보다 아르바이트를 먼저 했다 — 2026-11-02 사용자: 일일 미션 다음에 알바)
         first = True
         for ch in characters:
             who = ch["name"] if ch else "현재 캐릭터"
@@ -386,9 +386,6 @@ class Runner:
                     if t not in todo:
                         self._emit("task_end", slot=slot, task=t, label=t, **_done_view(state.get(slot, t)), seconds=0)
                 order = todo
-            if ch and cut and cut.get("slot") == slot and cut.get("task") in order and order[0] != cut["task"]:
-                order = [cut["task"], *[t for t in order if t != cut["task"]]]
-                log.info(f"[{who}] 끊긴 숙제 '{registry[cut['task']][0]}' 부터")
             self._loot.close(bot)  # 앞 캐릭터가 얻은 것 (다른 캐릭터로 바꾸기 전에)
             bot.character = ch
             report.character(ch)
