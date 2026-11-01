@@ -271,7 +271,9 @@ def _leave_dungeon(bot: Bot) -> bool:
         # 사냥터 안의 검은 구멍이었으면 사냥터로 돌아온다 — 끝나지 않은 사냥터를 이어서 본다 (은동전은 이미 나갔다)
         if not _in_field(bot):
             return True
-    if _in_field(bot):
+    # 아르바이트 채집으로 사냥터에 와 있던 것은 사냥터 판이 아니다 — 클리어가 오지 않아 40분을 기다릴 뻔했다
+    # (2026-11-01 채집 중 일시정지 → 이어 하기). 아르바이트가 추적 칸 조건을 보고 진행하기로 다시 잇는다
+    if cut != "arbeit" and _in_field(bot):
         hunt = hunt_quest(bot) or "패킷"
         bot.step("field_inside_at_login", f"사냥터 안에서 시작 ({hunt}) → 클리어까지 기다림")
         wait_field(bot, "", bot.cfg["silver"]["field_timeout"])
