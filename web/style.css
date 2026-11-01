@@ -725,7 +725,7 @@ tr.sec .muted { font-weight: 400; letter-spacing: 0; margin-left: 4px; }
 .q-done .q-badge { border-color: var(--ok-line); color: var(--ok); }
 .q-fail .q-badge { border-color: var(--bad); color: var(--bad); }
 
-/* 큐 아래 일괄 조작 줄 — 재생 · 일시정지 · 정지 · 정리 · 전체 삭제 */
+/* 큐 아래 일괄 조작 줄 — 재생 · 일시정지 · 정지 · 정리 · 전체 삭제 (결과·기록은 위 머리 줄) */
 .q-foot {
   display: flex; align-items: center; gap: 4px; flex: none;
   padding: 8px 10px; border-top: 1px solid var(--edge);
@@ -761,6 +761,7 @@ tr.sec .muted { font-weight: 400; letter-spacing: 0; margin-left: 4px; }
 #queue.folded .q-head .count,
 #queue.folded .q-head .spacer,
 #queue.folded #q-state,
+#queue.folded .q-head .q-fbtn,
 #queue.folded .q-list,
 #queue.folded .q-foot { display: none; }
 #queue.folded .q-tag {

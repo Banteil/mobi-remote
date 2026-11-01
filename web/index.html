@@ -464,6 +464,9 @@
     <b>작업 큐</b><span class="count" id="q-count"></span>
     <span class="spacer"></span>
     <span id="q-state" class="q-state"></span>
+    <!-- 결과·기록은 보는 것이라 조작 줄(아래)이 아니라 여기 — 아래에 다 두면 좁은 큐에서 오른쪽이 잘렸다 -->
+    <button class="q-fbtn" id="q-report-btn" title="지난번 큐 결과 창 다시 보기 (한 일 · 얻은 것)">결과</button>
+    <button class="q-fbtn" id="q-history" title="지금까지 진행한 작업 (끝난 시각 · 결과)">기록</button>
     <button class="q-fold" id="q-fold" title="접기">◂</button>
   </div>
   <!-- 접었을 때만 보이는 세로 라벨. 여기를 눌러도 다시 펼쳐진다. -->
@@ -474,8 +477,6 @@
     <button class="q-fbtn" id="q-pause" title="지금 걸음을 마치고 멈춤 — 재생하면 이어집니다">⏸</button>
     <button class="q-fbtn" id="q-halt" title="지금 명령까지 끊고 일시정지 — ▶ 로 이어 합니다">■</button>
     <span class="spacer"></span>
-    <button class="q-fbtn" id="q-report-btn" title="지난번 큐 결과 창 다시 보기 (한 일 · 얻은 것)">결과</button>
-    <button class="q-fbtn" id="q-history" title="지금까지 진행한 작업 (끝난 시각 · 결과)">기록</button>
     <button class="q-fbtn" id="q-tidy" title="실패한 항목 치우기 (완료는 스스로 빠집니다)">정리</button>
     <button class="q-fbtn" id="q-clear" title="전부 지우기">전체 삭제</button>
   </div>
