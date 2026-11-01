@@ -358,8 +358,6 @@ class DailyApi:
                 setattr(self, f"_{kind}_bot", bot)
                 if not bot.window.find():
                     raise ValueError("게임이 꺼져 있습니다")
-                # '게임 조작 감지' 일시정지는 쓰지 않는다 — 어비스 반복은 게임을 뒤에 두고 PC 를 계속 쓰는 기능인데,
-                # 게임이 잠깐 앞에 있을 때 누른 키(Alt+Tab 등)로 매칭 중에 멈췄다 (2026-10-23). 멈추기는 F12·버튼으로
                 a = cfg[kind]  # 게임은 입장할 때만 앞으로 가져온다 (abyss.repeat)
                 profile = prof.load_profile(self.paths.profile) or {"slots": [], "names": {}}
                 ch = next((c for c in prof.characters(profile) if c["slot"] == int(a.get("slot", 0))), None)
@@ -433,7 +431,6 @@ class DailyApi:
             "field": str(s["field"]),
             "stop_key": str(doc["game"].get("stop_key", "f12")),
             "dye_key": str(doc["game"].get("dye_key", "f11")),
-            "pause_on_touch": bool(doc["game"].get("pause_on_touch", True)),
             "fit_display": bool(doc["run"].get("fit_display", True)),
             "paths": {k: over.get(k, "") for k in ("data", "logs", "shots")},
             "current": {"data": str(self.paths.data), "logs": str(self.paths.logs), "shots": str(self.paths.shots)},
@@ -465,8 +462,6 @@ class DailyApi:
             if k == str(doc["game"].get("stop_key", "f12")).lower():
                 return {"error": "염색 도우미 키가 일시정지 키와 같습니다"}
             doc["game"]["dye_key"] = k
-        if "pause_on_touch" in v:
-            doc["game"]["pause_on_touch"] = bool(v["pause_on_touch"])
         if "fit_display" in v:
             doc["run"]["fit_display"] = bool(v["fit_display"])
         userconfig.save(self.paths, doc)

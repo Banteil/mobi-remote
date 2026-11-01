@@ -219,7 +219,6 @@ async function loadPathSettings() {
     '<option value="' + k + '"' + (k === cur ? ' selected' : '') + '>' + k.toUpperCase() + '</option>').join('');
   $('#opt-stop-key').innerHTML = fkeys(s.stop_key);
   $('#opt-dye-key').innerHTML = fkeys(s.dye_key);
-  $('#opt-pause-touch').checked = s.pause_on_touch !== false;
   $('#opt-fit-display').checked = s.fit_display !== false;
   ['data', 'logs', 'shots'].forEach((k) => { $('#dl-p-' + k).value = s.paths[k] || ''; });
   $('#dl-p-now').textContent = '지금: ' + s.current.data + ' (바꾸면 다음 실행부터)';
@@ -229,7 +228,6 @@ async function savePathSettings() {
   const r = await mm.daily.saveSettings({
     stop_key: $('#opt-stop-key').value,
     dye_key: $('#opt-dye-key').value,
-    pause_on_touch: $('#opt-pause-touch').checked,
     paths: { data: $('#dl-p-data').value, logs: $('#dl-p-logs').value, shots: $('#dl-p-shots').value },
   });
   if (!(r && r.error)) { dl.settings = Object.assign(dl.settings || {}, { stop_key: $('#opt-stop-key').value }); paintStopKey(); }

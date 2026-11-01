@@ -168,8 +168,6 @@ class Runner:
             bot.stopper.request()
         bot.daily = state
         bot.on_step = lambda s, t: self._emit("step", slot=(bot.character or {}).get("slot"), task=bot.task_id, step=s, text=t or s)
-        if cfg["game"].get("pause_on_touch", True) and not opts.dry_run:
-            bot.stopper.watch_manual(lambda: bot.window.hwnd)
         results: list[tuple[str, str, str]] = []
         report = None
         try:
