@@ -391,6 +391,7 @@ class RaidExit(Exit):
 
     def __init__(self, to_field: bool = False):
         self.to_field = to_field
+        self.party = False  # 나가기 창이 함께하기 것이었나
         if to_field:
             # 필드로 나갈 땐 X 대신 아이콘 — X 는 본래 '보관함으로 이동' 키다. 레이드 안에선 나가기 창이 먼저 뜨고
             # 보관함 이동은 남아 있다가, 나간 곳이 메인 필드면 그대로 보관함으로 뛰어간다 (2026-11-02 콜헨 → 여관).
@@ -407,13 +408,24 @@ class RaidExit(Exit):
         return _map(bot) not in (RAID_MAP, "loading")
 
     def dialog(self, bot, timeout):
-        return ui_text.wait(bot, gd.text("raid_leave_ship"), gd.region("raid_leave_buttons"), timeout=timeout)
+        """혼자하기는 '출항선으로 이동 / 파티&던전 나가기', 함께하기는 '콜헨으로 돌아갑니다.' 아래 '취소 / 나가기(Space)'
+        (함께하기엔 출항선으로 돌아가는 것이 없다 — 2026-11-03 사용자). 함께하기 창이면 '나가기' 자리를 돌려준다."""
+        end = time.monotonic() + max(0.0, timeout)
+        while True:
+            if hit := _find_text(bot, gd.text("raid_leave_ship"), gd.region("raid_leave_buttons")):
+                return hit
+            if _find_text(bot, gd.text("raid_leave_town"), gd.region("raid_leave_buttons"), exact=False):
+                self.party = True
+                return _find_text(bot, gd.text("raid_leave_ok"), gd.region("raid_leave_party_buttons")) or (1095, 964)
+            if time.monotonic() >= end:
+                return None
+            bot.sleep(0.8, 1.2)
 
     def confirm(self, bot, hit):
-        if self.to_field:
+        if self.to_field and not self.party:
             _click_text(bot, gd.text("raid_leave_field"), gd.region("raid_leave_buttons"), what="파티&던전 나가기")
         else:
-            super().confirm(bot, hit)  # 출항선으로 이동
+            super().confirm(bot, hit)  # 출항선으로 이동 · 함께하기면 콜헨으로 (Space)
 
 
 class ShipExit(Exit):
