@@ -19,6 +19,7 @@
     "arbeit_howto_facility": ["가공 시설", "제작대"],
     "dungeon_deep": "심층",
     "guide_daily_tab": "일일콘텐츠",
+    "dm_daily_tab": "일일미션",
     "dungeon_enter": "입장",
     "double_loot_on": "도전",
     "mission_start": "시작",
@@ -92,6 +93,7 @@
     "questwin_list": [1230, 150, 690, 850],
     "compass": [1782, 945, 86, 85],
     "guide_tabs": [780, 340, 500, 72],
+    "dm_side_tabs": [10, 410, 150, 340],
     "raid_ship_leave": [560, 710, 800, 70],
     "raid_ship_leave_buttons": [960, 920, 300, 90]
   }
