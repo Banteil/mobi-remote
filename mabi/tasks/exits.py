@@ -73,8 +73,8 @@ class Exit:
                     self.uncover(bot)
                     bot.sleep(1.0, 1.5)
                     continue
-                # 단축키(X)는 안이 확실할 때만 — 필드에서 X 는 '보관함으로 이동'이다. 출항선에서 내린 직후 필드에서
-                # 캐릭터가 보관함으로 걸어가는 일이 거듭 났다 (2026-11-02 레이드 카드 사이) → 모르면 아이콘을 누른다
+                # 단축키(X)는 안이 확실할 때만 — X 는 본래 '보관함으로 이동'이다 (콘텐츠 안에선 나가기 창이 먼저 뜨지만
+                # 메인 필드로 나가면 그 이동이 이어진다, 2026-11-02). 필드로 나가는 쪽은 HOTKEY 를 두지 않는다 → 아이콘
                 if self.HOTKEY and self.surely_inside(bot):
                     bot.log.debug(f"{self.NAME} 나가기: {self.HOTKEY} 키")
                     bot.key(self.HOTKEY)
