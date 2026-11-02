@@ -115,32 +115,3 @@ class AlterGoUnknownTest(unittest.TestCase):
         r, ctx, bot = self._run(False)
         self.assertEqual(r.result, "alter")
         bot.click.assert_not_called()
-
-
-class AlterFullSlotsTest(unittest.TestCase):
-    """가공 칸이 완료분으로 꽉 차 있으면 가공하기 전에 그 시설 완료분을 먼저 받는다."""
-
-    def _run(self, works):
-        from types import SimpleNamespace
-        from mabi.monitor import handlers
-        bot = mock.MagicMock()
-        bot.state.query.return_value = {"works": works}
-        ctx = mock.MagicMock(n={}, alter=("새록 버섯 진액",))
-        table = mock.MagicMock()
-        table.recipes.facility_of.return_value = "약품 가공 시설"
-        with mock.patch.object(handlers.craft_data, "data", return_value=table), \
-                mock.patch.object(handlers, "_short_toast", return_value=True), \
-                mock.patch.object(handlers, "_shot", return_value="x"), mock.patch.object(handlers, "_esc"):
-            r = handlers.alter(bot, ctx, SimpleNamespace(frame=None))
-        return r, bot
-
-    def test_collects_first(self):
-        r, bot = self._run([{"DisplayName": "깔끔 버섯 진액", "FacilityName": "약품 가공 시설", "IsCompleted": True}])
-        bot.state.cli.run.assert_called_once_with("complete_altering_work", {"displayName": "깔끔 버섯 진액"})
-        bot.key.assert_not_called()
-        self.assertIsInstance(r, str)
-
-    def test_other_facility_left(self):
-        r, bot = self._run([{"DisplayName": "강철괴", "FacilityName": "금속 가공 시설", "IsCompleted": True}])
-        bot.state.cli.run.assert_not_called()
-        bot.key.assert_called_with("space")

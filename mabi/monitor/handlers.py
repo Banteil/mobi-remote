@@ -9,7 +9,7 @@
 import time
 from dataclasses import dataclass
 
-from .. import craft as craft_data, gamedata as gd, ocr, situation as sit
+from .. import gamedata as gd, ocr, situation as sit
 from ..bot import StepTimeout
 from . import detect as d
 
@@ -409,16 +409,12 @@ def alter(bot, ctx, seen):
     ctx.n["alter"] = ctx.n.get("alter", 0) + 1
     if ctx.n["alter"] > 6:
         return Finish("stuck", f"가공을 거듭해도 일이 안 끝남 → {_shot(bot, 'arbeit_alter')}")
-    names = set(ctx.alter)
-    if _collect_done(bot, names):
-        ctx.note("arb_alter", "완료분 수령")
-        bot.sleep(2, 2.5)
-        return "가공 칸 비우기 → 완료분 모두 받기"
     ctx.note("arb_alter", "가공")
     bot.key("space")
     if _short_toast(bot):
         _esc(bot)
         return Finish("alter_short", f"가공 재료 부족 → {_shot(bot, 'arbeit_alter')}")
+    names = set(ctx.alter)
     end = time.monotonic() + bot.cfg["arbeit"].get("alter_wait", 180)
     while True:
         bot.sleep(3, 3.5)
@@ -438,25 +434,6 @@ def alter(bot, ctx, seen):
     return "가공 → 받기"
 
 
-def _collect_done(bot, names) -> bool:
-    """가공할 시설에 완료분이 남아 있으면 먼저 모두 받는다. 칸이 완료분으로 꽉 차면 '가공하기' 가 걸리지 않아
-    끝나지 않는 가공을 기다리다 막혔다 (2026-11-02 약품 가공 7칸 모두 완료). complete_altering_work 는 시설당 한 번에 그 시설 완료분 전부.
-    받은 뒤 뜨는 확인 창은 다음 점검이 닫고, 가공 창으로 돌아오면 다시 여기로 온다."""
-    data = bot.state.query("get_altering_works") or {}
-    works = data.get("works") or [] if isinstance(data, dict) else []
-    facs = {w.get("FacilityName") for w in works if w.get("DisplayName") in names}
-    try:
-        facs |= {craft_data.data().recipes.facility_of(n) for n in names}
-    except RuntimeError:
-        pass
-    done = next((w for w in works if w.get("IsCompleted") and w.get("FacilityName") in facs - {None}), None)
-    if not done:
-        return False
-    r = bot.state.cli.run("complete_altering_work", {"displayName": done["DisplayName"]})
-    bot.log.info(f"가공 시설 '{done['FacilityName']}' 완료분 모두 받기 → {'됨' if r.ok else r.error}")
-    return r.ok
-
-
 def _alter_go(bot, ctx, seen):
     """가공 시설 창 첫 화면 (아르바이트가 요구하는 가공품 카드만 보인다) → 카드 → '가공하러 가기'(Space) → 빠른 이동."""
     ctx.n["alter_go"] = ctx.n.get("alter_go", 0) + 1
@@ -474,6 +451,12 @@ def _alter_go(bot, ctx, seen):
     hit = next(((x, y) for t, x, y in cards if ocr.nospace(t) in names), None)
     if not hit:
         return Finish("stuck", f"가공 시설 창에서 가공품 카드를 못 찾음 → {_shot(bot, 'arbeit_alter')}")
+    # 카드를 고르기 전 이 화면의 Space 는 '모두 받기' — 받을 게 있든 없든 먼저 누른다. 칸이 완료분으로 꽉 차면
+    # 가공이 걸리지 않아 끝나지 않는 가공을 기다리다 막혔다 (2026-11-02 약품 가공 7칸). 받으면 뜨는 확인 창은 한 번 더 Space
+    bot.key("space")
+    bot.sleep(2, 2.5)
+    bot.key("space")
+    bot.sleep(1.2, 1.5)
     bot.click((hit[0], hit[1] - 60))
     bot.sleep(1.2, 1.5)
     ctx.note("arb_alter", "가공하러 감")
