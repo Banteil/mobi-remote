@@ -263,7 +263,8 @@ class DailyApi:
         def save(a):
             a["dungeon"] = str(v.get("dungeon") or "허상의 정박지")
             a["difficulty"] = str(v.get("difficulty") or "매우 어려움2")
-            a["mode"] = "solo" if v.get("mode") == "solo" else "party"
+            if v.get("mode") in ("solo", "party"):  # 없으면(예전 카드·명령) 탭에 고른 그대로
+                a["mode"] = v["mode"]
         return self._repeat_launch("abyss", "어비스", v, save, on_event)
 
     # ---- 레이드 반복 (mabi.tasks.raid) — 어비스와 같은 틀 ----
@@ -315,7 +316,8 @@ class DailyApi:
         def save(a):
             a["raid"] = str(v.get("raid") or "카브락")
             a["difficulty"] = str(v.get("difficulty") or "어려움")
-            a["mode"] = "party" if v.get("mode") == "party" else "solo"
+            if v.get("mode") in ("solo", "party"):  # 없으면(예전 카드·명령) 탭에 고른 그대로
+                a["mode"] = v["mode"]
         return self._repeat_launch("raid", "레이드", v, save, on_event)
 
     def daily_raidStop(self) -> dict:  # noqa: N802

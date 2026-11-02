@@ -21,12 +21,13 @@ COMMANDS = {"--resume": b"resume", "--halt": b"halt"}
 def _command(argv: list[str]) -> bytes:
     """이미 떠 있는 리모콘에 보낼 명령. 사람이 컴퓨터를 못 만질 때 밖에서 부린다:
       --halt 일시정지 · --resume 이어 하기 · --daily 슬롯,슬롯 [숙제,숙제] [--force] 일일 숙제 카드를 넣고 시작 (--force: 오늘 완료 기록이 있어도 다시)
-      --abyss 슬롯 던전 [판수] [난이도] 어비스 카드를 큐 뒤에 넣는다 (판수 0 = 멈출 때까지). 여러 번 부르면 차례로 쌓인다
-      --raid 슬롯 레이드 [판수] [난이도] 레이드(혼자하기) 카드를 큐 뒤에 넣는다 (어비스와 같음)"""
+      --abyss 슬롯 던전 [판수] [난이도] [solo|party] 어비스 카드를 큐 뒤에 넣는다 (판수 0 = 멈출 때까지). 여러 번 부르면 차례로 쌓인다
+      --raid 슬롯 레이드 [판수] [난이도] [solo|party] 레이드 카드를 큐 뒤에 넣는다 (어비스와 같음)
+      마지막 칸은 혼자하기(solo) / 함께하기(party). 비우면 설정 탭에 고른 대로"""
     for flag in ("--abyss", "--raid"):
         if flag in argv:
             i = argv.index(flag)
-            rest = [a for a in argv[i + 1:i + 5] if not a.startswith("--")]
+            rest = [a for a in argv[i + 1:i + 6] if not a.startswith("--")]
             return (flag[2:] + ":" + ":".join(rest)).encode()
     if "--daily" in argv:
         i = argv.index("--daily")
@@ -65,11 +66,13 @@ def _on_message(win: "MainWindow", conn) -> None:
         slot, where = int(parts[0]), parts[1]
         runs = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
         difficulty = parts[3] if len(parts) > 3 and parts[3] else default
+        mode = parts[4] if len(parts) > 4 and parts[4] in ("solo", "party") else None
         chars = win.api.daily_abyssSettings()["chars"]
         name = next((c["name"] for c in chars if c["slot"] == slot), "") or "지금 캐릭터"
-        log.info(f"명령 → {title} 담기 (슬롯 {slot}, {where} {difficulty}, {runs or '멈출 때까지'}{'판' if runs else ''})")
+        log.info(f"명령 → {title} 담기 (슬롯 {slot}, {where} {difficulty} {mode or ''}, {runs or '멈출 때까지'}{'판' if runs else ''})")
         win.api.queue_add({"kind": kind, "label": f"{title} · {name}", "slot": slot, place: where,
-                           "difficulty": difficulty, "runs": runs, "minutes": 0, "revive": True}, "end")
+                           "difficulty": difficulty, "runs": runs, "minutes": 0, "revive": True,
+                           **({"mode": mode} if mode else {})}, "end")
         if not q.running:
             q.tick()
     else:

@@ -442,6 +442,8 @@ class RaidRepeat(Repeat):
 
     def setup(self):
         self.bot.scene_skip = True  # 레이드는 연출이 길어 넘긴다 (사용자) — 뒤에서 도는 중이면 may_skip_scene 이 막는다
+        if self.a.get("mode") == "party":  # 매칭·사냥터 밖으로 옮기기는 아직 — 몰래 혼자하기로 돌지 않게 멈춘다
+            raise CannotProceed("레이드 함께하기는 아직 만드는 중 — 혼자하기로 골라 주세요")
 
     def leave_for_switch(self, at):
         get_out(self.bot, at)
