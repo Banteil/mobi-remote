@@ -94,18 +94,19 @@ def dialog(bot, ctx, seen):
         if time.monotonic() > end or lines_left(bot):
             break
         bot.sleep(0.3, 0.4)
+    # 그림이 안 맞아도 버튼 줄 글자로 확인하고 Space ('수락'·'결과 보고' 에 Space 배지). 버튼이 빛나는 애니메이션 중엔
+    # 템플릿 점수가 문턱에 못 미친다 (2026-10-28 08:43·09:07 16초·30초씩 못 함). 예전엔 메뉴가 떴다고 패킷이 말할 때만
+    # 글자를 봐서, 패킷이 늦으면 '대사 넘김' 을 눌러 수락 메뉴를 지나쳤다 → 다시 지원 (2026-11-02 09:16 사용자)
+    texts = [ocr.nospace(t) for t, _, _ in ocr.find_texts(bot.frame(), gd.region("board_choices"))]
+    for word, key, stage, tpl in (("arbeit_report", "arb_report", "결과 보고", a["report"]),
+                                  ("arbeit_accept", "arb_accept", "수락", a["accept"])):
+        if any(gd.text(word) in t for t in texts):
+            # 그림으로 못 찾은 화면은 버튼 시험 화면 후보로 남긴다 (tools/button_fixture.py)
+            bot.log.debug(f"'{stage}' 버튼을 그림으로 못 찾아 글자로 확인 → Space ({bot.snapshot('missed_' + tpl).name})")
+            ctx.note(key, stage)
+            bot.key("space")
+            return stage
     if menu and not lines_left(bot):
-        # 메뉴가 떠 있고(패킷) 넘길 대사가 없다 → 그림이 안 맞아도 버튼 줄 글자로 확인하고 Space ('수락'·'결과 보고' 에
-        # Space 배지). 템플릿 점수가 문턱에 못 미쳐 16초·30초씩 수락을 못 한 적이 있다 (2026-10-28 08:43·09:07)
-        texts = [ocr.nospace(t) for t, _, _ in ocr.find_texts(bot.frame(), gd.region("board_choices"))]
-        for word, key, stage, tpl in (("arbeit_report", "arb_report", "결과 보고", a["report"]),
-                                      ("arbeit_accept", "arb_accept", "수락", a["accept"])):
-            if any(gd.text(word) in t for t in texts):
-                # 그림으로 못 찾은 화면은 버튼 시험 화면 후보로 남긴다 (tools/button_fixture.py)
-                bot.log.debug(f"'{stage}' 버튼을 그림으로 못 찾아 글자로 확인 → Space ({bot.snapshot('missed_' + tpl).name})")
-                ctx.note(key, stage)
-                bot.key("space")
-                return stage
         bot.log.debug(f"메뉴는 떠 있는데 '수락'·'결과 보고' 버튼을 못 찾음 ({bot.snapshot('arbeit_menu').name})")
         return "메뉴 버튼 기다림"
     next_line(bot)
