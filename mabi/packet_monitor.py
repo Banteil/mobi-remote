@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import packet_diag
+from .spear import MAP_NAME, SpearState
 
 log = logging.getLogger("mabi")
 
@@ -457,6 +458,7 @@ class PacketMonitor:
         self._thread: threading.Thread | None = None
         self.table = None
         self.diag = None
+        self.spear = SpearState()  # 흩어진 물길 투창 패턴 (그 맵에서만 쌓는다)
 
     # 봇이 쓰는 것 ──────────────────────────────────
 
@@ -603,6 +605,8 @@ class PacketMonitor:
         if ev is None:
             self.table.decode(proto, b"")  # 처음 보는 번호면 기록만
             return
+        if ev.key.startswith("spear.") and not self.spear.active:
+            return  # 흩어진 물길 밖 — 이동 메시지 등은 풀지도 않는다
         if flag and ev.fields:  # 읽을 필드가 없으면 풀 필요도 없다
             try:
                 import brotli
@@ -611,12 +615,23 @@ class PacketMonitor:
                 self.diag.record("decompress", ev.key, body, error=str(e))
                 return
         _, vals = self.table.decode(proto, body)
+        if ev.key.startswith("spear."):
+            self._spear(ev.key, vals)
+            return
         if ev.key == "char.appearing":  # 내 고유 번호가 들어 있으면 내 캐릭터 (death1 등 캡처 4개에서 확인, 위치는 3094~3150 으로 들쭉날쭉)
             cid = self.state.char_id
             vals["mine"] = cid is not None and struct.pack("<Q", cid) in body
             if vals["mine"]:
                 vals["name"] = appearing_name(body)
         self.apply(ev.key, vals)
+
+    def _spear(self, key: str, vals: dict) -> None:
+        """투창 패턴 이벤트 — 알릴 일(내가 대상·파훼·끝 등)이면 남기고 기다리는 봇을 깨운다."""
+        msg = self.spear.feed(key, vals, self.state.me)
+        if msg:
+            log.info("패킷: %s", msg)
+            with self._cond:
+                self._cond.notify_all()
 
     def _desync(self, why: str, key) -> None:
         """스트림 조각을 잃었다 — 그 사이 이벤트(맵 이동·던전 나감·이동 끝 …)를 놓쳤을 수 있다. 기록하고 놓치면 틀리는
@@ -742,6 +757,7 @@ class PacketMonitor:
                 s.dungeon_state = "NotInDungeon"
             # 대화는 맵을 옮기면 끝난다 — 끝 패킷 없이 끊긴 대화가 '대화 중' 으로 남아 끼어들기·정리가 헛돌지 않게
             s.dialogue_npc, s.dialogue_action, s.dialogue_menu = None, "", False
+            self.spear.reset(s.channel_type == "InstanceAbyssDungeon" and MAP_NAME in (s.channel_name or ""))
             log.info("패킷: 맵 진입 %s (%s)", s.channel_name or s.channel, s.channel_type or "?")
         elif key == "session.logout_ok":  # 캐릭터 선택 화면으로 (me1 03:29:30 — 맵 떠남·세션 정리와 같은 때)
             s.in_game, s.loading = False, False
@@ -822,6 +838,8 @@ class PacketMonitor:
                 s.my_name = vals.get("name") or s.my_name
                 log.info("패킷: 내 캐릭터 %s (번호 %s)", s.my_name or "?", s.me)
         elif key == "actor.dead":
+            if self.spear.active:
+                self._spear(key, vals)  # 흩어진 물길 주술사가 모두 쓰러지면 투창 패턴 끝
             if s.me is not None and vals.get("actor") == s.me:  # 파티 판에서는 부활 창 신호가 안 온다 (death1 03:10:24)
                 s.dead = bool(vals.get("dead"))
                 if s.dead:

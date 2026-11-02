@@ -126,6 +126,24 @@ class Input:
         time.sleep(random.uniform(0.05, 0.11))
         _send(_key(vk, up=True))
 
+    def hold(self, keys) -> None:
+        """keys 만 누른 채로 둔다 (이동 키 WASD 등). 이전에 누른 것 중 빠진 키는 뗀다. hold(()) 로 다 뗀다."""
+        held = getattr(self, "_held", set())
+        keys = {k.lower() for k in keys}
+        if self.dry_run:
+            if keys != held:
+                self.log and self.log.info(f"[dry-run] hold {sorted(keys)}")
+        else:
+            for k in held - keys:
+                _send(_key(vk_of(k), up=True))
+            for k in keys - held:
+                _send(_key(vk_of(k), up=False))
+        self._held = keys
+
+    @property
+    def held(self) -> set:
+        return set(getattr(self, "_held", set()))
+
     def hotkey(self, mod: str, key: str) -> None:
         """mod 를 누른 채 key (예: alt + enter)."""
         if self.dry_run:

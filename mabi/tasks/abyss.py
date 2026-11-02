@@ -26,6 +26,7 @@ from . import ui_text
 from .content import CannotProceed, touch_prompt_visible, watch
 from .exits import DungeonExit, Exit
 from .repeat import Repeat
+from .spear import SpearDodge
 
 DIFFICULTIES = ["입문", "어려움", "매우 어려움", "매우 어려움2"]
 DUNGEONS = ["허상의 정박지", "광기의 동굴", "흩어진 물길"]
@@ -329,20 +330,26 @@ def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: No
     쓰러지면 revive 일 때 '여기서 부활' 하고 이어 한다 (못 하면 'dead' → 나가서 처음부터).
     배고프면 그때마다 음식을 먹는다 (어비스 반복은 일일 숙제의 하루 횟수 제한 없이).
     쓰러짐('여기서 부활')과 판 중에 끼어든 창(퀘스트 클리어 창·대화)은 점검자가 (content.watch).
-    tick(act): 확인마다 부른다 — 보스전 궁극기·팔라딘 변신 (Repeat.skills)."""
+    tick(act): 확인마다 부른다 — 보스전 궁극기·팔라딘 변신 (Repeat.skills).
+    흩어진 물길은 예외로 투창병 속성 패턴을 맡는다 — 내가 대상이 되면 패킷이 기다림을 깨우고 바로 움직인다 (tasks/spear)."""
     end = time.monotonic() + run_timeout
     mark = bot.packets.mark()
     ctx = monitor.Ctx("abyss", "판 진행", revive=revive)
+    spear = SpearDodge(bot)
 
     def cleared(_s=None) -> bool:  # 패킷: 이 판의 결과가 옴 (클리어 순간, CLI 결과 연출 표시와 같은 때)
         return bot.packets.find("abyss.result", mark, lambda v: bool(v.get("abyss"))) is not None
 
     while True:
-        if bot.wait_packet(cleared, 3) is None:  # 3초 쉬되 결과가 오면 바로 깬다
+        # 3초 쉬되 결과가 오거나 투창 대상이 되면 바로 깬다
+        if bot.wait_packet(lambda s: cleared() or spear.wanted(), 3) is None:
             bot.sleep(3)
         if cleared():
             bot.log.info("패킷: 어비스 결과 옴 → 클리어")
             return "clear"
+        if spear.wanted():
+            spear.run()
+            continue
         act = bot.activity() or {}
         if act.get("IsAbyssResultSequencePlaying"):
             return "clear"
