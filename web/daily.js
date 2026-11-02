@@ -66,7 +66,7 @@ function setCell(slot, task, status, tip) {
   td.title = tip || '';
 }
 
-/* 버튼 세 상태: 쉬는 중(숙제 시작) · 실행 중(일시정지) · 일시정지(이어 하기). 그만두려면 작업 큐에서 카드를 뺀다.
+/* 버튼 세 상태: 쉬는 중(시작) · 실행 중(일시정지) · 일시정지(이어 하기). 그만두려면 작업 큐에서 카드를 뺀다.
  * 일시정지는 큐의 숙제 카드가 일시정지(pause)인 것으로 안다 — 큐 그림이 바뀔 때마다 다시 칠한다 (app.js paintQueue → dlRefresh) */
 function dlPausedCard() {
   return qItems.find((x) => x.kind === 'daily' && x.status === 'pause');
@@ -75,7 +75,7 @@ function dlPausedCard() {
 function paintDailyRunning(on) {
   dl.running = on;
   const paused = !on && !!dlPausedCard();
-  $('#dl-start').textContent = paused ? '이어 하기 (' + stopKey() + ')' : '숙제 시작';
+  $('#dl-start').textContent = paused ? '이어 하기 (' + stopKey() + ')' : '시작';
   $('#dl-start').classList.toggle('hidden', on);
   $('#dl-stop').classList.toggle('hidden', !on);
   const p = $('#dl-state');
@@ -134,7 +134,7 @@ mm.daily.onDisplay((m) => {
 });
 
 /* 일일 숙제는 작업 큐(app.js)의 한 항목으로 돈다. 두 가지로 넣는다 (어비스와 같다):
- *  '숙제 시작' = 지금 바로 — 맨 위에 넣고 바로 시작한다. 돌던 작업은 뒤로 밀렸다가 끝나면 이어서 (qStartNow)
+ *  '시작' = 지금 바로 — 맨 위에 넣고 바로 시작한다. 돌던 작업은 뒤로 밀렸다가 끝나면 이어서 (qStartNow)
  *  '목표'     = 큐 맨 아래에 담기만 한다 (재생을 눌러야 진행) — 제작·채집 목표와 같은 방식
  * 게임 캐릭터는 하나라 둘이 동시에 돌면 안 되는데, 큐가 하나씩만 돌리므로 막힌다. */
 function dailySpec() {
@@ -334,7 +334,7 @@ function paintRepeatRunning(pre, on) {
 
 function paintAbyssRunning(on) { paintRepeatRunning('#ab', on); }
 
-/* 어비스 반복도 작업 큐의 한 항목으로 돈다 (일일 숙제와 같은 방식). '반복 시작' = 큐 맨 앞에 넣고 돌리기,
+/* 어비스 반복도 작업 큐의 한 항목으로 돈다 (일일 숙제와 같은 방식). '시작' = 큐 맨 앞에 넣고 돌리기,
  * '목표' = 탭에서 고른 그대로(판 수·분 제한 포함) 큐 뒤에 담기만 한다 (재생을 눌러야 진행)
  * → 'A 캐릭터 3판 → B 캐릭터 3판' 처럼 미리 걸어 둘 수 있다. */
 /** 어비스·레이드 탭에서 고른 그대로 큐 카드 (pre = '#ab' · '#rd', place = 장소 칸 이름 — dungeon · raid) */

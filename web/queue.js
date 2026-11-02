@@ -123,9 +123,9 @@ function qNote(it, text) {
 function qRemove(id) { mm.queue.remove(id); }
 
 /**
- * 지금 바로 시작 (숙제 시작 · 반복 시작 · 파란 버튼). 맨 위에 넣고 바로 돌린다.
+ * 지금 바로 시작 (숙제·어비스·레이드의 '시작' · 파란 버튼). 맨 위에 넣고 바로 돌린다.
  * 돌고 있는 작업이 있으면 세워서 대기로 돌리고(뒤로 밀림), 이 작업이 끝나면 이어서 한다.
- * replacePaused: 같은 종류의 일시정지 카드를 이걸로 바꾼다 (숙제 시작 = 새 숙제).
+ * replacePaused: 같은 종류의 일시정지 카드를 이걸로 바꾼다 (숙제 '시작' = 새 숙제).
  */
 function qStartNow(spec, replacePaused) {
   return mm.queue.add(spec, 'now', !!replacePaused);
