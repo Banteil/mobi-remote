@@ -353,6 +353,9 @@ class RaidExit(Exit):
     def inside(self, bot):
         return _map(bot) in (RAID_MAP, None)
 
+    def surely_inside(self, bot):
+        return _map(bot) == RAID_MAP
+
     def gone(self, bot):
         return _map(bot) not in (RAID_MAP, "loading")
 
@@ -369,10 +372,15 @@ class RaidExit(Exit):
 class ShipExit(Exit):
     """출항선에서 내린다: 나가기(X) → '출항선에서 퇴장하시겠습니까?' 나가기(Space) → 필드 메인 화면까지.
     어느 레이드의 배인지 모를 때(리모콘을 켜기 전에 탔거나 다른 레이드 카드) 메뉴에서 다시 들어가려고."""
-    NAME, SNAP, HOTKEY = "출항선", "raid_ship_leave", "x"
+    # X 단축키는 쓰지 않는다 — 내린 직후 필드에서 X 가 한 번 더 먹어 '보관함으로 이동' 으로 뛰어갔다
+    # (2026-11-02 레이드 카드 사이 캐릭터를 바꿀 때마다). 오른쪽 위 나가기 아이콘을 누른다
+    NAME, SNAP, HOTKEY = "출항선", "raid_ship_leave", None
 
     def inside(self, bot):
         return _map(bot) in (LOBBY_MAP, None)
+
+    def surely_inside(self, bot):
+        return _map(bot) == LOBBY_MAP
 
     def gone(self, bot):
         return _map(bot) not in (LOBBY_MAP, "loading")

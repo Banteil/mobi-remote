@@ -42,6 +42,10 @@ class Exit:
             else:
                 bot.key("space")
 
+    def surely_inside(self, bot: Bot) -> bool:
+        """단축키를 눌러도 되나 — 패킷이 맵을 알고 안이라고 할 때만 (기본은 inside 와 같음)."""
+        return self.inside(bot)
+
     def finished_before(self, bot: Bot) -> bool:
         """나가기 전에 판이 끝났나 (끝났으면 나가지 않고 부르는 쪽이 결과로 잇는다)."""
         return False
@@ -69,15 +73,20 @@ class Exit:
                     self.uncover(bot)
                     bot.sleep(1.0, 1.5)
                     continue
-                if self.HOTKEY:
+                # 단축키(X)는 안이 확실할 때만 — 필드에서 X 는 '보관함으로 이동'이다. 출항선에서 내린 직후 필드에서
+                # 캐릭터가 보관함으로 걸어가는 일이 거듭 났다 (2026-11-02 레이드 카드 사이) → 모르면 아이콘을 누른다
+                if self.HOTKEY and self.surely_inside(bot):
+                    bot.log.debug(f"{self.NAME} 나가기: {self.HOTKEY} 키")
                     bot.key(self.HOTKEY)
                     hit = self.dialog(bot, 4)
                 if not hit:
+                    bot.log.debug(f"{self.NAME} 나가기: 아이콘 클릭")
                     bot.click(ui["abyss_exit"])
                     hit = self.dialog(bot, 5)
                 if not hit:
                     continue
                 bot.sleep(0.5, 0.9)
+            bot.log.debug(f"{self.NAME} 나가기: 확인 창 → 나가기")
             self.confirm(bot, hit)
             break
         # 밖으로 나와 메인 화면이 보일 때까지 — 패킷이 있으면 맵을 떠나기 시작하는 순간(길어야 15초)을 기다렸다가,
