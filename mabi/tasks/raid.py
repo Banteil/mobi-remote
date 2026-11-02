@@ -349,6 +349,10 @@ class RaidExit(Exit):
 
     def __init__(self, to_field: bool = False):
         self.to_field = to_field
+        if to_field:
+            # 필드로 나갈 땐 X 대신 아이콘 — X 로 창을 열고 '파티&던전 나가기' 를 누르면 콜헨에 내리자마자 보관함으로
+            # 뛰어갔다 (2026-11-02). 출항선에서 X 로 내릴 때와 같다: 게임이 X 를 필드에서 한 번 더 받는 듯
+            self.HOTKEY = None
 
     def inside(self, bot):
         return _map(bot) in (RAID_MAP, None)
