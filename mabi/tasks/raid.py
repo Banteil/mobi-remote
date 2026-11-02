@@ -133,8 +133,9 @@ def _entry_button(bot: Bot) -> str:
     return ""
 
 
-def open_entry(bot: Bot, raid: str, difficulty: str = "", at: str = "") -> None:
-    """raid 입장 창을 열고 '혼자하기' · 난이도를 맞춘다. at 이 entry·list·menu 면 그 자리부터."""
+def open_entry(bot: Bot, raid: str, difficulty: str = "", at: str = "", solo: bool = True) -> None:
+    """raid 입장 창을 열고 탭('혼자하기', solo 가 아니면 '함께하기' + 우연한 만남 켬) · 난이도를 맞춘다.
+    at 이 entry·list·menu 면 그 자리부터."""
     if at == "entry" and not _find_text(bot, raid, gd.region("raid_entry_title")):
         bot.log.info(f"다른 레이드의 입장 창 → 닫고 '{raid}' 로")
         bot.key("esc")
@@ -155,9 +156,29 @@ def open_entry(bot: Bot, raid: str, difficulty: str = "", at: str = "") -> None:
         if not ui_text.wait(bot, gd.text("abyss_together"), gd.region("abyss_entry_top"), timeout=8):
             raise CannotProceed(f"'{raid}' 입장 창이 열리지 않음 → {bot.snapshot('raid').name}")
     # 탭 글자는 고르면 끝에 따옴표 같은 표시가 붙어 읽힌다 ('혼자하기'') — 들어 있기만 하면 된다
-    _click_text(bot, gd.text("raid_solo"), gd.region("abyss_entry_top"), exact=False, what="혼자하기")
+    if solo:
+        _click_text(bot, gd.text("raid_solo"), gd.region("abyss_entry_top"), exact=False, what="혼자하기")
+    else:
+        _click_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top"), exact=False, what="함께하기")
     if difficulty:
         _click_text(bot, difficulty, gd.region("raid_difficulty"), what=f"난이도 '{difficulty}'")
+    if not solo:
+        _chance(bot)
+
+
+def _chance(bot: Bot) -> None:
+    """함께하기 탭 '우연한 만남' 을 켠다 (어비스 입장 화면과 같은 자리·모양)."""
+    from .abyss import _chance_on
+    on = _chance_on(bot)
+    if on is None:
+        raise CannotProceed(f"'우연한 만남' 을 찾지 못함 → {bot.snapshot('raid').name}")
+    if not on[0]:
+        bot.click(on[1])
+        bot.sleep(1.0, 1.3)
+        on = _chance_on(bot)
+        if not on or not on[0]:
+            raise CannotProceed(f"'우연한 만남' 을 켜지 못함 → {bot.snapshot('raid').name}")
+        bot.log.info("우연한 만남 켬")
 
 
 def _travel_to_dock(bot: Bot) -> bool:
@@ -183,10 +204,11 @@ def _travel_to_dock(bot: Bot) -> bool:
     raise CannotProceed(f"선착장으로 가지 못함 → {bot.snapshot('raid_travel').name}")
 
 
-def board(bot: Bot, raid: str, difficulty: str, at: str = "") -> None:
-    """입장 창 → 출항선(배)까지. '이동하기' 면 선착장까지 걸어간 뒤 창에서 '출항하기'."""
+def board(bot: Bot, raid: str, difficulty: str, at: str = "", solo: bool = True) -> None:
+    """입장 창 → 출항선(배)까지. '이동하기' 면 선착장까지 걸어간 뒤 창에서 '출항하기'.
+    함께하기는 배에 타면 우연한 만남 매칭이 저절로 시작된다 (2026-11-03 사냥터에서 출항하기 → 배 → 6초 뒤 매칭)."""
     for attempt in range(3):
-        open_entry(bot, raid, difficulty, at=at)
+        open_entry(bot, raid, difficulty, at=at, solo=solo)
         at = ""
         button = ""
         for _ in range(5):
@@ -289,6 +311,24 @@ def sail(bot: Bot) -> None:
     raise StepTimeout(f"출항 뒤 레이드 맵에 들어가지 못함 → {bot.snapshot('raid_sail').name}")
 
 
+def wait_matched(bot: Bot, timeout: float) -> bool:
+    """함께하기: 배에서 우연한 만남 매칭이 잡혀 레이드 맵에 들어갈 때까지 (모두 모이면 저절로 들어간다).
+    매칭 상태는 어비스와 같은 패킷 (1 요청 · 2 찾는 중 · 3 잡힘). 시간 안에 못 들어가면 False."""
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        m = _map(bot)
+        if m == RAID_MAP:
+            bot.log.info("매칭 잡힘 → 레이드 맵에 들어옴")
+            return True
+        if m == "loading":
+            bot.wait_loaded(end - time.monotonic())
+            continue
+        bot.clear_blockers(ocr=True)  # 매칭 중에 뜬 창이 입장을 막지 않게 (어비스 wait_entered 와 같음)
+        if bot.wait_packet(lambda s: s.loading, 3) is None:
+            bot.sleep(2)
+    return False
+
+
 def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: None, tick=lambda act: False) -> str:
     """레이드 맵에서 보스를 잡을 때까지. 'clear' | 'dead' | 'timeout'.
     쓰러지면 '여기서 부활' (점검자 — abyss.revive_here, 부활 횟수를 다 쓰면 'dead'). 배고프면 먹는다.
@@ -323,6 +363,8 @@ def finish_result(bot: Bot) -> None:
     end = time.monotonic() + bot.cfg["raid"].get("result_timeout", 300)
     presses = 0
     while time.monotonic() < end:
+        if _map(bot) not in (RAID_MAP, None, "loading"):
+            return  # 이미 레이드 맵 밖 — 함께하기는 결과 뒤 저절로 콜헨 선착장(필드)으로 나온다 (2026-11-03 11초 뒤)
         if _find_text(bot, gd.text("raid_result"), gd.region("raid_result")):
             bot.sleep(1.0, 1.5)
             presses += 1
@@ -440,10 +482,13 @@ class RaidRepeat(Repeat):
     def boss_fight(self, s):
         return s.raid_boss  # 보스 입장 연출 뒤 보스전 시작 패킷 (레이드는 배·맵 진입 때도 모닥불이 와서 그걸로는 못 본다)
 
+    @property
+    def solo(self) -> bool:
+        """혼자하기로 하나 ([raid] mode). 함께하기(party)는 배에 타면 우연한 만남 매칭으로 들어간다."""
+        return self.a.get("mode", "solo") != "party"
+
     def setup(self):
         self.bot.scene_skip = True  # 레이드는 연출이 길어 넘긴다 (사용자) — 뒤에서 도는 중이면 may_skip_scene 이 막는다
-        if self.a.get("mode") == "party":  # 매칭·사냥터 밖으로 옮기기는 아직 — 몰래 혼자하기로 돌지 않게 멈춘다
-            raise CannotProceed("레이드 함께하기는 아직 만드는 중 — 혼자하기로 골라 주세요")
 
     def leave_for_switch(self, at):
         get_out(self.bot, at)
@@ -465,7 +510,7 @@ class RaidRepeat(Repeat):
                 self.emit(stage="entry")
                 bot.background = False
                 self.recheck("main")  # 이름을 모른 채 이어 했으면 입장 전에 확인 (메인이라 나갈 것 없이 접속만)
-                board(bot, raid, difficulty, at=at)
+                board(bot, raid, difficulty, at=at, solo=self.solo)
                 at = ""
                 stage = "ship"
             if stage == "ship" and _boarded != (raid, difficulty):
@@ -474,6 +519,16 @@ class RaidRepeat(Repeat):
                 leave_ship(bot)
                 stage = "entry"
                 continue
+            if stage == "ship" and not self.solo:
+                bot.step("raid_match", "우연한 만남 매칭 중")
+                self.emit(stage="matching")
+                if not wait_matched(bot, a.get("match_timeout", 600)):
+                    bot.log.warning(f"매칭이 {a.get('match_timeout', 600) / 60:.0f}분 안에 안 잡힘 → 배에서 내려 다시 입장")
+                    bot.background = False
+                    leave_ship(bot)
+                    stage = "entry"
+                    continue
+                stage = "play"
             if stage == "ship":
                 bot.step("raid_sail", "출항")
                 self.emit(stage="sail")
@@ -504,7 +559,19 @@ class RaidRepeat(Repeat):
 
                 def go_out():
                     bot.background = False
-                    leave(bot, to_field=True)
+                    if _map(bot) in (RAID_MAP, None):
+                        leave(bot, to_field=True)
+                    else:
+                        _wait_settled(bot, bot.cfg["timing"]["loading"])
+                if not self.solo:
+                    # 함께하기는 출항선으로 돌아가 다시 출항하지 않고, 필드에서 입장 창부터 다시 (출항하기 → 배 → 매칭)
+                    if self.repair_between(go_out) or not self.done():
+                        if _map(bot) in (RAID_MAP, None):
+                            go_out()
+                        stage = "entry"
+                        continue
+                    go_out()
+                    break
                 if self.repair_between(go_out):
                     stage = "entry"
                     continue
