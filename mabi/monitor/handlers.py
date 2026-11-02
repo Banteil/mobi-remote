@@ -9,7 +9,7 @@
 import time
 from dataclasses import dataclass
 
-from .. import gamedata as gd, ocr, situation as sit
+from .. import craft as craft_data, gamedata as gd, ocr, situation as sit
 from ..bot import StepTimeout
 from . import detect as d
 
@@ -409,12 +409,16 @@ def alter(bot, ctx, seen):
     ctx.n["alter"] = ctx.n.get("alter", 0) + 1
     if ctx.n["alter"] > 6:
         return Finish("stuck", f"가공을 거듭해도 일이 안 끝남 → {_shot(bot, 'arbeit_alter')}")
+    names = set(ctx.alter)
+    if _collect_done(bot, names):
+        ctx.note("arb_alter", "완료분 수령")
+        bot.sleep(2, 2.5)
+        return "가공 칸 비우기 → 완료분 모두 받기"
     ctx.note("arb_alter", "가공")
     bot.key("space")
     if _short_toast(bot):
         _esc(bot)
         return Finish("alter_short", f"가공 재료 부족 → {_shot(bot, 'arbeit_alter')}")
-    names = set(ctx.alter)
     end = time.monotonic() + bot.cfg["arbeit"].get("alter_wait", 180)
     while True:
         bot.sleep(3, 3.5)
@@ -432,6 +436,25 @@ def alter(bot, ctx, seen):
     _esc(bot)
     ctx.note("arb_alter", "가공 받음")
     return "가공 → 받기"
+
+
+def _collect_done(bot, names) -> bool:
+    """가공할 시설에 완료분이 남아 있으면 먼저 모두 받는다. 칸이 완료분으로 꽉 차면 '가공하기' 가 걸리지 않아
+    끝나지 않는 가공을 기다리다 막혔다 (2026-11-02 약품 가공 7칸 모두 완료). complete_altering_work 는 시설당 한 번에 그 시설 완료분 전부.
+    받은 뒤 뜨는 확인 창은 다음 점검이 닫고, 가공 창으로 돌아오면 다시 여기로 온다."""
+    data = bot.state.query("get_altering_works") or {}
+    works = data.get("works") or [] if isinstance(data, dict) else []
+    facs = {w.get("FacilityName") for w in works if w.get("DisplayName") in names}
+    try:
+        facs |= {craft_data.data().recipes.facility_of(n) for n in names}
+    except RuntimeError:
+        pass
+    done = next((w for w in works if w.get("IsCompleted") and w.get("FacilityName") in facs - {None}), None)
+    if not done:
+        return False
+    r = bot.state.cli.run("complete_altering_work", {"displayName": done["DisplayName"]})
+    bot.log.info(f"가공 시설 '{done['FacilityName']}' 완료분 모두 받기 → {'됨' if r.ok else r.error}")
+    return r.ok
 
 
 def _alter_go(bot, ctx, seen):
