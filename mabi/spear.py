@@ -6,10 +6,13 @@
   약 7~8초 뒤 대상 발밑(반지름 약 2.5)에 투창 → 그 범위에 같은 속성 주술사가 있으면 그 주술사 보호막이 깨진다(파훼).
 - 못 깨면 10초마다 같은 속성을 다시 던진다 — 이때는 속성 버프 없이 대상 표시만 온다.
 - 두 번 파훼하면 속성 패턴을 더 안 쓰고, 투창병이 쓰러지면 1초 안에 주술사 6마리도 쓰러진다 → 이 맵의 패턴 끝.
+보스 테로사의 틱택토 패턴도 같은 맵이라 여기서 쌓는다 (판은 tictactoe.TicTacToe).
 패킷은 받기만 한다. 움직이는 쪽은 tasks/spear.py.
 """
 import threading
 import time
+
+from .tictactoe import TicTacToe
 
 MAP_NAME = "흩어진 물길"
 # 주술사 속성 버프 · 투창병 속성 버프 (속성마다 고정, 7판 동안 같음)
@@ -19,6 +22,7 @@ SPEAR_MARK = 0x2280fbaa   # 투창병에 늘 붙는 버프 (투창병 알아보�
 TARGET_MARK = 0x1f4ed331  # 투창병 → 대상 캐릭터 (8초)
 SPEAR_HOME = (0.0, 163.0)
 FRESH = 3.0               # 대상 표시를 이만큼 지나서 보면 늦었다 (투창은 7~8초 뒤)
+TTT = ("spear.timeline", "spear.path", "spear.breakpoint")
 MOVES = ("spear.move_update", "spear.move_ensure", "spear.move_end", "spear.move_manual", "spear.move_location")
 
 
@@ -43,6 +47,7 @@ class SpearState:
             self.breaks = 0
             self.target_at = 0.0               # 내게 대상 표시가 붙은 때
             self.taken_at = 0.0                # 봇이 그 표시를 맡은 때
+            self.ttt = TicTacToe()             # 보스 틱택토
 
     @property
     def finished(self) -> bool:
@@ -56,6 +61,8 @@ class SpearState:
         if a is None:
             return None
         with self.lock:
+            if key in TTT:
+                return self.ttt.feed(key, v, me, self.pos)
             if key in MOVES:
                 x, y = v.get("x"), v.get("y")
                 if x is not None and y is not None and abs(x) < 1e5 and abs(y) < 1e5:

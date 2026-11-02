@@ -4,6 +4,7 @@
 1. 같은 속성 주술사 옆 (주술사에서 가운데 쪽으로 1.5) 으로 이동. 도착은 1칸 안 — 투창 범위 반지름이 약 2.5 라 주술사가 들어간다.
 2. 파훼(그 주술사 보호막 깨짐)를 볼 때까지 제자리를 지킨다 — 가만히 있으면 자동 전투·어그로가 끌고 가므로 짧게 움찔거리고,
    밀려나면 다시 들어간다 (사용자). 못 깨면 10초마다 같은 속성을 다시 던지니 계속 지킨다 (상한 HOLD).
+   먼저 떠나지 않는다 — 몬스터 길막·후딜 큰 스킬로 늦게 닿을 수 있다 (2026-11-03 사용자).
 3. 깨지면 투창병 근처로 돌아간다 (사용자: 돌아가는 건 파훼했을 때).
 W·D 가 맵에서 어느 쪽인지는 카메라를 고정한 채 (사용자) 주술사가 나온 뒤 한 번 짧게 눌러 재고 저장한다 (속성 버프 3~4초 전).
 키를 떼도 위치 읽기가 늦어 약 1.5칸 더 가므로 지금 속도 × LAG 만큼 앞에서 뗀다 (11-02 실측 초당 5.5칸, 수도사 이속 버프 때 ~7.9).
@@ -17,6 +18,7 @@ import time
 
 from ..bot import Bot
 from ..spear import SpearState
+from ..tictactoe import TURN
 
 TOL = 1.0          # 도착 (목표점에서)
 NEAR_SPEAR = 4.0   # 투창병 근처
@@ -25,6 +27,8 @@ SPEED = 5.5        # 보통 이동 속도 (칸/초). 이동 중엔 실제 속도
 LAG = 0.22
 GO_LIMIT = 8.0     # 한 번 가는 데 상한 (가장 먼 주술사가 약 24칸)
 CALIB_FILE = "spear_calib.json"
+SOLO = "솔로"        # 맵 이름 끝 '(… 솔로)' — 혼자하기
+CAMERA_WAIT = 2.0  # 맵에 들어오고 이만큼 뒤 카메라를 맞춘다
 
 
 class SpearDodge:
@@ -32,6 +36,7 @@ class SpearDodge:
         self.bot = bot
         self._calib = False     # 처음 쓸 때 파일에서 (흩어진 물길이 아니면 읽지도 않는다)
         self.calib_tried = 0.0  # 이 맵에서 보정을 해 봤나 (맵 진입 시각)
+        self.camera_set = 0.0   # 이 맵에서 카메라를 맞췄나 (맵 진입 시각)
 
     @property
     def file(self):
@@ -56,15 +61,46 @@ class SpearDodge:
         return self.bot.packets.spear
 
     def wanted(self) -> bool:
-        """지금 맡을 일이 있나 — 내가 대상이거나, 주술사가 나왔는데 W·D 방향을 아직 모름."""
+        """지금 맡을 일이 있나 — 내가 투창 대상이거나 틱택토 O 담당, 또는 주술사가 나왔는데 W·D 방향을 아직 모름."""
         st = getattr(self.bot.packets, "spear", None)
-        if not isinstance(st, SpearState) or not st.active or st.finished:
+        if not isinstance(st, SpearState) or not st.active:
+            return False
+        if self.camera_due():
+            return True
+        if st.ttt.due():
+            return True
+        if st.finished:
             return False
         return st.due() or (self.calib is None and len(st.attr) == 6
                             and self.calib_tried != self.bot.packets.state.entered_at)
 
+    def camera_due(self) -> bool:
+        """함께하기는 카메라가 캐릭터 반대쪽을 보고 시작한다 (혼자하기는 캐릭터가 보는 쪽 — 2026-11-03 사용자).
+        W·D 방향이 혼자하기와 달라지므로 맵에 들어와 로딩이 끝나면 한 번 맞춘다."""
+        s = self.bot.packets.state
+        return (s.entered_at and self.camera_set != s.entered_at and not s.loading
+                and SOLO not in (s.channel_name or "") and time.monotonic() - s.entered_at > CAMERA_WAIT)
+
+    def set_camera(self) -> None:
+        """Z(자동 카메라) → 2초 뒤 캐릭터 뒤로 돌아오면 다시 Z(수동 카메라)로 고정 (사용자)."""
+        self.camera_set = self.bot.packets.state.entered_at
+        self.bot.log.info("함께하기: 카메라를 캐릭터 뒤로 맞춤 (Z → 2초 → Z)")
+        self.bot.key("z")
+        time.sleep(2.0)
+        self.bot.key("z")
+
     def run(self) -> None:
         st = self.st
+        if self.camera_due():
+            self._with_focus(self.set_camera)
+            return
+        if st.ttt.due():
+            job = st.ttt.take()
+            if job and self.calib is None:
+                self._with_focus(self.calibrate)
+            if job and self.calib is not None:
+                self._with_focus(lambda: self.tictactoe(job))
+            return
         if self.calib is None and not st.due():
             self.calib_tried = self.bot.packets.state.entered_at
             self._with_focus(self.calibrate)
@@ -88,16 +124,28 @@ class SpearDodge:
         until = t0 + HOLD
         self.bot.log.info(f"투창 패턴: {job['attr']} 주술사 ({x:.0f}, {y:.0f}) 옆 {target[0]:.1f}, {target[1]:.1f} 로 이동")
         self.go(target, TOL, min(until, time.monotonic() + GO_LIMIT), done)
+        # 파훼를 볼 때까지 붙어 있는다 — 길막·후딜 큰 스킬로 늦게 닿을 수 있어 먼저 떠나지 않는다 (사용자)
         self.hold(target, until, done)
         if not done():
             self.bot.log.info(f"투창 패턴: {HOLD:.0f}초 동안 파훼 못 봄 — 투창병 쪽으로")
         if self.ok():
             self.go(self.st.spear_home(), NEAR_SPEAR, time.monotonic() + GO_LIMIT, lambda: False)
 
-    def ok(self) -> bool:
-        """계속해도 되나 — 맵을 떠났거나 쓰러졌거나 패턴이 끝났으면 그만둔다."""
+    def tictactoe(self, job: dict) -> None:
+        """틱택토 O 담당 — 고른 칸 가운데로 가서 보스가 O 를 새기러 출발할 때까지 (차례 시작 약 9초 뒤) 그 칸에 선다."""
+        ttt = self.st.ttt
+        target, t0 = (job["x"], job["y"]), job["at"]
+        done = lambda: ttt.resolved
+        self.bot.log.info(f"틱택토: O 담당 → 칸 {job['cell']} ({target[0]:.0f}, {target[1]:.1f}) 로 이동 · 판 {ttt.text()}")
+        self.go(target, TOL, t0 + TURN - 1, done, pattern=False)
+        self.hold(target, t0 + TURN + 4, done, pattern=False)
+        if not done():
+            self.bot.log.info("틱택토: 보스가 O 를 새기러 오는 것을 못 봄")
+
+    def ok(self, pattern: bool = True) -> bool:
+        """계속해도 되나 — 맵을 떠났거나 쓰러졌거나 (투창이면) 패턴이 끝났으면 그만둔다."""
         p = self.bot.packets
-        return self.st.active and not self.st.finished and not p.state.loading and not p.state.dead
+        return self.st.active and not (pattern and self.st.finished) and not p.state.loading and not p.state.dead
 
     def _with_focus(self, fn) -> None:
         """게임 창을 앞으로 (키를 누른 채 있어야 해서 뒤에서는 못 한다). 뒤에서 돌던 중이면 끝나고 원래 창을 돌려준다."""
@@ -140,10 +188,10 @@ class SpearDodge:
             ks.append("d" if b > 0 else "a")
         return ks
 
-    def go(self, target, tol: float, until: float, done) -> bool:
+    def go(self, target, tol: float, until: float, done, pattern: bool = True) -> bool:
         """target 까지 키를 누른 채 다시 보며 간다. 속도 × LAG 앞에서 떼고, 멈춘 자리가 모자라거나 지나쳤으면 짧게 다시."""
         inp, fine, hist = self.bot.input, False, []
-        while time.monotonic() < until and not done() and self.ok():
+        while time.monotonic() < until and not done() and self.ok(pattern):
             self.bot.check_stop()
             p = self.my_pos()
             if not p:
@@ -170,15 +218,15 @@ class SpearDodge:
         inp.hold(())
         return False
 
-    def hold(self, target, until: float, done) -> None:
+    def hold(self, target, until: float, done, pattern: bool = True) -> None:
         """파훼까지 제자리 — 벗어나면 다시 들어가고, 아니면 0.3초마다 짧게 움찔 (반대 키로 되돌림)."""
         inp, back = self.bot.input, {"w": "s", "s": "w", "a": "d", "d": "a"}
         pair = None
-        while time.monotonic() < until and not done() and self.ok():
+        while time.monotonic() < until and not done() and self.ok(pattern):
             self.bot.check_stop()
             p = self.my_pos()
             if p and math.dist(target, p) > TOL + 0.4:
-                self.go(target, TOL, until, done)
+                self.go(target, TOL, until, done, pattern)
                 continue
             if pair:  # 앞에서 움찔한 반대쪽으로 되돌린다
                 k, pair = pair, None

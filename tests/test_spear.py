@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from mabi.packet_monitor import PacketMonitor
 from mabi.spear import SHAMAN_ATTR, SPEAR_ATTR, SPEAR_MARK, TARGET_MARK
 from mabi.tasks.spear import SpearDodge
+from mabi.tictactoe import FORECAST, choose
 
 ME, OTHER, SPEAR = 100, 200, 300
 LAYOUT = {"독": (-10, 142), "번개": (-10, 151), "얼음": (-10, 160), "불": (10, 142), "어둠": (10, 151), "빛": (10, 160)}
@@ -101,6 +102,80 @@ class SpearStateTest(unittest.TestCase):
         self.assertEqual(self.m.spear.spear_home(), (0.0, 163.0))  # 투창병 자리를 못 봤으면 제자리
         self.feed("spear.move_update", actor=SPEAR, x=3.1, y=0.0)  # 위치가 아닌 값 — 믿지 않는다
         self.assertEqual(self.m.spear.spear_home(), (0.0, 163.0))
+
+
+class TicTacToeTest(unittest.TestCase):
+    """보스 틱택토 — 11-03 abyss_runs/boss2 순서 재생과 고르기 (사용자: 첫 X 상하좌우 → 귀퉁이 · 반대 귀퉁이 · 가운데)."""
+    BOSS, C = 900, 400
+
+    def setUp(self):
+        SpearStateTest.setUp(self)
+
+    enter, feed = SpearStateTest.enter, SpearStateTest.feed
+
+    def walk(self, actor, x, y):
+        self.feed("spear.path", actor=actor, points=2, x=x, y=y)
+
+    def turn(self, drawer, x_at):
+        self.walk(self.BOSS, *x_at)  # 보스가 칸 가운데로 걸어가 X
+        self.feed("spear.timeline", actor=drawer, name=FORECAST)
+
+    def draw(self, drawer, x, y):
+        self.m.spear.ttt.turn_at -= 5  # 차례 시작 뒤 몇 초 지나 보스가 담당 자리로 출발
+        self.walk(self.BOSS, x, y)
+
+    def test_boss2_replay(self):
+        ttt = self.m.spear.ttt
+        self.walk(ME, -3.4, 363.3)  # 플레이어 경로 이동은 칸 가운데가 아니라 X 로 안 본다
+        self.turn(ME, (0.0, 375.5))
+        self.assertTrue(ttt.due())
+        job = ttt.take()
+        self.assertIn(job["cell"], [(0, 0), (2, 0)])  # X 가 아래 가운데 → 먼 쪽(위) 귀퉁이
+        self.draw(ME, -9.6, 375.4)  # 실제로는 사람이 아래 왼쪽에 둠
+        self.turn(ME, (9.0, 366.5))
+        self.assertEqual(ttt.take()["cell"], (2, 0))  # 반대 귀퉁이 → 가운데가 남아 반드시 이김
+        self.draw(ME, 9.4, 358.0)
+        self.turn(self.C, (-9.0, 357.5))
+        self.assertFalse(ttt.due())  # 다른 캐릭터가 담당
+        self.draw(self.C, 0.3, 366.5)
+        self.assertTrue(ttt.done)
+        self.assertEqual(ttt.text(), "X.O/.OX/OX.")
+
+    def test_boss3_replay(self):
+        """11-03 01:32 — 차례 간격 5~6초, 첫 X 왼쪽 가운데."""
+        ttt = self.m.spear.ttt
+        self.turn(self.C, (-9.0, 366.5))
+        self.assertEqual(ttt.board, {(0, 1): "X"})
+        self.draw(self.C, -9.5, 375.1)
+        self.turn(ME, (9.0, 366.5))
+        self.assertEqual(ttt.take()["cell"], (2, 0))
+        self.draw(ME, 8.3, 357.5)
+        self.turn(ME, (9.0, 375.5))
+        self.assertEqual(ttt.take()["cell"], (1, 1))
+        self.draw(ME, 0.0, 366.8)
+        self.assertTrue(ttt.done)
+
+    def test_choose_plan(self):
+        for x1 in [(1, 0), (0, 1), (2, 1), (1, 2)]:  # 첫 X 상하좌우 어디든
+            b = {x1: "X"}
+            o1 = choose(b)
+            self.assertNotIn(o1, [(1, 1)] + [(c, r) for c, r in [(0, 0), (2, 0), (0, 2), (2, 2)] if x1[0] == c or x1[1] == r])
+            b[o1] = "O"
+            b[(1, 0) if (1, 0) not in b else (1, 2)] = "X"
+            o2 = choose(b)
+            self.assertEqual(o2, (2 - o1[0], 2 - o1[1]))
+            b[o2] = "O"
+            self.assertEqual(choose(b), (1, 1))
+
+
+    def test_choose_messy_party(self):
+        """함께하기 — 다른 사람이 가운데·상하좌우에 먼저 둬도 그 판에서 가장 나은 칸 (사용자 11-03)."""
+        def pick(t):
+            return choose({(c, r): ch for r, row in enumerate(t.split("/")) for c, ch in enumerate(row) if ch != "."})
+        self.assertIn(pick(".X./.O./..."), [(0, 2), (2, 2)])  # 가운데 O 를 낀 대각선
+        self.assertEqual(pick(".X./O../..."), (2, 1))          # 가운데만 남는 가로줄 → 다음에 반드시
+        self.assertEqual(pick(".X./.O./X.O"), (0, 0))          # 바로 이김
+        self.assertEqual(pick("X.O/.X./O.."), (2, 2))          # 두 줄 동시
 
 
 class KeysTest(unittest.TestCase):
