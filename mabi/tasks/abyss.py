@@ -91,14 +91,33 @@ def _wait_settled(bot: Bot, timeout: float) -> bool:
     return False
 
 
-def _travel_to_entry(bot: Bot) -> None:
+def _travel_to_entry(bot: Bot) -> bool:
     """입장 화면 버튼이 '이동하기' 다 — 캐릭터가 어비스 입구에서 멀다 (캐릭터를 바꾸면 그 캐릭터가 마지막에 있던 곳에서
-    시작해 거의 늘 이렇다 — 2026-10-24 '입장하기' 만 기다리다 실패). 눌러서 입구로 가고, 멀면 빠른 이동(T)."""
+    시작해 거의 늘 이렇다 — 2026-10-24 '입장하기' 만 기다리다 실패). 눌러서 입구로 가고, 멀면 빠른 이동(T).
+    도착하면 입장 화면이 고른 탭·난이도 그대로 다시 뜬다 (2026-11-03 혼자하기 실측: 이멘 마하 → 빠른 이동 24초 → '입장하기').
+    그러면 True — 그 창에서 잇는다. 창 없이 메인 화면에 멈췄으면 False (메뉴에서 다시 연다).
+    메인 화면만 기다리면 다시 뜬 입장 화면을 막는 창으로 보고 닫는다 (레이드 선착장과 같은 문제, 2026-10-28)."""
     bot.log.info("어비스 입구에서 멂 → 이동하기")
     _click_text(bot, gd.text("abyss_move"), gd.region("abyss_entry_right"), what="이동하기")
     bot.fast_travel(wait=5)
-    if not _wait_settled(bot, bot.cfg["abyss"].get("travel_timeout", 300)):
-        raise CannotProceed(f"어비스 입구로 가지 못함 → {bot.snapshot('abyss_travel').name}")
+    end = time.monotonic() + bot.cfg["abyss"].get("travel_timeout", 300)
+    still = 0  # 메인 화면에 멈춰 있는 것을 연달아 본 횟수 (이동 사이 잠깐 멈춤과 가르려고)
+    while time.monotonic() < end:
+        if bot.map_loading():
+            bot.wait_loaded(end - time.monotonic())
+            continue
+        if _find_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top")):
+            bot.log.info("어비스 입구 도착 → 입장 화면")
+            return True
+        if bot.at_main() and not bot.auto_traveling():
+            still += 1
+            if still >= 3:
+                bot.log.info("이동이 멈췄는데 입장 화면이 없음 → 메뉴에서 다시 엶")
+                return False
+        else:
+            still = 0  # 걷는 중이거나 창이 떠 있음 — 막 뜬 입장 화면을 닫지 않게 ESC 는 누르지 않는다
+        bot.sleep(2, 2.5)
+    raise CannotProceed(f"어비스 입구로 가지 못함 → {bot.snapshot('abyss_travel').name}")
 
 
 def _entry_button(bot: Bot) -> str:
@@ -199,8 +218,8 @@ def open_entry(bot: Bot, dungeon: str, difficulty: str = "", _moved: bool = Fals
         if button == "enter":
             break
         if button == "move" and not _moved:
-            _travel_to_entry(bot)
-            return open_entry(bot, dungeon, difficulty, _moved=True, solo=solo)
+            back = _travel_to_entry(bot)
+            return open_entry(bot, dungeon, difficulty, _moved=True, solo=solo, at="entry" if back else "")
         bot.sleep(1.0, 1.4)
     else:
         raise CannotProceed(f"'{dungeon}' {'혼자하기' if solo else '함께하기'}에 '입장하기' 가 없음 → {bot.snapshot('abyss').name}")
