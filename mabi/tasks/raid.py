@@ -501,9 +501,12 @@ class RaidRepeat(Repeat):
                 if self.repair_between(go_out):
                     stage = "entry"
                     continue
-                leave(bot)
                 if self.done():
+                    # 마지막 판이면 출항선으로 가지 않고 '파티&던전 나가기' 로 바로 필드로 — 다음 카드가 출항선에서
+                    # 내려야 하는 일이 없게 (사용자 2026-11-02)
+                    go_out()
                     break
+                leave(bot)
                 stage = self._next()
 
 
