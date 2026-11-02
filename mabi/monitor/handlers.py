@@ -410,11 +410,17 @@ def alter(bot, ctx, seen):
     if ctx.n["alter"] > 6:
         return Finish("stuck", f"가공을 거듭해도 일이 안 끝남 → {_shot(bot, 'arbeit_alter')}")
     ctx.note("arb_alter", "가공")
+    names = set(ctx.alter)
+    before = _alter_count(bot, names)
     bot.key("space")
     if _short_toast(bot):
         _esc(bot)
         return Finish("alter_short", f"가공 재료 부족 → {_shot(bot, 'arbeit_alter')}")
-    names = set(ctx.alter)
+    # 가공 칸이 (완료분으로) 꽉 차면 '가공하기' 가 걸리지 않는다. 시설 창의 '모두 받기' 는 시설에 다시 말을 걸게 해서
+    # 받는 길이 번거롭다 → 그 일은 포기하고 넘어간다 (사용자 2026-11-02). 가공 목록에 이 가공품이 늘지 않으면 꽉 찬 것
+    if before is not None and not _alter_started(bot, names, before):
+        _esc(bot)
+        return Finish("alter_full", f"가공이 걸리지 않음 (가공 칸이 꽉 참) → {_shot(bot, 'arbeit_alter')}")
     end = time.monotonic() + bot.cfg["arbeit"].get("alter_wait", 180)
     while True:
         bot.sleep(3, 3.5)
@@ -434,6 +440,24 @@ def alter(bot, ctx, seen):
     return "가공 → 받기"
 
 
+def _alter_count(bot, names) -> int | None:
+    """가공 목록(CLI)에 올라 있는 이 가공품 수 (완료분 포함). 조회 실패면 None."""
+    data = bot.state.query("get_altering_works")
+    if not isinstance(data, dict):
+        return None
+    return sum(1 for w in data.get("works") or [] if w.get("DisplayName") in names)
+
+
+def _alter_started(bot, names, before: int, timeout: float = 12) -> bool:
+    """'가공하기' 뒤 가공 목록에 이 가공품이 늘었나."""
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        bot.sleep(2, 2.5)
+        if (_alter_count(bot, names) or 0) > before:
+            return True
+    return False
+
+
 def _alter_go(bot, ctx, seen):
     """가공 시설 창 첫 화면 (아르바이트가 요구하는 가공품 카드만 보인다) → 카드 → '가공하러 가기'(Space) → 빠른 이동."""
     ctx.n["alter_go"] = ctx.n.get("alter_go", 0) + 1
@@ -451,12 +475,6 @@ def _alter_go(bot, ctx, seen):
     hit = next(((x, y) for t, x, y in cards if ocr.nospace(t) in names), None)
     if not hit:
         return Finish("stuck", f"가공 시설 창에서 가공품 카드를 못 찾음 → {_shot(bot, 'arbeit_alter')}")
-    # 카드를 고르기 전 이 화면의 Space 는 '모두 받기' — 받을 게 있든 없든 먼저 누른다. 칸이 완료분으로 꽉 차면
-    # 가공이 걸리지 않아 끝나지 않는 가공을 기다리다 막혔다 (2026-11-02 약품 가공 7칸). 받으면 뜨는 확인 창은 한 번 더 Space
-    bot.key("space")
-    bot.sleep(2, 2.5)
-    bot.key("space")
-    bot.sleep(1.2, 1.5)
     bot.click((hit[0], hit[1] - 60))
     bot.sleep(1.2, 1.5)
     ctx.note("arb_alter", "가공하러 감")

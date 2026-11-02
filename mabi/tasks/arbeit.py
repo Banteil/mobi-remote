@@ -629,12 +629,14 @@ def _task(bot: Bot, cfg: dict) -> str:
             skipped[job["title"]] = "가공 필요"
         elif r == "alter_short":
             skipped[job["title"]] = "가공 재료 부족"
+        elif r == "alter_full":
+            skipped[job["title"]] = "가공 칸 꽉 참"
         elif r == "dungeon":
             skipped[job["title"]] = "던전 클리어 필요"
         else:  # stuck · gather_stall — 다음 실행 때 다시 해 본다
             stuck.append(job["title"] + (" (채집이 멈춤)" if r == "gather_stall" else ""))
         save(None, "arb_result", {"done": "완료", "short": "건너뜀", "alter": "건너뜀(가공)",
-                                  "alter_short": "건너뜀(가공 재료 부족)", "dungeon": "건너뜀(던전)",
+                                  "alter_short": "건너뜀(가공 재료 부족)", "alter_full": "건너뜀(가공 칸 꽉 참)", "dungeon": "건너뜀(던전)",
                                   "gather_stall": "막힘(채집이 멈춤)"}.get(r, "막힘")
              + f": {job['title']}")
     save(None, "arb_end", "아르바이트 목록 끝")

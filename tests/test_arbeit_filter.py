@@ -115,3 +115,27 @@ class AlterGoUnknownTest(unittest.TestCase):
         r, ctx, bot = self._run(False)
         self.assertEqual(r.result, "alter")
         bot.click.assert_not_called()
+
+
+class AlterFullTest(unittest.TestCase):
+    """가공하기를 눌러도 가공 목록에 그 가공품이 늘지 않으면 (칸이 꽉 참) 그 일은 포기한다."""
+
+    def _run(self, counts):
+        from types import SimpleNamespace
+        from mabi.monitor import handlers
+        bot = mock.MagicMock()
+        seq = iter(counts)
+        bot.state.query.side_effect = lambda *_: {"works": [{"DisplayName": "옷감", "IsCompleted": True}] * next(seq)}
+        ctx = mock.MagicMock(n={}, alter=("옷감",))
+        with mock.patch.object(handlers, "_short_toast", return_value=False), \
+                mock.patch.object(handlers, "_shot", return_value="x"), mock.patch.object(handlers, "_esc"), \
+                mock.patch.object(handlers.time, "monotonic", side_effect=[0, 1, 5, 9, 13, 100, 200]):
+            return handlers.alter(bot, ctx, SimpleNamespace(frame=None))
+
+    def test_full_gives_up(self):
+        r = self._run([0, 0, 0, 0, 0])
+        self.assertEqual(r.result, "alter_full")
+
+    def test_started_waits(self):
+        r = self._run([0, 1, 1, 1, 1])
+        self.assertEqual(r, "가공 → 받기")  # 시작됐고 (목록이 늘었고) 다 끝나 받음
