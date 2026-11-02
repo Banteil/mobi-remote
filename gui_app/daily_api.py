@@ -308,7 +308,7 @@ class DailyApi:
         r = load_config(self.paths)["raid"]
         return {"raid": r["raid"], "difficulty": r.get("difficulty") or "어려움", "slot": int(r.get("slot", 0)),
                 "runs": int(r.get("runs", 0)), "minutes": float(r.get("minutes", 0)), "revive": bool(r.get("revive", True)),
-                "mode": r.get("mode") or "solo", "raids": raid.RAIDS, "difficulties": raid.DIFFICULTIES,
+                "mode": r.get("mode") or "party", "raids": raid.RAIDS, "difficulties": raid.DIFFICULTIES,
                 "running": bool(self._raid_thread and self._raid_thread.is_alive())}
 
     def _raid_launch(self, v: dict, on_event=None) -> threading.Thread:

@@ -496,8 +496,8 @@ class RaidRepeat(Repeat):
 
     @property
     def solo(self) -> bool:
-        """혼자하기로 하나 ([raid] mode). 함께하기(party)는 배에 타면 우연한 만남 매칭으로 들어간다."""
-        return self.a.get("mode", "solo") != "party"
+        """혼자하기로 하나 ([raid] mode = "solo"). 기본은 함께하기 — 배에 타면 우연한 만남 매칭으로 들어간다."""
+        return self.a.get("mode") == "solo"
 
     def setup(self):
         self.bot.scene_skip = True  # 레이드는 연출이 길어 넘긴다 (사용자) — 뒤에서 도는 중이면 may_skip_scene 이 막는다
