@@ -6,7 +6,9 @@ sleep·frame·wait_packet 이 늘 거친다)이 하던 일을 잠깐 멈추고 �
 않는다 — 태스크의 입력과 섞이면 엉뚱한 곳이 눌린다.
 
 여기에 드는 것은 태스크가 열지 않은 것뿐이다. NPC 대화를 스스로 다루는 일(접속·아르바이트·요일 던전 게시판·수리)은
-Bot.npc_talk() 로 '내 몫' 이라고 알리고, 그동안 대화는 끼어들기로 보지 않는다. 메뉴(선택지)가 있는 대화는 늘 태스크 몫.
+Bot.npc_talk() 로 '내 몫' 이라고 알리고, 그동안 대화는 끼어들기로 보지 않는다. 그 밖에 메뉴(선택지)가 뜨는 대화는
+고르지 않고 ESC('대화 종료')로 마친다 — 로나가 먼저 말을 걸면 대사 뒤 [판의 조언 · 상점 · 대화 종료] 메뉴가 뜨고,
+ESC 뒤 작별 대사를 넘겨야 끝난다 (2026-11-02 실기). 대사 내용으로 판단하지 않는다.
 패킷이 없으면 아무것도 하지 않는다 (예전처럼 태스크가 부르는 점검자가 본다).
 """
 import time
@@ -27,7 +29,7 @@ def pending(bot) -> str | None:
     s = p.state
     if s.attending():
         return "attendance"
-    if s.in_dialogue and not s.dialogue_menu and not bot.npc_owned():
+    if s.in_dialogue and not bot.npc_owned():
         return "dialog"
     return None
 
@@ -49,6 +51,7 @@ def handle(bot, what: str) -> bool:
             bot.log.warning(f"끼어들기: {label} 을 넘기지 못함 → {COOLDOWN}초 동안 두고 하던 일로 ({bot.snapshot('interrupt').name})")
             bot.interrupt_cooldown(what, COOLDOWN)
             return done
+        ctx.leave = what == "dialog" and bool(bot.packets.state.dialogue_menu)  # 메뉴면 ESC, 대사면 넘김 (handlers.dialog)
         seen = mon.check(ctx, guard=False)
         if seen.done:
             last_done, done = time.monotonic(), True

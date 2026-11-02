@@ -358,7 +358,7 @@ class InterruptTest(unittest.TestCase):
     def test_pending(self):
         from mabi.monitor import interrupts
         self.assertEqual(interrupts.pending(self._bot()), "dialog")
-        self.assertIsNone(interrupts.pending(self._bot(menu=True)))    # 메뉴가 있는 대화는 태스크 몫
+        self.assertEqual(interrupts.pending(self._bot(menu=True)), "dialog")  # 메뉴가 뜨는 대화도 (로나) — ESC 로 마침
         self.assertIsNone(interrupts.pending(self._bot(owned=True)))   # NPC 대화를 다루는 일 (아르바이트 등)
         self.assertEqual(interrupts.pending(self._bot(dialog=False, attending=True)), "attendance")
         b = self._bot()
@@ -381,6 +381,26 @@ class InterruptTest(unittest.TestCase):
             self.assertTrue(interrupts.handle(b, "dialog"))
         self.assertEqual(calls[0], "끼어들기 (dialog)")
         b.interrupt_cooldown.assert_not_called()
+
+    def test_menu_dialog_leaves(self):
+        # 메뉴가 떠 있으면 고르지 않고 대화를 마친다 (Ctx.leave → ESC '대화 종료'), 메뉴가 사라지면 다시 대사 넘김
+        from mabi.monitor import interrupts
+        b = self._bot(menu=True)
+        mon = mock.Mock()
+        leaves = []
+
+        def check(ctx, guard=False):
+            leaves.append(ctx.leave)
+            s = b.packets.state
+            if len(leaves) == 1:
+                s.dialogue_menu = False  # ESC → 작별 대사
+            else:
+                s.in_dialogue = False
+            return Seen(d.DIALOG, frame=frame(), done="대화 종료" if len(leaves) == 1 else "대사 넘김")
+        mon.check.side_effect = check
+        with mock.patch("mabi.monitor.of", return_value=mon):
+            self.assertTrue(interrupts.handle(b, "dialog"))
+        self.assertEqual(leaves[:2], [True, False])
 
     def test_gives_up_and_cools_down(self):
         from mabi.monitor import interrupts
