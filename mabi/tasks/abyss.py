@@ -166,12 +166,12 @@ def _open_list(bot: Bot, menu_open: bool = False) -> None:
     bot.sleep(1.0, 1.5)
 
 
-def open_entry(bot: Bot, dungeon: str, difficulty: str = "", _moved: bool = False, at: str = "") -> None:
-    """dungeon 입장 화면을 열고 '함께하기' · 난이도 · '우연한 만남' 을 맞춘다. at(where 결과)이 입장 화면이나
-    어비스 목록이면 그 자리부터, 아니면 메인 화면 → 메뉴 → 어비스 → 목록에서 dungeon.
-    '함께하기' 를 먼저 고른다 — '혼자하기' 탭이면 입구에서 먼 캐릭터는 버튼이 '이동하기' 라 입장할 수 없는데,
-    '함께하기' 는 어디서든 매칭된다 (2026-10-24: 혼자하기 탭에서 '입장하기' 만 찾다 실패). 그래도 '이동하기' 면
-    입구로 간 뒤 한 번 더 연다."""
+def open_entry(bot: Bot, dungeon: str, difficulty: str = "", _moved: bool = False, at: str = "",
+               solo: bool = False) -> None:
+    """dungeon 입장 화면을 열고 탭('함께하기', solo 면 '혼자하기') · 난이도 · ('함께하기' 면) '우연한 만남' 을 맞춘다.
+    at(where 결과)이 입장 화면이나 어비스 목록이면 그 자리부터, 아니면 메인 화면 → 메뉴 → 어비스 → 목록에서 dungeon.
+    '혼자하기' 탭은 입구에서 먼 캐릭터면 버튼이 '이동하기' 다 (2026-10-24: 혼자하기 탭에서 '입장하기' 만 찾다 실패).
+    '함께하기' 는 보통 어디서든 매칭되지만 그래도 '이동하기' 면 입구로 간 뒤 한 번 더 연다."""
     if at == "entry" and not _find_text(bot, dungeon, gd.region("abyss_entry_title")):
         bot.log.info(f"다른 어비스의 입장 화면 → 닫고 '{dungeon}' 로")
         at = ""
@@ -187,20 +187,25 @@ def open_entry(bot: Bot, dungeon: str, difficulty: str = "", _moved: bool = Fals
             bot.sleep(1.0, 1.4)
         else:
             raise CannotProceed(f"'{dungeon}' 입장 화면이 열리지 않음 → {bot.snapshot('abyss').name}")
-    _click_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top"), what="함께하기")
+    if solo:  # 탭 글자는 고르면 끝에 따옴표 같은 표시가 붙어 읽힌다 — 들어 있기만 하면 된다 (레이드와 같음)
+        _click_text(bot, gd.text("raid_solo"), gd.region("abyss_entry_top"), exact=False, what="혼자하기")
+    else:
+        _click_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top"), what="함께하기")
     if difficulty:
         _click_text(bot, difficulty, gd.region("abyss_difficulty"), what=f"난이도 '{difficulty}'")
-    # 함께하기에서 '입장하기' 가 보일 때까지 ('이동하기' 면 입구로 가서 다시)
+    # '입장하기' 가 보일 때까지 ('이동하기' 면 입구로 가서 다시)
     for _ in range(5):
         button = _entry_button(bot)
         if button == "enter":
             break
         if button == "move" and not _moved:
             _travel_to_entry(bot)
-            return open_entry(bot, dungeon, difficulty, _moved=True)
+            return open_entry(bot, dungeon, difficulty, _moved=True, solo=solo)
         bot.sleep(1.0, 1.4)
     else:
-        raise CannotProceed(f"'{dungeon}' 함께하기에 '입장하기' 가 없음 → {bot.snapshot('abyss').name}")
+        raise CannotProceed(f"'{dungeon}' {'혼자하기' if solo else '함께하기'}에 '입장하기' 가 없음 → {bot.snapshot('abyss').name}")
+    if solo:
+        return  # 혼자하기는 매칭(우연한 만남)이 없다
     on = _chance_on(bot)
     if on is None:
         raise CannotProceed(f"'우연한 만남' 을 찾지 못함 → {bot.snapshot('abyss').name}")
@@ -462,6 +467,11 @@ class AbyssRepeat(Repeat):
         # 맵 종류는 보지 않는다 (판 도중에 리모콘을 켜면 맵 진입을 못 봐 모른다 — 반복이 어비스 안에서만 부른다). 연출 중엔 안 누른다
         return s.boss_scene
 
+    @property
+    def solo(self) -> bool:
+        """혼자하기로 하나 ([abyss] mode = "solo"). 기본은 함께하기 (우연한 만남)."""
+        return self.a.get("mode") == "solo"
+
     def setup(self):
         self.bot.scene_skip = False  # 연출은 누르지 않고 기다린다 — 누르면 뒤에서 돌던 게임이 앞으로 나온다 (2026-10-25 사용자)
 
@@ -481,13 +491,13 @@ class AbyssRepeat(Repeat):
                 # 입장은 메뉴·목록·버튼을 눌러야 해서 게임을 앞에 두고 한다. 들어간 뒤로는 다시 뒤에서
                 bot.step("abyss_open", f"어비스 입장 화면 ({a['dungeon']})")
                 bot.background = False
-                open_entry(bot, a["dungeon"], a.get("difficulty", ""), at=at)
+                open_entry(bot, a["dungeon"], a.get("difficulty", ""), at=at, solo=self.solo)
                 at = ""  # 처음 한 번만 — 다음 입장은 판이 끝난 자리(메인)에서
                 _click_text(bot, gd.text("abyss_enter"), gd.region("abyss_entry_right"), what="입장하기", key="space")
                 self.to_back()
                 stage = "match"
             if stage == "match" and not inside(bot):
-                bot.step("abyss_match", "우연한 만남 매칭 중")
+                bot.step("abyss_match", "입장 중 (혼자하기)" if self.solo else "우연한 만남 매칭 중")
                 self.emit(stage="match")
                 if not wait_entered(bot, a["match_timeout"]):
                     self.stat["retries"] += 1

@@ -302,6 +302,7 @@ async function loadAbyss() {
   $('#ab-runs').value = a.runs;
   $('#ab-minutes').value = a.minutes;
   $('#ab-revive').checked = a.revive !== false;
+  $('#ab-mode').value = a.mode;
   paintAbyssRunning(a.running);
   loadRaid(a.chars);
   loadBoss();
@@ -343,7 +344,7 @@ function repeatSpec(kind, pre, title, place) {
   const name = slot ? sel.options[sel.selectedIndex].textContent.replace(/^\d+\.\s*/, '') : '';
   return {
     kind, label: title + ' · ' + (name || '지금 캐릭터'),
-    slot, [place]: $(pre + '-' + place).value, difficulty: $(pre + '-difficulty').value,
+    slot, [place]: $(pre + '-' + place).value, difficulty: $(pre + '-difficulty').value, mode: $(pre + '-mode').value,
     runs: Number($(pre + '-runs').value) || 0, minutes: Number($(pre + '-minutes').value) || 0,
     revive: $(pre + '-revive').checked,
   };
@@ -363,10 +364,12 @@ async function queueRepeat(it, amount) {  // 탭에서 고른 그대로 (0판·0
 
 function abyssSpec() { return repeatSpec('abyss', '#ab', '어비스', 'dungeon'); }
 
+const MODE_NAME = { solo: '혼자하기', party: '함께하기' };
+
 function abyssAmount(x) {
   const lim = [x.runs ? x.runs + '판' + (x.doneRuns ? ' (' + x.doneRuns + '판 함)' : '') : '',
     x.minutes ? x.minutes + '분' : ''].filter(Boolean).join(' · ');
-  return x.dungeon + ' ' + x.difficulty + ' · ' + (lim || '멈출 때까지') + (x.revive === false ? ' · 쓰러지면 나감' : '');
+  return x.dungeon + ' ' + x.difficulty + (x.mode ? ' ' + MODE_NAME[x.mode] : '') + ' · ' + (lim || '멈출 때까지') + (x.revive === false ? ' · 쓰러지면 나감' : '');
 }
 
 
@@ -418,6 +421,7 @@ async function loadRaid(chars) {
   $('#rd-runs').value = r.runs;
   $('#rd-minutes').value = r.minutes;
   $('#rd-revive').checked = r.revive !== false;
+  $('#rd-mode').value = r.mode;
   paintRaidRunning(r.running);
 }
 

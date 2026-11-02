@@ -8,7 +8,7 @@ FIELDS = ["id", "via", "name", "label", "recipe", "target", "status", "note",
           # 일일 숙제 카드 (kind='daily'). 빠지면 다시 켰을 때 숙제 카드인 줄 몰라 새 숙제가 바꿔 끼우지 못하고 쌓인다
           "kind", "chars", "only", "force",
           # 어비스 반복 카드 (kind='abyss'; runs 는 위 runs 를 같이 쓴다 — 판 수)
-          "slot", "dungeon", "difficulty", "minutes", "revive",
+          "slot", "dungeon", "difficulty", "minutes", "revive", "mode",  # mode: solo 혼자하기 · party 함께하기
           # 레이드 반복 카드 (kind='raid' — 어비스와 같고 장소 칸만 raid). 빠지면 다시 켰을 때 '레이드 None'
           "raid",
           # 한 번 하는 행동 카드 (kind='action' — 제작·채집·가공·수령·연주 버튼)

@@ -251,7 +251,7 @@ class DailyApi:
         return {"dungeon": a["dungeon"], "difficulty": a.get("difficulty") or "매우 어려움2", "runs": int(a.get("runs", 0)),
                 "slot": int(a.get("slot", 0)), "chars": [{"slot": c["slot"], "name": c["name"]} for c in prof.characters(profile)],
                 "minutes": float(a.get("minutes", 0)), "dungeons": abyss.DUNGEONS,
-                "revive": bool(a.get("revive", True)),
+                "revive": bool(a.get("revive", True)), "mode": a.get("mode") or "party",
                 "difficulties": abyss.DIFFICULTIES,
                 "running": bool(self._abyss_thread and self._abyss_thread.is_alive())}
 
@@ -263,6 +263,7 @@ class DailyApi:
         def save(a):
             a["dungeon"] = str(v.get("dungeon") or "허상의 정박지")
             a["difficulty"] = str(v.get("difficulty") or "매우 어려움2")
+            a["mode"] = "solo" if v.get("mode") == "solo" else "party"
         return self._repeat_launch("abyss", "어비스", v, save, on_event)
 
     # ---- 레이드 반복 (mabi.tasks.raid) — 어비스와 같은 틀 ----
@@ -306,7 +307,7 @@ class DailyApi:
         r = load_config(self.paths)["raid"]
         return {"raid": r["raid"], "difficulty": r.get("difficulty") or "어려움", "slot": int(r.get("slot", 0)),
                 "runs": int(r.get("runs", 0)), "minutes": float(r.get("minutes", 0)), "revive": bool(r.get("revive", True)),
-                "raids": raid.RAIDS, "difficulties": raid.DIFFICULTIES,
+                "mode": r.get("mode") or "solo", "raids": raid.RAIDS, "difficulties": raid.DIFFICULTIES,
                 "running": bool(self._raid_thread and self._raid_thread.is_alive())}
 
     def _raid_launch(self, v: dict, on_event=None) -> threading.Thread:
@@ -314,6 +315,7 @@ class DailyApi:
         def save(a):
             a["raid"] = str(v.get("raid") or "카브락")
             a["difficulty"] = str(v.get("difficulty") or "어려움")
+            a["mode"] = "party" if v.get("mode") == "party" else "solo"
         return self._repeat_launch("raid", "레이드", v, save, on_event)
 
     def daily_raidStop(self) -> dict:  # noqa: N802

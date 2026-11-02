@@ -159,7 +159,8 @@ class AbyssKind(Kind):
         lim = " · ".join(s for s in [
             (f"{x['runs']}판" + (f" ({x['doneRuns']}판 함)" if x.get("doneRuns") else "")) if x.get("runs") else "",
             f"{x['minutes']}분" if x.get("minutes") else ""] if s)
-        return f"{x.get(cls.PLACE)} {x.get('difficulty')} · {lim or '멈출 때까지'}" + (" · 쓰러지면 나감" if x.get("revive") is False else "")
+        mode = {"solo": " 혼자하기", "party": " 함께하기"}.get(x.get("mode"), "")
+        return f"{x.get(cls.PLACE)} {x.get('difficulty')}{mode} · {lim or '멈출 때까지'}" + (" · 쓰러지면 나감" if x.get("revive") is False else "")
 
     def where(self, it) -> str:
         return f"{it['doneRuns']}판 한 뒤" if it.get("doneRuns") else ""
@@ -212,7 +213,7 @@ class AbyssKind(Kind):
                 q.patch(it["id"], {"prog": p})
         launch = getattr(api, f"_{self.KIND}_launch")
         t = launch({"slot": it.get("slot"), self.PLACE: it.get(self.PLACE), "difficulty": it.get("difficulty"),
-                    "runs": runs, "minutes": minutes, "revive": it.get("revive") is not False,
+                    "mode": it.get("mode"), "runs": runs, "minutes": minutes, "revive": it.get("revive") is not False,
                     "interface": fit and not q.session.get("iface")}, on_event)
         t.join()
         q.patch(it["id"], {"doneRuns": int(it.get("doneRuns") or 0) + last["clears"],
