@@ -132,5 +132,34 @@ class LeaveDungeonTest(unittest.TestCase):
         b.key.assert_called_with("space")
 
 
+class FieldAtLoginTest(unittest.TestCase):
+    """접속 때 사냥터 안이면 사냥 퀘스트가 있을 때만 클리어를 기다린다 — 채집으로 와 있던 사냥터는 판이 아니다
+    (2026-11-03 일일 미션 채집 뒤 다음 캐릭터 접속에서 40분씩 기다림)."""
+
+    def leave(self, hunt, task=None):
+        from mabi.tasks import login
+        b = mock.MagicMock()
+        b.cfg = {"black_hole": {"space_keyword": "검은 구멍"}, "silver": {"field_timeout": 2400},
+                 "weekday_dungeon": {}}
+        b.character = {"slot": 1}
+        b.daily.progress.return_value = {"task": task, "slot": 1}
+        b.exists.return_value = False
+        here = SimpleNamespace(kind=None, in_field=True)
+        with mock.patch("mabi.place.place", return_value=here),                 mock.patch("mabi.tasks.content.game_space", return_value="센마이 평원"),                 mock.patch("mabi.tasks.content.hunt_quest", return_value=hunt),                 mock.patch("mabi.tasks.content.dungeon_state", return_value="NotInDungeon"),                 mock.patch("mabi.tasks.content.wait_field") as wf:
+            login._leave_dungeon(b)
+        return wf.called
+
+    def test_gathering_in_field_does_not_wait(self):
+        self.assertFalse(self.leave(""))
+        self.assertFalse(self.leave("", task="silver"))  # 퀘스트가 없다고 확실히 나오면 판이 아니다
+
+    def test_hunt_quest_waits(self):
+        self.assertTrue(self.leave("센마이 평원 사냥 (0/1)"))
+
+    def test_unknown_quest_waits_only_for_cut_silver(self):
+        self.assertTrue(self.leave(None, task="silver"))
+        self.assertFalse(self.leave(None, task="daily_mission"))
+
+
 if __name__ == "__main__":
     unittest.main()

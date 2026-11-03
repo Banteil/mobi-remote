@@ -271,13 +271,15 @@ def _leave_dungeon(bot: Bot) -> bool:
         # 사냥터 안의 검은 구멍이었으면 사냥터로 돌아온다 — 끝나지 않은 사냥터를 이어서 본다 (은동전은 이미 나갔다)
         if not _in_field(bot):
             return True
-    # 아르바이트 채집으로 사냥터에 와 있던 것은 사냥터 판이 아니다 — 클리어가 오지 않아 40분을 기다릴 뻔했다
-    # (2026-11-01 채집 중 일시정지 → 이어 하기). 아르바이트가 추적 칸 조건을 보고 진행하기로 다시 잇는다
-    if cut != "arbeit" and _in_field(bot):
-        hunt = hunt_quest(bot) or "패킷"
-        bot.step("field_inside_at_login", f"사냥터 안에서 시작 ({hunt}) → 클리어까지 기다림")
-        wait_field(bot, "", bot.cfg["silver"]["field_timeout"])
-        return True
+    # 사냥터 판인지는 사냥 퀘스트로 본다 (사냥터에 들어가면 늘 생긴다) — 채집(아르바이트·일일 미션)으로 와 있던 사냥터는
+    # 판이 아니라 클리어가 오지 않는다 (2026-11-01 아르바이트 채집 중 이어 하기, 11-03 일일 미션 채집 뒤 다음 캐릭터 접속에서
+    # 캐릭터마다 40분씩 기다림). 퀘스트 조회가 안 되면 끊긴 숙제가 은동전일 때만 기다린다
+    if _in_field(bot):
+        hunt = hunt_quest(bot)
+        if hunt or (hunt is None and cut == "silver"):
+            bot.step("field_inside_at_login", f"사냥터 안에서 시작 ({hunt or '패킷'}) → 클리어까지 기다림")
+            wait_field(bot, "", bot.cfg["silver"]["field_timeout"])
+            return True
     state = dungeon_state(bot)  # 패킷, 모르면 CLI
     if state == "InProgress":
         bot.step("dungeon_inside_at_login", "던전 안에서 시작 → 클리어까지 기다렸다가 나옴")
