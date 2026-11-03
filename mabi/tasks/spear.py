@@ -140,7 +140,7 @@ class SpearDodge:
             self._with_focus(self.skip_scene)
             return
         if self.camera_due():
-            self._with_focus(self.set_camera)
+            self.set_camera()  # Z 만 누른다 — 뒤에서도 창에 직접 보내지므로 게임을 앞으로 가져오지 않는다 (사용자 11-03)
             return
         if st.ttt.due():
             job = st.ttt.take()
