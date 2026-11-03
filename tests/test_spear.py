@@ -163,6 +163,28 @@ class TicTacToeTest(unittest.TestCase):
         self.draw(ME, 0.0, 366.8)
         self.assertTrue(ttt.done)
 
+    def test_o_only_in_window(self):
+        """O 는 차례 시작 3.5~8초 사이의 보스 경로만 (11-03 party2: 늘 4.9~5.1초). 2초 때 움직임을 O 로 읽어 판이 틀어졌다."""
+        ttt = self.m.spear.ttt
+        self.turn(self.C, (0.0, 375.5))
+        ttt.turn_at -= 2
+        self.walk(self.BOSS, 9.0, 357.5)  # 너무 이르다
+        self.assertNotIn((2, 0), ttt.board)
+        self.draw(self.C, -9.2, 357.8)
+        self.assertEqual(ttt.board.get((0, 0)), "O")
+
+    def test_signals_after_done_ignored(self):
+        """한 줄을 만든 뒤에도 보스가 같은 연출·대상 표시를 한 번 더 쓴다 — 차례·투창으로 보지 않는다 (11-03 17:19:38)."""
+        ttt = self.m.spear.ttt
+        ttt.done = True
+        self.feed("spear.timeline", actor=ME, name=FORECAST)
+        self.assertFalse(ttt.due())
+        SpearStateTest.summon(self)
+        for n in SH:
+            self.m.apply("actor.dead", {"actor": SH[n], "dead": True})
+        self.feed("spear.buff", actor=ME, buff=TARGET_MARK, caster=SPEAR)
+        self.assertEqual(self.m.spear.target_at, 0.0)
+
     def test_choose_plan(self):
         for x1 in [(1, 0), (0, 1), (2, 1), (1, 2)]:  # 첫 X 상하좌우 어디든
             b = {x1: "X"}

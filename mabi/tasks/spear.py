@@ -18,7 +18,7 @@ import time
 
 from ..bot import Bot
 from ..spear import SpearState
-from ..tictactoe import TURN
+from ..tictactoe import O_AT, O_WINDOW
 
 TOL = 1.0          # 도착 (목표점에서)
 NEAR_SPEAR = 4.0   # 투창병 근처
@@ -149,13 +149,17 @@ class SpearDodge:
                 time.sleep(random.uniform(0.2, 0.35))
 
     def tictactoe(self, job: dict) -> None:
-        """틱택토 O 담당 — 고른 칸 가운데로 가서 보스가 O 를 새기러 출발할 때까지 (차례 시작 약 9초 뒤) 그 칸에 선다."""
+        """틱택토 O 담당 — 차례 시작 5초 안에 고른 칸 가운데로 가서, 보스가 O 를 새기러 올 때까지 그 칸에서 버틴다
+        (밀려나면 다시 들어간다). 보스는 5초 때 담당이 서 있는 자리로 가므로 늦으면 엉뚱한 칸에 O 가 생긴다 (사용자)."""
         ttt = self.st.ttt
         target, t0 = (job["x"], job["y"]), job["at"]
         done = lambda: ttt.resolved
         self.bot.log.info(f"틱택토: O 담당 → 칸 {job['cell']} ({target[0]:.0f}, {target[1]:.1f}) 로 이동 · 판 {ttt.text()}")
-        self.go(target, TOL, t0 + TURN - 1, done, pattern=False)
-        self.hold(target, t0 + TURN + 4, done, pattern=False)
+        if self.go(target, TOL, t0 + O_AT, done, pattern=False):
+            self.bot.log.info(f"틱택토: 칸 도착 (차례 시작 {time.monotonic() - t0:.1f}초)")
+        elif not done():
+            self.bot.log.warning(f"틱택토: {O_AT:.0f}초 안에 칸에 못 감 — 그래도 버팀")
+        self.hold(target, t0 + O_WINDOW[1], done, pattern=False)
         if not done():
             self.bot.log.info("틱택토: 보스가 O 를 새기러 오는 것을 못 봄")
 

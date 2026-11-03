@@ -105,6 +105,8 @@ class SpearState:
                 self.pending = SPEAR_ATTR[b]
                 return f"투창병 속성: {self.pending}"
             elif b == TARGET_MARK:
+                if self.finished:  # 주술사가 다 쓰러진 뒤(보스방)에도 같은 표시가 온다 — 투창이 아니다
+                    return None
                 if me is not None and a == me:
                     self.target_at = now
                     return f"투창 대상 = 나 (남은 속성 {self.pending or '?'})"
