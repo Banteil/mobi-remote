@@ -161,5 +161,29 @@ class FieldAtLoginTest(unittest.TestCase):
         self.assertFalse(self.leave(None, task="daily_mission"))
 
 
+class RecheckDailyTest(unittest.TestCase):
+    """일일 미션 중에 음식을 먹어 '꼬르륵' 이 막 끝나 선물이 남은 채 확인 → '아직 남음'. 마지막 선물 받기로
+    다 받았으면 완료로 고친다 (2026-11-03 일일 카드 실패)."""
+
+    def recheck(self, status, verified):
+        from mabi.runner import Runner
+        r = Runner.__new__(Runner)
+        r._emit = mock.MagicMock()
+        state = mock.MagicMock()
+        results = [("[가] 일일 미션", status, "선물 10개, 미완료: 꼬르륵(음식 2개 먹기 1/2) — 확인 결과 아직 남음")]
+        with mock.patch.dict("mabi.tasks.VERIFY", {"daily_mission": lambda b, c: verified}):
+            r._recheck_daily(None, {}, state, 3, results, {"daily_mission": (0, status)})
+        return results[0][1], state
+
+    def test_fixed_after_leftover_gifts(self):
+        status, state = self.recheck("CHECK", True)
+        self.assertEqual(status, "OK")
+        state.set.assert_called_once_with(3, "daily_mission", "done")
+
+    def test_still_left_or_other_status(self):
+        self.assertEqual(self.recheck("CHECK", False)[0], "CHECK")
+        self.assertEqual(self.recheck("FAIL", True)[0], "FAIL")  # 실패는 선물로 고치지 않는다
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -244,6 +244,25 @@ class Runner:
         by_slot = {int(k): v for k, v in cfg["run"].get("tasks_by_slot", {}).items()}
         return self._has_work(cfg, opts, by_slot, self.characters(cfg, opts), prof.DailyState(self.paths.state))
 
+    def _recheck_daily(self, bot, cfg, state, slot, results, ended) -> None:
+        """일일 미션이 '아직 남음'(받을 선물이 남음)이었는데 마지막 선물 받기로 다 받았으면 완료로 고친다.
+        일일 미션 중에 배고파 음식을 먹어 '꼬르륵' 이 막 끝나면 선물이 남은 채 확인해 실패로 남았다 (2026-11-03)."""
+        if "daily_mission" not in ended or ended["daily_mission"][1] != "CHECK":
+            return
+        try:
+            if not tasks.VERIFY["daily_mission"](bot, cfg):
+                return
+        except (StepTimeout, CannotProceed, MissingTemplate):
+            return
+        i = ended["daily_mission"][0]
+        label, _, summary = results[i]
+        summary = summary.split(" — ")[0] + " — 남은 선물은 마지막에 받음"
+        results[i] = (label, "OK", summary)
+        if slot is not None:
+            state.set(slot, "daily_mission", "done")
+        log.info(f"  {label}: 남은 선물을 받아 완료로 고침")
+        self._emit("task_end", slot=slot, task="daily_mission", label=label, status="OK", summary=summary, seconds=0)
+
     @staticmethod
     def _order(cfg, opts, by_slot, ch) -> list[str]:
         """이 캐릭터가 할 숙제 순서 (캐릭터 탭에서 끈 숙제는 뺀다)."""
@@ -414,6 +433,7 @@ class Runner:
                 continue
             bot.watch_weight = True  # 숙제 중에만 가방 무게 감시
             self._loot.open(bot, who)
+            ended = {}  # 숙제 → (results 자리, 상태)
             for tid in order:
                 label, fn = registry[tid]
                 if tid in bot.also_done:  # 다른 숙제 안에서 이미 끝냄 (사냥터 안 검은 구멍 등)
@@ -421,6 +441,7 @@ class Runner:
                     self._emit("task_end", slot=slot, task=tid, label=label, status="DONE", summary="완료", seconds=0)
                     continue
                 status = step(slot, tid, f"[{who}] {label}", lambda fn=fn: fn(bot, cfg))
+                ended[tid] = (len(results) - 1, status)
                 if ch:
                     state.set(slot, tid, "done" if status == "OK" else f"{status}: {results[-1][2]}")
                     for t in bot.also_done:
@@ -436,6 +457,7 @@ class Runner:
                         got = tasks.daily_mission.claim_leftovers(bot, cfg)
                         if got:
                             log.info(f"  [{who}] 마지막에 남은 일일 미션 선물: {got}")
+                            self._recheck_daily(bot, cfg, state, slot, results, ended)
                     except StopRequested:
                         log.warning("사용자 중단")
                         return
