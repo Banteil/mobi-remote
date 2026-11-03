@@ -77,16 +77,24 @@ def phase(bot: Bot):
         pl = place(bot)
         return None if not pl.name else "abyss" if pl.kind == ABYSS_MAP else "out"
 
+    def cli_result() -> bool:
+        return bool((bot.activity() or {}).get("IsAbyssResultSequencePlaying"))
+
+    def exit_button():  # 결과 연출 동안엔 나가기 버튼이 남는다 — 결과를 알면 보지 않는다 (어긋남이 아니다)
+        if cli_result() or (p.ok and st.abyss_result):
+            return None
+        return "play" if on_screen(ui.get("abyss_exit")) else None
+
     ui = bot.ui
     v = judge.decide(bot, "어비스", [
         ("패킷 로딩", lambda: "loading" if bot.map_loading() else None),
         ("패킷 매칭", lambda: "matching" if p.ok and st.abyss_matching in (1, 2, 3) else None),
         ("화면 보상", lambda: "reward" if on_screen(ui.get("reward_exit"), ui.get("dungeon_retry"),
                                                    ui.get("dungeon_touch")) else None),
-        ("CLI 결과 연출", lambda: "reward" if (bot.activity() or {}).get("IsAbyssResultSequencePlaying") else None),
+        ("CLI 결과 연출", lambda: "reward" if cli_result() else None),
         ("패킷 결과", lambda: "reward" if p.ok and st.abyss_result and not st.loading else None),
         ("패킷 맵", packet_map),
-        ("화면 나가기 버튼", lambda: "play" if on_screen(ui.get("abyss_exit")) else None),
+        ("화면 나가기 버튼", exit_button),
         ("CLI 장소", cli_place),
     ], same={"matching": {"reward", "abyss"}, "reward": {"abyss"}, "play": {"abyss"},
              "loading": {"matching", "reward", "abyss"}}).value  # 다음 판으로 넘어가는 로딩엔 매칭·보상 신호가 남는다
