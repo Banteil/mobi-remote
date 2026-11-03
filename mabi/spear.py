@@ -108,7 +108,8 @@ class SpearState:
                 if me is not None and a == me:
                     self.target_at = now
                     return f"투창 대상 = 나 (남은 속성 {self.pending or '?'})"
-                return None  # 함께하기 — 다른 캐릭터가 대상
+                # 함께하기 — 다른 캐릭터가 대상. 남겨 둔다: 내게 걸렸는데 안 움직였다는 제보(11-03 16:05 어둠)를 가르려고
+                return f"투창 대상 = 다른 캐릭터 (번호 {a}, 나 {me})"
         return None
 
     # 봇이 쓰는 것 ──────────────────────────────────
