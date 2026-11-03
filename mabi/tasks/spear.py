@@ -39,6 +39,7 @@ class SpearDodge:
         self._calib = False     # 처음 쓸 때 파일에서 (흩어진 물길이 아니면 읽지도 않는다)
         self.calib_tried = 0.0  # 이 맵에서 보정을 해 봤나 (맵 진입 시각)
         self.camera_set = 0.0   # 이 맵에서 카메라를 맞췄나 (맵 진입 시각)
+        self.calib_map = 0.0    # W·D 를 잰 맵 (맵 진입 시각) — 카메라가 판마다 달라 맵마다 다시 잰다
 
     @property
     def file(self):
@@ -73,8 +74,13 @@ class SpearDodge:
             return True
         if st.finished:
             return False
-        return st.due() or (self.calib is None and len(st.attr) == 6
+        return st.due() or (self.stale() and len(st.attr) == 6
                             and self.calib_tried != self.bot.packets.state.entered_at)
+
+    def stale(self) -> bool:
+        """이 맵에서 아직 W·D 를 안 쟀나. 카메라를 고정해도 판마다 캐릭터가 보는 쪽이 달라 저장된 방향이 거꾸로일 수 있다
+        (2026-11-03 함께하기 — 틱택토에서 고른 칸의 정반대 칸으로 가 O 를 날리고 전멸). 못 재면 저장된 값으로 간다."""
+        return self.calib is None or self.calib_map != self.bot.packets.state.entered_at
 
     def camera_due(self) -> bool:
         """함께하기는 카메라가 캐릭터 반대쪽을 보고 시작한다 (혼자하기는 캐릭터가 보는 쪽 — 2026-11-03 사용자).
@@ -103,7 +109,7 @@ class SpearDodge:
             if job and self.calib is not None:
                 self._with_focus(lambda: self.tictactoe(job))
             return
-        if self.calib is None and not st.due():
+        if self.stale() and not st.due():
             self.calib_tried = self.bot.packets.state.entered_at
             self._with_focus(self.calibrate)
             return
@@ -265,6 +271,7 @@ class SpearDodge:
             self.bot.log.info(f"투창 패턴: W·D 방향 재기 실패 (W {w} · D {d}) — 다음 기회에")
             return
         self.calib = (w, d)
+        self.calib_map = self.bot.packets.state.entered_at
         try:
             self.file.write_text(json.dumps({"w": w, "d": d}), encoding="utf-8")
         except OSError:
