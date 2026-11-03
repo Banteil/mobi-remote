@@ -15,6 +15,8 @@ class KeysTest(unittest.TestCase):
 
     def test_check(self):
         self.assertIsNone(keys.check("camera", "f5"))
+        for k in ("end", "home", "pagedown", ",", "num3", "`"):  # 게임에서 쓰는 다른 키도 (사용자 11-03)
+            self.assertIsNone(keys.check("camera", k), k)
         self.assertIsNone(keys.check("fast_travel", ""))
         self.assertIsNotNone(keys.check("camera", ""))
         self.assertIsNotNone(keys.check("camera", "ㅋ"))
@@ -27,6 +29,12 @@ class KeysTest(unittest.TestCase):
         g = tomllib.loads((Path(__file__).parent.parent / "config.default.toml").read_text(encoding="utf-8"))["game"]
         for name, (default, _) in keys.GAME_KEYS.items():
             self.assertEqual(g.get(f"{name}_key"), default, name)
+
+    def test_navigation_keys_are_extended(self):
+        """End·Home 등은 확장 키 표시를 붙여 보낸다 — 없으면 게임이 숫자 패드 키로 받는다."""
+        from mabi import inputs
+        self.assertTrue(inputs._key(inputs.vk_of("end"), up=False).ki.dwFlags & inputs.KEYEVENTF_EXTENDEDKEY)
+        self.assertFalse(inputs._key(inputs.vk_of("z"), up=False).ki.dwFlags & inputs.KEYEVENTF_EXTENDEDKEY)
 
 
 if __name__ == "__main__":

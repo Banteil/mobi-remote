@@ -245,13 +245,19 @@ function keyName(e) {
   if (/^Key[A-Z]$/.test(c)) return c.slice(3).toLowerCase();
   if (/^Digit\d$/.test(c)) return c.slice(5);
   if (/^F([1-9]|1[0-2])$/.test(c)) return c.toLowerCase();
-  return { Slash: '/', Period: '.' }[c] || null;
+  if (/^Numpad\d$/.test(c)) return 'num' + c.slice(6);
+  return {
+    Slash: '/', Period: '.', Comma: ',', Minus: '-', Equal: '=', Semicolon: ';', Quote: "'",
+    BracketLeft: '[', BracketRight: ']', Backslash: '\\', Backquote: '`',
+    Home: 'home', End: 'end', Insert: 'insert', Delete: 'delete', PageUp: 'pageup', PageDown: 'pagedown',
+    ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+  }[c] || null;
 }
 
 function paintGameKeys(list) {
   $('#opt-game-keys').innerHTML = list.map((k) => {
     const [name, hint] = k.label.split(' — ');
-    return '<dt>' + esc(name) + '</dt><dd><input class="mono w-num game-key" data-name="' + esc(k.name) + '"'
+    return '<dt>' + esc(name) + '</dt><dd><input class="mono game-key" data-name="' + esc(k.name) + '"'
       + ' data-default="' + esc(k.default) + '" value="' + esc(k.key.toUpperCase()) + '" readonly>'
       + (hint ? '<div class="hint">' + esc(hint) + '</div>' : '') + '</dd>';
   }).join('');
@@ -533,10 +539,10 @@ $('#opt-game-keys').addEventListener('keydown', (e) => {
   if (!i || e.key === 'Tab') return;
   e.preventDefault();
   if (e.key === 'Escape') { e.stopPropagation(); i.blur(); return; }  // 옵션 창은 닫지 않는다
-  if (e.key === 'Backspace' || e.key === 'Delete') { i.value = ''; return; }
+  if (e.key === 'Backspace') { i.value = ''; return; }
   const k = keyName(e);
   if (k) i.value = k.toUpperCase();
-  $('#opt-keys-msg').textContent = k ? '' : '그 키는 쓸 수 없습니다 (글자·숫자·F1~F12·/·.)';
+  $('#opt-keys-msg').textContent = k ? '' : '그 키는 쓸 수 없습니다 (Shift·Ctrl·Alt·Space·Enter·Esc 는 안 됨)';
 });
 $('#opt-keys-save').addEventListener('click', saveGameKeys);
 $('#opt-keys-reset').addEventListener('click', () => {

@@ -564,6 +564,7 @@ select.sort { min-width: 0; max-width: 170px; padding: 5px 8px; font-size: 12px;
 }
 .opt-tab:hover { color: var(--fg-dim); }
 .opt-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.game-key { width: 100px; text-align: center; cursor: pointer; }
 
 /* ── 작업 기록 창 ─────────────────────────────────── */
 .qh-day { margin: 14px 0 6px; font-weight: 600; color: var(--fg-dim); }

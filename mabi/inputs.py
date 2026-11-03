@@ -13,6 +13,7 @@ MOUSEEVENTF_LEFTUP = 0x0004
 MOUSEEVENTF_WHEEL = 0x0800
 KEYEVENTF_KEYUP = 0x0002
 KEYEVENTF_SCANCODE = 0x0008
+KEYEVENTF_EXTENDEDKEY = 0x0001
 
 
 class MOUSEINPUT(ctypes.Structure):
@@ -40,7 +41,12 @@ class INPUT(ctypes.Structure):
 
 VK = {"esc": 0x1B, "enter": 0x0D, "space": 0x20, "tab": 0x09, "backspace": 0x08,
       "up": 0x26, "down": 0x28, "left": 0x25, "right": 0x27, "alt": 0x12, "ctrl": 0x11, "shift": 0x10,
-      "/": 0xBF, ".": 0xBE}
+      "/": 0xBF, ".": 0xBE, ",": 0xBC, "-": 0xBD, "=": 0xBB, ";": 0xBA, "'": 0xDE,
+      "[": 0xDB, "]": 0xDD, "\\": 0xDC, "`": 0xC0,
+      "home": 0x24, "end": 0x23, "insert": 0x2D, "delete": 0x2E, "pageup": 0x21, "pagedown": 0x22}
+VK.update({f"num{i}": 0x60 + i for i in range(10)})  # 숫자 패드
+# 확장 키 — 스캔 코드가 숫자 패드와 같아 표시를 붙여야 그 키로 받는다 (안 붙이면 End 가 숫자 패드 1)
+EXTENDED = {0x24, 0x23, 0x2D, 0x2E, 0x21, 0x22, 0x25, 0x26, 0x27, 0x28}
 VK.update({f"f{i}": 0x6F + i for i in range(1, 13)})
 
 
@@ -64,7 +70,7 @@ def _mouse(flags: int, data: int = 0) -> INPUT:
 
 def _key(vk: int, up: bool) -> INPUT:
     scan = user32.MapVirtualKeyW(vk, 0)
-    flags = KEYEVENTF_SCANCODE | (KEYEVENTF_KEYUP if up else 0)
+    flags = KEYEVENTF_SCANCODE | (KEYEVENTF_KEYUP if up else 0) | (KEYEVENTF_EXTENDEDKEY if vk in EXTENDED else 0)
     return INPUT(type=INPUT_KEYBOARD, ki=KEYBDINPUT(0, scan, flags, 0, 0))
 
 
@@ -167,9 +173,10 @@ def post_key(hwnd: int, key: str) -> None:
     user32.SendMessageW(hwnd, 0x0006, 1, 0)  # WM_ACTIVATE (WA_ACTIVE)
     user32.SendMessageW(hwnd, 0x0007, 0, 0)  # WM_SETFOCUS
     time.sleep(0.1)
-    user32.PostMessageW(hwnd, 0x0100, vk, 1 | (scan << 16))  # WM_KEYDOWN
+    ext = (1 << 24) if vk in EXTENDED else 0
+    user32.PostMessageW(hwnd, 0x0100, vk, 1 | (scan << 16) | ext)  # WM_KEYDOWN
     time.sleep(random.uniform(0.06, 0.1))
-    user32.PostMessageW(hwnd, 0x0101, vk, 1 | (scan << 16) | (0xC0 << 24))  # WM_KEYUP
+    user32.PostMessageW(hwnd, 0x0101, vk, 1 | (scan << 16) | ext | (0xC0 << 24))  # WM_KEYUP
     time.sleep(0.3)  # 게임이 다음 프레임에 읽을 때까지 활성으로 둔다
     if user32.GetForegroundWindow() == hwnd:
         return  # 그 사이 사람이 게임을 앞으로 가져왔다 — 비활성이라고 알리면 게임이 ESC 등 키를 무시한다
