@@ -661,7 +661,7 @@ def _clear_show(bot: Bot, mon, d, end: float) -> None:
     from .. import monitor
     kind = clear_kind(bot)
     ctx = monitor.Ctx(bot.task_id or "dungeon", "클리어 뒤 연출", menus=True, finish_on={d.REWARD: "menu"})
-    touched, quiet, closed, blind = 0.0, 0, 0, 0
+    touched, quiet, closed, blind, scened = 0.0, 0, 0, 0, False
     close_x = bot.cfg["dungeon"].get("window_close")
     bot.log.debug(f"클리어 뒤 연출 ({kind or '패킷 모름'})")
     while True:
@@ -673,6 +673,7 @@ def _clear_show(bot: Bot, mon, d, end: float) -> None:
         inside = kind and CLEAR_KINDS[kind][1](bot.packets.state) if bot.packets.ok else kind
         if seen.what == d.LOADING or (kind and not inside):
             return  # 보상 메뉴 없이 나왔다
+        scened = scened or seen.what == d.SCENE or bool(bot.cutscene_playing())
         if seen.done:
             quiet = 0
         elif (seen.what == d.UNKNOWN and closed < 3 and close_x and bot.vision.has(close_x)
@@ -688,9 +689,12 @@ def _clear_show(bot: Bot, mon, d, end: float) -> None:
             if kind:
                 # 보지 않고 누르는 건 처음 3번만 2.5초 간격, 그 뒤엔 터치 글자가 보일 때 또는 10초에 한 번 — 요일 던전은
                 # 보상 메뉴까지 40초 가까이 걸려 그동안 빈 곳을 계속 눌렀다 (2026-11-04). 터치 글자는 클리어 뒤 5~13초에
-                # 뜨고 2~3번이면 넘어갔다 (10-25 로그). 사냥터의 반투명 글자는 잘 안 읽혀 10초 간격 누르기는 남긴다
-                gap = 2.5 if blind < 3 else 10.0
-                if time.monotonic() - touched > gap or (blind >= 3 and touch_prompt_visible(bot)):
+                # 뜨고 2~3번이면 넘어갔다 (10-25 로그). 사냥터의 반투명 글자는 잘 안 읽혀 10초 간격 누르기는 남긴다.
+                # 던전은 터치 → 보상 상자 연출 → 보상 메뉴 순이라, 연출을 본 뒤로는 글자가 보일 때만 누른다 —
+                # 연출이 끝나고 메뉴가 뜨기까지 10초 남짓 빈 곳을 누르는 게 눈에 띄었다 (사용자 11-04)
+                gap = None if kind == "dungeon" and scened else 2.5 if blind < 3 else 10.0
+                if ((gap is not None and time.monotonic() - touched > gap)
+                        or (blind >= 3 or scened) and touch_prompt_visible(bot)):
                     touched = time.monotonic()
                     blind += 1
                     handlers_touch(bot, ctx, seen)
