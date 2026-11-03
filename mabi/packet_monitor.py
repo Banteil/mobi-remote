@@ -834,6 +834,10 @@ class PacketMonitor:
             if vals.get("mine"):
                 if vals.get("actor") != s.me:
                     s.combat = "NonCombat"  # 맵에 막 들어옴 — 싸우는 중이면 곧 전투 상태가 온다
+                    # 내 번호는 맵에 들어올 때만 바뀐다. 판 도중에 바뀌면 '나' 판단(투창·틱택토·변신·쓰러짐)이 틀어진다
+                    # (11-03 함께하기) — 다음에 생기면 바로 보이게 남긴다
+                    if s.me is not None and s.entered_at and time.monotonic() - s.entered_at > 10:
+                        log.warning("패킷: 맵 도중에 내 번호가 바뀜 %s → %s", s.me, vals.get("actor"))
                 s.me = vals.get("actor")
                 s.my_name = vals.get("name") or s.my_name
                 log.info("패킷: 내 캐릭터 %s (번호 %s)", s.my_name or "?", s.me)
