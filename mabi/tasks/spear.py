@@ -39,7 +39,8 @@ class SpearDodge:
         self._calib = False     # 처음 쓸 때 파일에서 (흩어진 물길이 아니면 읽지도 않는다)
         self.calib_tried = 0.0  # 이 맵에서 보정을 해 봤나 (맵 진입 시각)
         self.camera_set = 0.0   # 이 맵에서 카메라를 맞췄나 (맵 진입 시각)
-        self.camp_camera = 0.0  # 이 맵에서 모닥불 뒤(보스방으로 갈 때) 카메라를 다시 맞췄나 (맵 진입 시각)
+        self.camp_camera = 0.0  # 이 맵에서 보스 등장 연출 뒤 카메라를 다시 맞췄나 (맵 진입 시각)
+        self.scene_tried = 0.0  # 이 맵에서 보스 등장 연출을 넘겨 봤나 (맵 진입 시각)
 
     @property
     def file(self):
@@ -68,7 +69,7 @@ class SpearDodge:
         st = getattr(self.bot.packets, "spear", None)
         if not isinstance(st, SpearState) or not st.active:
             return False
-        if self.camera_due():
+        if self.camera_due() or self.scene_due():
             return True
         if st.ttt.due():
             return True
@@ -80,30 +81,56 @@ class SpearDodge:
     def camera_due(self) -> bool:
         """함께하기는 카메라가 캐릭터 반대쪽을 보고 시작한다 (혼자하기는 캐릭터가 보는 쪽 — 2026-11-03 사용자).
         W·D 방향이 혼자하기와 달라지므로 맵에 들어와 로딩이 끝나면 한 번 맞춘다.
-        모닥불이 나타나 보스방으로 갈 때도 한 번 더 — 첫 방에서 쓰러졌다 일어나면 시점이 뒤틀릴 수 있다 (사용자, 두 모드 다)."""
+        보스방에 들어가면 한 번 더 — 첫 방에서 쓰러졌다 일어나면 시점이 뒤틀릴 수 있다 (사용자, 두 모드 다).
+        모닥불이 나타난 때는 아직 보스방 앞 몬스터와 싸우는 중이라 (11-03 사용자) 보스 등장 연출이 끝난 뒤에 맞춘다
+        — 기록(party2 10판)에서 연출 끝 → 첫 틱택토 차례까지 25~44초."""
         s = self.bot.packets.state
         if not s.entered_at or s.loading or s.dead:
             return False
-        if s.campfire and self.camp_camera != s.entered_at:
-            return True
+        if s.boss_scene and self.camp_camera != s.entered_at:
+            return not s.cutscene
         return (self.camera_set != s.entered_at and SOLO not in (s.channel_name or "")
                 and time.monotonic() - s.entered_at > CAMERA_WAIT)
 
     def set_camera(self) -> None:
         """Z(자동 카메라) → 4초 뒤 캐릭터 뒤로 돌아오면 다시 Z(수동 카메라)로 고정 (사용자)."""
         s = self.bot.packets.state
-        camp = bool(s.campfire)
+        camp = bool(s.boss_scene)
         self.camera_set = s.entered_at  # 모닥불 뒤에 처음 맞춰도 맵 진입 때 것은 다시 하지 않는다
         if camp:
             self.camp_camera = s.entered_at
-        what = "모닥불 → 보스방" if camp else "함께하기"
+        what = "보스방" if camp else "함께하기"
         self.bot.log.info(f"{what}: 카메라를 캐릭터 뒤로 맞춤 (Z → {CAMERA_AUTO:.0f}초 → Z)")
         self.bot.key("z")
         time.sleep(CAMERA_AUTO)
         self.bot.key("z")
 
+    def scene_due(self) -> bool:
+        """보스 등장 연출 중이고 이 맵에서 아직 안 넘겼다. 물결은 어차피 게임을 앞에 두고 돌아 넘겨도 된다 (사용자 11-03)
+        — 다른 어비스는 연출을 기다린다 (Bot.scene_skip)."""
+        s = self.bot.packets.state
+        return bool(s.entered_at and s.cutscene and s.boss_scene and self.scene_tried != s.entered_at)
+
+    def skip_scene(self) -> None:
+        """'장면 넘기기' 를 누른다. 버튼이 연출 시작보다 조금 늦게 뜰 수 있어 잠깐 찾는다."""
+        bot = self.bot
+        self.scene_tried = bot.packets.state.entered_at
+        end = time.monotonic() + 5
+        while bot.packets.state.cutscene and time.monotonic() < end:
+            hit = bot.skip_button()
+            if hit and hit[0] == "scene":
+                bot.log.info("물결: 보스 등장 연출 넘기기")
+                bot.click(hit[1])
+                return
+            time.sleep(0.5)
+        if bot.packets.state.cutscene:
+            bot.log.info("물결: 보스 등장 연출의 넘기기 버튼을 못 찾음 — 끝나길 기다림")
+
     def run(self) -> None:
         st = self.st
+        if self.scene_due():
+            self._with_focus(self.skip_scene)
+            return
         if self.camera_due():
             self._with_focus(self.set_camera)
             return

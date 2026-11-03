@@ -229,17 +229,27 @@ class KeysTest(unittest.TestCase):
             sd.dodge({"x": 10, "y": 142, "at": time.monotonic(), "shaman": 1, "attr": "불"})
         self.assertEqual([c.args for c in bot.key.call_args_list], [("1",)] * 3)
 
-    def test_camera_again_at_campfire(self):
-        """모닥불(보스방으로 감)이 나오면 카메라를 한 번 더 맞춘다 — 혼자하기도 (사용자 11-03)."""
+    def test_camera_again_after_boss_scene(self):
+        """보스방에 들어가면 카메라를 한 번 더 맞춘다 — 혼자하기도 (사용자 11-03).
+        모닥불만 나온 때는 보스방 앞 몬스터와 싸우는 중이라 기다리고, 보스 등장 연출은 넘긴 뒤 맞춘다."""
         from unittest import mock
         m = PacketMonitor(None)
         m.state.me = ME
         m.apply("channel.entering", {"channel": 1, "channel_type": "InstanceAbyssDungeon",
                                      "channel_name": "흩어진 물길 (어비스 시즌2 3구역 매우 어려움2 솔로)"})
         bot = mock.MagicMock(packets=m)
+        bot.skip_button.return_value = ("scene", "hit")
         sd = SpearDodge(bot)
         self.assertFalse(sd.camera_due())  # 혼자하기는 들어올 때 맞추지 않는다
         m.apply("abyss.campfire", {})
+        self.assertFalse(sd.camera_due() or sd.scene_due())  # 모닥불만 — 아직 싸우는 중
+        m.apply("cutscene.play", {})
+        self.assertFalse(sd.camera_due())  # 연출 중엔 맞추지 않고
+        self.assertTrue(sd.scene_due())    # 넘긴다
+        sd.skip_scene()
+        bot.click.assert_called_once_with("hit")
+        self.assertFalse(sd.scene_due())   # 한 맵에 한 번
+        m.apply("cutscene.end", {})
         self.assertTrue(sd.camera_due())
         with mock.patch("mabi.tasks.spear.time.sleep"):
             sd.set_camera()
