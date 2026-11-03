@@ -303,9 +303,23 @@ async function loadAbyss() {
   $('#ab-minutes').value = a.minutes;
   $('#ab-revive').checked = a.revive !== false;
   $('#ab-mode').value = a.mode;
+  abyssFrontOnly = a.frontOnly || [];
+  paintAbyssBg();
   paintAbyssRunning(a.running);
   loadRaid(a.chars);
   loadBoss();
+}
+
+/* 고른 던전이 뒤에서 돌 수 있나 — 흩어진 물길은 패턴 이동 때문에 게임을 앞에 두고만 돈다 (abyss.FRONT_ONLY) */
+let abyssFrontOnly = [];
+function paintAbyssBg() {
+  const front = abyssFrontOnly.includes($('#ab-dungeon').value);
+  const el = $('#ab-bg');
+  el.textContent = front ? '백그라운드 불가' : '백그라운드 가능';
+  el.className = 'pill ab-bg ' + (front ? 'pill-warn' : 'pill-ok');
+  el.title = front
+    ? '패턴(투창·틱택토) 때 캐릭터를 직접 움직여야 해서 게임을 앞에 둔 채로 돕니다'
+    : '입장할 때만 게임을 앞으로 가져오고, 그 뒤로는 다른 창에 가려져 있어도 됩니다';
 }
 
 /* 보스전 기본값 (궁극기·팔라딘 변신) — 숙제 기본값처럼 캐릭터 탭에서 따로 정하지 않은 캐릭터에 */
@@ -457,6 +471,7 @@ $('#dl-start').addEventListener('click', () => {
 });
 $('#dl-queue').addEventListener('click', queueDaily);
 $('#opt-fit-display').addEventListener('change', () => mm.daily.saveSettings({ fit_display: $('#opt-fit-display').checked }));
+$('#ab-dungeon').addEventListener('change', paintAbyssBg);
 $('#ab-start').addEventListener('click', () => startRepeat(abyssSpec(), '어비스'));
 $('#ab-queue').addEventListener('click', () => { const it = abyssSpec(); queueRepeat(it, abyssAmount(it)); });
 $('#ab-stop').addEventListener('click', () => mm.daily.abyssStop());

@@ -26,11 +26,12 @@ from . import ui_text
 from .content import CannotProceed, touch_prompt_visible, watch
 from .exits import DungeonExit, Exit
 from .repeat import Repeat
-from ..spear import MAP_NAME as SPEAR_MAP
 from .spear import SpearDodge
 
 DIFFICULTIES = ["입문", "어려움", "매우 어려움", "매우 어려움2"]
 DUNGEONS = ["허상의 정박지", "광기의 동굴", "흩어진 물길"]
+# 게임을 앞에 두고만 도는 던전 — 패턴 이동(WASD 를 누른 채)이 있어 뒤에서 돌면 창을 가져오느라 늦는다 (AbyssRepeat.setup)
+FRONT_ONLY = ("흩어진 물길",)
 
 
 _norm = ui_text.norm
@@ -529,7 +530,7 @@ class AbyssRepeat(Repeat):
 
     def setup(self):
         self.bot.scene_skip = False  # 연출은 누르지 않고 기다린다 — 누르면 뒤에서 돌던 게임이 앞으로 나온다 (2026-10-25 사용자)
-        if self.behind and self.a.get("dungeon") == SPEAR_MAP:
+        if self.behind and self.a.get("dungeon") in FRONT_ONLY:
             # 투창·틱택토는 WASD 를 누른 채 움직여야 해 게임이 앞에 있어야 한다. 뒤에서 키를 보낸 뒤 앞으로 가져오면
             # 게임이 첫 활성화를 놓쳐 두 번 가져오느라 약 3초 걸려, 5초 안에 칸에 서야 하는 틱택토가 늦었다
             # (11-03 20:51·20:55). 사용자: "물결은 백그라운드로 돌리게 하면 안되겠다"

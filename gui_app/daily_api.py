@@ -250,7 +250,7 @@ class DailyApi:
         profile = prof.load_profile(self.paths.profile) or {"slots": [], "names": {}}
         return {"dungeon": a["dungeon"], "difficulty": a.get("difficulty") or "매우 어려움2", "runs": int(a.get("runs", 0)),
                 "slot": int(a.get("slot", 0)), "chars": [{"slot": c["slot"], "name": c["name"]} for c in prof.characters(profile)],
-                "minutes": float(a.get("minutes", 0)), "dungeons": abyss.DUNGEONS,
+                "minutes": float(a.get("minutes", 0)), "dungeons": abyss.DUNGEONS, "frontOnly": list(abyss.FRONT_ONLY),
                 "revive": bool(a.get("revive", True)), "mode": a.get("mode") or "party",
                 "difficulties": abyss.DIFFICULTIES,
                 "running": bool(self._abyss_thread and self._abyss_thread.is_alive())}

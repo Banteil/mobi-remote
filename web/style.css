@@ -137,6 +137,7 @@ pre { user-select: text; }
 .pill-warn { color: var(--warn); border-color: var(--warn); background: var(--warn-bg); }
 .pill-bad  { color: var(--bad);  border-color: var(--bad-line);  background: var(--bad-bg); }
 .pill-muted{ color: var(--fg-mute); }
+.card h3 .ab-bg { margin-left: 6px; text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 11px; padding: 1px 8px; }
 
 .stat { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; }
 .stat em { font-style: normal; font-size: 10px; color: var(--fg-mute); }
