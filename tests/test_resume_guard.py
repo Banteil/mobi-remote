@@ -86,3 +86,13 @@ class EatTest(unittest.TestCase):
         self.assertTrue(eat(b))
         self.assertFalse(eat(b))
         self.assertEqual(keys, ["b"])
+
+
+class SpearForegroundTest(unittest.TestCase):
+    def test_scattered_waterway_runs_in_front(self):
+        """흩어진 물길은 뒤에서 돌지 않는다 — 창을 가져오는 데 약 3초 걸려 틱택토가 늦었다 (11-03 사용자)."""
+        for dungeon, behind in (("흩어진 물길", False), ("광기의 동굴", True)):
+            cfg = {"abyss": {"dungeon": dungeon, "background": True}}
+            r = abyss.AbyssRepeat(mock.MagicMock(), cfg)
+            r.setup()
+            self.assertIs(r.behind, behind)
