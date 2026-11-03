@@ -220,6 +220,13 @@ def appearing_name(body: bytes) -> str | None:
         return None
 
 
+def appearing_is_mine(body: bytes, char_id: int | None) -> bool:
+    """등장 캐릭터 메시지가 내 캐릭터의 것인지. 캐릭터 자신의 기록은 [u64 고유 번호][u32 3][u32 바이트 길이][UTF-16 이름].
+    파티원 등장에도 파티 명단에 내 고유 번호가 들어 있지만 그 뒤는 [u32 2] — 고유 번호만 찾으면 파티원을 '나' 로 안다
+    (11-03 abyss_runs 8개: 내 등장 43건 모두 3, 파티원 등장의 내 번호는 2. 파티원 자신의 기록도 3)."""
+    return char_id is not None and struct.pack("<QI", char_id, 3) in body
+
+
 def parse_tcp(frame: bytes, link: int = 1):
     """(서버 IP, 서버 포트, 내 포트, seq, flags, payload) 또는 None. link 1 = 이더넷."""
     if link != 1 or len(frame) < 14:
@@ -630,9 +637,8 @@ class PacketMonitor:
         if ev.key.startswith("spear."):
             self._spear(ev.key, vals)
             return
-        if ev.key == "char.appearing":  # 내 고유 번호가 들어 있으면 내 캐릭터 (death1 등 캡처 4개에서 확인, 위치는 3094~3150 으로 들쭉날쭉)
-            cid = self.state.char_id
-            vals["mine"] = cid is not None and struct.pack("<Q", cid) in body
+        if ev.key == "char.appearing":  # 내 고유 번호 + 자기 기록 표시가 있으면 내 캐릭터 (위치는 3094~3150 으로 들쭉날쭉)
+            vals["mine"] = appearing_is_mine(body, self.state.char_id)
             if vals["mine"]:
                 vals["name"] = appearing_name(body)
         self.apply(ev.key, vals)

@@ -6,7 +6,7 @@ import time
 import unittest
 
 from mabi.bot import Bot
-from mabi.packet_monitor import PacketMonitor, Stream, appearing_name, parse_tcp
+from mabi.packet_monitor import PacketMonitor, Stream, appearing_is_mine, appearing_name, parse_tcp
 from mabi.tasks.content import wait_dungeon
 
 KNOWN = frozenset({0x4f6e, 0x5026, 0x272fa, 0x30d4b})
@@ -344,6 +344,16 @@ class AppearingNameTest(unittest.TestCase):
     def test_other_shapes_are_none(self):
         self.assertIsNone(appearing_name(b"\x00" * 200))
         self.assertIsNone(appearing_name(self.body()[:-60]))  # 잘림
+
+    def test_mine_by_own_record_not_party_list(self):
+        """파티원 등장의 파티 명단에도 내 고유 번호가 있다 — 뒤가 3(자기 기록)일 때만 나 (11-03 party4)."""
+        cid = 0x174ADF70
+        own = b"\x00" * 20 + struct.pack("<QII", cid, 3, 4) + "가나".encode("utf-16le")
+        party = (b"\x00" * 20 + struct.pack("<QII", 0x178AF7E0, 3, 4) + "다라".encode("utf-16le")
+                 + struct.pack("<QI", cid, 2))
+        self.assertTrue(appearing_is_mine(own + struct.pack("<QI", cid, 2), cid))  # 내 등장에도 명단이 붙는다
+        self.assertFalse(appearing_is_mine(party, cid))
+        self.assertFalse(appearing_is_mine(own, None))
 
 
 class SessionTest(unittest.TestCase):
