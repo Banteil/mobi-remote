@@ -61,9 +61,12 @@ class AbyssPhaseTest(unittest.TestCase):
         self.assertEqual(abyss.phase(bot), "reward")
 
     def test_cli_result_sequence(self):
-        bot = make_bot(in_abyss(), act={"IsAbyssResultSequencePlaying": True}, seen={"abyss_exit"})
+        bot = make_bot(in_abyss(abyss_result=3), act={"IsAbyssResultSequencePlaying": True}, seen={"abyss_exit"})
         self.assertEqual(abyss.phase(bot), "reward")
         bot.log.info.assert_not_called()  # 결과 연출 동안 나가기 버튼이 남는 건 어긋남이 아니다
+        bot = make_bot(in_abyss(), act={"IsAbyssResultSequencePlaying": True})
+        self.assertEqual(abyss.phase(bot), "reward")
+        bot.log.info.assert_called()  # 패킷이 결과를 놓침 (패킷 맵=판 안) — 이건 남긴다
 
     def test_matching_on_reward_screen_is_not_conflict(self):
         bot = make_bot(in_abyss(abyss_matching=2, abyss_result=3), seen={"reward_exit"})
