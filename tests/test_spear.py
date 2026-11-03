@@ -187,6 +187,18 @@ class KeysTest(unittest.TestCase):
         self.assertEqual(sorted(sd.keys_toward(7, -10)), ["d", "s"])
         self.assertEqual(sd.keys_toward(-3, 0.2), ["a"])
 
+    def test_fight_key_after_return(self):
+        """투창병 쪽으로 돌아온 뒤 1 을 3번 — 바로 전투로 (사용자 11-03)."""
+        from unittest import mock
+        bot = mock.MagicMock()
+        sd = SpearDodge(bot)
+        sd.go = sd.hold = mock.MagicMock()
+        st = mock.MagicMock()
+        st.broken_since.return_value = True
+        with mock.patch.object(SpearDodge, "st", st), mock.patch.object(SpearDodge, "ok", return_value=True),                 mock.patch("mabi.tasks.spear.time.sleep"):
+            sd.dodge({"x": 10, "y": 142, "at": time.monotonic(), "shaman": 1, "attr": "불"})
+        self.assertEqual([c.args for c in bot.key.call_args_list], [("1",)] * 3)
+
     def test_wanted_only_when_active(self):
         m = PacketMonitor(None)
         sd = SpearDodge(SimpleNamespace(packets=m))

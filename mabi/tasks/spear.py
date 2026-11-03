@@ -5,7 +5,7 @@
 2. 파훼(그 주술사 보호막 깨짐)를 볼 때까지 제자리를 지킨다 — 가만히 있으면 자동 전투·어그로가 끌고 가므로 짧게 움찔거리고,
    밀려나면 다시 들어간다 (사용자). 못 깨면 10초마다 같은 속성을 다시 던지니 계속 지킨다 (상한 HOLD).
    먼저 떠나지 않는다 — 몬스터 길막·후딜 큰 스킬로 늦게 닿을 수 있다 (2026-11-03 사용자).
-3. 깨지면 투창병 근처로 돌아간다 (사용자: 돌아가는 건 파훼했을 때).
+3. 깨지면 투창병 근처로 돌아간다 (사용자: 돌아가는 건 파훼했을 때). 돌아오면 1 을 3번 눌러 바로 전투로 (사용자 11-03).
 W·D 가 맵에서 어느 쪽인지는 카메라를 고정한 채 (사용자) 주술사가 나온 뒤 한 번 짧게 눌러 재고 저장한다 (속성 버프 3~4초 전).
 키를 떼도 위치 읽기가 늦어 약 1.5칸 더 가므로 지금 속도 × LAG 만큼 앞에서 뗀다 (11-02 실측 초당 5.5칸, 수도사 이속 버프 때 ~7.9).
 게임 키만 누른다 — 패킷은 보내지 않는다.
@@ -29,6 +29,7 @@ GO_LIMIT = 8.0     # 한 번 가는 데 상한 (가장 먼 주술사가 약 24�
 CALIB_FILE = "spear_calib.json"
 SOLO = "솔로"        # 맵 이름 끝 '(… 솔로)' — 혼자하기
 CAMERA_WAIT = 2.0  # 맵에 들어오고 이만큼 뒤 카메라를 맞춘다
+FIGHT_KEY, FIGHT_PRESS = "1", 3  # 투창병 쪽으로 돌아온 뒤 전투로 빨리 돌아가게 (사용자)
 
 
 class SpearDodge:
@@ -130,6 +131,10 @@ class SpearDodge:
             self.bot.log.info(f"투창 패턴: {HOLD:.0f}초 동안 파훼 못 봄 — 투창병 쪽으로")
         if self.ok():
             self.go(self.st.spear_home(), NEAR_SPEAR, time.monotonic() + GO_LIMIT, lambda: False)
+        if self.ok(pattern=False):
+            for _ in range(FIGHT_PRESS):
+                self.bot.key(FIGHT_KEY)
+                time.sleep(random.uniform(0.2, 0.35))
 
     def tictactoe(self, job: dict) -> None:
         """틱택토 O 담당 — 고른 칸 가운데로 가서 보스가 O 를 새기러 출발할 때까지 (차례 시작 약 9초 뒤) 그 칸에 선다."""
