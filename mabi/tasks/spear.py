@@ -39,6 +39,7 @@ class SpearDodge:
         self._calib = False     # 처음 쓸 때 파일에서 (흩어진 물길이 아니면 읽지도 않는다)
         self.calib_tried = 0.0  # 이 맵에서 보정을 해 봤나 (맵 진입 시각)
         self.camera_set = 0.0   # 이 맵에서 카메라를 맞췄나 (맵 진입 시각)
+        self.camp_camera = 0.0  # 이 맵에서 모닥불 뒤(보스방으로 갈 때) 카메라를 다시 맞췄나 (맵 진입 시각)
         self.calib_map = 0.0    # W·D 를 잰 맵 (맵 진입 시각) — 카메라가 판마다 달라 맵마다 다시 잰다
 
     @property
@@ -84,18 +85,32 @@ class SpearDodge:
 
     def camera_due(self) -> bool:
         """함께하기는 카메라가 캐릭터 반대쪽을 보고 시작한다 (혼자하기는 캐릭터가 보는 쪽 — 2026-11-03 사용자).
-        W·D 방향이 혼자하기와 달라지므로 맵에 들어와 로딩이 끝나면 한 번 맞춘다."""
+        W·D 방향이 혼자하기와 달라지므로 맵에 들어와 로딩이 끝나면 한 번 맞춘다.
+        모닥불이 나타나 보스방으로 갈 때도 한 번 더 — 첫 방에서 쓰러졌다 일어나면 시점이 뒤틀릴 수 있다 (사용자, 두 모드 다)."""
         s = self.bot.packets.state
-        return (s.entered_at and self.camera_set != s.entered_at and not s.loading
-                and SOLO not in (s.channel_name or "") and time.monotonic() - s.entered_at > CAMERA_WAIT)
+        if not s.entered_at or s.loading or s.dead:
+            return False
+        if s.campfire and self.camp_camera != s.entered_at:
+            return True
+        return (self.camera_set != s.entered_at and SOLO not in (s.channel_name or "")
+                and time.monotonic() - s.entered_at > CAMERA_WAIT)
 
     def set_camera(self) -> None:
-        """Z(자동 카메라) → 4초 뒤 캐릭터 뒤로 돌아오면 다시 Z(수동 카메라)로 고정 (사용자)."""
-        self.camera_set = self.bot.packets.state.entered_at
-        self.bot.log.info(f"함께하기: 카메라를 캐릭터 뒤로 맞춤 (Z → {CAMERA_AUTO:.0f}초 → Z)")
+        """Z(자동 카메라) → 4초 뒤 캐릭터 뒤로 돌아오면 다시 Z(수동 카메라)로 고정 (사용자).
+        모닥불 뒤에 맞췄으면 시점이 바뀌었을 수 있어 W·D 를 다시 잰다 (못 재면 틱택토 때 다시)."""
+        s = self.bot.packets.state
+        camp = bool(s.campfire)
+        self.camera_set = s.entered_at  # 모닥불 뒤에 처음 맞춰도 맵 진입 때 것은 다시 하지 않는다
+        if camp:
+            self.camp_camera = s.entered_at
+        what = "모닥불 → 보스방" if camp else "함께하기"
+        self.bot.log.info(f"{what}: 카메라를 캐릭터 뒤로 맞춤 (Z → {CAMERA_AUTO:.0f}초 → Z)")
         self.bot.key("z")
         time.sleep(CAMERA_AUTO)
         self.bot.key("z")
+        if camp:
+            self.calib_map = 0.0
+            self.calibrate()
 
     def run(self) -> None:
         st = self.st
@@ -104,7 +119,7 @@ class SpearDodge:
             return
         if st.ttt.due():
             job = st.ttt.take()
-            if job and self.calib is None:
+            if job and self.stale():
                 self._with_focus(self.calibrate)
             if job and self.calib is not None:
                 self._with_focus(lambda: self.tictactoe(job))
