@@ -338,6 +338,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   background: var(--overlay);
   display: flex; align-items: center; justify-content: center;
 }
+/* 옵션 창은 위에 붙인다 — 가운데 두면 탭마다 내용 길이에 따라 위 끝이 오르내려 탭을 누를 때마다 마우스를 옮겨야 했다 */
+#options { align-items: flex-start; padding-top: 40px; }
 /* 확인 창은 다른 창(캐릭터 편집 등) 위에서 묻는다 — HTML 에서 앞에 있어 같은 층이면 뒤로 숨었다 */
 #modal { z-index: 55; }
 .modal-box {
