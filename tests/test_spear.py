@@ -4,7 +4,7 @@ import unittest
 from types import SimpleNamespace
 
 from mabi.packet_monitor import PacketMonitor
-from mabi.spear import SHAMAN_ATTR, SPEAR_ATTR, SPEAR_MARK, TARGET_MARK
+from mabi.spear import FANG_KIND, SHAMAN_ATTR, SPEAR_ATTR, SPEAR_MARK, TARGET_MARK
 from mabi.tasks.spear import SpearDodge
 from mabi.tictactoe import FORECAST, choose
 
@@ -229,9 +229,34 @@ class KeysTest(unittest.TestCase):
             sd.dodge({"x": 10, "y": 142, "at": time.monotonic(), "shaman": 1, "attr": "불"})
         self.assertEqual([c.args for c in bot.key.call_args_list], [("1",)] * 3)
 
-    def test_camera_again_after_boss_scene(self):
-        """보스방에 들어가면 카메라를 한 번 더 맞춘다 — 혼자하기도 (사용자 11-03).
-        모닥불만 나온 때는 보스방 앞 몬스터와 싸우는 중이라 기다리고, 보스 등장 연출은 넘긴 뒤 맞춘다."""
+    def test_camera_when_fang_dies(self):
+        """비틀린 송곳니가 쓰러지면 (보스방으로 걸어감) 카메라를 한 번 더 맞춘다 — 혼자하기도 (사용자 11-03).
+        모닥불만으로는 안 맞춘다 (아직 싸우는 중일 수 있다). 사라짐은 멀어져도 와서 쓰러짐만 본다."""
+        from unittest import mock
+        m = PacketMonitor(None)
+        m.state.me = ME
+        m.apply("channel.entering", {"channel": 1, "channel_type": "InstanceAbyssDungeon",
+                                     "channel_name": "흩어진 물길 (어비스 시즌2 3구역 매우 어려움2 솔로)"})
+        bot = mock.MagicMock(packets=m)
+        sd = SpearDodge(bot)
+        m._spear("spear.monster", {"actor": 77, "x": 0.0, "y": 0.0, "kind": FANG_KIND})
+        m._spear("spear.monster", {"actor": 78, "x": 0.0, "y": 0.0, "kind": 6})
+        m.apply("abyss.campfire", {})
+        self.assertFalse(sd.camera_due())
+        m._spear("spear.gone", {"actor": 77})
+        m.apply("actor.dead", {"actor": 78, "dead": True})
+        self.assertFalse(sd.camera_due())
+        m.apply("actor.dead", {"actor": 77, "dead": True})
+        self.assertTrue(sd.camera_due())
+        with mock.patch("mabi.tasks.spear.time.sleep"):
+            sd.set_camera()
+        self.assertEqual([c.args for c in bot.key.call_args_list], [("z",), ("z",)])
+        m.apply("cutscene.play", {})
+        m.apply("cutscene.end", {})
+        self.assertFalse(sd.camera_due())  # 한 맵에 한 번
+
+    def test_camera_after_boss_scene_without_fang(self):
+        """송곳니를 못 봤으면 (판 도중에 켬 등) 보스 등장 연출을 넘긴 뒤 맞춘다."""
         from unittest import mock
         m = PacketMonitor(None)
         m.state.me = ME

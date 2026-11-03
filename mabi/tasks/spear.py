@@ -82,12 +82,12 @@ class SpearDodge:
         """함께하기는 카메라가 캐릭터 반대쪽을 보고 시작한다 (혼자하기는 캐릭터가 보는 쪽 — 2026-11-03 사용자).
         W·D 방향이 혼자하기와 달라지므로 맵에 들어와 로딩이 끝나면 한 번 맞춘다.
         보스방에 들어가면 한 번 더 — 첫 방에서 쓰러졌다 일어나면 시점이 뒤틀릴 수 있다 (사용자, 두 모드 다).
-        모닥불이 나타난 때는 아직 보스방 앞 몬스터와 싸우는 중이라 (11-03 사용자) 보스 등장 연출이 끝난 뒤에 맞춘다
-        — 기록(party2 10판)에서 연출 끝 → 첫 틱택토 차례까지 25~44초."""
+        모닥불만 봐서는 아직 보스방 앞 몬스터와 싸우는 중일 수 있어 (11-03 사용자) 비틀린 송곳니가 쓰러질 때 맞춘다
+        — 그 순간 모닥불이 나오고 보스방으로 17~20초 걸어간다 (party2 10판). 그걸 못 봤으면 보스 등장 연출이 끝난 뒤에."""
         s = self.bot.packets.state
         if not s.entered_at or s.loading or s.dead:
             return False
-        if s.boss_scene and self.camp_camera != s.entered_at:
+        if self.camp_camera != s.entered_at and (self.st.fang_down or s.boss_scene):
             return not s.cutscene
         return (self.camera_set != s.entered_at and SOLO not in (s.channel_name or "")
                 and time.monotonic() - s.entered_at > CAMERA_WAIT)
@@ -95,7 +95,7 @@ class SpearDodge:
     def set_camera(self) -> None:
         """Z(자동 카메라) → 4초 뒤 캐릭터 뒤로 돌아오면 다시 Z(수동 카메라)로 고정 (사용자)."""
         s = self.bot.packets.state
-        camp = bool(s.boss_scene)
+        camp = bool(self.st.fang_down or s.boss_scene)
         self.camera_set = s.entered_at  # 모닥불 뒤에 처음 맞춰도 맵 진입 때 것은 다시 하지 않는다
         if camp:
             self.camp_camera = s.entered_at
