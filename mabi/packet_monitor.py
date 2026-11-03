@@ -39,6 +39,16 @@ MAX_PENDING = 512           # 순서가 뒤바뀐 조각을 이만큼까지 들�
 OPEN_MAPS = ("Field", "BattleField", "FieldBoss", "HousingInn", "ScenarioField")  # 던전이 아닌 맵 종류
 # CLI 가 같은 뜻으로 알려 주는 오래 남는 상태 — CLI 를 물을 때마다 그 답으로 맞춘다 (merge_cli)
 CLI_FACTS = ("dungeon_state", "field_state", "dead")
+
+
+def map_contradicts(channel_type: str, act: dict) -> bool:
+    """패킷 맵 종류가 CLI 와 어긋나나 — 마을인데 던전 안·사냥터 안이라 함, 던전·사냥터 맵인데 밖이라 함.
+    장소 이름은 CLI 와 패킷이 글자가 달라 비교하지 않는다. 어비스·레이드는 CLI 가 던전으로 치지 않아 보지 않는다."""
+    t = channel_type
+    dungeon = (act.get("Dungeon") or {}).get("State") not in (None, "NotInDungeon")
+    field = bool((act.get("Battlefield") or {}).get("IsInBattleField"))
+    return bool(t) and ((t in OPEN_MAPS and dungeon) or (t == "BattleField") != field
+                        or (t == "InstanceDungeon" and not dungeon))
 CLI_LAG = 5.0  # CLI 가 패킷보다 늦게 바뀌는 시간 (쓰러짐 약 3초, death1 실측) — 패킷이 이보다 최근에 바꿨으면 패킷을 믿는다
 SYNC_FRAMES = 3             # 중간부터 받기 시작했을 때 이만큼 연달아 말이 되면 맞춘 것으로 본다
 
@@ -357,6 +367,7 @@ class PacketState:
     channel_type: str = ""
     channel_name: str = ""
     loading: bool = False            # 맵을 떠났고 새 맵에 아직 안 들어감
+    loading_at: float = 0.0          # 로딩이 시작된 때 (monotonic) — 오래 가면 맵 진입을 놓쳤나 CLI 로 본다 (Bot.map_loading)
     in_game: bool | None = None      # 게임 서버 입장 뒤 True, 로그아웃(캐릭터 선택 화면) 뒤 False. 감시를 켠 뒤 둘 다 없었으면 None
     dungeon_state: str | None = None  # NotInDungeon / Entering / InProgress / Cleared
     dungeon: int | None = None
@@ -668,6 +679,12 @@ class PacketMonitor:
         }
         out, fixed = [], False
         recent = min(asked_at, time.monotonic() - CLI_LAG)
+        # 맵 종류도 CLI 와 맞춘다 (예전엔 작업 시작 점검에서만) — 흐름이 끊겨 맵 진입을 놓치면 틀린 맵에 머문다.
+        # 막 들어온 맵은 CLI 가 늦게 따라오므로 둔다
+        if not s.loading and s.entered_at < recent and map_contradicts(s.channel_type, act):
+            out.append(f"맵 {s.channel_type} → 모름")
+            fixed = True
+            s.channel, s.channel_type, s.channel_name = None, "", ""
         for f, v in want.items():
             cur = getattr(s, f)
             if cur == v or s.changed_at.get(f, 0.0) > recent:
@@ -696,11 +713,7 @@ class PacketMonitor:
                   "레이드": s.raid_state}
         if act:
             s.loading = False
-            dungeon = (act.get("Dungeon") or {}).get("State") not in (None, "NotInDungeon")
-            field = bool((act.get("Battlefield") or {}).get("IsInBattleField"))
-            t = s.channel_type
-            if t and ((t in OPEN_MAPS and dungeon) or (t == "BattleField") != field
-                      or (t == "InstanceDungeon" and not dungeon)):
+            if map_contradicts(s.channel_type, act):
                 s.channel, s.channel_type, s.channel_name = None, "", ""
             s.dungeon_state = (act.get("Dungeon") or {}).get("State") or None
             if not (act.get("Battlefield") or {}).get("IsInBattleField"):
@@ -731,7 +744,7 @@ class PacketMonitor:
         s = self.state
         old = {f: getattr(s, f) for f in CLI_FACTS}
         if key == "channel.leaving":
-            s.loading = True
+            s.loading, s.loading_at = True, time.monotonic()
             s.dye_open_at, s.dye_known = None, True
             s.attendance_at = 0.0
         elif key == "channel.entering":
@@ -767,7 +780,7 @@ class PacketMonitor:
             log.info("패킷: 로그아웃 → 캐릭터 선택 화면")
         elif key == "session.entered":  # 게임 서버 입장 (접속·서버 옮김). 맵 진입은 몇 초 뒤
             if s.in_game is False:
-                s.loading = True
+                s.loading, s.loading_at = True, time.monotonic()
             s.in_game = True
         elif key == "daily.attendance_start":
             s.attendance_at = time.monotonic()

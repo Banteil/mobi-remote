@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from mabi import judge
+from mabi.bot import Bot
 from mabi.packet_monitor import PacketState
 from mabi.tasks import abyss
 
@@ -76,6 +77,30 @@ class AbyssPhaseTest(unittest.TestCase):
     def test_loading_first(self):
         bot = make_bot(PacketState(channel=1, loading=True), seen={"reward_exit"})
         self.assertEqual(abyss.phase(bot), "loading")
+
+
+class DeadTest(unittest.TestCase):
+    def bot(self, state, act, seen=False, ok=True):
+        return SimpleNamespace(packets=SimpleNamespace(ok=ok, state=state), activity=lambda *a, **k: act,
+                               ui={"revive": "revive_here"}, frame=lambda: "f",
+                               vision=SimpleNamespace(has=lambda n: True, find=lambda f, n: seen),
+                               log=mock.MagicMock())
+
+    def test_cli_beats_old_packet(self):
+        st = PacketState(dead=True)  # 오래전에 쓰러졌다는 패킷 (일어난 신호를 놓침)
+        b = self.bot(st, {"IsDead": False})
+        self.assertFalse(Bot.is_dead(b))
+        b.log.info.assert_called()
+
+    def test_fresh_packet_beats_cli(self):
+        import time
+        st = PacketState(dead=True)
+        st.changed_at["dead"] = time.monotonic()  # 부활 창 신호가 CLI 보다 약 3초 빠르다
+        self.assertTrue(Bot.is_dead(self.bot(st, {"IsDead": False})))
+
+    def test_screen_only_when_both_unknown(self):
+        self.assertTrue(Bot.is_dead(self.bot(PacketState(), None, seen=True, ok=False)))
+        self.assertFalse(Bot.is_dead(self.bot(PacketState(dead=False), {"IsDead": False}, seen=True)))
 
 
 if __name__ == "__main__":

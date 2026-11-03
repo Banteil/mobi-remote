@@ -20,7 +20,7 @@ from .digits import DigitReader
 from .connector import Connector
 from .game_state import GameState
 from .inputs import Input, StopWatcher, post_key, vk_of
-from . import packet_monitor
+from . import judge, packet_monitor
 from .blackbox import BlackBox
 from .screen import Screen
 from .vision import Match, Vision
@@ -71,6 +71,9 @@ def prune_shots(shot_dir: Path, log=None, keep_days: int = SHOT_KEEP_DAYS) -> in
     if n and log:
         log.info(f"오래된 스크린샷 {n}장 정리 ({keep_days}일 지남)")
     return n
+
+
+LOADING_DOUBT = 20.0  # 패킷 로딩이 이보다 길면 새 맵 진입을 놓쳤나 CLI 로 본다 (Bot.map_loading)
 
 
 class Bot:
@@ -287,11 +290,19 @@ class Bot:
 
     def map_loading(self) -> bool | None:
         """패킷으로 본 맵 로딩 중 여부 (맵을 떠났고 새 맵에 아직 안 들어감). 모르면 None —
-        감시가 꺼졌거나 끊김, 또는 감시를 켠 뒤 아직 맵을 옮긴 적이 없음."""
+        감시가 꺼졌거나 끊김, 또는 감시를 켠 뒤 아직 맵을 옮긴 적이 없음.
+        로딩이 LOADING_DOUBT 초 넘게 가면 CLI 와 맞춰 본다 — 흐름이 끊겨 맵 진입 패킷을 놓치면 로딩 중이 그대로 남는다.
+        CLI 가 답하면(로딩 중엔 답하지 않는다) 게임 안이니 패킷은 모르는 것(None)으로 → 부르는 쪽이 CLI·화면으로."""
         p = self.packets
         if not p.ok or (p.state.channel is None and not p.state.loading):
             return None
-        return p.state.loading
+        if not p.state.loading or time.monotonic() - p.state.loading_at < LOADING_DOUBT:
+            return p.state.loading
+        v = judge.decide(self, "로딩", [
+            ("CLI 응답", lambda: False if self.activity(max_age=2.0) is not None else None),
+            ("패킷", lambda: True),
+        ])
+        return True if v.value else None
 
     def is_loading(self) -> bool:
         """맵 로딩 중인가. 패킷이 알면 패킷으로, 모르면 CLI 가 답하지 않는 것으로 (로딩 중엔 get_activity 가 오류)."""
@@ -304,7 +315,7 @@ class Bot:
         """패킷으로 맵 로딩이 끝날 때까지 (로딩 중이 아니면 바로 True). False 시간 초과, None 모름 → 화면·CLI 로."""
         if self.map_loading() is None:
             return None
-        return self.wait_packet(lambda s: not s.loading, timeout)
+        return self.wait_packet(lambda s: self.map_loading() is not True, timeout)
 
     def in_game(self) -> bool:
         """게임 안(캐릭터로 접속해 맵에 있음)인가. 패킷이 알면 그것 (로그아웃·입장·맵 진입), 모르면 CLI get_my_info 가 답하는지."""
@@ -403,10 +414,18 @@ class Bot:
         모르면 CLI. act 는 이미 받아 둔 get_activity 결과 (없으면 묻는다 — 물으면서 패킷 상태도 맞춰진다)."""
         p = self.packets
         if act is None:
-            act = self.activity() or {}
-        if p.ok and p.state.dead is not None:
-            return p.state.dead
-        return bool(act.get("IsDead"))
+            act = self.activity()
+        st = p.state
+        recent = p.ok and st.dead is not None and             time.monotonic() - st.changed_at.get("dead", 0.0) < packet_monitor.CLI_LAG
+        ui = self.ui.get("revive")
+        return bool(judge.decide(self, "쓰러짐", [
+            ("패킷 방금", lambda: st.dead if recent else None),  # 부활 창 신호가 CLI IsDead 보다 약 3초 빠르다
+            ("CLI", lambda: bool(act.get("IsDead")) if act else None),
+            ("패킷", lambda: st.dead if p.ok else None),
+            # 화면은 둘 다 모를 때만 본다 — 부활한 뒤에도 버튼이 잠깐 남는다
+            ("화면 부활 버튼", lambda: True if (not act and not p.ok and ui and self.vision.has(ui)
+                                                and self.vision.find(self.frame(), ui)) else None),
+        ]).value)
 
     def environment(self, max_age: float = 3.0) -> dict | None:
         """CLI get_current_environment (장소 이름 등). max_age 초 안의 답은 같이 쓴다."""

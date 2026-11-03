@@ -5,6 +5,8 @@
 각 콘텐츠만의 화면 판단(입장 창·배·목록·보상 화면)은 그 태스크에 둔다.
 
 출처 규칙: 패킷 상태(바뀌는 즉시 알고, CLI 를 물을 때마다 CLI 답으로 맞춰짐 — Bot.activity) → 패킷이 맵을 모르면 CLI.
+패킷이 맵을 알아도 CLI 를 같이 물어 맞춘 뒤 본다 (1초 안의 답은 같이 씀) — 패킷만 믿다 흐름이 끊겨 틀린 맵에 머물렀다
+(2026-11-03 사용자: 여러 신호를 동시에 보고 우선순위로).
 장소 이름은 CLI 의 ChannelDisplayName 하나로 (패킷 맵 이름과는 글자가 다르다: '마스 심층 던전 1층 2구역' /
 '마스 3_2 던전 (심층 1층 2구역) 매우 어려움').
 """
@@ -40,6 +42,9 @@ def place(bot) -> Place:
     """지금 자리. 패킷이 맵을 알면 그것으로, 모르면 CLI(get_activity 의 던전·사냥터 + 장소 이름)로 짐작한다."""
     p = bot.packets
     loading = bot.map_loading()
+    if loading is False:
+        bot.activity()  # CLI 답으로 패킷의 맵·던전·사냥터를 맞춘다 (merge_cli — 어긋나면 맵을 모름으로 돌린다)
+        loading = bot.map_loading()
     s = p.state
     if loading is not None:  # 패킷이 맵을 안다
         field = None if s.field_state is None else s.field_state != "NotInBattlefield"

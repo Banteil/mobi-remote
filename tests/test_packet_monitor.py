@@ -158,6 +158,18 @@ class WaitTest(unittest.TestCase):
         self.m.merge_cli({"Dungeon": {"State": "NotInDungeon"}}, time.monotonic())
         self.assertEqual(self.m.state.dungeon_state, "NotInDungeon")
 
+    def test_merge_cli_fixes_wrong_map(self):
+        """맵 종류가 CLI 와 어긋나면 맵을 모름으로 — 맵 진입 패킷을 놓쳐 틀린 맵에 머물지 않게 (2026-11-03).
+        막 들어온 맵은 CLI 가 늦으니 둔다."""
+        s = self.m.state
+        self.m.apply("channel.entering", {"channel": 1, "channel_type": "Field"})
+        in_dungeon = {"Dungeon": {"State": "InProgress"}}
+        self.m.merge_cli(in_dungeon, time.monotonic())
+        self.assertEqual(s.channel_type, "Field")  # 방금 들어옴
+        s.entered_at -= 60
+        self.m.merge_cli(in_dungeon, time.monotonic())
+        self.assertEqual(s.channel_type, "")
+
     def test_merge_cli_keeps_fresh_packet(self):
         """패킷이 방금 바꾼 값은 둔다 — CLI 가 늦다 (쓰러짐은 패킷이 약 3초 빠름)."""
         asked = time.monotonic()
@@ -291,6 +303,18 @@ class MapWaitTest(unittest.TestCase):
         self.m.apply("channel.entering", {"channel": 3, "channel_type": "Field"})
         got = self.m.find("channel.entering", mark, lambda v: v["channel_type"] == "Field")
         self.assertEqual(got.vals["channel"], 3)
+
+    def test_long_loading_checked_with_cli(self):
+        """로딩이 오래 가면 CLI 와 맞춘다 — 흐름이 끊겨 맵 진입을 놓치면 로딩 중이 남는다 (2026-11-03)."""
+        from unittest import mock
+        self.bot.log = mock.MagicMock()
+        self.m.apply("channel.leaving", {})
+        self.m.state.loading_at -= 30
+        self.assertTrue(self.bot.map_loading())  # CLI 도 답하지 않는다 → 정말 로딩 중
+        self.bot.state, self.bot._act_cache = FakeCli(["NotInDungeon"] * 3), None
+        self.assertIsNone(self.bot.map_loading())  # CLI 가 답한다 → 게임 안, 패킷은 모르는 것으로
+        self.bot.log.info.assert_called()
+        self.assertIsNone(self.bot.wait_loaded(1))  # 모름 → 부르는 쪽이 CLI·화면으로 (오래 기다리지 않는다)
 
     def test_stale_signal_is_unknown(self):
         self.m.apply("channel.leaving", {})
