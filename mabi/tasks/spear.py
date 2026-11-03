@@ -29,6 +29,7 @@ GO_LIMIT = 8.0     # 한 번 가는 데 상한 (가장 먼 주술사가 약 24�
 CALIB_FILE = "spear_calib.json"
 SOLO = "솔로"        # 맵 이름 끝 '(… 솔로)' — 혼자하기
 CAMERA_WAIT = 2.0  # 맵에 들어오고 이만큼 뒤 카메라를 맞춘다
+CAMERA_AUTO = 4.0  # 자동 카메라로 이만큼 둔 뒤 수동으로 — 2초로는 덜 돌아간 채 고정됐다 (사용자 11-03)
 FIGHT_KEY, FIGHT_PRESS = "1", 3  # 투창병 쪽으로 돌아온 뒤 전투로 빨리 돌아가게 (사용자)
 
 
@@ -83,11 +84,11 @@ class SpearDodge:
                 and SOLO not in (s.channel_name or "") and time.monotonic() - s.entered_at > CAMERA_WAIT)
 
     def set_camera(self) -> None:
-        """Z(자동 카메라) → 2초 뒤 캐릭터 뒤로 돌아오면 다시 Z(수동 카메라)로 고정 (사용자)."""
+        """Z(자동 카메라) → 4초 뒤 캐릭터 뒤로 돌아오면 다시 Z(수동 카메라)로 고정 (사용자)."""
         self.camera_set = self.bot.packets.state.entered_at
-        self.bot.log.info("함께하기: 카메라를 캐릭터 뒤로 맞춤 (Z → 2초 → Z)")
+        self.bot.log.info(f"함께하기: 카메라를 캐릭터 뒤로 맞춤 (Z → {CAMERA_AUTO:.0f}초 → Z)")
         self.bot.key("z")
-        time.sleep(2.0)
+        time.sleep(CAMERA_AUTO)
         self.bot.key("z")
 
     def run(self) -> None:
