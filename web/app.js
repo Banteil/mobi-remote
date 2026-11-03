@@ -1349,6 +1349,7 @@ async function openOptions() {
   try {
     await paintOptionSettings();
     try { await loadPathSettings(); } catch (_) {}  // 일일 숙제 폴더 (daily.js)
+    try { await loadGameKeys(); } catch (_) {}      // 게임 단축키 (daily.js)
     if (!caps.length) await loadCaps();
     await loadFileLog();
     say('준비됨');

@@ -55,7 +55,7 @@ class FastTravelTest(unittest.TestCase):
         self.assertTrue(Bot.fast_travel(b, wait=5))
         b.wait_packet.assert_called_once()
         b.key.assert_called_once_with("t")
-        b.cfg = {"game": {}}
+        b.cfg = {"game": {"fast_travel_key": ""}}  # 옵션에서 비우면 안 씀
         b.key.reset_mock()
         self.assertFalse(Bot.fast_travel(b))
         b.key.assert_not_called()

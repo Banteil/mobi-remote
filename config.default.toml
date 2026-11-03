@@ -8,8 +8,17 @@ dye_key = "f11"             # 염색 도우미 켜기/끄기 (염색 탭 시작�
 # 상태 조회용 공식 CLI (게임 설정 'MM AI 에이전트 활성화' 필요, 7일마다 만료).
 # 연결이 안 되면 재화 개수는 화면 숫자 판독으로 대체한다.
 cli_path = ""                          # 비우면 자동으로 찾는다 (레지스트리 → 기본 설치 경로 → Nexon 폴더 → 제거 프로그램 목록)
+# 게임 단축키 — 게임 설정에서 바꿨으면 같게 (옵션 창 '게임 단축키', 목록과 설명은 mabi/keys.py)
+camera_key = "z"            # 카메라 전환 (흩어진 물길 카메라 맞춤)
+storage_key = "x"           # 보관함으로 이동 (레이드 판 사이 나가기 창)
+food_key = "b"              # 음식 먹기
+quest_key = "j"             # 퀘스트 창
+mission_key = "n"           # 미션 창
+map_key = "m"               # 지도
+guide_key = "/"             # 콘텐츠 가이드
 quick_nav_key = "."          # 퀵 내비게이터(잡화점·대장간 … 바로 가기) 여는 키
 fast_travel_key = "t"       # 먼 곳으로 자동 이동할 때 누를 빠른 이동 키 (비우면 사용 안 함)
+skill1_key = "1"            # 스킬 1 (투창 패턴을 피한 뒤 전투로)
 ultimate_key = "6"          # 궁극기 키 (어비스·레이드 보스전에서 켠 캐릭터만 — [boss_skills])
 paladin_key = "f5"          # 팔라딘 변신 키
 # 게임 서버 패킷을 받아 보고 맵 이동·던전 상태를 빨리 안다 (Npcap 필요, 받기만 하고 보내지 않음).
@@ -131,7 +140,6 @@ stella_pick = "stella_pick_button"    # '스텔라 픽' 버튼 (Space)
 notice_webview = "notice_webview_tabs" # 공지사항 웹 팝업 아래 탭 (ESC 로 닫힘)
 
 [daily_mission]
-key = "n"                             # 일일 미션 창
 title = "dm_title"
 gift = "dm_gift"                      # '선물 받기'
 go = "dm_go"                          # 미완료 미션의 '진행하기'

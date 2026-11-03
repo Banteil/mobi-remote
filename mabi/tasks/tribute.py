@@ -9,7 +9,7 @@ import time
 
 import numpy as np
 
-from .. import gamedata as gd, situation
+from .. import gamedata as gd, keys, situation
 from ..bot import Bot, StepTimeout
 from .content import (QUESTWIN_TAB_BAR_Y, CannotProceed, enter_from_dungeon_window, questwin_buttons, travel,
                       with_retries)
@@ -32,7 +32,7 @@ def open_quest(bot: Bot, c: dict) -> None:
     """퀘스트 창 메인 탭에서 고난도 퀘스트 카드의 '진행하기'를 누른다."""
     ui = bot.ui
     bot.to_main()
-    bot.key("j")
+    bot.key(keys.of(bot, "quest"))
     bot.click(ui["questwin_tab_main"], timeout=10)
     bot.sleep(1, 1.5)
     # 창은 지난번 스크롤 자리를 기억할 수 있다. 아래로만 내리면 위쪽 카드를 못 본다

@@ -235,6 +235,37 @@ async function savePathSettings() {
   if (!(r && r.error)) await loadPathSettings();
 }
 
+/* 게임 단축키 — 칸을 누르고 키를 누르면 그 키 (한글 입력 상태에서도 되게 e.code 로) */
+function keyName(e) {
+  const c = e.code || '';
+  if (/^Key[A-Z]$/.test(c)) return c.slice(3).toLowerCase();
+  if (/^Digit\d$/.test(c)) return c.slice(5);
+  if (/^F([1-9]|1[0-2])$/.test(c)) return c.toLowerCase();
+  return { Slash: '/', Period: '.' }[c] || null;
+}
+
+function paintGameKeys(list) {
+  $('#opt-game-keys').innerHTML = list.map((k) => {
+    const [name, hint] = k.label.split(' — ');
+    return '<dt>' + esc(name) + '</dt><dd><input class="mono w-num game-key" data-name="' + esc(k.name) + '"'
+      + ' data-default="' + esc(k.default) + '" value="' + esc(k.key.toUpperCase()) + '" readonly>'
+      + (hint ? '<div class="hint">' + esc(hint) + '</div>' : '') + '</dd>';
+  }).join('');
+}
+
+async function loadGameKeys() {
+  const s = await mm.daily.settings();
+  paintGameKeys(s.game_keys || []);
+}
+
+async function saveGameKeys() {
+  const v = {};
+  document.querySelectorAll('#opt-game-keys .game-key').forEach((i) => { v[i.dataset.name] = i.value.toLowerCase(); });
+  const r = await mm.daily.saveSettings({ game_keys: v });
+  $('#opt-keys-msg').textContent = r && r.error ? r.error : '저장했습니다';
+  if (!(r && r.error)) await loadGameKeys();
+}
+
 async function saveDailySettings() {
   const r = await mm.daily.saveSettings(collectDailySettings());
   if (r && r.error) { $('#dl-save-msg').textContent = r.error; return; }
@@ -493,6 +524,21 @@ $('#qr-body').addEventListener('click', async (e) => {
 });
 $('#dl-stop').addEventListener('click', () => { mm.daily.stop(false); say('일시정지 — 지금 동작이 끝나면 멈춥니다'); });
 $('#dl-save').addEventListener('click', saveDailySettings);
+$('#opt-game-keys').addEventListener('keydown', (e) => {
+  const i = e.target.closest('.game-key');
+  if (!i || e.key === 'Tab') return;
+  e.preventDefault();
+  if (e.key === 'Escape') { i.blur(); return; }
+  if (e.key === 'Backspace' || e.key === 'Delete') { i.value = ''; return; }
+  const k = keyName(e);
+  if (k) i.value = k.toUpperCase();
+  $('#opt-keys-msg').textContent = k ? '' : '그 키는 쓸 수 없습니다 (글자·숫자·F1~F12·/·.)';
+});
+$('#opt-keys-save').addEventListener('click', saveGameKeys);
+$('#opt-keys-reset').addEventListener('click', () => {
+  document.querySelectorAll('#opt-game-keys .game-key').forEach((i) => { i.value = i.dataset.default.toUpperCase(); });
+  $('#opt-keys-msg').textContent = '저장을 눌러야 적용됩니다';
+});
 $('#ab-boss-save').addEventListener('click', saveBoss);
 $('#opt-paths-save').addEventListener('click', savePathSettings);
 $('#dl-table').addEventListener('change', (e) => {

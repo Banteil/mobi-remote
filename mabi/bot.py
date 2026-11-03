@@ -16,6 +16,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from . import keys
 from .digits import DigitReader
 from .connector import Connector
 from .game_state import GameState
@@ -347,7 +348,7 @@ class Bot:
         """빠른 이동(T) — 먼 곳으로 자동 이동 중이면 누른다. 눌렀으면 True. 모든 이동(숙제·아르바이트·어비스·레이드·수리)이 쓴다.
         wait: 방금 이동을 시켰으면 시작되길 그만큼 기다린 뒤 본다 (패킷 traveling, 패킷이 모르면 2~3초).
         예전엔 2~3초 쉬고 한 번만 봐서 이동이 늦게 시작되면 T 를 놓치고 걸어갔다."""
-        key = self.cfg["game"].get("fast_travel_key")
+        key = keys.of(self, "fast_travel")
         if not key:
             return False
         if wait:
@@ -712,7 +713,7 @@ class Bot:
         if self.no_food(look=False) or not self.exists(name) or self.no_food():
             return False
         mark = self.packets.mark()
-        self.key("b")
+        self.key(keys.of(self, "food"))
         # 패킷: 먹으면 포만감이 온다. 안 오면 못 먹은 것 (어비스 판 안에서 6초마다 3분 넘게 B 만 누른 일 — 2026-10-27).
         # 먹었어도 'B' 표시가 바로 안 사라질 수 있어 먹은 뒤에도 EAT_GAP 동안은 다시 누르지 않는다
         got = self.packets.wait("char.satiety", 4, after=mark) if self.packets.ok else None

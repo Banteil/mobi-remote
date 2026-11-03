@@ -248,9 +248,11 @@ class KeysTest(unittest.TestCase):
         self.assertFalse(sd.camera_due())
         m.apply("actor.dead", {"actor": 77, "dead": True})
         self.assertTrue(sd.camera_due())
-        with mock.patch("mabi.tasks.spear.time.sleep"):
+        bot.cfg = {"game": {"camera_key": "c"}}  # 옵션에서 바꾼 카메라 키
+        with mock.patch("mabi.tasks.spear.time.sleep") as sleep:
             sd.set_camera()
-        self.assertEqual([c.args for c in bot.key.call_args_list], [("z",), ("z",)])
+        self.assertEqual([c.args for c in bot.key.call_args_list], [("c",), ("c",)])
+        sleep.assert_called_once_with(8.0)  # 보스방 갈 땐 8초 (사용자 11-03)
         m.apply("cutscene.play", {})
         m.apply("cutscene.end", {})
         self.assertFalse(sd.camera_due())  # 한 맵에 한 번

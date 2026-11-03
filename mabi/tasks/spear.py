@@ -16,6 +16,7 @@ import math
 import random
 import time
 
+from .. import keys
 from ..bot import Bot
 from ..spear import SpearState
 from ..tictactoe import O_AT, O_WINDOW
@@ -30,7 +31,8 @@ CALIB_FILE = "spear_calib.json"
 SOLO = "솔로"        # 맵 이름 끝 '(… 솔로)' — 혼자하기
 CAMERA_WAIT = 2.0  # 맵에 들어오고 이만큼 뒤 카메라를 맞춘다
 CAMERA_AUTO = 4.0  # 자동 카메라로 이만큼 둔 뒤 수동으로 — 2초로는 덜 돌아간 채 고정됐다 (사용자 11-03)
-FIGHT_KEY, FIGHT_PRESS = "1", 3  # 투창병 쪽으로 돌아온 뒤 전투로 빨리 돌아가게 (사용자)
+CAMP_AUTO = 8.0    # 보스방 갈 때는 더 길게 — 4초로는 덜 돌아간 채 고정될 때가 있었다 (사용자 11-03)
+FIGHT_PRESS = 3   # 투창병 쪽으로 돌아온 뒤 스킬 1 을 이만큼 눌러 전투로 빨리 돌아가게 (사용자)
 
 
 def _per_map(name: str):
@@ -101,17 +103,19 @@ class SpearDodge:
                 and time.monotonic() - s.entered_at > CAMERA_WAIT)
 
     def set_camera(self) -> None:
-        """Z(자동 카메라) → 4초 뒤 캐릭터 뒤로 돌아오면 다시 Z(수동 카메라)로 고정 (사용자)."""
+        """Z(자동 카메라) → 4초(보스방 갈 때 8초) 뒤 캐릭터 뒤로 돌아오면 다시 Z(수동 카메라)로 고정 (사용자).
+        Z 는 옵션의 카메라 전환 키."""
         s = self.bot.packets.state
         camp = bool(self.st.fang_down or s.boss_scene)
         self.camera_set = s.entered_at  # 모닥불 뒤에 처음 맞춰도 맵 진입 때 것은 다시 하지 않는다
         if camp:
             self.camp_camera = s.entered_at
-        what = "보스방" if camp else "함께하기"
-        self.bot.log.info(f"{what}: 카메라를 캐릭터 뒤로 맞춤 (Z → {CAMERA_AUTO:.0f}초 → Z)")
-        self.bot.key("z")
-        time.sleep(CAMERA_AUTO)
-        self.bot.key("z")
+        what, wait = ("보스방", CAMP_AUTO) if camp else ("함께하기", CAMERA_AUTO)
+        key = keys.of(self.bot, "camera")
+        self.bot.log.info(f"{what}: 카메라를 캐릭터 뒤로 맞춤 ({key.upper()} → {wait:.0f}초 → {key.upper()})")
+        self.bot.key(key)
+        time.sleep(wait)
+        self.bot.key(key)
 
     def scene_due(self) -> bool:
         """보스 등장 연출 중이고 이 맵에서 아직 안 넘겼다. 물결은 어차피 게임을 앞에 두고 돌아 넘겨도 된다 (사용자 11-03)
@@ -180,7 +184,7 @@ class SpearDodge:
             self.go(self.st.spear_home(), NEAR_SPEAR, time.monotonic() + GO_LIMIT, lambda: False)
         if self.ok(pattern=False):
             for _ in range(FIGHT_PRESS):
-                self.bot.key(FIGHT_KEY)
+                self.bot.key(keys.of(self.bot, "skill1"))
                 time.sleep(random.uniform(0.2, 0.35))
 
     def tictactoe(self, job: dict) -> None:

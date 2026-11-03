@@ -14,7 +14,7 @@
 """
 import time
 
-from .. import gamedata as gd
+from .. import gamedata as gd, keys
 from ..bot import Bot, StepTimeout
 from .. import monitor
 from ..place import RAID_LOBBY, place
@@ -272,7 +272,7 @@ def _press_sail(bot: Bot) -> bool:
         bot.click(hit)
         if started(bot.input_mark, 8):
             return True
-    bot.key("j")
+    bot.key(keys.of(bot, "quest"))
     bot.sleep(1.5, 2)
     title = _find_text(bot, gd.text("raid_sail"), gd.region("questwin_list"))
     goes = [(x, y) for t, x, y in ui_text.find_texts(bot.frame(), gd.region("questwin_list"))
@@ -387,7 +387,7 @@ def finish_result(bot: Bot) -> None:
 
 class RaidExit(Exit):
     """레이드 맵에서 나간다: 나가기(X) → '레이드에서 나가시겠습니까?' → 출항선으로 이동(Space) 또는 '파티&던전 나가기'(필드)."""
-    NAME, SNAP, HOTKEY = "레이드", "raid_leave", "x"  # X 는 결과 화면이 떠 있을 땐 안 먹는다 → 아이콘
+    NAME, SNAP, HOTKEY = "레이드", "raid_leave", "storage"  # 보관함 키(X). 결과 화면이 떠 있을 땐 안 먹는다 → 아이콘
 
     def __init__(self, to_field: bool = False):
         self.to_field = to_field

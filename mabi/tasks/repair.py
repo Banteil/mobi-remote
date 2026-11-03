@@ -17,7 +17,7 @@ import time
 
 import numpy as np
 
-from .. import gamedata as gd
+from .. import gamedata as gd, keys
 from ..bot import Bot
 from . import dialogue, ui_text
 from .content import CannotProceed
@@ -83,7 +83,7 @@ def _open_quick_nav(bot: Bot) -> tuple[int, int]:
     """퀵 내비게이터(단축키 '.', 캐릭터를 눌렀을 때 뜨는 그 메뉴)를 열고 '대장간' 자리를 돌려준다. 몇 번 해도 안 열리면 CannotProceed.
     메뉴는 마지막에 고른 탭으로 열린다 → '주요' 탭 글자가 보이면(열림) 그 탭이 골라져 있는지 바탕색으로 보고, 아니면 눌러서 바꾼다.
     메뉴 글자 읽기에 3~4초 걸린다 → 6초까지 본다."""
-    key = bot.cfg["game"].get("quick_nav_key") or "."
+    key = keys.of(bot, "quick_nav")
     for i in range(3):
         _leave_npc(bot)
         bot.key(key)

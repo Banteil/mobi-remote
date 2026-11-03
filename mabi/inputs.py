@@ -48,7 +48,7 @@ def vk_of(key: str) -> int:
     key = key.lower()
     if key in VK:
         return VK[key]
-    if len(key) == 1 and key.isalnum():
+    if len(key) == 1 and key.isascii() and key.isalnum():
         return ord(key.upper())
     raise ValueError(f"알 수 없는 키: {key}")
 

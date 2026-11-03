@@ -12,6 +12,7 @@ import threading
 
 import tomlkit
 
+from mabi import keys as gkeys
 from mabi import paths as mpaths
 from mabi import profile as prof
 from mabi import userconfig
@@ -435,6 +436,8 @@ class DailyApi:
             "field": str(s["field"]),
             "stop_key": str(doc["game"].get("stop_key", "f12")),
             "dye_key": str(doc["game"].get("dye_key", "f11")),
+            "game_keys": [{"name": n, "label": label, "default": d, "key": gkeys.of(doc, n)}
+                          for n, (d, label) in gkeys.GAME_KEYS.items()],
             "fit_display": bool(doc["run"].get("fit_display", True)),
             "paths": {k: over.get(k, "") for k in ("data", "logs", "shots")},
             "current": {"data": str(self.paths.data), "logs": str(self.paths.logs), "shots": str(self.paths.shots)},
@@ -466,6 +469,16 @@ class DailyApi:
             if k == str(doc["game"].get("stop_key", "f12")).lower():
                 return {"error": "염색 도우미 키가 일시정지 키와 같습니다"}
             doc["game"]["dye_key"] = k
+        gk = v.get("game_keys") or {}
+        mine = {str(doc["game"].get("stop_key", "f12")).lower(), str(doc["game"].get("dye_key", "f11")).lower()}
+        for n, k in gk.items():
+            k = str(k or "").strip().lower()
+            if err := gkeys.check(n, k):
+                return {"error": err}
+            if k in mine:
+                return {"error": f"{k.upper()} 는 리모콘의 일시정지·염색 도우미 키입니다"}
+        for n, k in gk.items():
+            doc["game"][f"{n}_key"] = str(k or "").strip().lower()
         if "fit_display" in v:
             doc["run"]["fit_display"] = bool(v["fit_display"])
         userconfig.save(self.paths, doc)

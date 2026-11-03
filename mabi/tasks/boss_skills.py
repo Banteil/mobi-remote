@@ -19,7 +19,7 @@ F5 1~3초 뒤 · 그 20초 뒤)이 둘 다 오면 그때 푼다. 시작 패킷�
 """
 import time
 
-from .. import profile as prof
+from .. import keys, profile as prof
 from ..bot import Bot
 
 KINDS = ("ultimate", "paladin")
@@ -43,11 +43,10 @@ class BossSkills:
 
     def __init__(self, bot: Bot, ultimate: bool, paladin: bool, boss_fight):
         self.bot, self.boss_fight = bot, boss_fight
-        g = bot.cfg["game"]
         # (이름, 키, 게이지 읽기) — 팔라딘 먼저: 게이지를 같이 쓰면 궁극기를 먼저 쓸 때 500 까지 못 모은다
         self.skills = [s for s, on in (
-            (("팔라딘 변신", g.get("paladin_key", "f5"), lambda st: (st.pal, st.pal_max) if st.can_paladin is not False else (None, None)), paladin),
-            (("궁극기", g.get("ultimate_key", "6"), lambda st: (st.ult, st.ult_max)), ultimate),
+            (("팔라딘 변신", keys.of(bot, "paladin"), lambda st: (st.pal, st.pal_max) if st.can_paladin is not False else (None, None)), paladin),
+            (("궁극기", keys.of(bot, "ultimate"), lambda st: (st.ult, st.ult_max)), ultimate),
         ) if on and s[1]]
         self.pressed: dict[str, float] = {}
         self.tries = (None, 0)  # (맵 entered_at, 그 맵에서 변신 키를 누른 횟수)

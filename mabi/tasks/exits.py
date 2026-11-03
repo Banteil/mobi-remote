@@ -9,13 +9,14 @@ leave_instance(bot) 는 지금 자리(place)를 보고 맞는 나가기를 부�
 """
 import time
 
+from .. import keys
 from ..bot import Bot, StepTimeout
 
 
 class Exit:
     NAME = ""        # 로그·오류에 쓰는 이름
     SNAP = "leave"   # 실패 스냅샷 이름
-    HOTKEY = None    # 나가기 단축키 (레이드 'x' — 클릭과 달리 뒤에서 도는 게임을 앞으로 가져오지 않는다)
+    HOTKEY = None    # 나가기 단축키 이름 (mabi.keys — 레이드는 보관함 키. 클릭과 달리 뒤에서 도는 게임을 앞으로 가져오지 않는다)
     TIMEOUT = 120    # 나가기를 누르는 데 쓰는 시간 상한 (횟수가 아니라 시간 — 사람이 PC 를 쓰는 동안 클릭이 몇 번 건너뛰어져도)
 
     # ---- 종류마다 덮어쓴다
@@ -76,8 +77,9 @@ class Exit:
                 # 단축키(X)는 안이 확실할 때만 — X 는 본래 '보관함으로 이동'이다 (콘텐츠 안에선 나가기 창이 먼저 뜨지만
                 # 메인 필드로 나가면 그 이동이 이어진다, 2026-11-02). 필드로 나가는 쪽은 HOTKEY 를 두지 않는다 → 아이콘
                 if self.HOTKEY and self.surely_inside(bot):
-                    bot.log.debug(f"{self.NAME} 나가기: {self.HOTKEY} 키")
-                    bot.key(self.HOTKEY)
+                    key = keys.of(bot, self.HOTKEY)
+                    bot.log.debug(f"{self.NAME} 나가기: {key} 키")
+                    bot.key(key)
                     hit = self.dialog(bot, 4)
                 if not hit:
                     bot.log.debug(f"{self.NAME} 나가기: 아이콘 클릭")

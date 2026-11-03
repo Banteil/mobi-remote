@@ -12,7 +12,7 @@
 """
 import time
 
-from .. import gamedata as gd, monitor, ocr
+from .. import gamedata as gd, keys, monitor, ocr
 from ..bot import Bot, StepTimeout
 from ..ocr import read_ko, read_text
 from .content import CannotProceed, has_word, wait_until
@@ -93,7 +93,7 @@ def open_window(bot: Bot, c: dict) -> None:
     """미션 창은 마지막에 본 쪽으로 열린다 — 사람이 주간 미션을 봤거나 끝낼 주간 미션이 있으면 주간 미션 화면이라
     일일 미션 제목을 못 찾고 실패했다 (2026-11-02) → 왼쪽 '일일 미션' 아이콘을 눌러 바꾼다."""
     bot.to_main()
-    bot.key(c["key"])
+    bot.key(keys.of(bot, "mission"))
     try:
         bot.wait(c["title"], timeout=4)
     except StepTimeout:

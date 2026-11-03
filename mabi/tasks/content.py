@@ -13,7 +13,7 @@ import re
 import time
 from typing import Callable
 
-from .. import gamedata as gd
+from .. import gamedata as gd, keys
 from ..bot import Bot, StepTimeout
 
 
@@ -91,7 +91,7 @@ def open_arbeit_tab(bot: Bot) -> None:
     ui = bot.ui
     bot.to_main()
     bot.hover_off()  # 지난번에 누른 탭 위에 커서가 남아 있으면 탭 그림이 커져 안 맞는다
-    bot.key("j")
+    bot.key(keys.of(bot, "quest"))
     try:
         bot.click(ui["questwin_tab_arbeit"], timeout=5)
     except StepTimeout:
@@ -111,7 +111,7 @@ def open_guide(bot: Bot) -> None:
     """'/' 콘텐츠 가이드를 연다. 지역 이동 직후 등에는 키가 무시되기도 해서 몇 번 다시 누른다."""
     for _ in range(3):
         bot.to_main()
-        bot.key("/")
+        bot.key(keys.of(bot, "guide"))
         try:
             bot.wait(bot.ui["guide_title"], timeout=6)
             bot.sleep(1, 1.5)
@@ -254,7 +254,7 @@ def open_map(bot: Bot) -> None:
     """지도(M)를 연다. 처음에는 지금 있는 지역의 지역 맵이 열린다."""
     for _ in range(3):  # M 이 무시될 때가 있어 지도가 열렸는지 확인하고 다시 누른다
         bot.to_main()
-        bot.key("m")
+        bot.key(keys.of(bot, "map"))
         try:
             bot.wait(bot.ui["map_open"], timeout=4)
             break
