@@ -85,6 +85,11 @@ class AbyssPhaseTest(unittest.TestCase):
         self.assertEqual(abyss.phase(bot), "loading")
         bot.log.info.assert_not_called()
 
+    def test_matching_from_field_is_not_conflict(self):
+        bot = make_bot(PacketState(channel=1, channel_type="Field", loading=False, abyss_matching=2))
+        self.assertEqual(abyss.phase(bot), "matching")
+        bot.log.info.assert_not_called()
+
     def test_loading_first(self):
         bot = make_bot(PacketState(channel=1, loading=True), seen={"reward_exit"})
         self.assertEqual(abyss.phase(bot), "loading")

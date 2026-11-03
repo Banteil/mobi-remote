@@ -96,7 +96,7 @@ def phase(bot: Bot):
         ("패킷 맵", packet_map),
         ("화면 나가기 버튼", exit_button),
         ("CLI 장소", cli_place),
-    ], same={"matching": {"reward", "abyss"}, "reward": {"abyss"}, "play": {"abyss"},
+    ], same={"matching": {"reward", "abyss", "out"}, "reward": {"abyss"}, "play": {"abyss"},  # 매칭은 필드에서도 기다린다
              "loading": {"matching", "reward", "abyss"}}).value  # 다음 판으로 넘어가는 로딩엔 매칭·보상 신호가 남는다
     return "play" if v == "abyss" else v  # CLI 장소만 알면 예전처럼 판 안으로
 
