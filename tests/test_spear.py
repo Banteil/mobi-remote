@@ -208,14 +208,12 @@ class KeysTest(unittest.TestCase):
                                      "channel_name": "흩어진 물길 (어비스 시즌2 3구역 매우 어려움2 솔로)"})
         bot = mock.MagicMock(packets=m)
         sd = SpearDodge(bot)
-        sd.calibrate = mock.MagicMock()
         self.assertFalse(sd.camera_due())  # 혼자하기는 들어올 때 맞추지 않는다
         m.apply("abyss.campfire", {})
         self.assertTrue(sd.camera_due())
         with mock.patch("mabi.tasks.spear.time.sleep"):
             sd.set_camera()
         self.assertEqual([c.args for c in bot.key.call_args_list], [("z",), ("z",)])
-        sd.calibrate.assert_called_once()  # 시점이 바뀌었을 수 있어 W·D 를 다시 잰다
         self.assertFalse(sd.camera_due())  # 한 맵에 한 번
 
     def test_wanted_only_when_active(self):

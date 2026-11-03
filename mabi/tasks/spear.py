@@ -40,7 +40,6 @@ class SpearDodge:
         self.calib_tried = 0.0  # 이 맵에서 보정을 해 봤나 (맵 진입 시각)
         self.camera_set = 0.0   # 이 맵에서 카메라를 맞췄나 (맵 진입 시각)
         self.camp_camera = 0.0  # 이 맵에서 모닥불 뒤(보스방으로 갈 때) 카메라를 다시 맞췄나 (맵 진입 시각)
-        self.calib_map = 0.0    # W·D 를 잰 맵 (맵 진입 시각) — 카메라가 판마다 달라 맵마다 다시 잰다
 
     @property
     def file(self):
@@ -75,13 +74,8 @@ class SpearDodge:
             return True
         if st.finished:
             return False
-        return st.due() or (self.stale() and len(st.attr) == 6
+        return st.due() or (self.calib is None and len(st.attr) == 6
                             and self.calib_tried != self.bot.packets.state.entered_at)
-
-    def stale(self) -> bool:
-        """이 맵에서 아직 W·D 를 안 쟀나. 카메라를 고정해도 판마다 캐릭터가 보는 쪽이 달라 저장된 방향이 거꾸로일 수 있다
-        (2026-11-03 함께하기 — 틱택토에서 고른 칸의 정반대 칸으로 가 O 를 날리고 전멸). 못 재면 저장된 값으로 간다."""
-        return self.calib is None or self.calib_map != self.bot.packets.state.entered_at
 
     def camera_due(self) -> bool:
         """함께하기는 카메라가 캐릭터 반대쪽을 보고 시작한다 (혼자하기는 캐릭터가 보는 쪽 — 2026-11-03 사용자).
@@ -96,8 +90,7 @@ class SpearDodge:
                 and time.monotonic() - s.entered_at > CAMERA_WAIT)
 
     def set_camera(self) -> None:
-        """Z(자동 카메라) → 4초 뒤 캐릭터 뒤로 돌아오면 다시 Z(수동 카메라)로 고정 (사용자).
-        모닥불 뒤에 맞췄으면 시점이 바뀌었을 수 있어 W·D 를 다시 잰다 (못 재면 틱택토 때 다시)."""
+        """Z(자동 카메라) → 4초 뒤 캐릭터 뒤로 돌아오면 다시 Z(수동 카메라)로 고정 (사용자)."""
         s = self.bot.packets.state
         camp = bool(s.campfire)
         self.camera_set = s.entered_at  # 모닥불 뒤에 처음 맞춰도 맵 진입 때 것은 다시 하지 않는다
@@ -108,9 +101,6 @@ class SpearDodge:
         self.bot.key("z")
         time.sleep(CAMERA_AUTO)
         self.bot.key("z")
-        if camp:
-            self.calib_map = 0.0
-            self.calibrate()
 
     def run(self) -> None:
         st = self.st
@@ -119,12 +109,12 @@ class SpearDodge:
             return
         if st.ttt.due():
             job = st.ttt.take()
-            if job and self.stale():
+            if job and self.calib is None:
                 self._with_focus(self.calibrate)
             if job and self.calib is not None:
                 self._with_focus(lambda: self.tictactoe(job))
             return
-        if self.stale() and not st.due():
+        if self.calib is None and not st.due():
             self.calib_tried = self.bot.packets.state.entered_at
             self._with_focus(self.calibrate)
             return
@@ -286,7 +276,6 @@ class SpearDodge:
             self.bot.log.info(f"투창 패턴: W·D 방향 재기 실패 (W {w} · D {d}) — 다음 기회에")
             return
         self.calib = (w, d)
-        self.calib_map = self.bot.packets.state.entered_at
         try:
             self.file.write_text(json.dumps({"w": w, "d": d}), encoding="utf-8")
         except OSError:
