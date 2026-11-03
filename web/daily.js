@@ -224,13 +224,17 @@ async function loadPathSettings() {
   $('#dl-p-now').textContent = '지금: ' + s.current.data + ' (바꾸면 다음 실행부터)';
 }
 
+async function saveRemoteKeys() {
+  const r = await mm.daily.saveSettings({ stop_key: $('#opt-stop-key').value, dye_key: $('#opt-dye-key').value });
+  if (!(r && r.error)) { dl.settings = Object.assign(dl.settings || {}, { stop_key: $('#opt-stop-key').value }); paintStopKey(); }
+  $('#opt-rkeys-msg').textContent = r && r.error ? r.error : '저장했습니다';
+  if (!(r && r.error)) await loadPathSettings();
+}
+
 async function savePathSettings() {
   const r = await mm.daily.saveSettings({
-    stop_key: $('#opt-stop-key').value,
-    dye_key: $('#opt-dye-key').value,
     paths: { data: $('#dl-p-data').value, logs: $('#dl-p-logs').value, shots: $('#dl-p-shots').value },
   });
-  if (!(r && r.error)) { dl.settings = Object.assign(dl.settings || {}, { stop_key: $('#opt-stop-key').value }); paintStopKey(); }
   $('#opt-paths-msg').textContent = r && r.error ? r.error : '저장했습니다';
   if (!(r && r.error)) await loadPathSettings();
 }
@@ -541,6 +545,7 @@ $('#opt-keys-reset').addEventListener('click', () => {
 });
 $('#ab-boss-save').addEventListener('click', saveBoss);
 $('#opt-paths-save').addEventListener('click', savePathSettings);
+$('#opt-rkeys-save').addEventListener('click', saveRemoteKeys);
 $('#dl-table').addEventListener('change', (e) => {
   const b = e.target;
   if (b.dataset.dlChar) {
