@@ -528,7 +528,7 @@ $('#opt-game-keys').addEventListener('keydown', (e) => {
   const i = e.target.closest('.game-key');
   if (!i || e.key === 'Tab') return;
   e.preventDefault();
-  if (e.key === 'Escape') { i.blur(); return; }
+  if (e.key === 'Escape') { e.stopPropagation(); i.blur(); return; }  // 옵션 창은 닫지 않는다
   if (e.key === 'Backspace' || e.key === 'Delete') { i.value = ''; return; }
   const k = keyName(e);
   if (k) i.value = k.toUpperCase();

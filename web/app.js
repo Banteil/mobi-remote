@@ -1358,6 +1358,15 @@ async function openOptions() {
   }
 }
 
+/** 옵션 창 탭. 마지막에 본 탭을 기억한다 (이 PC 에서만). */
+function showOptionPane(name) {
+  if (!$('.opt-pane[data-pane="' + name + '"]')) name = 'general';
+  $$('.opt-tab').forEach((t) => t.classList.toggle('active', t.dataset.pane === name));
+  $$('.opt-pane').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== name));
+  $('#options .modal-scroll').scrollTop = 0;
+  try { localStorage.setItem('optPane', name); } catch (_) {}
+}
+
 function closeOptions() {
   $('#options').classList.add('hidden');
 }
@@ -1677,6 +1686,8 @@ function wire() {
 
   $('#btn-options').addEventListener('click', openOptions);
   $('#options-close').addEventListener('click', closeOptions);
+  $$('.opt-tab').forEach((t) => t.addEventListener('click', () => showOptionPane(t.dataset.pane)));
+  try { showOptionPane(localStorage.getItem('optPane') || 'general'); } catch (_) { showOptionPane('general'); }
   // 바깥을 눌러도 닫는다. 창이 커서 닫기 버튼까지 가기 번거롭다.
   $('#options').addEventListener('click', (e) => { if (e.target.id === 'options') closeOptions(); });
   // Esc 로도 닫는다. 확인 모달이 떠 있을 때는 그쪽이 먼저 받아야 하므로 건너뛴다.

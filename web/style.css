@@ -556,6 +556,14 @@ select.sort { min-width: 0; max-width: 170px; padding: 5px 8px; font-size: 12px;
 }
 /* 창 안에서는 카드 바깥 여백이 두 번 들어가 보이므로 줄인다 */
 .modal-scroll .card:last-child { margin-bottom: 0; }
+/* 옵션 창 탭 — 위 탭(.tab)과 같은 모양. 클래스가 다른 건 위 탭 전환($$('.tab'))에 걸리지 않게 */
+#opt-tabs { display: flex; flex-wrap: wrap; gap: 2px; margin: -4px 0 10px; border-bottom: 1px solid var(--edge); }
+.opt-tab {
+  padding: 7px 12px; border: 0; background: transparent; cursor: pointer;
+  color: var(--fg-mute); border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.opt-tab:hover { color: var(--fg-dim); }
+.opt-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
 /* ── 작업 기록 창 ─────────────────────────────────── */
 .qh-day { margin: 14px 0 6px; font-weight: 600; color: var(--fg-dim); }
