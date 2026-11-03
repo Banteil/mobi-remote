@@ -28,6 +28,16 @@ class InsideTest(unittest.TestCase):
     def test_matching_without_map_is_not_inside(self):
         self.assertFalse(abyss.inside(bot_with(PacketState(abyss_matching=2))))
 
+    def test_entered_since_needs_new_map(self):
+        """'다시 하기' 뒤 지난 판 맵(보상 화면)은 결과를 놓쳐도 새 판이 아니다 (2026-11-03 19:26)."""
+        st = PacketState(channel=1, channel_type="InstanceAbyssDungeon", loading=False, entered_at=100.0)
+        bot = bot_with(st)
+        self.assertTrue(abyss.inside(bot))  # 결과를 놓치면 판 안으로 보이지만
+        self.assertFalse(abyss.entered_since(bot, 150.0))  # 다시 하기(150) 뒤에 들어온 맵이 아니다
+        st.entered_at = 200.0
+        self.assertTrue(abyss.entered_since(bot, 150.0))
+        self.assertIsNone(abyss.entered_since(bot_with(PacketState()), 150.0))  # 패킷이 맵을 모름
+
 
 class WaitDungeonTest(unittest.TestCase):
     def test_cli_failure_is_not_an_answer(self):

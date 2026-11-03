@@ -237,14 +237,24 @@ def open_entry(bot: Bot, dungeon: str, difficulty: str = "", _moved: bool = Fals
         bot.log.info("우연한 만남 켬")
 
 
-def wait_entered(bot: Bot, timeout: float) -> bool:
+def entered_since(bot: Bot, since: float) -> bool | None:
+    """since(monotonic) 뒤에 어비스 맵에 새로 들어왔나. 패킷이 맵을 모르면 None.
+    '다시 하기' 뒤엔 지난 판 맵(보상 화면)에 선 채 매칭을 기다린다 — 패킷이 끊겨 결과를 놓치면 inside 가 그 자리를
+    판 안으로 봐, 매칭 중에 판 진행 → 보상 화면 기다림으로 빠져 다음 판을 통째로 놓쳤다 (2026-11-03 19:26)."""
+    if bot.map_loading() is None:
+        return None
+    st = bot.packets.state
+    return not st.loading and st.channel_type == ABYSS_MAP and st.entered_at > since
+
+
+def wait_entered(bot: Bot, timeout: float, since: float | None = None) -> bool:
     """매칭(우연한 만남)이 잡혀 어비스 안으로 들어갈 때까지. 모두 모이면 저절로 들어간다. 시간 안에 못 들어가면 False.
     패킷이 있으면 맵을 떠나는 순간 바로 알고, 로딩 동안은 화면을 보지 않는다. 어비스 맵에 들어온 지 10초가 지났는데
     나가기 버튼이 가려져 있으면 그래도 들어온 것으로 본다 (판 진행 쪽이 가린 창을 넘긴다). 기다리기 시작한 뒤에 들어간
-    어비스 맵만 센다 — '다시 하기' 뒤엔 지난 판 맵에 선 채로 매칭을 기다릴 수 있다."""
-    start = time.monotonic()
-    end = start + timeout
-    while not inside(bot):
+    어비스 맵만 센다 — '다시 하기' 뒤엔 지난 판 맵에 선 채로 매칭을 기다릴 수 있다. since: 입장·다시 하기를 누른 때."""
+    end = time.monotonic() + timeout
+    start = time.monotonic() if since is None else since
+    while not (inside(bot) and entered_since(bot, start) is not False):
         if time.monotonic() > end:
             return False
         loading = bot.map_loading()
@@ -497,6 +507,8 @@ class AbyssRepeat(Repeat):
         """혼자하기로 하나 ([abyss] mode = "solo"). 기본은 함께하기 (우연한 만남)."""
         return self.a.get("mode") == "solo"
 
+    match_at = 0.0  # 입장·다시 하기를 누른 때 — 그 뒤에 새로 들어간 맵만 이번 판 (entered_since)
+
     def setup(self):
         self.bot.scene_skip = False  # 연출은 누르지 않고 기다린다 — 누르면 뒤에서 돌던 게임이 앞으로 나온다 (2026-10-25 사용자)
 
@@ -518,13 +530,14 @@ class AbyssRepeat(Repeat):
                 bot.background = False
                 open_entry(bot, a["dungeon"], a.get("difficulty", ""), at=at, solo=self.solo)
                 at = ""  # 처음 한 번만 — 다음 입장은 판이 끝난 자리(메인)에서
+                self.match_at = time.monotonic()
                 _click_text(bot, gd.text("abyss_enter"), gd.region("abyss_entry_right"), what="입장하기", key="space")
                 self.to_back()
                 stage = "match"
-            if stage == "match" and not inside(bot):
+            if stage == "match" and not (inside(bot) and entered_since(bot, self.match_at) is not False):
                 bot.step("abyss_match", "입장 중 (혼자하기)" if self.solo else "우연한 만남 매칭 중")
                 self.emit(stage="match")
-                if not wait_entered(bot, a["match_timeout"]):
+                if not wait_entered(bot, a["match_timeout"], self.match_at):
                     self.stat["retries"] += 1
                     bot.log.warning(f"{a['match_timeout'] / 60:.0f}분 안에 매칭·입장이 되지 않음 → 처음부터 다시 "
                                     f"→ {bot.snapshot('abyss_match').name}")
@@ -561,6 +574,7 @@ class AbyssRepeat(Repeat):
     def _again(self):
         """보상 화면 '다시 하기' (Space) → 같은 던전·난이도로 다시 매칭."""
         bot = self.bot
+        self.match_at = time.monotonic()
         bot.key("space")
         for _ in range(2):  # 키가 안 들었으면 — 뒤에서는 키를 한 번 더, 앞에서는 누른다
             # 패킷: 매칭 상태(요청·찾는 중·잡힘)나 맵 로딩이 오면 눌린 것. 모르면 2~3초 뒤 화면의 '다시 하기' 버튼으로

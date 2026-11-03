@@ -33,14 +33,22 @@ CAMERA_AUTO = 4.0  # 자동 카메라로 이만큼 둔 뒤 수동으로 — 2초
 FIGHT_KEY, FIGHT_PRESS = "1", 3  # 투창병 쪽으로 돌아온 뒤 전투로 빨리 돌아가게 (사용자)
 
 
+def _per_map(name: str):
+    """이 맵에서 한 번 한 일 (맵 진입 시각) — 판 진행을 다시 부를 때마다 SpearDodge 가 새로 생겨도 이어지게
+    맵 상태(SpearState)에 둔다. 클리어 뒤 보상 화면에서 판 진행을 다시 불러 보스방 카메라를 또 돌렸다 (11-03 19:26)."""
+    return property(lambda self: getattr(self.bot.packets.spear, name, 0.0),
+                    lambda self, v: setattr(self.bot.packets.spear, name, v))
+
+
 class SpearDodge:
+    calib_tried = _per_map("calib_tried")   # 보정을 해 봤나
+    camera_set = _per_map("camera_set")     # 카메라를 맞췄나
+    camp_camera = _per_map("camp_camera")   # 보스방 갈 때 카메라를 다시 맞췄나
+    scene_tried = _per_map("scene_tried")   # 보스 등장 연출을 넘겨 봤나
+
     def __init__(self, bot: Bot):
         self.bot = bot
         self._calib = False     # 처음 쓸 때 파일에서 (흩어진 물길이 아니면 읽지도 않는다)
-        self.calib_tried = 0.0  # 이 맵에서 보정을 해 봤나 (맵 진입 시각)
-        self.camera_set = 0.0   # 이 맵에서 카메라를 맞췄나 (맵 진입 시각)
-        self.camp_camera = 0.0  # 이 맵에서 보스 등장 연출 뒤 카메라를 다시 맞췄나 (맵 진입 시각)
-        self.scene_tried = 0.0  # 이 맵에서 보스 등장 연출을 넘겨 봤나 (맵 진입 시각)
 
     @property
     def file(self):

@@ -255,6 +255,23 @@ class KeysTest(unittest.TestCase):
         m.apply("cutscene.end", {})
         self.assertFalse(sd.camera_due())  # 한 맵에 한 번
 
+    def test_camera_once_per_map_across_calls(self):
+        """판 진행을 다시 불러 SpearDodge 가 새로 생겨도 같은 맵에서 카메라를 또 돌리지 않는다 (11-03 19:26)."""
+        from unittest import mock
+        m = PacketMonitor(None)
+        m.state.me = ME
+        m.apply("channel.entering", {"channel": 1, "channel_type": "InstanceAbyssDungeon",
+                                     "channel_name": "흩어진 물길 (어비스 시즌2 3구역 매우 어려움2 솔로)"})
+        m.apply("abyss.campfire", {})
+        m.apply("cutscene.play", {})
+        m.apply("cutscene.end", {})
+        bot = mock.MagicMock(packets=m)
+        sd = SpearDodge(bot)
+        self.assertTrue(sd.camera_due())
+        with mock.patch("mabi.tasks.spear.time.sleep"):
+            sd.set_camera()
+        self.assertFalse(SpearDodge(bot).camera_due())
+
     def test_camera_after_boss_scene_without_fang(self):
         """송곳니를 못 봤으면 (판 도중에 켬 등) 보스 등장 연출을 넘긴 뒤 맞춘다."""
         from unittest import mock
