@@ -375,6 +375,16 @@ class DeathTest(unittest.TestCase):
         self.m.apply("char.appearing", {"actor": 9, "mine": True})
         self.assertEqual(self.m.state.me, 9)
 
+    def test_my_actor_once_per_map(self):
+        """한 맵에서 내 번호는 한 번만 — 다른 캐릭터 등장에도 내 고유 번호가 들어 있을 때가 있다 (11-03 21:36)."""
+        self.m.apply("channel.entering", {"channel": 1, "channel_type": "Field"})
+        self.m.apply("char.appearing", {"actor": 9, "mine": True, "name": "A"})
+        self.m.apply("char.appearing", {"actor": 12, "mine": True, "name": "B"})
+        self.assertEqual((self.m.state.me, self.m.state.my_name), (9, "A"))
+        self.m.apply("channel.entering", {"channel": 2, "channel_type": "Field"})
+        self.m.apply("char.appearing", {"actor": 30, "mine": True, "name": "A"})  # 새 맵에선 새 번호
+        self.assertEqual(self.m.state.me, 30)
+
     def test_party_death_by_my_actor(self):
         # 파티 판에서는 부활 창 신호 없이 내 액터 사망만 온다 (death1 03:10:24)
         self.m.apply("char.appearing", {"actor": 9, "mine": True})

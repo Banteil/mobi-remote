@@ -407,6 +407,7 @@ class PacketState:
     max_weight: float | None = None
     char_id: int | None = None       # 내 캐릭터 고유 번호 (안 바뀜) — 맵을 옮길 때마다 오는 내 개인 데이터 맨 앞
     me: int | None = None            # 내 캐릭터 오브젝트 번호 — 맵마다 바뀐다. 등장 캐릭터 중 고유 번호가 든 것 (없으면 포만감 설정)
+    me_map: float = 0.0              # me 를 정한 맵 (그 맵의 entered_at) — 한 맵에서 한 번만 정한다
     my_name: str | None = None       # 접속한 캐릭터 이름 (내 등장 메시지에서). 캐릭터를 바꾸면 다음 맵 진입 때 새로 안다
     dialogue_npc: int | None = None  # 대화 중인 NPC 오브젝트 번호 (대화 중이 아니면 None)
     # 지금 대사 뒤 할 일 (대사 내용의 dialogueAction): SelectKeyword 메뉴 버튼 · EndDialogue 작별 인사(눌러야 끝남) ·
@@ -846,12 +847,15 @@ class PacketMonitor:
         elif key == "char.appearing":
             if vals.get("mine"):
                 if vals.get("actor") != s.me:
+                    # 내 번호는 맵에 들어올 때만 바뀐다. 이미 이 맵에서 정했으면 다른 오브젝트의 등장에도 내 고유 번호가
+                    # 들어 있는 것 — 무시한다 (11-03 21:36 이멘 마하: 들어온 11초 뒤 다른 캐릭터를 '나' 로 바꿨다.
+                    # CLI 칭호·직업은 처음 캐릭터). 바꾸면 '나' 판단(투창·틱택토·변신·쓰러짐)이 틀어진다
+                    if s.me is not None and s.entered_at and s.me_map == s.entered_at:
+                        log.warning("패킷: 이 맵에서 정한 내 번호 %s 를 두고 다른 등장(%s, %s)에도 내 고유 번호가 있음 → 무시",
+                                    s.me, vals.get("actor"), vals.get("name") or "?")
+                        return
                     s.combat = "NonCombat"  # 맵에 막 들어옴 — 싸우는 중이면 곧 전투 상태가 온다
-                    # 내 번호는 맵에 들어올 때만 바뀐다. 판 도중에 바뀌면 '나' 판단(투창·틱택토·변신·쓰러짐)이 틀어진다
-                    # (11-03 함께하기) — 다음에 생기면 바로 보이게 남긴다
-                    if s.me is not None and s.entered_at and time.monotonic() - s.entered_at > 10:
-                        log.warning("패킷: 맵 도중에 내 번호가 바뀜 %s → %s", s.me, vals.get("actor"))
-                s.me = vals.get("actor")
+                s.me, s.me_map = vals.get("actor"), s.entered_at
                 s.my_name = vals.get("name") or s.my_name
                 log.info("패킷: 내 캐릭터 %s (번호 %s)", s.my_name or "?", s.me)
         elif key == "actor.dead":
