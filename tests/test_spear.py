@@ -90,6 +90,14 @@ class SpearStateTest(unittest.TestCase):
         self.throw("불")
         self.assertFalse(self.m.spear.due())
 
+    def test_party_satiety_keeps_me(self):
+        """함께하기 — 다른 캐릭터 포만감 패킷이 내 번호를 덮어써 내게 걸린 대상 표시를 놓쳤다 (11-03 16:05)."""
+        self.summon()
+        self.m.apply("char.satiety", {"actor": OTHER, "satiety": 80})
+        self.assertEqual(self.m.state.me, ME)
+        self.throw("어둠")
+        self.assertTrue(self.m.spear.due())
+
     def test_new_map_resets(self):
         self.summon()
         self.enter("흩어진 물길 (어비스 시즌2 3구역 매우 어려움2 솔로)")

@@ -883,8 +883,12 @@ class PacketMonitor:
         elif key == "char.ai":
             s.ai = vals.get("ai", "")
         elif key == "char.satiety":
-            s.satiety = vals.get("satiety")
-            s.me = vals.get("actor", s.me)
+            # 함께하기에선 다른 캐릭터의 포만감도 온다 — 예전엔 이걸로 내 번호를 덮어써, 투창 대상·틱택토 O 담당이
+            # 나인데도 '다른 캐릭터'로 봤다 (2026-11-03 16:05·16:10). 내 번호를 모를 때만 받아들인다
+            a = vals.get("actor")
+            if s.me is None or a is None or a == s.me:
+                s.satiety = vals.get("satiety")
+                s.me = s.me if a is None else a
         elif key == "equip.durability":
             r = vals.get("ratio")
             if r is not None:
