@@ -100,6 +100,14 @@ class ReviveTest(unittest.TestCase):
         self.assertFalse(run(bot))
         self.assertEqual(bot.keys, [])
 
+    def test_wipe_leaves_at_once(self):
+        """전멸 — '여기서 부활' 이 없고 '전멸하였습니다' 가 보이면 R 을 누르지 않고 바로 나간다 (2026-11-03 사용자)."""
+        bot = FakeBot(FakePackets(used=0, mx=6))
+        bot.vision = SimpleNamespace(find=lambda frame, name: False)
+        with mock.patch.object(abyss, "_find_text", return_value=(960, 221)):
+            self.assertFalse(run(bot))
+        self.assertEqual(bot.keys, [])
+
     def test_without_packets_uses_is_dead(self):
         bot = FakeBot(FakePackets(ok=False))
         bot.is_dead = lambda: bot.now < 3  # 패킷이 없으면 CLI IsDead 가 풀리는 것으로

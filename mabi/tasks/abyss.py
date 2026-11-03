@@ -318,16 +318,22 @@ def revive_here(bot: Bot) -> bool:
     막혔는지 미리 알아내려 하지 않는다 — R 을 누르고 정해진 시간 안에 부활 신호가 오는지로 정한다 (사용자 2026-10-25).
     함께하기 전멸·부활 아이템 없음 등으로 막혀 있으면 R 은 아무 일도 하지 않아 누르는 비용이 없다.
     (예전엔 화면 글자·버튼 색으로 미리 막힘을 판단했는데, 잘못 읽으면 부활할 수 있는데도 나가 버렸다.)
-    누르기 전에 나가는 것은 확실한 신호뿐: 패킷이 알려 준 이 판의 부활 횟수를 다 씀.
+    누르기 전에 나가는 것은 확실한 신호뿐: 패킷이 알려 준 이 판의 부활 횟수를 다 씀, 화면의 '전멸하였습니다'.
     부활 신호: 패킷 revive.item_ok (ReviveUsingConsumable_RSP_SUCCESS) 또는 쓰러짐이 풀림 (패킷 SetDead 0 · CLI IsDead)."""
     if revives_left(bot) == 0:
         bot.log.warning(f"부활 횟수를 다 씀 (패킷) → 나감 ({bot.snapshot('abyss_dead').name})")
         return False
     # 사망 화면 버튼은 쓰러지고 1~2초 뒤에 뜨고, 그 전의 키는 무시된다 → 버튼이 보일 때까지 잠깐.
     # 못 찾아도(전멸이면 버튼이 없다) 그냥 누른다 — 판단은 아래 시간 제한이 한다
+    # 전멸이면 '여기서 부활' 이 없고 나가서 다시 들어가는 수밖에 없다 — 함께하기는 나가기 말고 할 수 있는 게 없고,
+    # '캠프파이어에서 부활' 도 캠프파이어를 건드린 적이 없으면 안 된다 (2026-11-03 사용자). 버튼이 없고 화면 가운데
+    # '전멸하였습니다' 가 보이면 R 을 누르며 기다리지 않고 바로 나간다 (예전엔 20초쯤 걸렸다)
     for _ in range(3):
         if bot.vision.find(bot.frame(), "revive_here"):
             break
+        if _find_text(bot, gd.text("abyss_wiped"), gd.region("abyss_wiped"), exact=False):
+            bot.log.warning(f"전멸 → 바로 나감 ({bot.snapshot('abyss_dead').name})")
+            return False
         bot.sleep(1.5, 2)
     mark = bot.packets.mark()
     bot.key("r")  # '여기서 부활' 단축키 (사용자 확인 2026-10-25) — 버튼 위치가 모드마다 달라도 된다
