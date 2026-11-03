@@ -133,8 +133,8 @@ class LeaveDungeonTest(unittest.TestCase):
 
 
 class FieldAtLoginTest(unittest.TestCase):
-    """접속 때 사냥터 안이면 사냥 퀘스트가 있을 때만 클리어를 기다린다 — 채집으로 와 있던 사냥터는 판이 아니다
-    (2026-11-03 일일 미션 채집 뒤 다음 캐릭터 접속에서 40분씩 기다림)."""
+    """접속 때 사냥터 안이면 사냥 퀘스트가 있을 때만 클리어를 기다린다 — 채집이나 사냥터 안 던전을 마치고 나와 있는
+    사냥터는 판이 아니다 (2026-11-03 페카 공물 던전에서 나와 센마이 평원에 남은 채 다음 캐릭터 접속 → 40분씩 기다림)."""
 
     def leave(self, hunt, task=None):
         from mabi.tasks import login
