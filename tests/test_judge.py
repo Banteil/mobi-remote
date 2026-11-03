@@ -74,6 +74,13 @@ class AbyssPhaseTest(unittest.TestCase):
         bot = make_bot(st, seen={"abyss_exit"})  # 사냥터에도 비슷한 나가기 버튼 (2026-10-26)
         self.assertEqual(abyss.phase(bot), "out")
 
+    def test_expected_overlaps_are_not_conflicts(self):
+        """다음 판으로 넘어가는 로딩엔 매칭·보상 신호가 남는다 — 어긋남으로 남기지 않는다 (11-03 로그 소음)."""
+        bot = make_bot(PacketState(channel=1, loading=True, abyss_matching=3, abyss_result=3), seen={"reward_exit"},
+                       act={"IsAbyssResultSequencePlaying": True})
+        self.assertEqual(abyss.phase(bot), "loading")
+        bot.log.info.assert_not_called()
+
     def test_loading_first(self):
         bot = make_bot(PacketState(channel=1, loading=True), seen={"reward_exit"})
         self.assertEqual(abyss.phase(bot), "loading")

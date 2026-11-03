@@ -71,14 +71,14 @@ def phase(bot: Bot):
             return "out"
         return None if st.abyss_result or st.abyss_matching in (1, 2, 3) else "play"
 
-    def cli_place():
+    def cli_place():  # CLI 장소 이름은 판 안·보상 화면·매칭 중 모두 어비스라 '어비스 어딘가' 까지만 안다
         if known:
             return None
         pl = place(bot)
-        return None if not pl.name else "play" if pl.kind == ABYSS_MAP else "out"
+        return None if not pl.name else "abyss" if pl.kind == ABYSS_MAP else "out"
 
     ui = bot.ui
-    return judge.decide(bot, "어비스", [
+    v = judge.decide(bot, "어비스", [
         ("패킷 로딩", lambda: "loading" if bot.map_loading() else None),
         ("패킷 매칭", lambda: "matching" if p.ok and st.abyss_matching in (1, 2, 3) else None),
         ("화면 보상", lambda: "reward" if on_screen(ui.get("reward_exit"), ui.get("dungeon_retry"),
@@ -88,7 +88,9 @@ def phase(bot: Bot):
         ("패킷 맵", packet_map),
         ("화면 나가기 버튼", lambda: "play" if on_screen(ui.get("abyss_exit")) else None),
         ("CLI 장소", cli_place),
-    ], same={"matching": {"reward"}}).value
+    ], same={"matching": {"reward", "abyss"}, "reward": {"abyss"}, "play": {"abyss"},
+             "loading": {"matching", "reward", "abyss"}}).value  # 다음 판으로 넘어가는 로딩엔 매칭·보상 신호가 남는다
+    return "play" if v == "abyss" else v  # CLI 장소만 알면 예전처럼 판 안으로
 
 
 def inside(bot: Bot) -> bool:
