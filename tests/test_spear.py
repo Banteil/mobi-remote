@@ -260,10 +260,38 @@ class KeysTest(unittest.TestCase):
         with mock.patch("mabi.tasks.spear.time.sleep") as sleep:
             sd.set_camera()
         self.assertEqual([c.args for c in bot.key.call_args_list], [("c",), ("c",)])
-        sleep.assert_called_once_with(8.0)  # 보스방 갈 땐 8초 (사용자 11-03)
+        self.assertAlmostEqual(sum(c.args[0] for c in sleep.call_args_list), 6.0)  # 보스방 갈 땐 6초 (사용자 11-04)
         m.apply("cutscene.play", {})
         m.apply("cutscene.end", {})
         self.assertFalse(sd.camera_due())  # 한 맵에 한 번
+
+    def test_camera_second_press_after_scene(self):
+        """맞추는 중에 보스 등장 연출이 시작되면 두 번째 Z 는 연출이 끝난 뒤 (11-04 14:34 자동 카메라로 남음)."""
+        from unittest import mock
+        m = PacketMonitor(None)
+        m.state.me = ME
+        m.apply("channel.entering", {"channel": 1, "channel_type": "InstanceAbyssDungeon",
+                                     "channel_name": "흩어진 물길 (어비스 시즌2 3구역 매우 어려움2 솔로)"})
+        m.apply("abyss.campfire", {})
+        m.apply("cutscene.play", {})
+        m.apply("cutscene.end", {})
+        bot = mock.MagicMock(packets=m)
+        sd = SpearDodge(bot)
+        n = []
+
+        def sleep(sec):
+            n.append(sec)
+            if len(n) == 20:  # 2초 뒤 보스방에 들어가 연출 시작
+                m.apply("cutscene.play", {})
+        with mock.patch("mabi.tasks.spear.time.sleep", sleep):
+            sd.set_camera()
+        self.assertEqual(bot.key.call_count, 1)
+        self.assertFalse(sd.camera_due())  # 연출 중엔 안 누른다
+        m.apply("cutscene.end", {})
+        self.assertTrue(sd.camera_due())
+        sd.set_camera()
+        self.assertEqual(bot.key.call_count, 2)
+        self.assertFalse(sd.camera_due())
 
     def test_camera_once_per_map_across_calls(self):
         """판 진행을 다시 불러 SpearDodge 가 새로 생겨도 같은 맵에서 카메라를 또 돌리지 않는다 (11-03 19:26)."""
