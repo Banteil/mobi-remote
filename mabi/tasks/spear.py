@@ -147,7 +147,7 @@ class SpearDodge:
             self.set_camera()  # Z 만 누른다 — 뒤에서도 창에 직접 보내지므로 게임을 앞으로 가져오지 않는다 (사용자 11-03)
             return
         if st.ttt.due():
-            job = st.ttt.take()
+            job = st.ttt.take(self.my_pos())  # 같은 값인 칸이면 가까운 쪽
             if job and self.calib is None:
                 self._with_focus(self.calibrate)
             if job and self.calib is not None:

@@ -149,6 +149,14 @@ class TicTacToeTest(unittest.TestCase):
         self.assertTrue(ttt.done)
         self.assertEqual(ttt.text(), "X.O/.OX/OX.")
 
+    def test_tie_goes_to_nearest(self):
+        """점수가 같은 칸이면 내 자리에서 가까운 칸 (사용자 11-04)."""
+        from mabi.tictactoe import choose
+        b = {(1, 2): "X"}  # 아래 가운데 X → 위 두 귀퉁이가 같은 점수
+        self.assertEqual(choose(b, (8.0, 360.0)), (2, 0))
+        self.assertEqual(choose(b, (-8.0, 360.0)), (0, 0))
+        self.assertEqual(choose({(0, 0): "O", (2, 2): "O"}, (9.0, 357.5)), (1, 1))  # 이기는 칸은 거리와 상관없이
+
     def test_boss3_replay(self):
         """11-03 01:32 — 차례 간격 5~6초, 첫 X 왼쪽 가운데."""
         ttt = self.m.spear.ttt

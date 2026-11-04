@@ -41,16 +41,19 @@ def won(board: dict, mark: str = "O") -> bool:
     return any(all(board.get(c) == mark for c in line) for line in LINES)
 
 
-def choose(board: dict) -> tuple[int, int] | None:
+def choose(board: dict, near: tuple[float, float] | None = None) -> tuple[int, int] | None:
     """O 를 둘 칸. 이기는 칸이 있으면 그것, 아니면 둔 뒤 점수가 가장 높은 칸:
     O 둘 + 남은 칸이 가운데(보스가 가운데엔 안 둔다 → 다음에 반드시 이김) 100, O 둘 10, O 하나 1 (X 가 없는 줄만).
-    가운데는 이길 때만 — 마지막 수로 남겨 둔다. 빈 칸이 가운데뿐이면 가운데."""
+    가운데는 이길 때만 — 마지막 수로 남겨 둔다. 빈 칸이 가운데뿐이면 가운데.
+    같은 값이면 near(내 자리)에 가까운 칸 — 모션 긴 스킬 중에 담당이 되면 1~2초 늦게 출발해, 먼 칸으로 가다
+    5초 안에 못 닿으면 엉뚱한 칸(가운데 등)에 O 가 생긴다 (사용자 11-04)."""
     empty = [(c, r) for c in range(3) for r in range(3) if (c, r) not in board]
     if not empty:
         return None
-    for cell in empty:
-        if won({**board, cell: "O"}):
-            return cell
+    far = (lambda cell: math.dist(near, center_of(cell))) if near else (lambda cell: 0.0)
+    wins = [cell for cell in empty if won({**board, cell: "O"})]
+    if wins:
+        return min(wins, key=far)
 
     def score(cell):
         b = {**board, cell: "O"}
@@ -62,7 +65,7 @@ def choose(board: dict) -> tuple[int, int] | None:
             rest = [c for c in line if c not in b]
             s += 100 if n == 2 and rest == [CENTER] else 10 if n == 2 else n
         return s - (1000 if cell == CENTER else 0)
-    return max(empty, key=score)
+    return max(empty, key=lambda cell: (score(cell), -far(cell)))
 
 
 class TicTacToe:
@@ -122,9 +125,9 @@ class TicTacToe:
         """내가 O 담당이 됐고 아직 안 맡았다."""
         return not self.done and self.mine_at > self.taken_at and time.monotonic() - self.mine_at < O_AT
 
-    def take(self) -> dict | None:
+    def take(self, near: tuple[float, float] | None = None) -> dict | None:
         self.taken_at = self.mine_at
-        cell = choose(self.board)
+        cell = choose(self.board, near)
         if cell is None:
             return None
         x, y = center_of(cell)
