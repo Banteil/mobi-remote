@@ -156,6 +156,15 @@ class TicTacToeTest(unittest.TestCase):
         self.assertEqual(choose(b, (8.0, 360.0)), (2, 0))
         self.assertEqual(choose(b, (-8.0, 360.0)), (0, 0))
         self.assertEqual(choose({(0, 0): "O", (2, 2): "O"}, (9.0, 357.5)), (1, 1))  # 이기는 칸은 거리와 상관없이
+        # 위 가운데 X 에 내가 그 옆 → 열린 줄이 하나 적어도 가까운 X 옆 귀퉁이 (11-04 15:44 은 반대편으로 뛰었다)
+        self.assertEqual(choose({(1, 0): "X"}, (5.0, 358.0)), (2, 0))
+        self.assertEqual(choose({(1, 0): "X"}, (-5.0, 358.0)), (0, 0))
+        # 다음 수에 반드시 이기는 칸이 둘이면 가까운 쪽 (사용자 11-04 질문)
+        b = {(0, 0): "X", (1, 0): "X", (0, 1): "O", (0, 2): "O", (1, 2): "X"}
+        self.assertEqual(choose(b, (9.0, 357.5)), (2, 0))
+        self.assertEqual(choose(b, (9.0, 375.5)), (2, 1))
+        # O 둘(10점)이 걸리면 멀어도 그 칸
+        self.assertEqual(choose({(1, 0): "X", (0, 0): "O"}, (9.0, 357.5)), (2, 2))
 
     def test_boss3_replay(self):
         """11-03 01:32 — 차례 간격 5~6초, 첫 X 왼쪽 가운데."""
@@ -197,7 +206,7 @@ class TicTacToeTest(unittest.TestCase):
         for x1 in [(1, 0), (0, 1), (2, 1), (1, 2)]:  # 첫 X 상하좌우 어디든
             b = {x1: "X"}
             o1 = choose(b)
-            self.assertNotIn(o1, [(1, 1)] + [(c, r) for c, r in [(0, 0), (2, 0), (0, 2), (2, 2)] if x1[0] == c or x1[1] == r])
+            self.assertIn(o1, [(0, 0), (2, 0), (0, 2), (2, 2)])  # X 옆 귀퉁이여도 (가까운 쪽, 사용자 11-04)
             b[o1] = "O"
             b[(1, 0) if (1, 0) not in b else (1, 2)] = "X"
             o2 = choose(b)

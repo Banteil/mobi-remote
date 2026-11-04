@@ -162,7 +162,7 @@ class SpearDodge:
             self.set_camera()  # Z 만 누른다 — 뒤에서도 창에 직접 보내지므로 게임을 앞으로 가져오지 않는다 (사용자 11-03)
             return
         if st.ttt.due():
-            job = st.ttt.take(self.my_pos())  # 같은 값인 칸이면 가까운 쪽
+            job = st.ttt.take(self.my_pos())  # 크게 차이 나지 않으면 가까운 칸
             if job and self.calib is None:
                 self._with_focus(self.calibrate)
             if job and self.calib is not None:
@@ -208,7 +208,10 @@ class SpearDodge:
         ttt = self.st.ttt
         target, t0 = (job["x"], job["y"]), job["at"]
         done = lambda: ttt.resolved
-        self.bot.log.info(f"틱택토: O 담당 → 칸 {job['cell']} ({target[0]:.0f}, {target[1]:.1f}) 로 이동 · 판 {ttt.text()}")
+        near = job.get("near")
+        at = f"({near[0]:.0f}, {near[1]:.1f})" if near else "모름"
+        self.bot.log.info(f"틱택토: O 담당 → 칸 {job['cell']} ({target[0]:.0f}, {target[1]:.1f}) 로 이동 · 판 {ttt.text()}"
+                          f" · 내 자리 {at} · 차례 시작 {time.monotonic() - t0:.1f}초 뒤 출발")
         if self.go(target, TOL, t0 + O_AT, done, pattern=False):
             self.bot.log.info(f"틱택토: 칸 도착 (차례 시작 {time.monotonic() - t0:.1f}초)")
         elif not done():

@@ -16,6 +16,7 @@ import time
 XS = (-9.0, 0.0, 9.0)
 YS = (357.5, 366.5, 375.5)
 CENTER = (1, 1)
+CORNERS = [(0, 0), (2, 0), (0, 2), (2, 2)]
 SNAP = 4.5          # 칸 가운데에서 이만큼 안이면 그 칸
 EXACT = 0.3         # X 를 새기러 갈 땐 칸 가운데로 정확히 간다
 FORECAST = "Abyss_S3_Forecast_Target"
@@ -45,8 +46,9 @@ def choose(board: dict, near: tuple[float, float] | None = None) -> tuple[int, i
     """O 를 둘 칸. 이기는 칸이 있으면 그것, 아니면 둔 뒤 점수가 가장 높은 칸:
     O 둘 + 남은 칸이 가운데(보스가 가운데엔 안 둔다 → 다음에 반드시 이김) 100, O 둘 10, O 하나 1 (X 가 없는 줄만).
     가운데는 이길 때만 — 마지막 수로 남겨 둔다. 빈 칸이 가운데뿐이면 가운데.
-    같은 값이면 near(내 자리)에 가까운 칸 — 모션 긴 스킬 중에 담당이 되면 1~2초 늦게 출발해, 먼 칸으로 가다
-    5초 안에 못 닿으면 엉뚱한 칸(가운데 등)에 O 가 생긴다 (사용자 11-04)."""
+    10점(O 둘) 아래의 차이(열린 줄 수)는 보지 않고 귀퉁이 중 near(내 자리)에 가까운 칸, 같은 점수끼리도 가까운 칸 —
+    모션 긴 스킬 중에 담당이 되면 1~2초 늦게 출발해, 먼 칸으로 가다 5초 안에 못 닿으면 엉뚱한 칸(가운데 등)에
+    O 가 생긴다 (사용자 11-04, 15:44·15:48 두 번 못 닿음)."""
     empty = [(c, r) for c in range(3) for r in range(3) if (c, r) not in board]
     if not empty:
         return None
@@ -65,7 +67,10 @@ def choose(board: dict, near: tuple[float, float] | None = None) -> tuple[int, i
             rest = [c for c in line if c not in b]
             s += 100 if n == 2 and rest == [CENTER] else 10 if n == 2 else n
         return s - (1000 if cell == CENTER else 0)
-    return max(empty, key=lambda cell: (score(cell), -far(cell)))
+    def rank(cell):
+        s = score(cell)
+        return (s, -far(cell)) if s >= 10 else (0, s > 0 and cell in CORNERS, s > 0, -far(cell))
+    return max(empty, key=rank)
 
 
 class TicTacToe:
@@ -131,7 +136,7 @@ class TicTacToe:
         if cell is None:
             return None
         x, y = center_of(cell)
-        return {"cell": cell, "x": x, "y": y, "at": self.mine_at}
+        return {"cell": cell, "x": x, "y": y, "at": self.mine_at, "near": near}
 
     def text(self) -> str:
         return "/".join("".join(self.board.get((c, r), ".") for c in range(3)) for r in range(3))
