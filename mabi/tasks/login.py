@@ -1,11 +1,11 @@
 """타이틀/캐릭터 선택 화면에서 지정한 캐릭터로 필드 메인 화면까지 진입.
 
 캐릭터는 선택 화면에서의 순서(slot)로 고른다 (profile.json 에 사용자가 입력).
-카드는 생성 순으로 한 줄에 columns 개씩 놓이고, 보유 캐릭터 수는 화면의 카드 수로 센다. 카드 위치는 고정 좌표 대신 카드 우상단
-'•••' 버튼을 화면에서 찾아 계산하고, 스크롤이 실제로 됐는지와 노란 선택 테두리가
-그 카드에 생겼는지 확인한 뒤에만 게임 시작을 누른다 (엉뚱한 캐릭터 접속 방지).
-첫 줄은 스크롤 맨 위, 마지막 줄은 스크롤 맨 아래에서 고른다. 카드 수는 스크롤 맨 위에서 보이는
-카드로 세므로 두 줄(columns * 2개)까지 지원한다.
+카드는 생성 순으로 한 줄에 columns 개씩 놓인다. 카드 자리는 오픈 이래 바뀐 적이 없어 고정 좌표로 누른다 (사용자 11-04):
+카드 우상단 '•••' 를 찾아 계산했더니, 장식 테두리가 있는 의상의 카드는 선택됐을 때 '•••' 가 가려져(일치도 0.79)
+그 줄이 한 칸씩 밀려 옆 캐릭터로 접속하고 그 캐릭터 숙제를 '완료' 로 남겼다 (11-04 다른 사용자 로그).
+스크롤 맨 위에서 두 줄(columns * 2개)까지 — 둘째 줄은 카드 윗부분을 누른다 (아래는 게임 시작 버튼).
+누른 뒤 노란 선택 테두리와 카드 이름을 확인하고, 접속 뒤에도 내 캐릭터 이름이 맞는지 본다 (WrongCharacter).
 
 오전 6시 이후 캐릭터가 처음 접속하면 메인 화면 전에 이런 화면이 순서 없이 나올 수 있다 (settle_first_login):
 - 출석 대사 → (버튼 없는 첫 대사는 3초쯤 뒤 화면 클릭) → '출석부 건너뛰기' → '출석 완료' 확인(Space)
@@ -25,6 +25,10 @@ from ..vision import Match
 
 class SelectFailed(StepTimeout):
     pass
+
+
+class WrongCharacter(StepTimeout):
+    """접속해 보니 고른 캐릭터가 아님 — 숙제를 시작하지 않는다."""
 
 
 _last_login = 0.0  # 마지막으로 '게임 시작'을 누른 시각 (monotonic)
@@ -77,38 +81,37 @@ def count_characters(bot: Bot, cfg: dict) -> int:
     return sum(len(r) for r in rows)
 
 
+def slot_menu(cs: dict, slot: int) -> Match:
+    """스크롤 맨 위에서 이 슬롯 카드의 '•••' 자리 (고정)."""
+    row, col = divmod(slot - 1, cs["columns"])
+    (x0, y0), (dx, dy) = cs["slot_menu"], cs["slot_pitch"]
+    return Match(cs["card_menu"], x0 + col * dx, y0 + row * dy, 0, 0, 1.0)
+
+
 def select_character(bot: Bot, cfg: dict, character: dict) -> None:
+    from .charscan import _read_card
     cs = cfg["charselect"]
     name = character.get("name", f"슬롯 {character['slot']}")
-    total = count_characters(bot, cfg)  # 스크롤 맨 위 상태가 된다
-    if character["slot"] > total:
-        raise SelectFailed(f"{name}: 캐릭터가 {total}개뿐이라 슬롯 {character['slot']} 이 없음")
-    row, col = divmod(character["slot"] - 1, cs["columns"])
-    last_row = (total - 1) // cs["columns"]
-    if row not in (0, last_row):
-        raise SelectFailed(f"{name}: 세 줄 이상인 캐릭터 목록은 지원하지 않음")
-
-    rows = _scrolled_rows(bot, cs, top=row == 0)
-    r = (rows[0] if row == 0 else rows[-1]) if rows else []
-    if col >= len(r):
-        raise SelectFailed(f"{name}: 캐릭터 카드 위치를 찾지 못함 → {bot.snapshot('charselect').name}")
-    target = r[col]
-
+    if character["slot"] > cs["columns"] * 2:
+        raise SelectFailed(f"{name}: 세 줄 이상인 캐릭터 목록은 지원하지 않음 (슬롯 {character['slot']})")
+    if _scrolled_rows(bot, cs, top=True) is None:
+        raise SelectFailed(f"{name}: 캐릭터 카드를 찾지 못함 → {bot.snapshot('charselect').name}")
+    target = slot_menu(cs, character["slot"])
     ox, oy = cs["card_click_offset"]
-    x, y = target.x + ox, target.y + oy
-    if y > cs["max_click_y"]:
-        raise SelectFailed(f"{name}: 카드 클릭 위치가 게임 시작 버튼과 겹침 (y={y})")
+    x, y = target.x + ox, min(target.y + oy, cs["max_click_y"])  # 둘째 줄은 카드 윗부분 (아래는 게임 시작 버튼)
 
     for _ in range(2):
         bot.click((x, y))
         bot.sleep(0.8, 1.2)
         frame = bot.frame()
-        menus = bot.vision.find_all(frame, cs["card_menu"])
-        # 클릭 후 같은 자리의 카드가 선택됐는지 (스크롤이 움직였으면 실패로 본다)
-        same = next((m for m in menus if abs(m.x - target.x) <= 6 and abs(m.y - target.y) <= 6), None)
-        if same and _is_selected(frame, same, cs):
-            bot.log.info(f"{name} 선택 확인")
-            return
+        if not _is_selected(frame, target, cs):
+            continue
+        # 카드 이름 — 확실히 읽었는데 다르면 고르지 않는다. 못 읽으면 접속 뒤 이름으로 한 번 더 본다 (WrongCharacter)
+        read = _read_card(frame, target, cs) if character.get("name") else {}
+        if read.get("name") and read["name_score"] >= 0.9 and not name_matches(read["name"], name):
+            raise SelectFailed(f"{name}: 슬롯 {character['slot']} 카드 이름이 '{read['name']}' → {bot.snapshot('charselect').name}")
+        bot.log.info(f"{name} 선택 확인" + (f" (카드 이름 '{read['name']}')" if read.get("name") else ""))
+        return
     raise SelectFailed(f"{name}: 선택 테두리 확인 실패 → {bot.snapshot('charselect').name}")
 
 
@@ -316,6 +319,10 @@ def _task(bot: Bot, cfg: dict, character: dict | None = None) -> str:
             _clear_auth_fail(bot, cfg)
         try:
             return _run(bot, cfg, character)
+        except WrongCharacter as e:  # 다시 고른다 (지금 캐릭터 이름이 다르니 _run 이 선택 화면으로 나간다)
+            if attempt:
+                raise
+            bot.log.warning(f"{e} → 다시 고름")
         except StepTimeout:
             if attempt or not _auth_fail_visible(bot):
                 raise
@@ -436,6 +443,12 @@ def _run(bot: Bot, cfg: dict, character: dict | None) -> str:
                     raise StepTimeout(f"{name} 접속 후 메인 화면이 나타나지 않음 → {bot.snapshot('login').name}")
 
     bot.state.available(refresh=True)
+    # 들어간 캐릭터가 고른 캐릭터인가 — 패킷이 이름을 바로 안다 (다르면 숙제를 시작하지 않는다, 11-04 엉뚱한 캐릭터에 숙제)
+    if character is not None and character.get("name"):
+        bot.wait_packet(lambda s: bool(s.my_name) and not s.loading, 10, since=mark)
+        now = current_name(bot)
+        if now and not name_matches(now, name):
+            raise WrongCharacter(f"{name} 을 골랐는데 {now} 로 접속됨 → {bot.snapshot('wrong_char').name}")
     handled = settle_first_login(bot, cfg, c["settle_timeout"])
     situation.attendance_done(bot)
     if handled:
