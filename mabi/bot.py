@@ -160,7 +160,14 @@ class Bot:
     def check_in(self) -> None:
         """작업·숙제를 시작할 때마다 (처음이든 일시정지 뒤 이어 하기든) 지금 상태부터 다시 본다 — 패킷이 기억하는 지난
         상태를 믿고 시작하지 않는다 (PacketMonitor.reconcile). 캐릭터 선택 화면·로딩이면 CLI 가 답하지 않아 그런 상태는
-        모름으로 둔다. CLI 연결 여부도 여기서 다시 묻는다 — 처음 한 번 정한 값이 실행 내내 남아 있었다."""
+        모름으로 둔다. CLI 연결 여부도 여기서 다시 묻는다 — 처음 한 번 정한 값이 실행 내내 남아 있었다.
+        메인 화면이면 배고픔도 본다 — 접속 직후(출석 화면 뒤) 'B' 표시가 늦게 떠 놓치고, 요일 던전은 메인 화면으로
+        돌아오지 않고 바로 출발해 배고픈 채로 갔다 (11-05 사용자)."""
+        try:
+            if self.at_main():
+                self.eat_if_hungry()
+        except Exception as e:  # noqa: BLE001 — 먹기 확인이 작업 시작을 막으면 안 된다
+            self.log.debug(f"시작 점검: 배고픔 확인 실패 {e}")
         if self.packets.status != "running":
             return
         self.state.available(refresh=True)
