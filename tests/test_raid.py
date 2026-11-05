@@ -94,5 +94,30 @@ class CardTest(unittest.TestCase):
         self.assertEqual(set(raid.DIFFICULTIES), set(raid.RAIDS))
 
 
+class ScreenTest(unittest.TestCase):
+    """11-05 새 레이드(적월의 스카스)가 목록 맨 앞에 들어온 화면 — 이름은 그대로 글자로 찾는다."""
+
+    @staticmethod
+    def texts(name, *regions):
+        from pathlib import Path
+        import cv2
+        import numpy as np
+        from mabi import gamedata as gd, ocr
+        f = cv2.imdecode(np.fromfile(str(Path(__file__).parent / "fixtures" / name), np.uint8), cv2.IMREAD_COLOR)
+        return [[t for t, *_ in ocr.find_texts(f, gd.region(r))] for r in regions]
+
+    def test_list_has_all_raids(self):
+        (names,) = self.texts("raid_list_1105.png", "raid_list")
+        self.assertEqual(names, raid.RAIDS)
+
+    def test_new_raid_entry_window(self):
+        title, diff, top, right = self.texts("raid_entry_scas.png", "raid_entry_title", "raid_difficulty",
+                                             "abyss_entry_top", "abyss_entry_right")
+        self.assertEqual(title, ["적월의 스카스"])
+        self.assertEqual(diff, raid.DIFFICULTIES["적월의 스카스"])
+        self.assertEqual(top, ["혼자하기", "함께하기"])
+        self.assertIn("출항하기", right)
+
+
 if __name__ == "__main__":
     unittest.main()
