@@ -3,6 +3,8 @@
 templates/<name>.png 가 템플릿 이미지이고, templates/index.json 에는
 템플릿을 잘라낸 원래 위치(roi)와 개별 임계값을 기록한다.
 roi 가 있으면 그 주변(margin)만 탐색해서 빠르고 오탐이 적다.
+자리가 조금씩 움직이는 템플릿(목록 속 버튼 등)은 roi 대신 area [x, y, w, h] 로 넉넉한 탐색 범위를 준다 —
+화면 전체를 뒤지면 엉뚱한 곳(파티 플레이의 G 등)에 걸린다 (사용자 11-05).
 """
 import json
 from dataclasses import dataclass
@@ -65,11 +67,15 @@ class Vision:
     def _search_area(self, name: str, frame: np.ndarray, region) -> tuple[int, int, int, int]:
         fh, fw = frame.shape[:2]
         if region is None:
-            roi = self._index.get(name, {}).get("roi")
-            if roi is None:
+            entry = self._index.get(name, {})
+            roi = entry.get("roi")
+            if roi is not None:
+                m = self.roi_margin
+                region = (roi[0] - m, roi[1] - m, roi[2] + 2 * m, roi[3] + 2 * m)
+            elif entry.get("area") is not None:
+                region = entry["area"]
+            else:
                 return 0, 0, fw, fh
-            m = self.roi_margin
-            region = (roi[0] - m, roi[1] - m, roi[2] + 2 * m, roi[3] + 2 * m)
         x, y, w, h = region
         x0, y0 = max(0, x), max(0, y)
         x1, y1 = min(fw, x + w), min(fh, y + h)
