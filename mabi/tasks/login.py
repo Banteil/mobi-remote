@@ -145,9 +145,10 @@ def settle_first_login(bot: Bot, cfg: dict, timeout: float) -> list[str]:
         # 출석 이벤트의 첫 NPC 대사엔 버튼이 없고 화면을 한 번 눌러야 '출석부 건너뛰기'가 나온다.
         # 대사가 뜬 뒤 한동안 입력을 안 받으므로 3초쯤 지나서 누른다 (2026-10-22 새 캐릭터로 확인).
         # 대사 화면엔 믿을 만한 표시가 없어(말풍선 아이콘은 움직임) '모르는 화면 + 로딩 아님(CLI)' 으로 판단한다
-        # 아무것도 처리하기 전(=첫 대사)에만 누른다. '출석 완료' 연출 중에 누르면 가운데 보상 아이템이 눌린다
-        if not handled and unknown in (2, 6) and bot.in_game():
-            bot.log.info("버튼 없는 화면이 이어짐 (출석 대사) → 화면 한 번 클릭")
+        # 11-05 패치 뒤 생긴 '권장 전투력 … 달성' 창도 버튼 없이 화면을 눌러 닫는다 (공지 팝업 다음에도 뜬다).
+        # 가운데는 보상 아이템이라 누르면 아이템 설명이 뜨므로 왼쪽 빈 자리를 누른다 (사용자 11-05)
+        if unknown in (2, 6) and bot.in_game():
+            bot.log.info("버튼 없는 화면이 이어짐 (출석 대사·달성 창) → 왼쪽 빈 자리 한 번 클릭")
             bot.snapshot("first_dialog")
             bot.click(tuple(c["first_dialog_xy"]))
             continue
