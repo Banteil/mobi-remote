@@ -1241,6 +1241,8 @@ function packetHtml(st) {
       ' <button class="btn btn-tiny" data-packet-retry>다시 확인</button>' +
       '<div class="hint">설치한 뒤 다시 확인을 누르면 켜집니다. 없어도 화면·CLI 로 돕니다.</div>',
     no_table: '<span class="mark-warn">패킷 표·키가 없어 꺼져 있습니다</span>',
+    stale_table: '<span class="mark-warn">게임이 업데이트돼 패킷 표가 맞지 않아 꺼 두었습니다</span>' +
+      '<div class="hint">CLI·화면으로 돕니다. 새 판 리모콘을 받으면 다시 켜집니다.</div>',
     off: '<span class="muted">설정에서 꺼 둠</span>',
   })[st] || '<span class="mark-warn">켜지 못했습니다 (로그 확인)</span>';
 }

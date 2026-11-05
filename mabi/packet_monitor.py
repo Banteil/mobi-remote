@@ -11,6 +11,7 @@ Npcap 이 없거나 표·키가 없으면 꺼진 채(status)로 있고, 봇은 �
 """
 import copy
 import ctypes
+import hashlib
 import logging
 import os
 import socket
@@ -460,10 +461,25 @@ class PacketState:
         return self.dialogue_npc is not None
 
 
+def game_metadata() -> Path | None:
+    """게임의 IL2CPP 메타데이터 (메시지 번호표의 출처). CLI 를 찾는 경로로 게임 폴더를 찾는다. 못 찾으면 None."""
+    from .connector import candidates
+    for exe, _ in candidates():
+        f = Path(exe).parent / "MabinogiMobile_Data" / "il2cpp_data" / "Metadata" / "global-metadata.dat"
+        if f.exists():
+            return f
+    return None
+
+
 class PacketMonitor:
+    GAME_CHECK = 60  # 게임 파일이 바뀌었나 보는 간격 (초) — 리모콘을 켠 채 게임이 패치될 수 있다
+
     def __init__(self, logs_dir: Path):
         self.logs_dir = logs_dir
-        self.status = "off"          # off / running / no_npcap / no_table / error
+        self.status = "off"          # off / running / no_npcap / no_table / stale_table / error
+        self._game_file: Path | None | bool = None  # False = 찾아봤는데 없음
+        self._game_mtime = 0.0
+        self._game_checked = 0.0
         self.error = ""
         self.state = PacketState()
         self.recent: deque[Seen] = deque(maxlen=500)
@@ -484,7 +500,34 @@ class PacketMonitor:
     @property
     def ok(self) -> bool:
         """신호를 믿어도 되는가 (돌고 있고 최근 30초 안에 서버 패킷을 받음 — 로딩 중엔 몇 초씩 조용하다)."""
+        self._check_game()
         return self.status == "running" and time.monotonic() - self.last_rx < 30
+
+    def _check_game(self) -> None:
+        """게임이 패치돼 표를 묶은 메타데이터와 달라지면 감시를 'stale_table' 로 — 봇은 CLI·화면으로 돈다.
+        패치로 메시지 번호 대부분이 바뀌어(11-05: 3,213개 중 2,877개) 옛 표로는 자동 이동 시작을 못 알아보고
+        '이동 안 함' 이 남아 CLI 로 넘어가지도 않았다. 다른 메시지를 상태 이벤트로 잘못 읽을 수도 있다."""
+        want = (self.table.meta.get("game_metadata_sha256") if self.table else "") or ""
+        now = time.monotonic()
+        if self.status != "running" or not want or now - self._game_checked < self.GAME_CHECK:
+            return
+        self._game_checked = now
+        try:
+            if self._game_file is None:
+                self._game_file = game_metadata() or False
+            if not self._game_file:
+                return
+            mtime = self._game_file.stat().st_mtime
+            if mtime == self._game_mtime:
+                return
+            self._game_mtime = mtime
+            got = hashlib.sha256(self._game_file.read_bytes()).hexdigest()[:len(want)]
+        except OSError:
+            return
+        if got != want:
+            self.status = "stale_table"
+            self.diag.record("table_load", "stale_table", error=f"게임 메타데이터 {got} ≠ 표 {want}")
+            log.warning("게임이 업데이트돼 패킷 표가 맞지 않음 → 패킷 신호를 끄고 CLI·화면으로 판단 (새 판 리모콘 필요)")
 
     DYE_LIMIT = 240   # 미니게임 제한 2분 + '적용하시겠습니까?' 창 여유. 끝 신호를 놓쳐도 이만큼 지나면 닫힌 것으로
 
@@ -589,6 +632,7 @@ class PacketMonitor:
         self.status = "running"
         self.started_at = time.monotonic()
         log.info("패킷 감시 시작 (%s)", cap.device)
+        self._check_game()
         streams: dict[tuple, Stream] = {}
         try:
             while not self._stop.is_set():
