@@ -48,7 +48,7 @@ def _rows(menus: list[Match], tol: int = 20) -> list[list[Match]]:
 def _is_selected(frame: np.ndarray, menu: Match, cs: dict) -> bool:
     """카드 왼쪽 테두리에 노란 선택 테두리가 있는지."""
     dx0, dx1 = cs["border_dx"]
-    y = menu.y + cs["border_dy"]
+    y = min(menu.y + cs["border_dy"], cs.get("border_max_y", 820))  # 화면 아래쪽은 어둡게 흐려져 테두리 색이 바랜다
     strip = frame[y - 20:y + 20, max(0, menu.x + dx0):menu.x + dx1].reshape(-1, 3).astype(int)
     target = np.array(cs["border_bgr"])
     close = np.abs(strip - target).max(axis=1) <= 40

@@ -54,6 +54,16 @@ class SelectTest(unittest.TestCase):
         self.select("가나다", {"name": "라마", "name_score": 0.65})
         self.select("가나다", {"name": "", "name_score": 0.0})
 
+    def test_second_row_border_checked_above_fade(self):
+        """둘째 줄 카드는 아래쪽이 화면 가장자리 그라데이션에 걸려 테두리가 흐리다 — 그 위에서 본다 (11-05 실패)."""
+        import numpy as np
+        frame = np.full((1080, 1920, 3), 14, np.uint8)
+        target = login.slot_menu(CS, 5)
+        x = target.x + (CS["border_dx"][0] + CS["border_dx"][1]) // 2
+        frame[target.y:880, x - 1:x + 2] = CS["border_bgr"]
+        frame[880:1080, x - 1:x + 2] = (52, 108, 133)  # 바랜 노란색
+        self.assertTrue(login._is_selected(frame, target, CS))
+
     def test_no_border_fails(self):
         with self.assertRaises(login.SelectFailed):
             self.select("가나다", {}, selected=False)
