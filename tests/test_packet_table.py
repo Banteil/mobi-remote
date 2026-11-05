@@ -53,6 +53,30 @@ class DecodeTest(unittest.TestCase):
         self.assertIsNotNone(got)
         return got[1]
 
+    def test_spear_monster_follows_markers(self):
+        """물길 주술사 위치·종류는 표식으로 찾는다 — 앞 내용이 늘거나 줄어 칸이 밀려도 (11-05 패치 64바이트) 같은 값."""
+        pos_mark = bytes.fromhex("0000403f00010000000000000000ffffffff")
+        kind_mark = bytes.fromhex("10000000") + bytes(range(16)) + bytes.fromhex("0000000001")
+        ev = self.t.by_key("spear.monster")
+        for pad in (0, 64, 128):  # 패치 뒤 · 패치 전 · 더 늘어난 경우
+            body = bytearray(1800)
+            struct.pack_into("<Q", body, 0, 777)
+            k = 618 - len(kind_mark) + pad
+            body[k:k + len(kind_mark)] = kind_mark
+            struct.pack_into("<II", body, k + len(kind_mark), 2, 0x662b9106)
+            struct.pack_into("<fff", body, 1072 + pad, -10.0, 151.0, 1.57)
+            body[1072 + pad + 16:1072 + pad + 16 + len(pos_mark)] = pos_mark
+            v = self.t.decode(ev.proto, bytes(body))[1]
+            self.assertEqual((v["actor"], v["x"], v["y"]), (777, -10.0, 151.0), pad)
+            self.assertEqual(v["kind"], 0x662b9106_00000002, pad)
+
+    def test_marker_missing_uses_fixed_offset(self):
+        ev = self.t.by_key("spear.monster")
+        body = bytearray(1800)
+        struct.pack_into("<ff", body, 1072, 3.0, 4.0)
+        v = self.t.decode(ev.proto, bytes(body))[1]
+        self.assertEqual((v["x"], v["y"]), (3.0, 4.0))
+
     def test_dungeon_state(self):
         self.assertEqual(self.decode("dungeon.state", "02000000")["state_name"], "InProgress")
         self.assertEqual(self.decode("dungeon.state", "03000000")["state_name"], "Cleared")

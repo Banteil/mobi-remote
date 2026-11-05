@@ -14,6 +14,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import struct
 import zlib
 from dataclasses import dataclass, field
@@ -90,6 +91,17 @@ class Field:
     size: int = 0  # u64list: 항목 하나의 바이트 수
     at: int = 0    # u64list: 항목 안에서 읽을 u64 위치
     key: str = ""  # sjon: 이 이름 다음 문자열을 값으로 읽는다
+    # 표식 — 패치로 앞 내용이 늘거나 줄어 칸이 밀려도 따라가게, 이 바이트 모양(16진, ?? 는 아무 바이트)을 찾아
+    # 그 시작 + rel 에서 읽는다. 표식이 없으면 off 그대로 (11-05 패치로 물길 주술사 위치가 64바이트 밀림)
+    find: str = ""
+    rel: int = 0
+
+    def at_body(self, body: bytes) -> int:
+        if self.find:
+            m = _marker(self.find).search(body)
+            if m:
+                return m.start() + self.rel
+        return self.off
 
 
 @dataclass(frozen=True)
@@ -148,9 +160,10 @@ class Table:
             return None
         vals = {}
         for f in ev.fields:
-            v = _read(body, f.off, f.type, f.size, f.at, f.key)
+            off = f.at_body(body)
+            v = _read(body, off, f.type, f.size, f.at, f.key) if off >= 0 else None
             if v is None:
-                self._problem("short_body", ev.key, body, field=f.name, off=f.off, type=f.type)
+                self._problem("short_body", ev.key, body, field=f.name, off=off, type=f.type)
                 continue
             vals[f.name] = v
             if f.enum:
@@ -169,6 +182,13 @@ class Table:
     def _problem(self, kind: str, key: str, body: bytes | None, **info) -> None:
         if self.diag is not None:
             self.diag.record(kind, key, body, **info)
+
+
+@cache
+def _marker(hexpat: str) -> re.Pattern:
+    """'0000403f??01' → 바이트 정규식 (?? = 아무 바이트)."""
+    parts = [hexpat[i:i + 2] for i in range(0, len(hexpat), 2)]
+    return re.compile(b"".join(b"." if h == "??" else re.escape(bytes.fromhex(h)) for h in parts), re.S)
 
 
 _FMT = {"u8": "<B", "u32": "<I", "i32": "<i", "u64": "<Q", "f32": "<f"}
