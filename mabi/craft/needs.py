@@ -41,11 +41,18 @@ def _resolve(table: RecipeTable, product: str, ctx: dict, choice: dict) -> dict:
     return {"how": "make", "row": row, "blocked": _block_of(row, ctx)}
 
 
+SKILL_SHORT = "insufficient_living_skill_level"
+
+
 def _block_of(row: dict, ctx: dict) -> dict | None:
     """이 레시피를 지금 못 돌리는 이유. 재료 부족은 이유가 아니다 (그건 계산이 채운다)."""
     reason = (ctx.get("refused") or {}).get(row["name"])
+    # 생활 스킬은 지금 레벨(get_my_info LivingSkills)과 표의 해금 레벨로 미리 거른다 — 시도해 거절당하기 전에
+    skill = (ctx.get("skills") or {}).get(row.get("skill"))
     if reason:
-        return {"reason": reason}
+        return {"reason": reason, **({"haveSkill": skill} if reason == SKILL_SHORT and skill is not None else {})}
+    if row["via"] == "craft" and skill is not None and row.get("skillLevel") and skill < row["skillLevel"]:
+        return {"reason": SKILL_SHORT, "haveSkill": skill}
     if row["via"] == "alter":
         have = (ctx.get("levels") or {}).get(row.get("facility"))
         if have is not None and row.get("level") is not None and have < row["level"]:

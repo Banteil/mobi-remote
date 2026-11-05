@@ -126,6 +126,10 @@ def snapshot(cd, qc: QueryCache, refresh: bool = True, offline: bool = False) ->
             "gather": gather_map(gather["data"]), "works": works, "recipes": kn.get("recipes") or {}, "kn": kn,
             "stale": bool(items.get("stale") or craft.get("stale") or alter.get("stale") or gather.get("stale")),
             "cached": bool(items.get("cached") and craft.get("cached") and alter.get("cached") and gather.get("cached"))}
+    # 생활 스킬 레벨 (11-05 패치로 get_my_info 에 생김). 없어도 계획은 선다 — 게임 목록의 거절 이유로 본다
+    me = (qc.get("get_my_info", **kw) or {}).get("data")
+    snap["skills"] = {s["DisplayName"]: s["Level"] for s in (me or {}).get("LivingSkills") or []
+                      if isinstance(s, dict) and s.get("DisplayName") and s.get("Level") is not None}
     snap["makers"] = maker_index(cd, snap, kn)
     return snap
 
@@ -158,7 +162,7 @@ def plan_context(snap: dict, fresh: bool = False) -> dict:
         slots[fac] = s.get("slots")
     return {"owned": snap["owned"], "incoming": incoming,
             "gatherable": {n: g["ok"] for n, g in snap["gather"].items()}, "refused": refused,
-            "levels": levels, "slots": slots, "fresh": fresh,
+            "levels": levels, "slots": slots, "fresh": fresh, "skills": snap.get("skills") or {},
             "craftLimit": lambda recipe: know.craft_limit(recipe, kn)}
 
 
@@ -189,7 +193,8 @@ def plan_step(snap: dict, p: dict) -> dict:
         ko = errors.describe("execute_altering" if (b.get("facility") or "").endswith("가공 시설")
                              else "execute_crafting", b["reason"])
         need = (f" (시설 Lv.{b['needLevel']}" + (f", 지금 Lv.{b['haveLevel']}" if b.get("haveLevel") else "")
-                + (f" · {b['skill']} Lv.{b['skillLevel']}" if b.get("skill") else "") + ")")
+                + (f" · {b['skill']} Lv.{b['skillLevel']}" if b.get("skill") else "")
+                + (f", 지금 Lv.{b['haveSkill']}" if b.get("haveSkill") is not None else "") + ")")
         return {"kind": "blocked", "reason": b["reason"], "name": b["recipe"], "product": b["product"],
                 "blockedList": p["blocked"],
                 "message": f"{b['recipe']} — {ko.get('text') or b['reason']}{need}"

@@ -14,7 +14,7 @@ import time
 from .. import situation
 from ..bot import Bot, StepTimeout
 from .dialogue import in_dialog
-from .content import (CannotProceed, daily_achieved, enter_from_dungeon_window, open_arbeit_tab, questwin_buttons, travel,
+from .content import (GROWTH, CannotProceed, daily_achieved, growth_done, enter_from_dungeon_window, open_arbeit_tab, questwin_buttons, travel,
                       with_retries)
 
 SUNDAY_CHOICES = ("골드", "보석", "촉매")  # 선택지 글자 괄호 안의 낱말. 이 낱말이 든 버튼을 누른다
@@ -111,7 +111,8 @@ def _task(bot: Bot, cfg: dict) -> str:
     # 요일 던전 창이 이미 열려 있으면 (입구에 선 채 끊김·다시 켬) 카드·이동을 건너뛰고 거기서 입장한다.
     # 완료 확인(verify)은 가이드 창을 열어 던전 창을 닫으므로 그보다 먼저 본다
     # (패킷 '추천' 이 요일 던전이 아니면 — 이미 깼을 수 있다 — 가이드로 확인부터)
-    not_done = not bot.packets.ok or bot.packets.state.recommend in (None, 2)
+    known = growth_done(bot, GROWTH.get(c["achieved"]))
+    not_done = known is False or known is None and (not bot.packets.ok or bot.packets.state.recommend in (None, 2))
     if not_done and situation.dungeon_tab(bot) == "weekday":
         bot.log.info("요일 던전 창이 이미 열려 있음 → 바로 입장")
         result = enter_from_dungeon_window(bot, c["clear_timeout"], c["extra_loot"])
@@ -120,7 +121,7 @@ def _task(bot: Bot, cfg: dict) -> str:
     # 단계: wd_card(요일 아르바이트 찾기) → travel → [일요일: wd_board → wd_card → travel] → dungeon_enter → in_dungeon
     # → dungeon_reward (content 가 남김). 던전 안에서 끊겼으면 접속 단계가 클리어까지 보고 나오고,
     # 여기서는 일일 달성 체크로 끝났는지 본다
-    if verify(bot, cfg):
+    if known or known is None and verify(bot, cfg):
         bot.verified = True
         return "완료 (일일 달성 체크)"
     talk = [bot.cfg["arbeit"]["dialog_log"], bot.ui["dialog_skip"]]

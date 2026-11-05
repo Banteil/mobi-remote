@@ -13,7 +13,7 @@ import time
 
 from ..bot import Bot, StepTimeout
 from ..profile import game_day_start
-from .content import achieved_mark, daily_achieved, game_space, inside_space, open_guide, open_guide_card, watch
+from .content import GROWTH, achieved_mark, daily_achieved, growth_done, game_space, inside_space, open_guide, open_guide_card, watch
 
 
 def cleared_today(bot: Bot) -> bool:
@@ -88,9 +88,13 @@ def run(bot: Bot, cfg: dict) -> str:
             return "완료 (패킷: 오늘 깸)"
         if bot.resumed_at("bh_travel", "bh_inside"):
             bot.log.info("지난번에 검은 구멍으로 가다(또는 안에서) 끊김 → 바로 가기부터 다시")
+        known = growth_done(bot, GROWTH.get(c["achieved"]))  # CLI 가 알면 가이드의 체크 아이콘은 안 본다
+        if known:
+            bot.verified = True
+            return "완료 (일일 달성 체크)"
         bot.step("bh_open", "콘텐츠 가이드 → 오늘 남았나 → 검은 구멍 바로 가기")
         open_guide(bot)
-        if achieved_mark(bot, c["achieved"]):
+        if known is None and achieved_mark(bot, c["achieved"]):
             bot.to_main()
             bot.verified = True
             return "완료 (일일 달성 체크)"

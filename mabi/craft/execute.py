@@ -87,6 +87,22 @@ def item_snapshot(cd, cli: Connector) -> dict | None:
         return None
 
 
+def pick_variant(cd, cli: Connector, name: str) -> int | None:
+    """같은 이름 레시피의 갈래 번호 (11-05 패치: 같은 이름이 여럿이면 variant 없이는 ambiguous_recipe 로 거절).
+    레시피 표에서 고르는 줄(첫 줄 — 예전엔 variant 없이 시키면 이 줄이 돌았다)과 재료가 같은 갈래, 없으면 목록 첫 갈래."""
+    from .recipes import bare
+    r = cli.run("get_craftable_items", name)
+    items = (r.data or {}).get("items") if r.ok and isinstance(r.data, dict) else None
+    same = [i for i in items or [] if bare(i.get("DisplayName")) == bare(name) and i.get("Variant") is not None]
+    if not same:
+        return None
+    want = (cd.recipes.first(name, "craft") or {}).get("ingredients")
+    for i in same:
+        if want and {bare(g.get("DisplayName")): g.get("Required") for g in i.get("Ingredients") or []} == want:
+            return i["Variant"]
+    return same[0]["Variant"]
+
+
 def execute(cd, cli: Connector, qc: QueryCache, command: str, body=None, timeout: float | None = None,
             on_facility_level: Callable[[dict], None] | None = None) -> ExecResult:
     """명령 하나 실행 + 학습. 비용이 있는 명령은 부르는 쪽이 미리 사용자 확인을 받아야 한다."""
@@ -124,6 +140,11 @@ def execute(cd, cli: Connector, qc: QueryCache, command: str, body=None, timeout
     sole = sole_completed_recipe(cli, name) if command == "complete_altering_work" and name else None
 
     r = cli.run(command, body, timeout=timeout)
+    if command == "execute_crafting" and name and not r.ok and isinstance(r.data, dict)             and r.data.get("error") == "ambiguous_recipe" and "variant" not in body:
+        v = pick_variant(cd, cli, name)  # 거절은 비용 없이 돌아온다 — 갈래를 정해 한 번 더
+        if v is not None:
+            body = {**body, "variant": v}
+            r = cli.run(command, body, timeout=timeout)
     if r.ok and command.startswith("get_"):
         qc.write(command, r.data)
     data = r.data if isinstance(r.data, dict) else {}

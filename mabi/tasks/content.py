@@ -137,8 +137,31 @@ def achieved_mark(bot: Bot, label: str) -> bool:
     return green > 0.3
 
 
+# 일일 달성 아이콘(템플릿) → CLI get_growth_guide 의 Target
+GROWTH = {"guide_daily_weekday": "요일 던전", "guide_daily_blackhole": "검은 구멍"}
+
+
+def growth_done(bot: Bot, target: str | None, day: str = "Daily") -> bool | None:
+    """CLI get_growth_guide (11-05 패치에 생김) 로 그 콘텐츠를 이번 기간(Daily·Weekly)에 끝냈나.
+    게임 성장 가이드와 같은 값이라 가이드 창을 열어 체크 아이콘을 보지 않아도 된다. 모르면 None (화면으로 본다).
+    검은 구멍 일일은 이월된 주간 횟수 때문에 IsCompleted 뒤에도 RemainingCount 가 남을 수 있다 — 끝남은 IsCompleted."""
+    if not target or not bot.state.available():
+        return None
+    data = bot.state.query("get_growth_guide", timeout=10)
+    rows = data.get("Contents") if isinstance(data, dict) else None
+    row = next((r for r in rows or [] if r.get("Target") == target and r.get("DayType") == day), None)
+    if not row or not row.get("IsUnlocked") or "IsCompleted" not in row:
+        return None
+    bot.log.debug(f"CLI 성장 가이드: {target} ({day}) {'끝남' if row['IsCompleted'] else '남음'}"
+                  + (f" · 남은 {row['RemainingCount']}" if "RemainingCount" in row else ""))
+    return bool(row["IsCompleted"])
+
+
 def daily_achieved(bot: Bot, label: str) -> bool:
-    """'/' 콘텐츠 가이드를 열어 일일 달성 체크를 본다 (achieved_mark)."""
+    """오늘 끝냈나 — CLI 성장 가이드가 알면 그것, 모르면 '/' 콘텐츠 가이드를 열어 일일 달성 체크를 본다 (achieved_mark)."""
+    done = growth_done(bot, GROWTH.get(label))
+    if done is not None:
+        return done
     open_guide(bot)
     done = achieved_mark(bot, label)
     bot.to_main()

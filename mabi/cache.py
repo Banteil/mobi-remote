@@ -24,6 +24,18 @@ TTL = {
 DEFAULT_TTL = 60
 
 
+def normalize(command: str, data) -> None:
+    """CLI 응답 형식 변화를 한 곳에서 맞춘다 (제자리에서 고침).
+    11-05 패치: get_craftable_items 의 MissingIngredients(모자란 재료만) → Ingredients(재료 전체 + 가방 보유량).
+    부족분을 쓰는 곳(계획·학습·옛 화면)은 그대로 두고 Ingredients 에서 모자란 것을 골라 MissingIngredients 로 채운다."""
+    if command != "get_craftable_items" or not isinstance(data, dict):
+        return
+    for r in data.get("items") or []:
+        if isinstance(r, dict) and "Ingredients" in r and "MissingIngredients" not in r:
+            r["MissingIngredients"] = [i for i in r["Ingredients"] or []
+                                       if (i.get("Owned") or 0) < (i.get("Required") or 0)]
+
+
 class QueryCache:
     def __init__(self, connector: Connector, cache_dir: Path):
         self.cli = connector
@@ -49,6 +61,7 @@ class QueryCache:
             return None
 
     def write(self, command: str, data) -> None:
+        normalize(command, data)
         try:
             self.dir.mkdir(parents=True, exist_ok=True)
             self._file(command).write_text(json.dumps({"command": command, "savedAt": datetime.now().isoformat(),
