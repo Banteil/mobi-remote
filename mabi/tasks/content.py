@@ -625,10 +625,16 @@ def _play_dungeon(bot: Bot, clear_timeout: float, extra_loot: int, again: str | 
     return result
 
 
+# 클리어 한 번이면 그날 숙제가 끝나는 것 (공물은 고난도 퀘스트가 하루 한 번 — 남은 공물로 더 도는 건 덤)
+CLEAR_DONE = {"weekday_dungeon", "tribute"}
+
+
 def cleared_now(bot: Bot, what: str) -> None:
     """클리어 신호(던전 Cleared·사냥터 끝남)가 온 순간. 보상 화면 정리(다시 하기·나가기)를 기다리지 않고
     여기서 클리어로 친다 — 정리 도중 끊겨도 그 판은 깬 것으로 남는다 (2026-11-06 사용자)."""
     bot.log.info(f"{what} 클리어")
+    if bot.task_id in CLEAR_DONE:
+        bot.done_at_clear = True
     if bot.on_clear:
         bot.on_clear()
 

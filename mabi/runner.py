@@ -335,6 +335,7 @@ class Runner:
             """숙제 하나 실행. 상태 문자열 반환."""
             log.info(f"▶ {label}")
             bot.task_id, bot.resume, bot.verified = tid, None, False
+            bot.done_at_clear = False
             if slot is not None:
                 last = state.last_step(slot, tid)
                 # 끝까지 간 기록('end')이 아니면 그 단계에서 끊긴 것 → 숙제가 거기서부터 이어 한다
@@ -373,6 +374,11 @@ class Runner:
             # 게임이 꺼졌거나(튕김·사람이 끔) 연속 실행 제한 창이면 남은 일마다 실패를 쌓지 않고 일시정지.
             # 단계 기록은 남아 있어 게임을 켜고 다시 시작(F12)하면 이 자리부터 이어 한다
             status, summary = outcome.escalate(bot, status, summary)
+            halted = status == "STOP"
+            if bot.done_at_clear and status in ("STOP", "FAIL", "ERROR"):
+                # 클리어는 했다 — 보상 화면 정리 중 멈추거나 끊겨도 숙제는 끝난 것 (2026-11-06 사용자). 멈춤은 그대로 멈춘다
+                summary = f"{summary} — 클리어 뒤 {status}, 숙제는 완료"
+                status = "OK"
             if status in ("FAIL", "ERROR") and repeated(slot, tid, status, summary):
                 log.error(f"{label}: 앞 캐릭터와 같은 이유로 또 실패 → 일시정지 (원인을 확인한 뒤 이어 하기)")
                 status, summary = "STOP", f"두 캐릭터 연달아 같은 실패 — 확인 필요: {summary}"
@@ -384,7 +390,7 @@ class Runner:
             results.append((label, status, summary))
             report.task_end(status, summary)
             self._emit("task_end", slot=slot, task=tid, label=label, status=status, summary=summary, seconds=secs)
-            return status
+            return "STOP" if halted else status
 
         # 끊긴 숙제도 정해진 순서대로 — 앞 숙제가 실패해 남았으면 그것부터. 끊긴 숙제는 제 차례에 끊긴 단계부터 이어 한다.
         # (예전엔 끊긴 일을 맨 앞으로 당겨 일일 미션보다 아르바이트를 먼저 했다 — 2026-11-02 사용자: 일일 미션 다음에 알바)
@@ -443,7 +449,7 @@ class Runner:
                 status = step(slot, tid, f"[{who}] {label}", lambda fn=fn: fn(bot, cfg))
                 ended[tid] = (len(results) - 1, status)
                 if ch:
-                    state.set(slot, tid, "done" if status == "OK" else f"{status}: {results[-1][2]}")
+                    state.set(slot, tid, "done" if results[-1][1] == "OK" else f"{status}: {results[-1][2]}")
                     for t in bot.also_done:
                         state.set(slot, t, "done")
                 if status == "STOP":

@@ -118,6 +118,7 @@ class Bot:
         self.daily = None  # 오늘 진행 기록 (profile.DailyState), runner 가 설정
         self.also_done: set[str] = set()  # 다른 태스크 안에서 함께 끝낸 태스크 id (runner 가 완료로 기록)
         self.on_clear = None  # 클리어 신호가 온 순간 부를 함수 (content.cleared_now) — 숙제가 그 자리에서 횟수를 기록
+        self.done_at_clear = False  # 이 숙제의 클리어를 이미 함 — 뒤 정리 중 멈춰도 오늘 완료로 기록 (runner)
         self.verified = False  # 지금 숙제가 스스로 완료를 확인했다 (runner 가 다시 확인하지 않는다 — 가이드를 두 번 열던 것)
         self.task_id: str | None = None  # 지금 하는 숙제 id, runner 가 설정
         # 이 숙제를 지난번에 어디까지 했나 ({"stage", "at", ...}) — 도중에 끊겼으면 있다. 숙제가 보고 이어 한다

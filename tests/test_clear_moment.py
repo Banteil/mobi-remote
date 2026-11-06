@@ -63,6 +63,26 @@ class ClearMomentTest(unittest.TestCase):
             silver.run(bot, CFG)
         self.assertEqual(bot.daily.data.get("silver_fields"), 1)
 
+    def test_one_clear_tasks_done_at_clear(self):
+        for tid, done in (("weekday_dungeon", True), ("tribute", True), ("silver", False)):
+            bot = make_bot()
+            bot.task_id, bot.done_at_clear = tid, False
+            content.cleared_now(bot, "던전")
+            self.assertEqual(bot.done_at_clear, done, tid)
+
+    def test_silver_done_at_last_run_clear(self):
+        bot = make_bot()
+        bot.task_id, bot.done_at_clear = "silver", False
+
+        def field_once(b, c, again=False, more=False):
+            content.cleared_now(b, "사냥터")
+            raise RuntimeError("보상 화면 정리 중 멈춤")
+
+        with mock.patch.object(silver, "field_once", field_once):
+            with self.assertRaises(RuntimeError):
+                silver.run(bot, CFG)
+        self.assertTrue(bot.done_at_clear)
+
 
 if __name__ == "__main__":
     unittest.main()

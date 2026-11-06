@@ -173,10 +173,13 @@ def run(bot: Bot, cfg: dict) -> str:
                 if bot.daily and slot:
                     bot.daily.set(slot, "silver_pending", {"kind": kind, "n": i + 1, "coins": before})
                 counted = []
+                last_run = i == runs - 1 and (once is dungeon_once or not dungeon_runs)
 
                 def on_clear(kind=kind):
                     # 클리어 신호 순간 오늘 기록에 남긴다 — 보상 화면 정리 중 끊겨도 그 판은 한 것
                     counted.append(True)
+                    if last_run:  # 계획한 마지막 판 — 은동전 숙제는 끝남
+                        bot.done_at_clear = True
                     if bot.daily and slot:
                         if kind == "field":
                             bot.daily.set(slot, "silver_fields", fields_done + 1)

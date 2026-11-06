@@ -114,6 +114,7 @@ def run(bot: Bot, cfg: dict) -> str:
         watch(bot, ctx)
         bot.sleep(5)
     bot.step("bh_done", "검은 구멍 클리어 → 정리")
+    bot.done_at_clear = True
     bot.sleep(2, 3)
     monitor.of(bot).settle(monitor.Ctx("black_hole", "검은 구멍 클리어 뒤"))  # 클리어 화면·퀘스트 완료·대화
     bot.dismiss_popups()
