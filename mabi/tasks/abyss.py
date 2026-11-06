@@ -593,8 +593,8 @@ class AbyssRepeat(Repeat):
                 self.stat["deaths" if r == "dead" else "retries"] += 1
                 stage = "entry"
             else:
+                self.cleared()  # 결과가 온 순간 센다 — 보상 화면 정리를 기다리지 않는다
                 got = to_reward(bot)
-                self.cleared()
                 if got == "matching" and not self.done():
                     self.match_at = bot.packets.state.entered_at  # 지난 판 맵 뒤에 들어가는 맵이 다음 판
                     stage = "match"

@@ -565,12 +565,13 @@ class RaidRepeat(Repeat):
                     continue
                 stage = "cleared"
             if stage == "cleared":
-                finish_result(bot)
+                # 보스 처치(결과 옴) 순간 센다 — 결과 창 처리를 기다리지 않는다
                 if leftover:
                     bot.log.info("시작 전에 끝나 있던 판 → 나가서 다시 출항 (판 수에 넣지 않음)")
                     leftover = False
                 else:
                     self.cleared()
+                finish_result(bot)
 
                 def go_out():
                     bot.background = False

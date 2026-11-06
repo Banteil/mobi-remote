@@ -609,6 +609,8 @@ def _play_dungeon(bot: Bot, clear_timeout: float, extra_loot: int, again: str | 
             if time.monotonic() > end:
                 raise StepTimeout("던전 클리어 대기 시간 초과")
         result = "clear" if state == "Cleared" else "fail"
+        if result == "clear":
+            cleared_now(bot, "던전")
         bot.step("dungeon_reward", "던전 클리어 → 보상·나가기" if result == "clear" else f"던전 끝남({state}) → 나가기")
         if result == "fail":
             bot.log.warning(f"던전 종료 상태: {state} → {bot.snapshot('dungeon_end').name}")
@@ -616,10 +618,19 @@ def _play_dungeon(bot: Bot, clear_timeout: float, extra_loot: int, again: str | 
         # CLI 를 못 쓰면 클리어 화면이 뜰 때까지 기다린다
         bot.wait(ui["dungeon_touch"], timeout=clear_timeout, interval=2.0)
         result = "clear"
+        cleared_now(bot, "던전")
 
     if after_clear(bot, extra_loot, again) and result == "clear":
         return "again"
     return result
+
+
+def cleared_now(bot: Bot, what: str) -> None:
+    """클리어 신호(던전 Cleared·사냥터 끝남)가 온 순간. 보상 화면 정리(다시 하기·나가기)를 기다리지 않고
+    여기서 클리어로 친다 — 정리 도중 끊겨도 그 판은 깬 것으로 남는다 (2026-11-06 사용자)."""
+    bot.log.info(f"{what} 클리어")
+    if bot.on_clear:
+        bot.on_clear()
 
 
 def touch_prompt_visible(bot: Bot) -> bool:
@@ -847,6 +858,7 @@ def wait_field(bot: Bot, place: str, clear_timeout: float, again: str | None = N
     while bot.packets.ok and bot.packets.state.field_state == "InProgress":
         if bot.wait_packet(lambda s: s.field_state != "InProgress", 5):
             bot.log.info(f"패킷: 사냥터 끝남 ({bot.packets.state.field_state})")
+            cleared_now(bot, "사냥터")
             bot.step("field_reward", "사냥터 클리어 → 마무리")
             return "again" if after_clear(bot, again=again) else "clear"
         watch(bot, ctx)
@@ -856,6 +868,7 @@ def wait_field(bot: Bot, place: str, clear_timeout: float, again: str | None = N
     # 넘어가 클리어 화면 앞에 40초 가까이 서 있었다 (2026-10-28 08:32:43~08:33:21)
     if bot.packets.ok and bot.packets.state.field_state is not None:
         bot.log.info(f"패킷: 사냥터 끝남 ({bot.packets.state.field_state})")
+        cleared_now(bot, "사냥터")
         bot.step("field_reward", "사냥터 클리어 → 마무리")
         return "again" if after_clear(bot, again=again) else "clear"
     gone = 0
@@ -882,5 +895,6 @@ def wait_field(bot: Bot, place: str, clear_timeout: float, again: str | None = N
         if time.monotonic() > end:
             raise StepTimeout("사냥터 클리어 대기 시간 초과")
         bot.sleep(5)
+    cleared_now(bot, "사냥터")
     bot.step("field_reward", "사냥터 클리어 → 마무리")
     return "again" if after_clear(bot, again=again) else "clear"

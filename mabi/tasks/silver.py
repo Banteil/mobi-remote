@@ -172,7 +172,20 @@ def run(bot: Bot, cfg: dict) -> str:
                 bot.step(f"silver_{kind}", f"{label} {i + 1}/{runs}회 (은동전 {before})", n=i + 1, runs=runs)
                 if bot.daily and slot:
                     bot.daily.set(slot, "silver_pending", {"kind": kind, "n": i + 1, "coins": before})
-                r = once(bot, c, again=again, more=i < runs - 1)
+                counted = []
+
+                def on_clear(kind=kind):
+                    # 클리어 신호 순간 오늘 기록에 남긴다 — 보상 화면 정리 중 끊겨도 그 판은 한 것
+                    counted.append(True)
+                    if bot.daily and slot:
+                        if kind == "field":
+                            bot.daily.set(slot, "silver_fields", fields_done + 1)
+                        bot.daily.set(slot, "silver_pending", None)
+                bot.on_clear = on_clear
+                try:
+                    r = once(bot, c, again=again, more=i < runs - 1)
+                finally:
+                    bot.on_clear = None
                 if bot.daily and slot:
                     bot.daily.set(slot, "silver_pending", None)
                 again = r == "again"
@@ -182,9 +195,10 @@ def run(bot: Bot, cfg: dict) -> str:
                 if before is not None and after is not None and not 0 <= c["dungeon_cost"] - (before - after) <= 2:
                     bot.log.warning(f"{label} 1회에 은동전 {before} → {after} (예상 -{c['dungeon_cost']})")
                 results.append("clear" if again else r)
-                if once is field_once and results[-1] == "clear" and bot.daily and slot:
+                if once is field_once and (counted or results[-1] == "clear"):
                     fields_done += 1
-                    bot.daily.set(slot, "silver_fields", fields_done)
+                    if bot.daily and slot:
+                        bot.daily.set(slot, "silver_fields", fields_done)
             except CannotProceed as e:  # 진행 불가 (미해금, 비용 불일치 등) → 이 종류는 그만두고 다음으로
                 bot.log.warning(f"{label} 진행 불가: {e}")
                 notes.append(f"{label} 진행 불가")
