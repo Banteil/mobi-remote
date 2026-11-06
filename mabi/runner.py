@@ -89,7 +89,7 @@ class RunOptions:
 
 
 def _done_view(stored) -> dict:
-    """오늘 끝난 숙제를 화면에 보일 상태. '남음(직접)' 은 그대로 보여 준다 (다시 하지는 않는다)."""
+    """오늘 끝난 숙제를 화면에 보일 상태. '넘김(조건)' 은 그대로 보여 준다 (다시 하지는 않는다)."""
     if isinstance(stored, str) and stored.startswith("MANUAL"):
         return {"status": "MANUAL", "summary": stored.split(":", 1)[-1].strip()}
     return {"status": "DONE", "summary": "오늘 완료"}
@@ -360,7 +360,7 @@ class Runner:
                     try:
                         if not check(bot, cfg):
                             if tid in tasks.MANUAL_LEFT:  # 할 수 있는 건 다 함. 남은 건 사람이 직접 (다시 시작해도 넘김)
-                                status, summary = "MANUAL", f"{summary} — 남은 건 직접 처리"
+                                status, summary = "MANUAL", f"{summary} — 조건이 안 돼 넘긴 일은 직접 처리"
                             else:
                                 status, summary = "CHECK", f"{summary} — 확인 결과 아직 남음"
                     except (StepTimeout, CannotProceed, MissingTemplate) as e:

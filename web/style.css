@@ -910,7 +910,8 @@ tr.sec .muted { font-weight: 400; letter-spacing: 0; margin-left: 4px; }
 .dl-kv dd .hint { flex-basis: 100%; text-align: right; margin: 0; }
 .st-OK, .st-DONE { color: var(--ok); }
 .st-TODO { color: var(--fg-mute); }
-.st-CHECK, .st-HEAVY, .st-MANUAL { color: var(--warn); }
+.st-CHECK, .st-HEAVY { color: var(--warn); }
+.st-MANUAL { color: var(--fg-mute); }
 /* 일일 숙제 결과 보고 */
 .dl-rp-sum { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .dl-rp-sum .pill { font-size: 13px; }

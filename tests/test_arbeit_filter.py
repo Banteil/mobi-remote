@@ -86,6 +86,35 @@ class HowtoRowTest(unittest.TestCase):
         self.assertEqual(self.pick([("약품 가공 시설", 1390, 369)]), (1390, 369))
 
 
+class HowtoShopTest(unittest.TestCase):
+    """상점 줄(카트 아이콘)은 고르지 않는다 — 실제 화면으로 (2026-11-06 '갑작스런 주문' 밀가루)."""
+
+    def run_on(self, png, alter=()):
+        import cv2
+        from types import SimpleNamespace
+        from mabi.monitor import handlers
+        from mabi.vision import Vision
+        bot = mock.MagicMock()
+        bot.cfg = {"arbeit": {"howto_area": [1200, 240, 720, 700]}}
+        bot.vision = Vision(ROOT / "templates")
+        ctx = mock.MagicMock(n={}, alter=alter)
+        frame = cv2.imread(str(ROOT / "tests" / "fixtures" / png))
+        with mock.patch.object(handlers, "fast_travel"), mock.patch.object(handlers, "_shot", return_value="x.png"):
+            out = handlers.howto(bot, ctx, SimpleNamespace(frame=frame))
+        return out, bot.click.call_args[0][0] if bot.click.called else None
+
+    def test_shop_rows_skipped_goes_to_facility(self):
+        # 식재료 가공 시설 · 카페 · 레스토랑(물물교환) · 방앗간(물물교환) → 상점은 빼고 가공 시설로 (가공 창이 건너뜀을 정한다)
+        out, at = self.run_on("howto_alter_or_shop.png")
+        self.assertEqual(out, "구하는 방법 → 시설")
+        self.assertLess(abs(at[1] - 275), 30)
+
+    def test_gather_rows_kept(self):
+        out, at = self.run_on("howto_gather.png")
+        self.assertEqual(out, "채집하러 감 (구하는 방법 맨 위)")
+        self.assertLess(abs(at[1] - 275), 30)
+
+
 if __name__ == "__main__":
     unittest.main()
 

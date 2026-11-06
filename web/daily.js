@@ -6,7 +6,7 @@
  *   start · character · task_start · task_end{status, summary, seconds} · done · failed
  */
 const ST_TEXT = {
-  OK: '완료', DONE: '완료', TODO: '아직 안 함', CHECK: '남음', MANUAL: '남음(직접)', FAIL: '실패', ERROR: '오류', HEAVY: '가방 무게',
+  OK: '완료', DONE: '완료', TODO: '아직 안 함', CHECK: '남음', MANUAL: '넘김(조건)', FAIL: '실패', ERROR: '오류', HEAVY: '가방 무게',
   SKIP: '건너뜀', STOP: '중단', RUN: '진행 중',
 };
 const INHERIT = 'inherit';
@@ -307,7 +307,9 @@ function dailyReportHtml(results, loots) {
   const n = (f) => rows.filter((r) => f(r[1])).length;
   const pills = [
     ['완료', n((s) => s === 'OK' || s === 'DONE'), 'pill-ok'],
-    ['남음', n((s) => s === 'CHECK' || s === 'MANUAL'), 'pill-warn'],
+    ['남음', n((s) => s === 'CHECK'), 'pill-warn'],
+    // 진행 조건이 안 돼 넘긴 일(아르바이트 구매·긴 가공 등)은 실패·남음과 따로 센다 (2026-11-06 사용자)
+    ['넘김', n((s) => s === 'MANUAL'), 'pill-muted'],
     ['중단', n((s) => s === 'STOP'), 'pill-muted'],  // 사람이 멈춘 것(F12·■)은 실패가 아니다 — 이어 하면 그 자리부터
     ['실패', n((s) => !GOOD.has(s) && !['CHECK', 'MANUAL', 'TODO', 'STOP'].includes(s)), 'pill-bad'],
   ].filter((x) => x[1]).map(([t, c, k]) => '<span class="pill ' + k + '">' + t + ' ' + c + '</span>').join('');

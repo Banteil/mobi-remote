@@ -499,7 +499,7 @@ def _apply_top(bot: Bot) -> bool | None:
 
 
 def verify(bot: Bot, cfg: dict) -> bool:
-    """수락해 둔 아르바이트가 남지 않았으면 완료. 포기한 일(가공품 부족 등)이 남아 있으면 '남음(직접)'.
+    """수락해 둔 아르바이트가 남지 않았으면 완료. 포기한 일(가공품 부족 등)이 남아 있으면 '넘김(조건)'.
     CLI 는 추적 중인 일 하나만 보여 주므로 퀘스트 창 목록의 '진행하기' 카드로 본다."""
     if accepted(bot):
         return False
@@ -645,6 +645,6 @@ def _task(bot: Bot, cfg: dict) -> str:
     if skipped:
         out += ", 건너뜀: " + ", ".join(f"{t}({w})" for t, w in skipped.items())
     if stuck:
-        # 막힌 일은 사람 몫이 아니라 다시 해 볼 일 → 실패로 남겨 다음 실행 때 이어 한다 ('남음(직접)' 은 물품 부족만)
+        # 막힌 일은 사람 몫이 아니라 다시 해 볼 일 → 실패로 남겨 다음 실행 때 이어 한다 ('넘김(조건)' 은 물품·가공 부족 등 조건만)
         raise CannotProceed(out + ", 막힘: " + ", ".join(dict.fromkeys(stuck)))
     return out
