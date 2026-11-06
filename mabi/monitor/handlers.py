@@ -107,6 +107,16 @@ def dialog(bot, ctx, seen):
             bot.key("space")
             return stage
     if menu and not lines_left(bot):
+        # 아르바이트가 아닌 일(클리어 뒤 정리 등)에서 뜬 NPC 메뉴는 우리 일이 아니다 → 대화 종료(ESC).
+        # 아르바이트여도 버튼이 늦게 그려지는 건 몇 초 — 계속 없으면 우리 메뉴가 아니다.
+        # 클리어 뒤 로나 메뉴(판의 조언·상점·대화 종료) 앞에서 3분 가까이 '메뉴 버튼 기다림' 만 했다 (2026-11-06 11:16)
+        waits = ctx.n.get("menu_wait", 0)
+        if ctx.task != "arbeit" or waits >= 3:
+            ctx.n["menu_wait"] = 0
+            bot.log.info(f"우리 일이 아닌 NPC 메뉴 → 대화 종료 ({bot.snapshot('npc_menu_other').name})")
+            _esc(bot)
+            return "대화 종료"
+        ctx.n["menu_wait"] = waits + 1
         bot.log.debug(f"메뉴는 떠 있는데 '수락'·'결과 보고' 버튼을 못 찾음 ({bot.snapshot('arbeit_menu').name})")
         return "메뉴 버튼 기다림"
     next_line(bot)
