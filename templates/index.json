@@ -47,14 +47,7 @@
       28
     ]
   },
-  "charselect_card_menu": {
-    "area": [
-      250,
-      100,
-      1450,
-      980
-    ]
-  },
+  "charselect_card_menu": {},
   "charselect_start": {
     "roi": [
       890,
@@ -105,22 +98,8 @@
       45
     ]
   },
-  "dm_gift": {
-    "area": [
-      760,
-      450,
-      1000,
-      630
-    ]
-  },
-  "dm_go": {
-    "area": [
-      760,
-      450,
-      1000,
-      630
-    ]
-  },
+  "dm_gift": {},
+  "dm_go": {},
   "dm_title": {
     "roi": [
       220,
@@ -185,14 +164,7 @@
       34
     ]
   },
-  "dungeon_retry_enter": {
-    "area": [
-      1100,
-      900,
-      820,
-      180
-    ]
-  },
+  "dungeon_retry_enter": {},
   "dungeon_tab_deep_on": {
     "roi": [
       126,
@@ -258,14 +230,7 @@
       34
     ]
   },
-  "field_recommend": {
-    "area": [
-      400,
-      60,
-      1400,
-      260
-    ]
-  },
+  "field_recommend": {},
   "field_recommend_thumb": {
     "roi": [
       880,
@@ -275,38 +240,10 @@
     ],
     "threshold": 0.7
   },
-  "guide_card_blackhole": {
-    "area": [
-      150,
-      150,
-      1700,
-      850
-    ]
-  },
-  "guide_daily_blackhole": {
-    "area": [
-      300,
-      120,
-      1300,
-      200
-    ]
-  },
-  "guide_daily_weekday": {
-    "area": [
-      300,
-      120,
-      1300,
-      200
-    ]
-  },
-  "guide_go": {
-    "area": [
-      150,
-      150,
-      1700,
-      900
-    ]
-  },
+  "guide_card_blackhole": {},
+  "guide_daily_blackhole": {},
+  "guide_daily_weekday": {},
+  "guide_go": {},
   "guide_title": {
     "roi": [
       210,
@@ -375,22 +312,8 @@
       32
     ]
   },
-  "quest_card_tribute": {
-    "area": [
-      900,
-      150,
-      1020,
-      850
-    ]
-  },
-  "quest_go_orange": {
-    "area": [
-      1500,
-      150,
-      420,
-      930
-    ]
-  },
+  "quest_card_tribute": {},
+  "quest_go_orange": {},
   "questwin_tab_arbeit": {
     "roi": [
       1650,
@@ -450,58 +373,22 @@
     ]
   },
   "zone_1-1": {
-    "threshold": 0.92,
-    "area": [
-      150,
-      250,
-      1450,
-      700
-    ]
+    "threshold": 0.92
   },
   "zone_1-2": {
-    "threshold": 0.92,
-    "area": [
-      150,
-      250,
-      1450,
-      700
-    ]
+    "threshold": 0.92
   },
   "zone_1-3": {
-    "threshold": 0.92,
-    "area": [
-      150,
-      250,
-      1450,
-      700
-    ]
+    "threshold": 0.92
   },
   "zone_2-1": {
-    "threshold": 0.92,
-    "area": [
-      150,
-      250,
-      1450,
-      700
-    ]
+    "threshold": 0.92
   },
   "zone_2-2": {
-    "threshold": 0.92,
-    "area": [
-      150,
-      250,
-      1450,
-      700
-    ]
+    "threshold": 0.92
   },
   "zone_2-3": {
-    "threshold": 0.92,
-    "area": [
-      150,
-      250,
-      1450,
-      700
-    ]
+    "threshold": 0.92
   },
   "place_00": {
     "roi": [
@@ -672,31 +559,13 @@
     "threshold": 0.75
   },
   "npc_space_option": {
-    "threshold": 0.8,
-    "area": [
-      200,
-      400,
-      1000,
-      680
-    ]
+    "threshold": 0.8
   },
   "toast_no_material": {
-    "threshold": 0.8,
-    "area": [
-      600,
-      0,
-      720,
-      220
-    ]
+    "threshold": 0.8
   },
   "arbeit_accept": {
-    "threshold": 0.78,
-    "area": [
-      560,
-      860,
-      800,
-      220
-    ]
+    "threshold": 0.78
   },
   "craft_transfer_title": {
     "threshold": 0.8
@@ -759,22 +628,6 @@
       895,
       332,
       136
-    ]
-  },
-  "deliver_ready": {
-    "area": [
-      500,
-      820,
-      1000,
-      260
-    ]
-  },
-  "item_missing": {
-    "area": [
-      400,
-      380,
-      1120,
-      440
     ]
   }
 }

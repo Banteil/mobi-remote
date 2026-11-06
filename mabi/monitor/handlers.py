@@ -218,9 +218,10 @@ def deliver(bot, ctx, seen):
         bot.sleep(1, 1.3)
         return "물품 전달"
     tries = ctx.n.get("deliver", 0)
-    if tries >= 4:
+    if tries >= 4:  # 닫기 전에 찍는다 — 창이 보여야 정말 모자랐는지 버튼을 못 알아봤는지 가릴 수 있다
+        shot = _shot(bot, 'arbeit_short')
         _esc(bot)
-        return Finish("short", f"전달할 물품이 모자람 → {_shot(bot, 'arbeit_short')}")
+        return Finish("short", f"전달할 물품이 모자람 → {shot}")
     if tries == 0:
         bot.key("a")
     ctx.n["deliver"] = tries + 1
