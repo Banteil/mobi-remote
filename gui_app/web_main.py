@@ -120,6 +120,10 @@ class MainWindow(WebWindow):
 def main() -> int:
     paths = mpaths.load()
     setup_logging(paths, console=False)
+    # 작업 표시줄은 프로세스(pythonw.exe)의 아이콘으로 묶어 보여 준다 — 우리 앱 ID 를 따로 주어야 창 아이콘이 쓰인다
+    if sys.platform == "win32":
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("MobiRemote.App")
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setWindowIcon(QIcon(str(WEB / "icon.png")))
