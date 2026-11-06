@@ -58,6 +58,23 @@ class Exit:
     # ---- 공통
     def run(self, bot: Bot) -> bool:
         """나간다. 다 나와 메인 화면이 보이면 True, 나가기 전에 판이 끝났으면 False."""
+        for attempt in range(self.RETRIES + 1):
+            got = self._press(bot)
+            if got is not None:
+                return got
+            if attempt == self.RETRIES:
+                break
+            # 확인까지 눌렀는데 그대로 안이다 — 나가는 사이 부활(어비스 우연한 만남: 캠프파이어에 앉은 파장이 전체 부활)이
+            # 확인 창을 닫았다. 한 번 나가기로 정했으면 무슨 일이 생겨도 나간다 (2026-11-06 사용자) → 처음부터 다시 누른다
+            bot.log.warning(f"{self.NAME} 나가기를 눌렀는데 아직 안 (나가는 사이 부활 등) → 다시 나가기 "
+                            f"({attempt + 1}/{self.RETRIES}) → {bot.snapshot(self.SNAP + '_again').name}")
+        raise StepTimeout(f"{self.NAME}에서 나가기를 {self.RETRIES + 1}번 눌러도 안에 남음 → {bot.snapshot(self.SNAP).name}")
+
+    RETRIES = 3     # 확인까지 눌렀는데 안에 남았을 때 처음부터 다시 누르는 횟수
+    STAY = 20       # 확인 뒤 이만큼 로딩이 안 시작되고 안에 그대로면 안 나가진 것으로 본다 (초)
+
+    def _press(self, bot: Bot) -> bool | None:
+        """나가기 → 확인 → 밖. True 나옴 / False 나가기 전에 판이 끝남 / None 확인까지 눌렀는데 안에 남음."""
         ui = bot.ui
         deadline = time.monotonic() + self.TIMEOUT
         while True:
@@ -93,17 +110,25 @@ class Exit:
             break
         # 밖으로 나와 메인 화면이 보일 때까지 — 패킷이 있으면 맵을 떠나기 시작하는 순간(길어야 15초)을 기다렸다가,
         # 로딩 동안은 화면을 보지 않는다
-        bot.wait_packet(lambda s: s.loading, 15, since=bot.input_mark)
+        pressed = time.monotonic()
+        if bot.wait_packet(lambda s: s.loading, 15, since=bot.input_mark) is False and self.inside(bot) \
+                and not bot.map_loading():
+            return None  # 패킷: 맵을 떠나기 시작하지 않았고 그대로 안
         end = time.monotonic() + bot.cfg["timing"]["loading"]
+        left = False  # 로딩이든 밖이든 한 번이라도 안을 벗어났나
         while time.monotonic() < end:
             if bot.map_loading():
+                left = True
                 bot.wait_loaded(end - time.monotonic())
                 continue
             if self.gone(bot):
+                left = True
                 if bot.at_main():
                     return True
                 if not bot.is_loading():
                     bot.clear_blockers(ocr=True)  # 나오면서 뜬 퀘스트 완료 창 등
+            elif not left and not bot.is_loading() and time.monotonic() - pressed > self.STAY:
+                return None  # 패킷 없이 화면으로만: 확인 뒤 한참 그대로 안
             bot.sleep(2)
         raise StepTimeout(f"{self.NAME}에서 나온 뒤 메인 화면이 나오지 않음")
 

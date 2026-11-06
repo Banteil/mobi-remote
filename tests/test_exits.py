@@ -41,6 +41,21 @@ class ExitTest(unittest.TestCase):
         Fake([True], [(10, 20), (10, 20)]).run(b)  # 창이 떠 있는데 Space 가 안 먹음 → 그 자리 클릭
         b.click.assert_called_once_with((10, 20))
 
+    def test_revived_while_leaving_presses_again(self):
+        # 확인(Space) 뒤 부활로 창이 닫히고 그대로 안 — 멍하니 기다리지 않고 처음부터 다시 나간다 (2026-11-06 우연한 만남)
+        b = make_bot()
+        b.wait_packet.side_effect = [False, False, True, True]  # 첫 확인 뒤 로딩 없음 → 두 번째엔 로딩
+        f = Fake([True, True, True], [(10, 20), None, (10, 20)])
+        self.assertTrue(f.run(b))
+        self.assertEqual([c.args[0] for c in b.key.call_args_list].count("space"), 2)
+
+    def test_still_inside_gives_up_after_retries(self):
+        b = make_bot(loading_after_space=False)
+        f = Fake(iter(lambda: True, None), iter(lambda: (10, 20), None))
+        with self.assertRaises(exits.StepTimeout):
+            f.run(b)
+        self.assertEqual(b.key.call_count, exits.Exit.RETRIES + 1)
+
     def test_finished_before_does_not_leave(self):
         f = Fake([True], [])
         f.finished_before = lambda bot: True
