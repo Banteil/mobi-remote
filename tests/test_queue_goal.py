@@ -107,6 +107,21 @@ class GoalKindTest(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(len(api.calls), 7)
 
+    def test_craft_batches_are_progress(self):
+        # 제작은 한 번에 10회까지 — 같은 묶음이 거푸 나와도 보유량이 늘면 진전 (2026-11-06 여행자 간식 46개에서 섰다)
+        steps = [(i * 10, {"kind": "craft", "name": "여행자 간식", "batch": 10, "runs": 100 - i * 10, "need": 100 - i * 10})
+                 for i in range(8)]
+        api = FakeApi(steps + [(100, {"kind": "done"})])
+        ok, q = self.run_goal(api, card(name="여행자 간식", target=100))
+        self.assertTrue(ok)
+        self.assertEqual(len(api.calls), 8)
+
+    def test_same_craft_without_progress_stops(self):
+        api = FakeApi([(0, {"kind": "craft", "name": "여행자 간식", "batch": 10, "runs": 100})] * 10)
+        ok, q = self.run_goal(api)
+        self.assertFalse(ok)
+        self.assertEqual(len(api.calls), 4)
+
     def test_same_alter_without_progress_stops(self):
         api = FakeApi([(0, {"kind": "alter", "name": "강철괴", "runs": 1, "wanted": 10, "queued": 3})] * 10)
         ok, q = self.run_goal(api)

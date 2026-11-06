@@ -302,9 +302,11 @@ class GoalKind(Kind):
                     break
                 continue  # 구해 왔다니 다시 판단해 본다
             # 같은 걸음만 반복되면 헛도는 것이다. 기다림은 원래 반복되므로 제외한다.
-            # 가공은 한 번에 1건이라 같은 등록이 거푸 나오는 게 정상 — 남은 건수(wanted)·시설에 건 수(queued)가 바뀌면 진전이다
-            key = (f"{kind}:{st.get('name') or ''}:{st.get('batch') or st.get('runs') or ''}"
-                   f":{st.get('wanted') or ''}:{st.get('queued') or ''}")
+            # 가공은 한 번에 1건이라 같은 등록이 거푸 나오는 게 정상 — 남은 건수(wanted)·시설에 건 수(queued)가 바뀌면 진전이다.
+            # 제작도 한 번에 묶는 상한(10회)이 있어 같은 묶음이 거푸 나온다 — 보유량(have)·남은 횟수(runs)·필요량(need)이 바뀌면 진전
+            # (2026-11-06 여행자 간식 100개: 10회씩 잘 만들며 46개까지 왔는데 '5회 반복' 으로 섰다)
+            key = (f"{kind}:{st.get('name') or ''}:{st.get('batch') or ''}:{st.get('runs') or ''}:{st.get('need') or ''}"
+                   f":{st.get('wanted') or ''}:{st.get('queued') or ''}:{have}")
             repeat = repeat + 1 if key == last_key and kind != "wait" else 0
             last_key = key
             # 학습은 한 번 해 보고 안 되면 더 해도 안 된다
