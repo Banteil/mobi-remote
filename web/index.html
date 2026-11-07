@@ -37,7 +37,7 @@
 
 <nav id="tabs">
   <button class="tab active" data-tab="chars">캐릭터</button>
-  <button class="tab" data-tab="daily">일일 숙제</button>
+  <button class="tab" data-tab="daily">숙제</button>
   <button class="tab" data-tab="abyss">어비스·레이드</button>
   <button class="tab" data-tab="dash">대시보드</button>
   <button class="tab" data-tab="craft">제작</button>
@@ -374,8 +374,14 @@
   </section>
 
 
-  <!-- 일일 숙제 (파이썬판에서 생김) -->
+  <!-- 숙제 — 안쪽 탭: 일일 · 주간 · 기타 (주간·기타는 아직 빈 칸) -->
   <section class="panel" id="panel-daily">
+    <div id="hw-tabs">
+      <button class="hw-tab active" data-hw="daily">일일 숙제</button>
+      <button class="hw-tab" data-hw="weekly">주간 숙제</button>
+      <button class="hw-tab" data-hw="etc">기타 숙제</button>
+    </div>
+    <div class="hw-pane" data-hw="daily">
     <div class="toolbar">
       <span id="dl-date" class="muted"></span>
       <span class="spacer"></span>
@@ -405,6 +411,13 @@
     <div class="card card-wide">
       <h3>로그 <span class="count" id="dl-log-n"></span></h3>
       <pre id="dl-log" class="dl-log"></pre>
+    </div>
+    </div>
+    <div class="hw-pane hidden" data-hw="weekly">
+      <div class="card card-wide"><div class="empty">주간 숙제는 준비 중입니다.</div></div>
+    </div>
+    <div class="hw-pane hidden" data-hw="etc">
+      <div class="card card-wide"><div class="empty">기타 숙제는 준비 중입니다.</div></div>
     </div>
   </section>
 

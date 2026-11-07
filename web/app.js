@@ -1369,6 +1369,14 @@ function showOptionPane(name) {
   try { localStorage.setItem('optPane', name); } catch (_) {}
 }
 
+/** 숙제 탭 안쪽 탭 (일일 · 주간 · 기타). 마지막에 본 탭을 기억한다 (이 PC 에서만). */
+function showHomeworkPane(name) {
+  if (!$('.hw-pane[data-hw="' + name + '"]')) name = 'daily';
+  $$('.hw-tab').forEach((t) => t.classList.toggle('active', t.dataset.hw === name));
+  $$('.hw-pane').forEach((p) => p.classList.toggle('hidden', p.dataset.hw !== name));
+  try { localStorage.setItem('hwPane', name); } catch (_) {}
+}
+
 function closeOptions() {
   $('#options').classList.add('hidden');
 }
@@ -1500,6 +1508,8 @@ function debounce(fn, ms) {
 
 function wire() {
   $$('.tab').forEach((t) => t.addEventListener('click', () => showTab(t.dataset.tab)));
+  $$('.hw-tab').forEach((t) => t.addEventListener('click', () => showHomeworkPane(t.dataset.hw)));
+  try { showHomeworkPane(localStorage.getItem('hwPane') || 'daily'); } catch (_) { showHomeworkPane('daily'); }
 
   // 테마 — 지금 값은 <html data-theme>에 이미 붙어 있다(theme.js). 여기서는 뒤집기만 한다.
   paintThemeBtn();
