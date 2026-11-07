@@ -320,7 +320,7 @@ def run(bot: Bot, cfg: dict) -> str:
         raise RuntimeError("일일 미션은 진행 상태 확인에 CLI 가 필요함")
     # 단계: dm_open → dm_alchemy / dm_gather → dm_gifts → dm_milestones.
     # 직접 진행하는 건 연금술·채집(자급자족의 삶) 둘뿐이고, 선물·누적 보상은 맨 끝에 한꺼번에 받는다.
-    # 음식 미션은 하지 않는다 — 메인 화면으로 돌아올 때 배고프면 먹는 것(bot.eat_if_hungry, 하루 2번)으로 채워진다.
+    # 음식 미션은 하지 않는다 — 메인 화면으로 돌아올 때 배고프면 먹는 것(bot.eat_if_hungry)으로 채워진다.
     # 미션마다 진행 수·받은 선물은 CLI 가 알려 주므로 끊겨도 처음부터 다시 돌면 남은 것만 한다
     labels = {"alchemy": "연금술", "gather": "채집"}
     todo = [(key, m) for key in labels if c[key]["enabled"] and (m := _pending(bot, c[key]["mission_keyword"]))]

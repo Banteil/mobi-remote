@@ -722,15 +722,13 @@ class Bot:
 
     def eat_if_hungry(self) -> bool:
         """메인 화면으로 돌아올 때마다 본다: 좌상단 음식 아이콘의 'B' 표시가 보이면 (배고픔) B 를 눌러 음식을 먹는다.
-        숙제로서 먹는 건 캐릭터마다 하루 run.food_max 번까지 (일일 미션 '음식 2개 먹기' 를 채우면 충분하다).
-        그만큼 먹었거나 음식이 없으면 (no_food) 보지도 누르지도 않는다. 일일 미션 쪽에서는 음식을 먹지 않는다."""
+        하루 횟수 제한은 없다 (예전 run.food_max=2 — 드릴에서 2번을 채운 뒤 배고파도 못 먹어 사용자가 없앰, 2026-11-08).
+        음식이 없으면 (no_food) 보지도 누르지도 않는다. 먹은 횟수는 기록만 한다. 일일 미션 쪽에서는 음식을 먹지 않는다."""
         name = self.ui.get("food_b")
         if not name or not self.vision.has(name):
             return False
         slot = self.character["slot"] if self.character else None
         tracked = self.daily is not None and slot is not None
-        if tracked and self.daily.count(slot, "food") >= self.cfg["run"].get("food_max", 2):
-            return False
         if time.monotonic() < getattr(self, "_eat_after", 0.0):
             return False  # 방금 먹었거나 못 먹었다 — 한동안 다시 누르지 않는다
         if self.no_food(look=False) or not self.exists(name) or self.no_food():
