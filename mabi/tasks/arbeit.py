@@ -302,12 +302,21 @@ def _moved(bot: Bot) -> bool:
 
 
 def _press_progress(bot: Bot, title: str) -> bool:
-    """맨 위 카드의 '진행하기'. 누를 수 없었으면 False. 눌렀는데 아무 변화가 없으면 점검자가 한 번 더 누른다."""
+    """title 카드의 '진행하기'. 누를 수 없었으면 False. 눌렀는데 아무 변화가 없으면 점검자가 한 번 더 누른다."""
     def do():
         open_arbeit_tab(bot)
-        # 하고 있는(추적 중인) 일은 목록 맨 위 카드다 → 제목을 OCR 로 맞춰 볼 것 없이 맨 위 '진행하기' (2026-10-22 사용자 지적)
-        b = _find_card_button(bot, None, PROGRESS)
+        # 수락한 일이 하나뿐이면 맨 위 '진행하기' (제목 OCR 이 틀려도 된다, 2026-10-22 사용자 지적).
+        # 둘 이상이면 제목으로 고른다 — 건너뛴 일도 수락한 채 맨 위에 남아, 다음 일을 하려다 그 일을 또 눌렀다
+        # (2026-11-07 아이던 제작 '재료 부족' 으로 넘긴 뒤 '좋아하는 버섯' 차례에 같은 제작대로 가서 같이 넘김)
+        items = _buttons(bot)
+        btns = sorted(((x, y) for t, x, y in items if _is(t, PROGRESS)), key=lambda b: b[1])
+        # 아래에 '지원하기'(구인 중)나 구인 마감 글이 보이면 수락한 일 카드는 그 위가 전부다
+        end = any(_is(t, APPLY) or any(w in _norm(t) for w in gd.words("arbeit_closed")) for t, _, _ in items)
+        alone = len(btns) == 1 and end
+        b = btns[0] if alone else _find_card_button(bot, title, PROGRESS)
         if not b:
+            bot.log.warning(f"아르바이트 '{title}': 퀘스트 창에서 이 일의 '진행하기' 를 못 찾음 "
+                            f"(읽은 글자 {getattr(bot, '_arb_read', None)}) → {bot.snapshot('arbeit_card').name}")
             bot.to_main()
             return False
         bot.click(b)

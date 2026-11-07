@@ -168,3 +168,38 @@ class AlterFullTest(unittest.TestCase):
     def test_started_waits(self):
         r = self._run([0, 1, 1, 1, 1])
         self.assertEqual(r, "가공 → 받기")  # 시작됐고 (목록이 늘었고) 다 끝나 받음
+
+
+class PressProgressTest(unittest.TestCase):
+    """맨 위 '진행하기' 가 아니라 이 일의 카드 — 건너뛴 일이 수락한 채 위에 남아 있다 (2026-11-07)."""
+
+    def press(self, items, title):
+        from mabi.tasks import arbeit
+        bot = mock.MagicMock()
+        bot.cfg = {"arbeit": {"list_pages": 1}}
+        act = lambda ctx, name, do, *a, **k: do()  # noqa: E731
+        with mock.patch.object(arbeit, "_buttons", return_value=items), \
+                mock.patch.object(arbeit, "open_arbeit_tab"), mock.patch.object(arbeit, "_fast_travel"), \
+                mock.patch.object(arbeit.monitor, "of", return_value=mock.Mock(act=act)):
+            ok = arbeit._press_progress(bot, title)
+        return ok, bot
+
+    def test_picks_own_card_not_top(self):
+        items = [("국경 수비대 물자 보급", 1400, 300), ("진행하기", 1700, 420),
+                 ("좋아하는 버섯", 1400, 560), ("진행하기", 1700, 680), ("지원하기", 1700, 940)]
+        ok, bot = self.press(items, "좋아하는 버섯")
+        self.assertTrue(ok)
+        bot.click.assert_called_once_with((1700, 680))
+
+    def test_single_card_top_even_if_title_unread(self):
+        items = [("??", 1400, 300), ("진행하기", 1700, 420), ("지원하기", 1700, 680)]
+        ok, bot = self.press(items, "좋아하는 버섯")
+        self.assertTrue(ok)
+        bot.click.assert_called_once_with((1700, 420))
+
+    def test_two_cards_title_not_found_does_not_press(self):
+        items = [("국경 수비대 물자 보급", 1400, 300), ("진행하기", 1700, 420),
+                 ("??", 1400, 560), ("진행하기", 1700, 680), ("지원하기", 1700, 940)]
+        ok, bot = self.press(items, "좋아하는 버섯")
+        self.assertFalse(ok)
+        bot.click.assert_not_called()
