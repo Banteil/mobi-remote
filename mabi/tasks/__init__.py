@@ -1,6 +1,6 @@
 """태스크 모음. 각 태스크는 run(bot, cfg) -> str 형태이고, 반환값은 실행 요약 문자열이다.
 캐릭터 접속(login)은 run.py 가 캐릭터마다 먼저 실행하므로 여기 목록에는 없다."""
-from . import arbeit, black_hole, daily_mission, silver, tribute, weekday
+from . import arbeit, black_hole, daily_mission, drill, silver, tribute, weekday
 
 TASKS = {
     "weekday_dungeon": ("요일 던전", weekday.run),
@@ -9,6 +9,8 @@ TASKS = {
     "black_hole": ("검은 구멍", black_hole.run),
     "daily_mission": ("일일 미션", daily_mission.run),
     "arbeit": ("아르바이트", arbeit.run),
+    # 기타 숙제 — 일일 순서(run.order)에는 없고, 숙제 탭의 '기타 숙제' 에서 이것만 골라 돈다 (only)
+    "drill": ("나이트메어 드릴", drill.run),
 }
 
 
@@ -23,6 +25,7 @@ VERIFY = {
     "black_hole": black_hole.verify,
     "daily_mission": daily_mission.verify,
     "arbeit": arbeit.verify,
+    "drill": drill.verify,
 }
 
 

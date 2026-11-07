@@ -387,6 +387,11 @@ class PacketState:
     raid_state: str | None = None
     raid_result: int = 0             # 레이드 결과 (보스 처치 순간 레이드 번호, 맵을 옮기면 0)
     raid_boss: bool = False          # 이 맵에서 레이드 보스전이 시작됨
+    # 나이트메어 드릴 (caps/drill1 2026-11-08): 최고 기록 구역(맵 진입·클리어 때 옴, 기록 없으면 0. 접속 캐릭터가 바뀌면 None)
+    # · 방금 깬 구역(결과 창과 같은 때, 다음 구역 입장·맵 진입이면 0)
+    drill_best: int | None = None
+    drill_records: int = 0           # 최고 기록 개수 (직업마다 하나) — 여럿이면 drill_best 가 지금 직업 것인지 모른다
+    drill_result: int = 0
     campfire: bool = False           # 이 맵에 모닥불이 나타남 (어비스는 보스방 앞)
     # 모닥불 뒤 연출 = 어비스 보스 등장 (abyss1: 모닥불 → 연출 → 클리어). 모닥불만으로는 보스방 앞 잡몹 전투까지 보스전으로
     # 봐 변신을 33초 일찍 썼다 (2026-10-30 16:49:27 F5 → 16:50:00 연출). 모닥불 앞 연출은 주마다 첫 입장 연출이라 빼고 (사용자),
@@ -829,6 +834,7 @@ class PacketMonitor:
                 s.abyss_matching = 0
             s.abyss_result = 0  # 새 맵 — 지난 판 결과는 끝났다 (나갈 때 0 이 오는지 실측이 없어 여기서도 지운다)
             s.raid_result, s.raid_boss, s.campfire, s.boss_scene = 0, False, False, False
+            s.drill_result = 0
             s.transform_start, s.transformed_here = 0.0, False
             # 맵을 나가면(클리어 뒤 다시 하기·나가기) 궁극기·팔라딘 게이지가 처음으로 (사용자). 새 값이 오기 전에 지난 판 값을 믿지 않게
             if s.ult is not None:
@@ -845,6 +851,7 @@ class PacketMonitor:
         elif key == "session.logout_ok":  # 캐릭터 선택 화면으로 (me1 03:29:30 — 맵 떠남·세션 정리와 같은 때)
             s.in_game, s.loading = False, False
             s.me = s.my_name = None
+            s.drill_best = None  # 다음에 접속하는 캐릭터의 기록은 맵 진입 때 새로 온다
             s.attendance_at = 0.0
             s.dialogue_npc, s.dialogue_action, s.dialogue_menu = None, "", False
             log.info("패킷: 로그아웃 → 캐릭터 선택 화면")
@@ -866,6 +873,15 @@ class PacketMonitor:
         elif key == "raid.result":
             s.raid_result = vals.get("raid") or 0
             log.info("패킷: 레이드 결과 옴")
+        elif key == "drill.best":
+            # 직업마다 기록이 따로 있다 — 표는 첫 기록만 읽는다 (기록이 여럿이면 어느 직업 것인지 몰라 드릴 숙제가 창으로도 본다)
+            s.drill_best = (vals.get("zone") or 0) if vals.get("count") else 0
+            s.drill_records = vals.get("count") or 0
+        elif key == "drill.enter":
+            s.drill_result = 0
+        elif key == "drill.result":
+            s.drill_result = vals.get("zone") or 0
+            log.info("패킷: 나이트메어 드릴 %s구역 클리어", s.drill_result)
         elif key == "raid.boss_begin":
             s.raid_boss = True
             log.info("패킷: 레이드 보스전 시작")

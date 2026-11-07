@@ -1030,3 +1030,6 @@ input[type="number"].num-in { min-width: 0; width: 72px; }
 .opt-num { min-width: 32px; text-align: right; font-variant-numeric: tabular-nums; }
 #dye-light { width: 110px; }
 #dye-light:disabled, #dye-light:disabled + .opt-num { opacity: .4; }
+
+/* 기타 숙제 — 나이트메어 드릴 캐릭터 고르기 */
+.dr-chars { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 4px 0 10px; }

@@ -94,6 +94,19 @@ class Input:
         time.sleep(random.uniform(0.05, 0.12))
         _send(_mouse(MOUSEEVENTF_LEFTUP))
 
+    def press(self, sx: int, sy: int, seconds: float) -> None:
+        """화면 절대좌표를 seconds 초 동안 누르고 있다가 뗀다 (컷신 길게 눌러 넘기기 등)."""
+        if self.dry_run:
+            self.log and self.log.info(f"[dry-run] press ({sx}, {sy}) {seconds:.1f}s")
+            return
+        user32.SetCursorPos(sx, sy)
+        time.sleep(random.uniform(0.03, 0.08))
+        _send(_mouse(MOUSEEVENTF_LEFTDOWN))
+        try:
+            time.sleep(seconds + random.uniform(0, 0.2))
+        finally:
+            _send(_mouse(MOUSEEVENTF_LEFTUP))
+
     def move(self, sx: int, sy: int) -> None:
         """커서만 옮긴다 (누르지 않음)."""
         if not self.dry_run:

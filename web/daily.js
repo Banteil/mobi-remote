@@ -21,6 +21,7 @@ async function loadDaily() {
   if (!dl.pickedTasks) dl.pickedTasks = new Set(dl.st.order);
   $('#dl-date').textContent = '게임 날짜 ' + dl.st.date + ' (오전 6시에 바뀜)';
   paintDailyTable();
+  paintDrillChars();
   paintDailyRunning(dl.st.running);
   paintDailySettings();
 }
@@ -165,7 +166,45 @@ async function queueDaily() {
     ' · 재생을 누르면 진행합니다.', 'ok');
 }
 
+/* 기타 숙제 — 나이트메어 드릴. 일일 숙제와 같은 큐 카드(kind 'daily')에 only=['drill'] 로 담는다.
+ * 깬 구역은 저장하지 않고 들어갈 때마다 패킷·드릴 창으로 확인하므로 늘 force (오늘 한 번 했어도 다시 확인) */
+function paintDrillChars() {
+  const chars = (dl.st && dl.st.chars) || [];
+  if (!dl.drillChars) dl.drillChars = new Set();
+  const allOn = chars.length > 0 && chars.every((c) => dl.drillChars.has(c.slot));
+  $('#dr-chars').innerHTML = chars.length
+    ? '<label class="chk"><input type="checkbox" data-dr-all' + (allOn ? ' checked' : '') + '>전체</label>' +
+      chars.map((c) => '<label class="chk"><input type="checkbox" data-dr-char="' + c.slot + '"' +
+        (dl.drillChars.has(c.slot) ? ' checked' : '') + '>' + c.slot + '. ' + esc(c.name) + '</label>').join('')
+    : '<span class="muted">캐릭터 탭에서 캐릭터를 추가하세요</span>';
+  $('#dr-pick-note').textContent = dl.drillChars.size + '명';
+}
+
+function drillSpec() {
+  const chars = (dl.st.chars || []).map((c) => c.slot).filter((s) => dl.drillChars.has(s));
+  if (!chars.length) { toast('캐릭터를 하나 이상 고르세요', '', 'bad'); return null; }
+  return { kind: 'daily', label: '나이트메어 드릴', chars: chars, only: ['drill'], force: true };
+}
+
+function startDrill() {
+  if (qItems.some((x) => x.kind === 'daily' && x.status === 'run')) { toast('이미 숙제가 실행 중입니다', '', 'bad'); return; }
+  const it = drillSpec();
+  if (!it) return;
+  const cur = qItems.find((x) => x.status === 'run');
+  toast('나이트메어 드릴 시작', stopKey() + ' = 일시정지 · 다시 누르면 재개' +
+    (cur ? ' · 진행 중이던 "' + cur.label + '" 은 뒤로 미룹니다' : ''), 'ok');
+  qStartNow(it, false);
+}
+
+async function queueDrill() {
+  const it = drillSpec();
+  if (!it) return;
+  await mm.queue.add(it, 'end');
+  toast('큐에 담았습니다', '나이트메어 드릴 — ' + it.chars.length + '명 · 재생을 누르면 진행합니다.', 'ok');
+}
+
 function dailyAmount(x) {
+  if (x.only && x.only.length === 1 && x.only[0] === 'drill') return (x.chars || []).length + '명';
   return (x.chars || []).length + '명 · ' + (x.only ? '숙제 ' + x.only.length + '개' : '전체') + (x.force ? ' · 다시' : '');
 }
 
@@ -566,3 +605,15 @@ $('#dl-table').addEventListener('change', (e) => {
   } else return;
   paintDailyTable();
 });
+$('#dr-chars').addEventListener('change', (e) => {
+  const b = e.target;
+  if (b.dataset.drChar) {
+    const s = Number(b.dataset.drChar);
+    b.checked ? dl.drillChars.add(s) : dl.drillChars.delete(s);
+  } else if ('drAll' in b.dataset) {
+    dl.drillChars = new Set(b.checked ? dl.st.chars.map((c) => c.slot) : []);
+  } else return;
+  paintDrillChars();
+});
+$('#dr-start').addEventListener('click', startDrill);
+$('#dr-queue').addEventListener('click', queueDrill);

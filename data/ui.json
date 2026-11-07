@@ -68,7 +68,12 @@
     "raid_quest_clear": "클리어",
     "raid_quest_done": "토벌 완료",
     "raid_ship_leave": "출항선에서퇴장",
-    "raid_ship_leave_ok": "나가기"
+    "raid_ship_leave_ok": "나가기",
+    "drill_menu": "나이트메어",
+    "drill_title": "나이트메어드릴",
+    "drill_exit": "나가기",
+    "drill_retry": "다시하기",
+    "drill_next": "다음으로"
   },
 
   "regions": {
@@ -100,6 +105,11 @@
     "guide_tabs": [780, 340, 500, 72],
     "dm_side_tabs": [10, 410, 150, 340],
     "raid_ship_leave": [560, 710, 800, 70],
-    "raid_ship_leave_buttons": [960, 920, 300, 90]
+    "raid_ship_leave_buttons": [960, 920, 300, 90],
+    "drill_title": [60, 15, 500, 60],
+    "drill_zone": [20, 140, 300, 60],
+    "drill_button": [1240, 960, 620, 90],
+    "drill_result_buttons": [600, 950, 720, 110],
+    "drill_result_zone": [760, 220, 400, 55]
   }
 }

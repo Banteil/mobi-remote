@@ -131,6 +131,8 @@ class Bot:
         # 게임을 앞으로 가져오지 않고 한다 — 화면은 가려져 있어도 찍고(PrintWindow), 키는 창에 직접 보낸다.
         # 클릭은 그렇게 안 되므로 누를 때만 잠깐 앞으로 가져왔다가 원래 창을 되돌린다 (어비스 반복 중에 쓴다)
         self.background = False
+        # 봇을 만들 때(게임을 앞으로 가져오기 전) 쓰던 창 — 뒤로 보내 도는 숙제(나이트메어 드릴)가 그 창을 돌려준다
+        self.user_window = ctypes.windll.user32.GetForegroundWindow()
         # 기다리는 게 오래 안 나오면 막는 화면(대화·연출·퀘스트 클리어 확인·화면 터치)을 넘겨 본다 (tasks.content.clear_blockers).
         # 혼자 오래 도는 일(일일 숙제·어비스 반복)만 켠다 — runner·abyss.repeat 가 설정
         self.auto_clear = False
@@ -599,6 +601,18 @@ class Bot:
                               f" → {self.snapshot('click_skipped').name}")
         self.sleep(2.0)
         return False
+
+    def long_press(self, x: int, y: int, seconds: float) -> bool:
+        """기준 좌표를 seconds 초 동안 누르고 있는다 (나이트메어 드릴 입장 컷신은 화면을 길게 눌러야 넘어간다).
+        게임을 앞으로 가져와 누른다. 못 가져왔으면 누르지 않고 False."""
+        self.input_mark = self.packets.mark()
+        self.box.input(f"길게 누름 ({x}, {y}) {seconds:.1f}초")
+        self.ensure_focus()
+        if not self.window.is_foreground() and not self.input.dry_run:
+            return self._click_skipped(x, y)
+        self.input.press(*self.screen.to_screen(x, y), seconds)
+        self.pause()
+        return True
 
     def hover_off(self, x: int = 300, y: int = 540) -> None:
         """커서를 버튼이 없는 자리(왼쪽 가운데)로 치운다. 누른 버튼 위에 커서가 남아 있으면 마우스를 올린 효과로
