@@ -806,7 +806,11 @@ class PacketMonitor:
             s.in_game = True  # 감시를 켠 뒤 처음 맵을 옮긴 경우에도 알게
             s.cutscene = False
             s.fast_travel_ok = None  # 새 맵 — 빠른 이동 가능 여부는 다음 자동 이동 때 다시 온다
-            if s.channel_type == "InstanceAbyssDungeon":
+            # 우연한 만남 매칭(ChanceMeetingGlobalMatching)은 레이드도 같이 쓴다 — 어비스 맵에서만 지우면 레이드 매칭으로
+            # 출항선에 들어간 뒤에도 '잡힘' 이 남아, 다음 어비스 반복이 '매칭 중' 으로 보고 오지 않을 입장을 기다렸다
+            # (2026-11-07 17:32). 콘텐츠 맵(Instance*)에 들어갔거나 잡힌(3) 뒤 맵을 옮겼으면 매칭은 끝났다.
+            # 찾는 중(1·2)에 필드를 옮겨 다니는 것은 매칭이 이어진다
+            if (s.channel_type or "").startswith("Instance") or s.abyss_matching == 3:
                 s.abyss_matching = 0
             s.abyss_result = 0  # 새 맵 — 지난 판 결과는 끝났다 (나갈 때 0 이 오는지 실측이 없어 여기서도 지운다)
             s.raid_result, s.raid_boss, s.campfire, s.boss_scene = 0, False, False, False

@@ -108,6 +108,17 @@ class WaitTest(unittest.TestCase):
         self.assertEqual((self.m.state.channel, self.m.state.channel_type), (5, "InstanceDungeon"))
         self.assertEqual(self.m.last("channel.leaving").key, "channel.leaving")
 
+    def test_matching_cleared_by_raid_entry(self):
+        """우연한 만남 매칭은 레이드도 같이 쓴다 — 출항선에 들어가면 끝 (2026-11-07: '잡힘' 이 남아 어비스가 입장을 기다림)."""
+        self.m.apply("abyss.matching_update", {"state": 3})
+        self.m.apply("channel.entering", {"channel": 7, "channel_type": "InstanceRaidLobby", "channel_name": ""})
+        self.assertEqual(self.m.state.abyss_matching, 0)
+
+    def test_matching_kept_while_searching_across_fields(self):
+        self.m.apply("abyss.matching_update", {"state": 2})
+        self.m.apply("channel.entering", {"channel": 2, "channel_type": "Field", "channel_name": ""})
+        self.assertEqual(self.m.state.abyss_matching, 2)
+
     def test_dungeon_state_cleared_on_field(self):
         """던전을 나가는 패킷을 놓쳐도 마을에 들어오면 던전 밖 (2026-10-30: 지난밤 Cleared 가 남아 접속이 헛돎)."""
         self.m.apply("dungeon.state", {"state_name": "Cleared"})
