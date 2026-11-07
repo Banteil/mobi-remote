@@ -40,6 +40,8 @@ MAX_PENDING = 512           # 순서가 뒤바뀐 조각을 이만큼까지 들�
 OPEN_MAPS = ("Field", "BattleField", "FieldBoss", "HousingInn", "ScenarioField")  # 던전이 아닌 맵 종류
 # CLI 가 같은 뜻으로 알려 주는 오래 남는 상태 — CLI 를 물을 때마다 그 답으로 맞춘다 (merge_cli)
 CLI_FACTS = ("dungeon_state", "field_state", "dead")
+MATCH_KEEP = 600     # 작업 시작 점검: 이보다 오래전에 받은 매칭(요청·찾는 중)은 끝난 것으로 (초)
+CUTSCENE_KEEP = 120  # 작업 시작 점검: 이보다 오래전에 시작한 연출은 끝 신호를 놓친 것으로 (초)
 
 
 def map_contradicts(channel_type: str, act: dict) -> bool:
@@ -761,7 +763,17 @@ class PacketMonitor:
         바뀐 것 ['이름 전 → 후']."""
         s = self.state
         before = {"맵": s.channel_name, "던전": s.dungeon_state, "사냥터": s.field_state, "쓰러짐": s.dead,
-                  "레이드": s.raid_state}
+                  "레이드": s.raid_state, "매칭": s.abyss_matching, "연출": s.cutscene}
+        now = time.monotonic()
+        # CLI 가 알려 주지 않는 순간 상태는 시작 전에 생긴 것이 오래됐으면 지운다 — 사람이 그 사이 무엇을 했는지 모른다
+        # (2026-11-07 17:32: 사람이 한 레이드 매칭의 '잡힘' 이 남아 어비스 반복이 오지 않을 입장을 기다림).
+        # 작업마다 점검하므로 바로 앞 작업이 막 받은 것(매칭을 걸고 일시정지 → 이어 하기 등)은 남긴다
+        if s.abyss_matching and (s.abyss_matching == 3 or (s.channel_type or "").startswith("Instance") and
+                                 s.channel_type != "InstanceAbyssDungeon"
+                                 or now - s.changed_at.get("abyss_matching", 0.0) > MATCH_KEEP):
+            s.abyss_matching = 0
+        if s.cutscene and now - s.changed_at.get("cutscene", 0.0) > CUTSCENE_KEEP:
+            s.cutscene = False
         if act:
             s.loading = False
             if map_contradicts(s.channel_type, act):
@@ -779,6 +791,8 @@ class PacketMonitor:
                 s.fast_travel_ok = None  # 다음 자동 이동 때 다시 온다
             if not act.get("IsDialoguePlaying"):
                 s.dialogue_npc, s.dialogue_action, s.dialogue_menu = None, "", False
+            if not (act.get("Mode") or {}).get("IsPlayingMiniGame"):
+                s.dye_open_at = None  # 염색 미니게임 닫힘을 놓쳤어도
         else:
             s.dungeon_state = s.field_state = s.dead = s.traveling = s.combat = s.fast_travel_ok = None
         if s.channel_type not in ("InstanceRaid", "InstanceRaidLobby"):
@@ -786,8 +800,9 @@ class PacketMonitor:
         if s.channel_type != "InstanceAbyssDungeon":
             s.abyss_result = 0
             s.campfire = s.boss_scene = False
+            s.revives_used = s.revives_max = None  # 지난 판의 부활 횟수로 '다 씀' 이라 보지 않게 (맵에 들어가면 다시 온다)
         after = {"맵": s.channel_name, "던전": s.dungeon_state, "사냥터": s.field_state, "쓰러짐": s.dead,
-                 "레이드": s.raid_state}
+                 "레이드": s.raid_state, "매칭": s.abyss_matching, "연출": s.cutscene}
         return [f"{k} {before[k]} → {after[k]}" for k in before if before[k] != after[k]]
 
     def apply(self, key: str, vals: dict) -> None:
@@ -873,6 +888,7 @@ class PacketMonitor:
                     log.info("패킷: 변신 시작")
         elif key == "abyss.matching_update":
             s.abyss_matching = vals.get("state") or 0
+            s.changed_at["abyss_matching"] = time.monotonic()
         elif key == "abyss.matching_cancel_ok":
             s.abyss_matching = 0
         elif key == "field.context":
@@ -940,6 +956,7 @@ class PacketMonitor:
             s.dead = False
         elif key == "cutscene.play":
             s.cutscene = True
+            s.changed_at["cutscene"] = time.monotonic()
             if s.campfire or not s.entered_at:
                 s.boss_scene = True
         elif key in ("cutscene.end", "cutscene.abort"):

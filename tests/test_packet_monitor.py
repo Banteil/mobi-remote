@@ -127,6 +127,25 @@ class WaitTest(unittest.TestCase):
         self.m.apply("channel.entering", {"channel": 2, "channel_type": "Field", "channel_name": ""})
         self.assertEqual(self.m.state.dungeon_state, "NotInDungeon")
 
+    def test_reconcile_drops_stale_moment_states(self):
+        """시작 점검: CLI 가 모르는 순간 상태(매칭·연출)는 시작 전에 오래된 것이면 지운다 (2026-11-07 레이드 매칭이 남음)."""
+        from mabi import packet_monitor as pm
+        act = {"Dungeon": {"State": "NotInDungeon"}, "Battlefield": {"IsInBattleField": False}, "IsDead": False}
+        self.m.apply("channel.entering", {"channel": 1, "channel_type": "Field", "channel_name": "마을"})
+        s = self.m.state
+        s.abyss_matching, s.cutscene, s.revives_used, s.revives_max = 3, True, 3, 3
+        changed = self.m.reconcile(act)
+        self.assertEqual((s.abyss_matching, s.revives_used, s.revives_max), (0, None, None))
+        self.assertIn("매칭 3 → 0", changed)
+        # 막 건 매칭(찾는 중)은 남긴다 — 매칭을 걸고 일시정지했다 이어 하기
+        self.m.apply("abyss.matching_update", {"state": 2})
+        self.m.reconcile(act)
+        self.assertEqual(s.abyss_matching, 2)
+        s.changed_at["abyss_matching"] -= pm.MATCH_KEEP + 1
+        s.changed_at["cutscene"] = s.changed_at.get("cutscene", 0.0) - pm.CUTSCENE_KEEP - 1
+        self.m.reconcile(act)
+        self.assertEqual((s.abyss_matching, s.cutscene), (0, False))
+
     def test_reconcile_with_cli(self):
         """시작 점검: 지난 상태를 CLI 답으로 맞춘다."""
         self.m.apply("channel.entering", {"channel": 1, "channel_type": "Field", "channel_name": "마을"})
