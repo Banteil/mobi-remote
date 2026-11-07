@@ -170,7 +170,8 @@ async function queueDaily() {
  * 깬 구역은 저장하지 않고 들어갈 때마다 패킷·드릴 창으로 확인하므로 늘 force (오늘 한 번 했어도 다시 확인) */
 function paintDrillChars() {
   const chars = (dl.st && dl.st.chars) || [];
-  if (!dl.drillChars) dl.drillChars = new Set();
+  // 캐릭터 탭에서 뺀 캐릭터는 고른 목록에서도 지운다 (숙제 탭을 열 때마다 캐릭터 목록을 새로 받아 다시 그린다)
+  dl.drillChars = new Set([...(dl.drillChars || [])].filter((s) => chars.some((c) => c.slot === s)));
   const allOn = chars.length > 0 && chars.every((c) => dl.drillChars.has(c.slot));
   $('#dr-chars').innerHTML = chars.length
     ? '<label class="chk"><input type="checkbox" data-dr-all' + (allOn ? ' checked' : '') + '>전체</label>' +
