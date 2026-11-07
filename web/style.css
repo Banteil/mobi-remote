@@ -1032,4 +1032,8 @@ input[type="number"].num-in { min-width: 0; width: 72px; }
 #dye-light:disabled, #dye-light:disabled + .opt-num { opacity: .4; }
 
 /* 기타 숙제 — 나이트메어 드릴 캐릭터 고르기 */
+/* '전체' 는 머리말 줄 오른쪽(인원수 옆)에 두고 줄 아래를 그어, 아래 캐릭터 체크박스와 다른 것으로 보이게 한다 */
+.card h3.dr-head { padding-bottom: 8px; border-bottom: 1px solid var(--edge); }
+.card h3.dr-head .dr-all { margin-left: auto; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--fg); }
+.card h3.dr-head .dr-all + .count { margin-left: 0; }
 .dr-chars { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 4px 0 10px; }

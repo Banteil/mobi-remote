@@ -173,9 +173,10 @@ function paintDrillChars() {
   // 캐릭터 탭에서 뺀 캐릭터는 고른 목록에서도 지운다 (숙제 탭을 열 때마다 캐릭터 목록을 새로 받아 다시 그린다)
   dl.drillChars = new Set([...(dl.drillChars || [])].filter((s) => chars.some((c) => c.slot === s)));
   const allOn = chars.length > 0 && chars.every((c) => dl.drillChars.has(c.slot));
+  $('#dr-all').checked = allOn;
+  $('#dr-all').disabled = !chars.length;
   $('#dr-chars').innerHTML = chars.length
-    ? '<label class="chk"><input type="checkbox" data-dr-all' + (allOn ? ' checked' : '') + '>전체</label>' +
-      chars.map((c) => '<label class="chk"><input type="checkbox" data-dr-char="' + c.slot + '"' +
+    ? chars.map((c) => '<label class="chk"><input type="checkbox" data-dr-char="' + c.slot + '"' +
         (dl.drillChars.has(c.slot) ? ' checked' : '') + '>' + c.slot + '. ' + esc(c.name) + '</label>').join('')
     : '<span class="muted">캐릭터 탭에서 캐릭터를 추가하세요</span>';
   $('#dr-pick-note').textContent = dl.drillChars.size + '명';
@@ -611,9 +612,11 @@ $('#dr-chars').addEventListener('change', (e) => {
   if (b.dataset.drChar) {
     const s = Number(b.dataset.drChar);
     b.checked ? dl.drillChars.add(s) : dl.drillChars.delete(s);
-  } else if ('drAll' in b.dataset) {
-    dl.drillChars = new Set(b.checked ? dl.st.chars.map((c) => c.slot) : []);
   } else return;
+  paintDrillChars();
+});
+$('#dr-all').addEventListener('change', (e) => {
+  dl.drillChars = new Set(e.target.checked ? dl.st.chars.map((c) => c.slot) : []);
   paintDrillChars();
 });
 $('#dr-start').addEventListener('click', startDrill);
