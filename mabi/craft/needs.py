@@ -214,15 +214,16 @@ def plan(table: RecipeTable, target: str, count: int, ctx: dict | None = None) -
              "craft": sum(s["calls"] for s in steps if s["via"] == "craft")}
     total_calls = sum(calls.values())
 
+    # 가공 시설은 대기열을 한 번에 하나씩 돌린다 (칸 수는 대기열 길이일 뿐 — State NotStarted→InProgress).
+    # 예전엔 칸 수만큼 동시에 돈다고 보고 나눠 7배 짧게 어림했다 (2026-11-09 사용자: 밥 75분×5번 = 15개에 6시간 넘음).
+    # 다른 시설끼리는 따로 돈다 → serial = 모든 가공을 더한 것, parallel = 시설별 합 중 가장 긴 것.
+    # 단계 사이 앞뒤 관계(재료가 먼저 나와야 다음 가공)는 안 따지므로 parallel 은 아래쪽 어림값이다
     serial = sum((s["sec"] or 0) * s["runs"] for s in steps if s["via"] == "alter")
-    parallel = None
-    if c.get("slots"):
-        by_fac: dict = {}
-        for s in steps:
-            if s["via"] == "alter":
-                by_fac[s["facility"]] = by_fac.get(s["facility"], 0) + (s["sec"] or 0) * s["runs"]
-        # 시설마다 칸 수로 나눈 시간 중 가장 긴 것. 단계 사이 앞뒤 관계는 안 따지므로 아래쪽 어림값이다
-        parallel = max((math.ceil(sec / max(1, c["slots"].get(f) or 1)) for f, sec in by_fac.items()), default=0)
+    by_fac: dict = {}
+    for s in steps:
+        if s["via"] == "alter":
+            by_fac[s["facility"]] = by_fac.get(s["facility"], 0) + (s["sec"] or 0) * s["runs"]
+    parallel = max(by_fac.values(), default=0)
 
     facilities: dict = {}
     skills: dict = {}

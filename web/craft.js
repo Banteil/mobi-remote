@@ -275,8 +275,9 @@ function needsHtml(p) {
 
   const t = p.time || {};
   if (t.serial) {
-    out.push('<p class="hint">가공에 걸리는 시간 — 한 칸으로 줄줄이 돌리면 ' + dur(t.serial) +
-      (t.parallel != null ? ', 칸을 나눠 쓰면 대략 ' + dur(t.parallel) : '') + '</p>');
+    // 시설마다 한 번에 하나씩 돈다. 시설이 여럿이면 서로는 따로 돌아 가장 오래 걸리는 시설만큼 (needs.plan)
+    out.push('<p class="hint">가공에 걸리는 시간 — 약 ' + dur(t.parallel != null ? t.parallel : t.serial) +
+      (t.parallel != null && t.parallel < t.serial ? ' (시설마다 하나씩, 시설끼리는 동시에 · 모두 더하면 ' + dur(t.serial) + ')' : ' (시설에서 하나씩 차례로)') + '</p>');
   }
 
   if (p.ambiguous && p.ambiguous.length) {
