@@ -206,18 +206,25 @@ class StopWatcher:
     """중단 키를 백그라운드에서 30ms 마다 감시한다. 짧게 눌러도 놓치지 않도록 별도 스레드에서 본다.
     눌리면 stopped 가 켜지고 봇은 다음 대기/캡처 시점에 멈춘다. force_exit 이면 OCR·CLI 호출 등으로
     grace 초 안에 멈추지 못할 때 프로세스를 강제로 끝낸다 (콘솔 실행용. GUI 는 창까지 꺼지므로 끈다).
-    request() 로 키 대신 코드에서 중단을 요청할 수 있다 (GUI 의 중단 버튼)."""
+    request() 로 키 대신 코드에서 중단을 요청할 수 있다 (GUI 의 중단 버튼). why 는 로그에 쓸 까닭 —
+    사람이 멈춘 게 아니면 적는다 (작업 큐가 먼저 할 카드에 밀어냄 등). 없으면 '사용자 중단'."""
 
     def __init__(self, vk: int, grace: float = 5.0, log=None, force_exit: bool = True):
         import threading
         self.vk, self.grace, self.log, self.force_exit = vk, grace, log, force_exit
         self.stopped = threading.Event()
         self.by_key = False  # 키로 멈췄나 (버튼·코드 요청이 아니라)
+        self.why = ""        # 코드가 멈춘 까닭 (request) — 비면 사람이 멈춘 것
         self._closed = threading.Event()
         threading.Thread(target=self._run, name="stop-watcher", daemon=True).start()
 
-    def request(self) -> None:
+    def request(self, why: str = "") -> None:
+        self.why = why
         self.stopped.set()
+
+    def reason(self) -> str:
+        """멈춘 까닭 (로그·결과에 쓴다)."""
+        return self.why or "사용자 중단"
 
     def close(self) -> None:
         self._closed.set()
@@ -238,7 +245,7 @@ class StopWatcher:
         else:
             self.by_key = True
         self.stopped.set()
-        self.log and self.log.warning("중단 키 입력 → 멈춥니다" if self.by_key else "중단 요청 → 멈춥니다")
+        self.log and self.log.warning("중단 키 입력 → 멈춥니다" if self.by_key else f"{self.why or '중단 요청'} → 멈춥니다")
         try:
             import winsound
             winsound.MessageBeep()

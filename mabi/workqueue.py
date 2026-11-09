@@ -39,6 +39,8 @@ log = logging.getLogger("mabi")
 
 STOP_RANK = {"stopped": 0, "later": 0, "preempt": 1, "pause": 2, "skip": 3, "remove": 3, "skill": 4, "transfer": 4}
 LIVE = ("wait", "run", "pause")  # 아직 할 일이 남은 카드
+# 사람이 멈춘 게 아닌 까닭 — 돌던 일의 로그에 '사용자 중단' 대신 쓴다 (Kind.stop 이 봇의 멈춤 요청에 싣는다)
+STOP_WHY = {"preempt": "먼저 할 카드에 밀림 (끝나면 이어서)"}
 
 
 class Kind:

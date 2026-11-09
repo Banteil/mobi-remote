@@ -41,6 +41,33 @@ class OutcomeTest(unittest.TestCase):
         self.assertIsNone(Bot.overweight(b))
 
 
+
+class StopReasonTest(unittest.TestCase):
+    """멈춘 까닭 — 사람이 멈춘 게 아니면 로그에 '사용자 중단' 대신 그 까닭 (작업 큐가 먼저 할 카드에 밀어냄 등)."""
+
+    def test_reason(self):
+        from mabi.inputs import StopWatcher
+        w = StopWatcher(0x87, force_exit=False)  # F24 — 아무도 누르지 않는 키
+        try:
+            self.assertEqual(w.reason(), "사용자 중단")
+            w.request("먼저 할 카드에 밀림")
+            self.assertTrue(w.stopped.is_set())
+            self.assertEqual(w.reason(), "먼저 할 카드에 밀림")
+        finally:
+            w.close()
+
+    def test_queue_preempt_carries_reason(self):
+        from gui_app.queue_api import AbyssKind, DailyKind, RaidKind
+        from mabi.workqueue import STOP_WHY
+        api = mock.MagicMock()
+        AbyssKind(api).stop("preempt")
+        api.daily_abyssStop.assert_called_once_with(STOP_WHY["preempt"])
+        RaidKind(api).stop("pause")  # 사람이 멈춤 → 까닭 없음
+        api.daily_raidStop.assert_called_once_with("")
+        DailyKind(api).stop("preempt")
+        api.daily_stop.assert_called_once_with(False, STOP_WHY["preempt"])
+
+
 if __name__ == "__main__":
     unittest.main()
 

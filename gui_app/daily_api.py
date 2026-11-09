@@ -153,11 +153,11 @@ class DailyApi:
         except Exception:
             log.exception("결과 창을 앞으로 가져오지 못함")
 
-    def daily_stop(self, end: bool = False) -> dict:
-        """end=False: 일시정지 (F12 로 이어 함), True: 종료 (큐에서 카드를 지움)."""
+    def daily_stop(self, end: bool = False, why: str = "") -> dict:
+        """end=False: 일시정지 (F12 로 이어 함), True: 종료 (큐에서 카드를 지움). why: 사람이 아닌 까닭 (로그에)."""
         self._daily_end = bool(end)
         if self._daily_runner:
-            self._daily_runner.stop()
+            self._daily_runner.stop(why)
         return {"ok": True}
 
     # ---- 게임 화면 설정 (숙제·어비스 시작 전에 작업 큐가 확인·맞춤 — queue_api._q_display) ----
@@ -321,9 +321,9 @@ class DailyApi:
                 a["mode"] = v["mode"]
         return self._repeat_launch("raid", "레이드", v, save, on_event)
 
-    def daily_raidStop(self) -> dict:  # noqa: N802
+    def daily_raidStop(self, why: str = "") -> dict:  # noqa: N802
         if self._raid_bot:
-            self._raid_bot.stopper.request()
+            self._raid_bot.stopper.request(why)
         return {"ok": True}
 
     def _repeat_launch(self, kind: str, title: str, v: dict, save, on_event=None) -> threading.Thread:
@@ -399,9 +399,9 @@ class DailyApi:
         t.start()
         return t
 
-    def daily_abyssStop(self) -> dict:  # noqa: N802
+    def daily_abyssStop(self, why: str = "") -> dict:  # noqa: N802
         if self._abyss_bot:
-            self._abyss_bot.stopper.request()
+            self._abyss_bot.stopper.request(why)
         return {"ok": True}
 
     # ---- 캐릭터·숙제 설정 ----

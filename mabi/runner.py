@@ -121,14 +121,15 @@ class Runner:
         self.force_exit = force_exit
         self.bot: Bot | None = None
         self._stop_requested = False
+        self._stop_why = ""
         # 캐릭터마다 얻은 것 (작업 큐 결과 창) — 숙제를 시작할 때와 그 캐릭터를 끝낼 때 가방·재화를 찍어 뺀다
         self._loot = queue_report.LootMeter(lambda x: self._emit("loot", **x))
 
-    def stop(self) -> None:
-        """GUI 의 중단 버튼. 봇은 다음 대기/캡처 시점에 멈춘다."""
-        self._stop_requested = True
+    def stop(self, why: str = "") -> None:
+        """GUI 의 중단 버튼 (why: 사람이 아닌 까닭 — 작업 큐가 밀어냄 등). 봇은 다음 대기/캡처 시점에 멈춘다."""
+        self._stop_requested, self._stop_why = True, why
         if self.bot:
-            self.bot.stopper.request()
+            self.bot.stopper.request(why)
 
 
     def _emit(self, type_: str, **kw) -> None:
@@ -168,7 +169,7 @@ class Runner:
         bot = self.bot = Bot(cfg, paths, dry_run=opts.dry_run, force_exit=self.force_exit)
         bot.auto_clear = True  # 기다리는 화면이 오래 안 나오면 대화·퀘스트 클리어 창 등을 넘겨 본다
         if self._stop_requested:
-            bot.stopper.request()
+            bot.stopper.request(self._stop_why)
         bot.daily = state
         bot.on_step = lambda s, t: self._emit("step", slot=(bot.character or {}).get("slot"), task=bot.task_id, step=s, text=t or s)
         results: list[tuple[str, str, str]] = []
@@ -223,7 +224,7 @@ class Runner:
                     except (display.DisplayFixFailed, StepTimeout, MissingTemplate, RuntimeError) as e:
                         log.warning(f"화면 설정을 되돌리지 못함 — 다음 숙제가 끝날 때 다시 시도: {e}")
         except StopRequested:
-            results.append(("실행", "STOP", "사용자 중단"))
+            results.append(("실행", "STOP", bot.stopper.reason()))
         finally:
             if report:
                 report.finish(results)
@@ -474,7 +475,7 @@ class Runner:
                             log.info(f"  [{who}] 마지막에 남은 일일 미션 선물: {got}")
                             self._recheck_daily(bot, cfg, state, slot, results, ended)
                     except StopRequested:
-                        log.warning("사용자 중단")
+                        log.warning(bot.stopper.reason())
                         return
                     except (StepTimeout, CannotProceed, MissingTemplate, RuntimeError) as e:
                         log.warning(f"[{who}] 마지막 일일 미션 선물 받기 실패: {e}")

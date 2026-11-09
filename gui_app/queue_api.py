@@ -18,7 +18,7 @@ from mabi import cutpoint
 from mabi import gamedata as gd
 from mabi import queue_report
 from mabi.runner import RunOptions, load_config
-from mabi.workqueue import Kind, WorkQueue
+from mabi.workqueue import STOP_WHY, Kind, WorkQueue
 
 log = logging.getLogger("mabi")
 
@@ -159,7 +159,7 @@ class DailyKind(Kind):
 
     def stop(self, reason):
         # 카드를 뺐으면 종료, 아니면 일시정지 (진행 기록으로 끊긴 자리부터 이어 한다)
-        self.api.daily_stop(reason in ("remove", "skip"))
+        self.api.daily_stop(reason in ("remove", "skip"), STOP_WHY.get(reason, ""))
 
 
 class AbyssKind(Kind):
@@ -246,7 +246,7 @@ class AbyssKind(Kind):
         return True
 
     def stop(self, reason):
-        getattr(self.api, f"daily_{self.KIND}Stop")()
+        getattr(self.api, f"daily_{self.KIND}Stop")(STOP_WHY.get(reason, ""))
 
 
 class RaidKind(AbyssKind):

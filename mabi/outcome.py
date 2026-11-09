@@ -26,7 +26,7 @@ def classify(bot: Bot, tag: str, label: str, e: BaseException) -> tuple[str, str
     """예외 → (상태, 요약, 화면 정리가 필요한가). 실패면 스냅샷·블랙박스를 남긴다."""
     from .tasks.content import CannotProceed
     if isinstance(e, StopRequested):
-        log.warning("사용자 중단")
+        log.warning(bot.stopper.reason())
         return "STOP", "", False
     if isinstance(e, AuthBlocked):  # 접속을 더 두드리면 꼬일 수 있다 → 전체를 멈추고 사람에게 넘긴다
         log.error(str(e))
