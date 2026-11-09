@@ -379,6 +379,7 @@ travel_timeout = 600
 match_timeout = 600
 clear_timeout = 1500                 # 안의 제한 시간은 20분
 quest_wait = 20                      # 나온 뒤 '[긴급 의뢰] 뱅가드 브리치' 퀘스트 클리어 창을 기다리는 시간
+background = true                    # 입장 뒤로는 게임을 앞에 두지 않고 한다 (가려져 있어도 됨, 내리면 안 됨)
 
 [abyss]
 dungeon = "허상의 정박지"             # 메뉴 → 어비스 목록의 던전 이름

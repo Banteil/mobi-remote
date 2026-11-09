@@ -8,6 +8,7 @@
   → 필드로 나오면 꼭 '[긴급 의뢰] 뱅가드 브리치' 퀘스트 클리어 창이 뜬다 → 확인(Space). 여기까지가 한 캐릭터 몫.
 안: 맵 ID 가 패킷 표에 없어 맵 종류를 모르고 CLI 도 던전으로 치지 않는다 (Dungeon NotInDungeon) — CLI 장소 이름
   ('뱅가드 브리치 • 여신의 뜰') 으로 본다. 그래서 클리어는 던전의 화면 판정(dungeon_touch)과 클리어 뒤 정리(after_clear) 그대로.
+입장한 뒤로는 게임을 뒤로 보내고 한다 (드릴·어비스와 같음).
 끝냈나: CLI 성장 가이드 '뱅가드 브리치' Weekly IsCompleted (클리어 화면 때 바로 바뀌었다). 모를 때만 주간 탭 카드가 사라졌나로.
 """
 import time
@@ -137,8 +138,16 @@ def run(bot: Bot, cfg: dict) -> str:
         enter(bot)
     else:
         bot.log.info("이미 뱅가드 브리치 안 → 클리어까지")
-    play(bot)
-    quest_clear(bot)
+    try:
+        if _cfg(bot).get("background", True):
+            # 들어간 뒤로는 게임을 뒤로 보내고 하던 창을 돌려준다 (사용자 — 드릴·어비스와 같다). 키는 창에 직접 가고,
+            # 클릭(화면 터치 등)만 누를 때 잠깐 앞으로 가져왔다가 되돌린다
+            bot.background = True
+            bot.window.give_back(bot.user_window)
+        play(bot)
+        quest_clear(bot)
+    finally:
+        bot.background = False
     if done(bot) is False:
         raise CannotProceed("뱅가드 브리치를 클리어했는데 성장 가이드가 안 끝남")
     return "클리어"
