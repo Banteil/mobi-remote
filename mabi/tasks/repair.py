@@ -20,7 +20,7 @@ import numpy as np
 from .. import gamedata as gd, keys
 from ..bot import Bot
 from . import dialogue, ui_text
-from .content import CannotProceed
+from .content import CannotProceed, go_talk
 
 def _find(bot: Bot, key: str, region: str, exact: bool = True):
     return ui_text.find(bot, gd.text(key), gd.region(region), exact)
@@ -106,36 +106,9 @@ def _open_quick_nav(bot: Bot) -> tuple[int, int]:
     raise CannotProceed(f"퀵 내비게이터(대장간)가 열리지 않음 → {bot.snapshot('repair_menu').name}")
 
 
-def _moving(bot: Bot) -> bool | None:
-    """'대장간' 을 누른 뒤 움직이기 시작했나 (패킷: 자동 이동 · NPC 에게 다가가는 AI · 대화 시작 · 맵 이동). 모르면 None."""
-    if not bot.packets.ok:
-        return None
-    return bot.wait_packet(lambda s: s.traveling or s.loading or bool(s.ai) or s.in_dialogue, 5, since=bot.input_mark)
-
-
 def _go_smithy(bot: Bot) -> None:
-    """퀵 내비게이터 '대장간' → 도착해 대장간 NPC 대화가 열릴 때까지 (도착하면 대화가 저절로 열린다).
-    눌렀는데 패킷으로 움직임이 없으면 메뉴를 다시 열어 한 번 더. 이동 중 빠른 이동이 되면 T."""
-    for attempt in range(2):
-        bot.click(_open_quick_nav(bot))
-        if _moving(bot) is not False:
-            break
-        bot.log.info("'대장간' 을 눌렀는데 움직이지 않음 (패킷) → 메뉴를 다시 엶")
-    else:
-        raise CannotProceed(f"'대장간' 을 눌러도 움직이지 않음 → {bot.snapshot('repair_menu').name}")
-    bot.log.info("대장간으로 이동")
-    fast = False
-    end = time.monotonic() + bot.cfg["abyss"].get("travel_timeout", 300)
-    while time.monotonic() < end:
-        if bot.map_loading():
-            bot.wait_loaded(end - time.monotonic())
-            continue
-        if dialogue.talking(bot):  # 도착해 대화가 열림 — 메뉴는 인사말을 넘긴 뒤에 뜬다 (_open_repair)
-            return
-        if not fast:
-            fast = bot.fast_travel()
-        bot.sleep(1.5, 2)
-    raise CannotProceed(f"대장간 NPC 대화가 열리지 않음 → {bot.snapshot('repair_npc').name}")
+    """퀵 내비게이터 '대장간' → 도착해 대장간 NPC 대화가 열릴 때까지 (content.go_talk)."""
+    go_talk(bot, lambda: bot.click(_open_quick_nav(bot)), "대장간", "repair_menu")
 
 
 def _open_repair(bot: Bot) -> bool:

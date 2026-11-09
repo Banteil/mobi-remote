@@ -269,6 +269,40 @@ def travel(bot: Bot, arrive: list[str], timeout: float) -> None:
                 raise StepTimeout(f"이동이 끝났는데 {ARRIVE_GRACE}s 안에 {arrive} 중 아무것도 나타나지 않음")
 
 
+def npc_moving(bot: Bot) -> bool | None:
+    """NPC 에게 가는 버튼을 누른 뒤 움직이기 시작했나 (패킷: 자동 이동 · NPC 에게 다가가는 AI · 대화 시작 · 맵 이동). 모르면 None."""
+    if not bot.packets.ok:
+        return None
+    return bot.wait_packet(lambda s: s.traveling or s.loading or bool(s.ai) or s.in_dialogue, 5, since=bot.input_mark)
+
+
+def go_talk(bot: Bot, start: Callable[[], None], what: str, shot: str) -> None:
+    """start() 로 NPC 에게 가는 이동을 시작하고, 도착해 그 NPC 대화가 열릴 때까지 (도착하면 대화가 저절로 열린다).
+    눌렀는데 패킷으로 움직임이 없으면 한 번 더 start(). 이동 중 빠른 이동이 되면 T.
+    대장간 수리(퀵 내비게이터 '대장간') · 어비스 주간 전리품(관청 에반) 이 같이 쓴다."""
+    from .dialogue import talking
+    for _ in range(2):
+        start()
+        if npc_moving(bot) is not False:
+            break
+        bot.log.info(f"'{what}' 을 눌렀는데 움직이지 않음 (패킷) → 다시")
+    else:
+        raise CannotProceed(f"'{what}' 을 눌러도 움직이지 않음 → {bot.snapshot(shot).name}")
+    bot.log.info(f"{what} 으로 이동")
+    fast = False
+    end = time.monotonic() + bot.cfg["abyss"].get("travel_timeout", 300)
+    while time.monotonic() < end:
+        if bot.map_loading():
+            bot.wait_loaded(end - time.monotonic())
+            continue
+        if talking(bot):  # 도착해 대화가 열림 — 메뉴는 인사말을 넘긴 뒤에 뜬다
+            return
+        if not fast:
+            fast = bot.fast_travel()
+        bot.sleep(1.5, 2)
+    raise CannotProceed(f"{what} NPC 대화가 열리지 않음 → {bot.snapshot(shot + '_npc').name}")
+
+
 class CannotProceed(RuntimeError):
     """던전 미해금, 장소를 못 찾음 등 진행할 수 없는 상황. 실행기는 실패로 기록하고 다음 숙제로 넘어간다."""
 

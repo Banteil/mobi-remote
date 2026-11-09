@@ -23,7 +23,7 @@ from ..place import place
 from .. import monitor
 from ..monitor import detect as d, handlers
 from . import ui_text
-from .content import CannotProceed, touch_prompt_visible, watch
+from .content import CannotProceed, go_talk, touch_prompt_visible, watch
 from .exits import DungeonExit, Exit
 from .repeat import Repeat
 from .spear import SpearDodge
@@ -223,8 +223,46 @@ def _open_list(bot: Bot, menu_open: bool = False) -> None:
     bot.sleep(1.0, 1.5)
 
 
+def loot_pending(bot: Bot) -> tuple[int, int] | None:
+    """어비스 목록 왼쪽 아래 '주간 전리품' 칸의 '전리품 받기' 버튼 자리 — 정산할 게 남았을 때만 (받고 나면 '전리품 보기')."""
+    return _find_text(bot, gd.text("abyss_loot"), gd.region("abyss_loot"))
+
+
+def settle_loot(bot: Bot) -> None:
+    """주간 전리품 정산. 주간 초기화(월요일) 뒤에는 정산하기 전엔 어느 어비스도 못 들어간다
+    ('입장 불가 — 주간 전리품을 먼저 정산하세요', 2026-11-09). 어비스 목록이 열린 채로 부른다. 흐름 (그날 실기로 확인):
+    '전리품 받기' → 퀘스트 '주간 전리품 수령' 으로 관청 에반에게 자동 이동 → 도착하면 대화가 열림 → 인사말 넘김
+    → 메뉴 '주간 전리품 받기'(Space) → 대사 넘김 → '전리품 정산' 보상 화면 → 확인(Space) → 필드 메인 화면.
+    대사로 판단하지 않는다 — 메뉴 버튼 글자(점검자 choose)와 보상 화면 제목으로만 본다."""
+    hit = loot_pending(bot)
+    if not hit:
+        return
+    bot.log.info("주간 전리품이 남아 있음 → 먼저 정산 (정산 전엔 어비스에 못 들어감)")
+    bot.step("abyss_loot", "주간 전리품 정산")
+    with bot.npc_talk():  # 대화는 여기서 다룬다 — 끼어들기가 넘기지 않게 (대장간 수리와 같음)
+        go_talk(bot, lambda: bot.click(hit), "주간 전리품(관청)", "abyss_loot")
+        mon = monitor.of(bot)
+        ctx = monitor.Ctx("abyss", "주간 전리품", choose=gd.text("abyss_loot_claim"), choose_region="board_choices")
+        end, chosen = time.monotonic() + 90, False
+        while time.monotonic() < end:
+            if _find_text(bot, gd.text("abyss_loot_done"), gd.region("abyss_loot_done")):
+                bot.sleep(2.5, 3)  # 받은 물품이 하나씩 그려지는 동안은 확인 버튼이 아직 없다
+                bot.key("space")
+                bot.sleep(1.5, 2)
+                chosen = True
+                continue
+            if chosen and bot.at_main():
+                bot.log.info("주간 전리품 정산 끝")
+                return
+            seen = mon.check(ctx, guard=False)
+            chosen = ctx.take("chosen") or chosen
+            if not seen.done:
+                bot.sleep(0.8, 1.2)
+    raise CannotProceed(f"주간 전리품 정산이 끝나지 않음 → {bot.snapshot('abyss_loot_end').name}")
+
+
 def open_entry(bot: Bot, dungeon: str, difficulty: str = "", _moved: bool = False, at: str = "",
-               solo: bool = False) -> None:
+               solo: bool = False, _settled: bool = False) -> None:
     """dungeon 입장 화면을 열고 탭('함께하기', solo 면 '혼자하기') · 난이도 · ('함께하기' 면) '우연한 만남' 을 맞춘다.
     at(where 결과)이 입장 화면이나 어비스 목록이면 그 자리부터, 아니면 메인 화면 → 메뉴 → 어비스 → 목록에서 dungeon.
     '혼자하기' 탭은 입구에서 먼 캐릭터면 버튼이 '이동하기' 다 (2026-10-24: 혼자하기 탭에서 '입장하기' 만 찾다 실패).
@@ -235,12 +273,21 @@ def open_entry(bot: Bot, dungeon: str, difficulty: str = "", _moved: bool = Fals
     if at != "entry":
         if at != "list":
             _open_list(bot, menu_open=at == "menu")
+        if not _settled and loot_pending(bot):
+            settle_loot(bot)
+            return open_entry(bot, dungeon, difficulty, _moved, solo=solo, _settled=True)
         _click_text(bot, dungeon, gd.region("abyss_list"), what=f"어비스 '{dungeon}'")
         bot.sleep(1.0, 1.5)
         # 입장 화면이 열렸나: 위쪽 '혼자하기 / 함께하기' 탭 글자로 본다 (버튼 글자는 탭·위치에 따라 바뀐다)
         for _ in range(6):
             if _find_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top")):
                 break
+            # 전리품 버튼을 못 읽고 지나쳤으면 '입장 불가 — 주간 전리품을 먼저 정산하세요' 가 뜬다 → 닫고 정산
+            if not _settled and _find_text(bot, gd.text("abyss_loot_first"), gd.region("abyss_popup"), exact=False):
+                bot.key("space")
+                bot.sleep(1.0, 1.3)
+                settle_loot(bot)
+                return open_entry(bot, dungeon, difficulty, _moved, solo=solo, _settled=True)
             bot.sleep(1.0, 1.4)
         else:
             raise CannotProceed(f"'{dungeon}' 입장 화면이 열리지 않음 → {bot.snapshot('abyss').name}")
@@ -257,7 +304,8 @@ def open_entry(bot: Bot, dungeon: str, difficulty: str = "", _moved: bool = Fals
             break
         if button == "move" and not _moved:
             back = _travel_to_entry(bot)
-            return open_entry(bot, dungeon, difficulty, _moved=True, solo=solo, at="entry" if back else "")
+            return open_entry(bot, dungeon, difficulty, _moved=True, solo=solo, at="entry" if back else "",
+                              _settled=_settled)
         bot.sleep(1.0, 1.4)
     else:
         raise CannotProceed(f"'{dungeon}' {'혼자하기' if solo else '함께하기'}에 '입장하기' 가 없음 → {bot.snapshot('abyss').name}")
