@@ -77,6 +77,19 @@ class DecodeTest(unittest.TestCase):
         v = self.t.decode(ev.proto, bytes(body))[1]
         self.assertEqual((v["x"], v["y"]), (3.0, 4.0))
 
+    def test_equip_update_reads_from_end(self):
+        """장비 갱신의 각인 단계·강화 경험치는 끝에서부터 — 박힌 보석 수만큼 앞이 늘어도 (298 · 322바이트) 같은 값.
+        고정 위치로 읽을 때는 보석 3개짜리 장비에서 단계가 엉뚱한 수로 읽혀 강화 반복이 첫 번에 멈췄다 (11-09)."""
+        ev = self.t.by_key("equip.update")
+        for size in (298, 322):
+            body = bytearray(size)
+            struct.pack_into("<Q", body, 8, 77)
+            struct.pack_into("<I", body, size - 123, 16)
+            struct.pack_into("<I", body, size - 74, 377304)
+            v = self.t.decode(ev.proto, bytes(body))[1]
+            self.assertEqual((v["id"], v["carving_level"], v["carving_exp"]), (77, 16, 377304), size)
+        self.assertEqual(self.t.decode(ev.proto, bytes(60))[1], {"id": 0})  # 너무 짧으면 그 칸은 빠진다
+
     def test_dungeon_state(self):
         self.assertEqual(self.decode("dungeon.state", "02000000")["state_name"], "InProgress")
         self.assertEqual(self.decode("dungeon.state", "03000000")["state_name"], "Cleared")

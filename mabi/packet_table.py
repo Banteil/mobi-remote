@@ -95,13 +95,15 @@ class Field:
     # 그 시작 + rel 에서 읽는다. 표식이 없으면 off 그대로 (11-05 패치로 물길 주술사 위치가 64바이트 밀림)
     find: str = ""
     rel: int = 0
+    # off 가 음수면 본문 끝에서부터 센다 — 앞쪽에 길이가 바뀌는 칸이 있고 뒤쪽은 고정일 때
+    # (장비 갱신: 박힌 보석 수만큼 앞이 늘어 각인 단계가 밀린다, 11-09 목걸이 298 · 완드 322바이트)
 
     def at_body(self, body: bytes) -> int:
         if self.find:
             m = _marker(self.find).search(body)
             if m:
                 return m.start() + self.rel
-        return self.off
+        return self.off if self.off >= 0 else len(body) + self.off
 
 
 @dataclass(frozen=True)
