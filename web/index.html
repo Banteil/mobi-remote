@@ -414,7 +414,15 @@
     </div>
     </div>
     <div class="hw-pane hidden" data-hw="weekly">
-      <div class="card card-wide"><div class="empty">주간 숙제는 준비 중입니다.</div></div>
+      <div class="card card-wide">
+        <h3 class="h3-tools dr-head">필드 보스 <small>캐릭터마다 이번 주 1번 — 매일 12·18·20·22시부터 30분, 그 시간이 아니면 큐에서 기다렸다가 열리면 돕니다</small>
+          <label class="chk dr-all"><input type="checkbox" id="fb-all">전체</label><span class="count" id="fb-pick-note"></span></h3>
+        <div class="dr-chars" id="fb-chars"></div>
+        <div class="row"><label>보스 <select id="fb-boss"></select></label><label>난이도 <select id="fb-level"></select></label>
+          <span class="spacer"></span>
+          <button class="btn" id="fb-queue" title="고른 캐릭터를 작업 큐 맨 아래에 담습니다 — 열린 시간이 되면 진행 (재생을 눌러 두세요)">목표</button>
+          <button class="btn btn-primary" id="fb-start" title="지금 바로 시작 — 열린 시간이 아니면 열릴 때까지 기다립니다">시작</button></div>
+      </div>
     </div>
     <div class="hw-pane hidden" data-hw="etc">
       <div class="card card-wide">

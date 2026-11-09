@@ -22,6 +22,7 @@ async function loadDaily() {
   $('#dl-date').textContent = '게임 날짜 ' + dl.st.date + ' (오전 6시에 바뀜)';
   paintDailyTable();
   paintDrillChars();
+  paintFieldBoss();
   paintDailyRunning(dl.st.running);
   paintDailySettings();
 }
@@ -168,45 +169,98 @@ async function queueDaily() {
 
 /* 기타 숙제 — 나이트메어 드릴. 일일 숙제와 같은 큐 카드(kind 'daily')에 only=['drill'] 로 담는다.
  * 깬 구역은 저장하지 않고 들어갈 때마다 패킷·드릴 창으로 확인하므로 늘 force (오늘 한 번 했어도 다시 확인) */
-function paintDrillChars() {
+/* 캐릭터 고르기 칸 (기타·주간 숙제 카드가 같이 씀) — pre: 요소 id 앞말 ('dr' · 'fb'), key: dl 안의 고른 슬롯 Set 이름 */
+function paintPick(pre, key) {
   const chars = (dl.st && dl.st.chars) || [];
   // 캐릭터 탭에서 뺀 캐릭터는 고른 목록에서도 지운다 (숙제 탭을 열 때마다 캐릭터 목록을 새로 받아 다시 그린다)
-  dl.drillChars = new Set([...(dl.drillChars || [])].filter((s) => chars.some((c) => c.slot === s)));
-  const allOn = chars.length > 0 && chars.every((c) => dl.drillChars.has(c.slot));
-  $('#dr-all').checked = allOn;
-  $('#dr-all').disabled = !chars.length;
-  $('#dr-chars').innerHTML = chars.length
-    ? chars.map((c) => '<label class="chk"><input type="checkbox" data-dr-char="' + c.slot + '"' +
-        (dl.drillChars.has(c.slot) ? ' checked' : '') + '>' + c.slot + '. ' + esc(c.name) + '</label>').join('')
+  dl[key] = new Set([...(dl[key] || [])].filter((s) => chars.some((c) => c.slot === s)));
+  const allOn = chars.length > 0 && chars.every((c) => dl[key].has(c.slot));
+  $('#' + pre + '-all').checked = allOn;
+  $('#' + pre + '-all').disabled = !chars.length;
+  $('#' + pre + '-chars').innerHTML = chars.length
+    ? chars.map((c) => '<label class="chk"><input type="checkbox" data-pick-char="' + c.slot + '"' +
+        (dl[key].has(c.slot) ? ' checked' : '') + '>' + c.slot + '. ' + esc(c.name) + '</label>').join('')
     : '<span class="muted">캐릭터 탭에서 캐릭터를 추가하세요</span>';
-  $('#dr-pick-note').textContent = dl.drillChars.size + '명';
+  $('#' + pre + '-pick-note').textContent = dl[key].size + '명';
 }
 
-function drillSpec() {
-  const chars = (dl.st.chars || []).map((c) => c.slot).filter((s) => dl.drillChars.has(s));
-  if (!chars.length) { toast('캐릭터를 하나 이상 고르세요', '', 'bad'); return null; }
-  return { kind: 'daily', label: '나이트메어 드릴', chars: chars, only: ['drill'], force: true };
+function bindPick(pre, key) {
+  $('#' + pre + '-chars').addEventListener('change', (e) => {
+    const s = Number(e.target.dataset.pickChar);
+    if (!s) return;
+    e.target.checked ? dl[key].add(s) : dl[key].delete(s);
+    paintPick(pre, key);
+  });
+  $('#' + pre + '-all').addEventListener('change', (e) => {
+    dl[key] = new Set(e.target.checked ? dl.st.chars.map((c) => c.slot) : []);
+    paintPick(pre, key);
+  });
 }
 
-function startDrill() {
+function pickedSlots(key) {
+  const chars = (dl.st.chars || []).map((c) => c.slot).filter((s) => dl[key].has(s));
+  if (!chars.length) toast('캐릭터를 하나 이상 고르세요', '', 'bad');
+  return chars;
+}
+
+/* 고른 카드를 지금 바로 (진행 중이던 것은 뒤로) · 큐 맨 아래에 */
+function startHomework(it, title) {
   if (qItems.some((x) => x.kind === 'daily' && x.status === 'run')) { toast('이미 숙제가 실행 중입니다', '', 'bad'); return; }
-  const it = drillSpec();
-  if (!it) return;
   const cur = qItems.find((x) => x.status === 'run');
-  toast('나이트메어 드릴 시작', stopKey() + ' = 일시정지 · 다시 누르면 재개' +
+  toast(title + ' 시작', stopKey() + ' = 일시정지 · 다시 누르면 재개' +
     (cur ? ' · 진행 중이던 "' + cur.label + '" 은 뒤로 미룹니다' : ''), 'ok');
   qStartNow(it, false);
 }
 
-async function queueDrill() {
-  const it = drillSpec();
-  if (!it) return;
+async function queueHomework(it, title) {
   await mm.queue.add(it, 'end');
-  toast('큐에 담았습니다', '나이트메어 드릴 — ' + it.chars.length + '명 · 재생을 누르면 진행합니다.', 'ok');
+  toast('큐에 담았습니다', title + ' — ' + it.chars.length + '명 · 재생을 누르면 진행합니다.', 'ok');
+}
+
+function paintDrillChars() { paintPick('dr', 'drillChars'); }
+
+function drillSpec() {
+  const chars = pickedSlots('drillChars');
+  return chars.length ? { kind: 'daily', label: '나이트메어 드릴', chars: chars, only: ['drill'], force: true } : null;
+}
+
+/* 주간 숙제 — 필드 보스. 일일 숙제 카드(kind 'daily')에 only=['field_boss'] 로, 고른 보스·난이도는 카드의 fieldBoss.
+ * 이번 주에 잡았는지는 들어가기 전에 게임(성장 가이드)으로 보므로 늘 force. 열린 시간(12·18·20·22시부터 30분)이
+ * 아니면 큐에서 비켜 있다가 열리면 돈다 (gui_app DailyKind.ready) */
+const FB_BOSSES = { '페리': 3, '크라브바흐': 3, '크라마': 3, '드로흐에넴': 3, '토르모그': 2, '앙그르바한': 2 };
+const FB_LEVELS = ['일반', '어려움', '매우 어려움'];
+
+function paintFieldBoss() {
+  paintPick('fb', 'fbChars');
+  const boss = $('#fb-boss');
+  if (!boss.options.length) {
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem('mm.fieldBoss') || '{}'); } catch (e) { /* 저장 못 함 — 기본값 */ }
+    boss.innerHTML = Object.keys(FB_BOSSES).map((b) => '<option>' + b + '</option>').join('');
+    boss.value = FB_BOSSES[saved.boss] ? saved.boss : '드로흐에넴';
+    paintFieldBossLevels(saved.difficulty || '매우 어려움');
+  }
+}
+
+function paintFieldBossLevels(want) {
+  const levels = FB_LEVELS.slice(0, FB_BOSSES[$('#fb-boss').value]);
+  $('#fb-level').innerHTML = levels.map((l) => '<option>' + l + '</option>').join('');
+  $('#fb-level').value = levels.includes(want) ? want : levels[levels.length - 1];  // 없으면 그 보스의 가장 높은 난이도
+}
+
+function fieldBossSpec() {
+  const chars = pickedSlots('fbChars');
+  if (!chars.length) return null;
+  const pick = { boss: $('#fb-boss').value, difficulty: $('#fb-level').value };
+  try { localStorage.setItem('mm.fieldBoss', JSON.stringify(pick)); } catch (e) { /* 저장 못 해도 이번 카드는 됨 */ }
+  return { kind: 'daily', label: '필드 보스 · ' + pick.boss, chars: chars, only: ['field_boss'], force: true, fieldBoss: pick };
 }
 
 function dailyAmount(x) {
   if (x.only && x.only.length === 1 && x.only[0] === 'drill') return (x.chars || []).length + '명';
+  if (x.only && x.only.length === 1 && x.only[0] === 'field_boss') {
+    return (x.chars || []).length + '명' + (x.fieldBoss ? ' · ' + x.fieldBoss.difficulty : '');
+  }
   return (x.chars || []).length + '명 · ' + (x.only ? '숙제 ' + x.only.length + '개' : '전체') + (x.force ? ' · 다시' : '');
 }
 
@@ -607,17 +661,10 @@ $('#dl-table').addEventListener('change', (e) => {
   } else return;
   paintDailyTable();
 });
-$('#dr-chars').addEventListener('change', (e) => {
-  const b = e.target;
-  if (b.dataset.drChar) {
-    const s = Number(b.dataset.drChar);
-    b.checked ? dl.drillChars.add(s) : dl.drillChars.delete(s);
-  } else return;
-  paintDrillChars();
-});
-$('#dr-all').addEventListener('change', (e) => {
-  dl.drillChars = new Set(e.target.checked ? dl.st.chars.map((c) => c.slot) : []);
-  paintDrillChars();
-});
-$('#dr-start').addEventListener('click', startDrill);
-$('#dr-queue').addEventListener('click', queueDrill);
+bindPick('dr', 'drillChars');
+$('#dr-start').addEventListener('click', () => { const it = drillSpec(); if (it) startHomework(it, '나이트메어 드릴'); });
+$('#dr-queue').addEventListener('click', () => { const it = drillSpec(); if (it) queueHomework(it, '나이트메어 드릴'); });
+bindPick('fb', 'fbChars');
+$('#fb-boss').addEventListener('change', () => paintFieldBossLevels($('#fb-level').value));
+$('#fb-start').addEventListener('click', () => { const it = fieldBossSpec(); if (it) startHomework(it, '필드 보스'); });
+$('#fb-queue').addEventListener('click', () => { const it = fieldBossSpec(); if (it) queueHomework(it, '필드 보스'); });

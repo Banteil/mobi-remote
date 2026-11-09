@@ -37,7 +37,7 @@ from .queue_report import QueueReport, loot
 
 log = logging.getLogger("mabi")
 
-STOP_RANK = {"stopped": 0, "preempt": 1, "pause": 2, "skip": 3, "remove": 3, "skill": 4, "transfer": 4}
+STOP_RANK = {"stopped": 0, "later": 0, "preempt": 1, "pause": 2, "skip": 3, "remove": 3, "skill": 4, "transfer": 4}
 LIVE = ("wait", "run", "pause")  # 아직 할 일이 남은 카드
 
 
@@ -53,6 +53,10 @@ class Kind:
     def run(self, q: "WorkQueue", it: dict) -> bool:
         """카드 하나를 끝까지 (막는다). 끝까지 갔으면 True. 멈췄으면 q.set_stop('stopped') 후 False."""
         raise NotImplementedError
+
+    def ready(self, it: dict) -> str:
+        """지금 돌릴 수 있나 — 안 되면 까닭 (정해진 시간에만 하는 일). 그런 카드는 큐가 비켜 두고 아래 카드를 돌린다."""
+        return ""
 
     def stop(self, reason: str) -> None:
         """큐가 선다 — 돌고 있는 일을 멈춰 달라."""
@@ -382,11 +386,35 @@ class WorkQueue:
                 with self.lock:
                     if self.stop:
                         break
-                    # 위에서부터: 일시정지 카드를 만나면 거기서 선다 (건너뛰고 아래 카드를 돌리지 않는다)
-                    it = next((x for x in self.items if x.get("status") in ("wait", "pause")), None)
-                    if not it or it.get("status") == "pause":
+                    # 위에서부터: 일시정지 카드를 만나면 거기서 선다 (건너뛰고 아래 카드를 돌리지 않는다).
+                    # 정해진 시간에만 하는 카드(필드 보스)가 지금 그 시간이 아니면 비켜 두고 아래 카드를 (ready)
+                    it, later = None, []
+                    for x in self.items:
+                        if x.get("status") not in ("wait", "pause"):
+                            continue
+                        ready = getattr(self.kind_of(x), "ready", None)  # 없는 종류는 늘 준비됨
+                        why = x.get("status") == "wait" and ready and ready(x)
+                        if why:
+                            later.append((x, why))
+                            continue
+                        it = x
+                        break
+                    for x, why in later:
+                        if x.get("note") != why:
+                            x["note"] = why
+                    if not it and later:
+                        it = None  # 기다릴 카드만 남음 — 아래에서 열릴 때까지
+                    elif not it or it.get("status") == "pause":
                         drained = not it
                         break
+                if it is None:
+                    self._changed()
+                    for _ in range(30):  # 30초마다 다시 본다 (멈추면 바로)
+                        if self.stop:
+                            break
+                        time.sleep(1)
+                    continue
+                with self.lock:
                     it["status"] = "run"
                     it["startedAt"] = int(time.time() * 1000)
                     it["note"] = "시작"
@@ -428,6 +456,15 @@ class WorkQueue:
                     self._changed()
                     continue
                 why = self.stop and self.stop["reason"]
+                if why == "later":  # 정해진 시간이 지났다 — 남은 몫은 다음 열림 때 (실패 아님)
+                    it["status"] = "wait"
+                    it["note"] = self.stop.get("note") or "다음에 이어서"
+                    self._record(it, "stop")
+                    report("stop")
+                    with self.lock:
+                        self.stop = None
+                    self._changed()
+                    continue
                 if why == "skip":  # 이 카드만 중단 → 빼고 다음 카드로
                     it["note"] = "중단"
                     self._record(it, "stop")

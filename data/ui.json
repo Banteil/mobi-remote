@@ -78,7 +78,15 @@
     "drill_title": "나이트메어드릴",
     "drill_exit": "나가기",
     "drill_retry": "다시하기",
-    "drill_next": "다음으로"
+    "drill_next": "다음으로",
+    "fb_menu": "필드보스",
+    "fb_title": "필드보스",
+    "fb_move_confirm": "이동하시겠습니까",
+    "fb_enter": "들어가시겠습니까",
+    "fb_skip": "넘기기",
+    "fb_result": "처치완료",
+    "fb_noreward": "보상이없습니다",
+    "fb_exit": "나가시겠습니까"
   },
 
   "regions": {
@@ -120,6 +128,14 @@
     "drill_zone": [20, 140, 300, 60],
     "drill_button": [1240, 960, 620, 90],
     "drill_result_buttons": [600, 950, 720, 110],
-    "drill_result_zone": [760, 220, 400, 55]
+    "drill_result_zone": [760, 220, 400, 55],
+    "fb_title": [20, 10, 320, 70],
+    "fb_list": [20, 80, 230, 640],
+    "fb_difficulty": [300, 185, 420, 55],
+    "fb_dialog": [660, 440, 600, 400],
+    "fb_skip": [1680, 15, 240, 60],
+    "fb_result": [760, 150, 400, 70],
+    "fb_noreward": [560, 560, 800, 60],
+    "fb_exit_button": [1856, 20, 40, 40]
   }
 }

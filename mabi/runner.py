@@ -86,6 +86,7 @@ class RunOptions:
     interface_ready: bool = False
     restore: bool = True
     extra: dict = field(default_factory=dict)  # 리포트에 남길 실행 정보
+    cfg: dict = field(default_factory=dict)    # 이번 실행만 덮어쓸 설정 {칸: {키: 값}} (큐 카드가 고른 필드 보스 등)
 
 
 def _done_view(stored) -> dict:
@@ -150,6 +151,8 @@ class Runner:
     def run(self, opts: RunOptions) -> list[tuple[str, str, str]]:
         paths = self.paths
         cfg = load_config(paths)
+        for k, v in opts.cfg.items():
+            cfg[k] = {**cfg.get(k, {}), **v}
         registry = tasks.build(cfg)
         by_slot = {int(k): v for k, v in cfg["run"].get("tasks_by_slot", {}).items()}
         referenced = (opts.only or []) + cfg["run"]["order"] + [t for v in by_slot.values() for t in v]
@@ -395,10 +398,16 @@ class Runner:
         # 끊긴 숙제도 정해진 순서대로 — 앞 숙제가 실패해 남았으면 그것부터. 끊긴 숙제는 제 차례에 끊긴 단계부터 이어 한다.
         # (예전엔 끊긴 일을 맨 앞으로 당겨 일일 미션보다 아르바이트를 먼저 했다 — 2026-11-02 사용자: 일일 미션 다음에 알바)
         first = True
-        for ch in characters:
+        for n, ch in enumerate(characters):
             who = ch["name"] if ch else "현재 캐릭터"
             slot = ch["slot"] if ch else None
             order = self._order(cfg, opts, by_slot, ch)
+            # 정해진 시간에만 하는 숙제(필드 보스)만 남았는데 지금은 그 시간이 아니면 남은 캐릭터는 다음에 (작업 큐가 그때 다시)
+            if (why := tasks.not_ready(order)):
+                log.info(f"{why} → 남은 캐릭터 {len(characters) - n}명은 다음에")
+                for c in characters[n:]:
+                    results.append((f"[{c['name'] if c else '현재 캐릭터'}]", "WAIT", why))
+                break
             if ch and not opts.force:
                 todo = [t for t in order if not state.is_done(slot, t)]
                 if not todo:

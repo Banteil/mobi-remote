@@ -1,6 +1,6 @@
 """태스크 모음. 각 태스크는 run(bot, cfg) -> str 형태이고, 반환값은 실행 요약 문자열이다.
 캐릭터 접속(login)은 run.py 가 캐릭터마다 먼저 실행하므로 여기 목록에는 없다."""
-from . import arbeit, black_hole, daily_mission, drill, silver, tribute, weekday
+from . import arbeit, black_hole, daily_mission, drill, field_boss, silver, tribute, weekday
 
 TASKS = {
     "weekday_dungeon": ("요일 던전", weekday.run),
@@ -11,7 +11,20 @@ TASKS = {
     "arbeit": ("아르바이트", arbeit.run),
     # 기타 숙제 — 일일 순서(run.order)에는 없고, 숙제 탭의 '기타 숙제' 에서 이것만 골라 돈다 (only)
     "drill": ("나이트메어 드릴", drill.run),
+    # 주간 숙제 — 숙제 탭의 '주간 숙제' 에서 이것만 골라 돈다 (only). 열린 시간(12·18·20·22시부터 30분)에만 — READY
+    "field_boss": ("필드 보스", field_boss.run),
 }
+
+# 지금 시작해도 되나 — 안 되면 까닭 (열린 시간이 아님 등). 그 숙제만 도는 카드는 될 때까지 큐에서 비켜 있다 (작업 큐)
+READY = {
+    "field_boss": field_boss.not_ready,
+}
+
+
+def not_ready(order) -> str:
+    """order 의 숙제 중 지금 시작하면 안 되는 것의 까닭 (모두 그런 숙제일 때만 — 섞여 있으면 다른 숙제는 한다)."""
+    whys = [READY[t]() if t in READY else "" for t in order or ()]
+    return whys[0] if whys and all(whys) else ""
 
 
 # 확인 결과 남아도 '남음(직접 처리)' 으로 두고 다시 시작할 때 넘기는 숙제 (자동으로는 더 할 수 없는 것만 남는다)
@@ -26,6 +39,7 @@ VERIFY = {
     "daily_mission": daily_mission.verify,
     "arbeit": arbeit.verify,
     "drill": drill.verify,
+    "field_boss": field_boss.verify,
 }
 
 

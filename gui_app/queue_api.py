@@ -105,7 +105,8 @@ class DailyKind(Kind):
         opts = RunOptions(chars=it.get("chars") or None, only=it.get("only") or None, force=bool(it.get("force")),
                           display=fit, interface_ready=bool(q.session.get("iface")),
                           restore=False,  # 되돌리기는 큐가 다 끝날 때 한 번 (_q_drained)
-                          extra={"from": "queue"})
+                          extra={"from": "queue"},
+                          cfg={"field_boss": it["fieldBoss"]} if it.get("fieldBoss") else {})
 
         def on_event(e):
             fields = {}
@@ -132,6 +133,10 @@ class DailyKind(Kind):
         if any(s == "STOP" for _, s, _ in val or []):  # F12·멈추기 → 일시정지 (F12 나 ▶ 로 이어 함)
             q.set_stop("stopped")
             return False
+        wait = [summary for _, s, summary in val or [] if s == "WAIT"]
+        if wait:  # 정해진 시간에만 하는 숙제(필드 보스)가 닫혔다 — 실패가 아니라 다음 열림까지 대기로
+            q.set_stop("later", {"note": f"{len(wait)}명 남음 · {wait[0]}"})
+            return False
         # 끝까지 돌았어도 끝나지 않은 숙제가 있으면 '완료' 로 치우지 않는다 — 6명 모두 접속에 실패했는데 카드가
         # 완료로 사라져 다 된 줄 알았다 (2026-10-30). 실패 카드로 남겨 ▶ 로 다시 걸면 오늘 끝난 숙제는 넘기고 남은 것만 한다
         bad = [label for label, s, _ in val or [] if s in FAILED]
@@ -140,6 +145,11 @@ class DailyKind(Kind):
                        " — 결과 창 확인 · ▶ 로 남은 것만 다시")
             return False
         return True
+
+    def ready(self, it) -> str:
+        """정해진 시간에만 하는 숙제만 담은 카드(필드 보스)는 그 시간이 아니면 까닭을 돌려준다 — 큐가 비켜 두고 다음 카드를."""
+        from mabi import tasks
+        return tasks.not_ready(it.get("only"))
 
     def stop(self, reason):
         # 카드를 뺐으면 종료, 아니면 일시정지 (진행 기록으로 끊긴 자리부터 이어 한다)
