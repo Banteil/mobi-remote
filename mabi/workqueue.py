@@ -58,6 +58,10 @@ class Kind:
         """지금 돌릴 수 있나 — 안 되면 까닭 (정해진 시간에만 하는 일). 그런 카드는 큐가 비켜 두고 아래 카드를 돌린다."""
         return ""
 
+    def timed(self, it: dict) -> bool:
+        """정해진 시간에만 하는 카드인가 — 열리면(ready 가 "") 돌던 카드를 끊어도 되는 자리에서 끊고 먼저 한다 (cut_for_timed)."""
+        return False
+
     def stop(self, reason: str) -> None:
         """큐가 선다 — 돌고 있는 일을 멈춰 달라."""
 
@@ -290,6 +294,26 @@ class WorkQueue:
             self.items.insert(at + 1, it)
         self._changed()
         self.tick()
+
+    def cut_for_timed(self) -> str:
+        """시간 정해진 카드(Kind.timed)가 지금 열렸으면 그 카드를 맨 위로 올리고 돌던 카드를 밀어낸다 ('지금 바로' 와 같은
+        preempt — 밀린 카드는 대기로 돌아가 그 카드가 끝나면 끊긴 자리부터 이어 한다). 돌던 일이 끊어도 되는 자리에서
+        부른다 (mabi/cutpoint). 밀어냈으면 까닭, 아니면 ""."""
+        with self.lock:
+            cur = self.current()
+            timed = lambda x: getattr(self.kind_of(x), "timed", lambda _: False)(x)  # noqa: E731 — 없는 종류는 아님
+            if not cur or self.stop or timed(cur):
+                return ""
+            due = next((x for x in self.items if x.get("status") == "wait" and timed(x) and not self.kind_of(x).ready(x)),
+                       None)
+            if not due:
+                return ""
+            self.items.remove(due)
+            self.items.insert(0, due)
+            cur["note"] = f"'{due.get('label')}' 먼저 — 끝나면 이어서"
+        self._changed()
+        self.request_stop("preempt")
+        return f"'{due.get('label')}' 열림"
 
     def pause_one(self, item_id) -> None:
         """돌고 있는 이 카드에서 일시정지 (이번 걸음을 마치고)."""

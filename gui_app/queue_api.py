@@ -151,6 +151,11 @@ class DailyKind(Kind):
         from mabi import tasks
         return tasks.not_ready(it.get("only"))
 
+    def timed(self, it) -> bool:
+        """정해진 시간에만 하는 숙제(tasks.READY)만 담은 카드인가."""
+        from mabi import tasks
+        return tasks.timed(it.get("only"))
+
     def stop(self, reason):
         # 카드를 뺐으면 종료, 아니면 일시정지 (진행 기록으로 끊긴 자리부터 이어 한다)
         self.api.daily_stop(reason in ("remove", "skip"))
@@ -423,6 +428,8 @@ class QueueApi:
                                 "action": ActionKind(self)},
                                on_drained=self._q_drained, pause_note=self._q_pause_note,
                                snap=self._q_snap, on_report=self._q_report)
+        from mabi import cutpoint
+        cutpoint.set_hook(self.queue.cut_for_timed)  # 시간 정해진 카드가 열리면 돌던 일을 끊어도 되는 자리에서 끊는다
         threading.Thread(target=self._q_hotkey, name="queue-f12", daemon=True).start()
 
     # ---- 결과 창: 큐가 다 비면 (다 끝남·전체 중단·마지막 카드 뺌) mabi/workqueue 가 보고서를 넘긴다

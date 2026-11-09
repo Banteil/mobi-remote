@@ -21,7 +21,7 @@ from .digits import DigitReader
 from .connector import Connector
 from .game_state import GameState
 from .inputs import Input, StopWatcher, post_key, vk_of
-from . import judge, packet_monitor
+from . import cutpoint, judge, packet_monitor
 from .blackbox import BlackBox
 from .screen import Screen
 from .vision import Match, Vision
@@ -160,6 +160,8 @@ class Bot:
             self.daily.set_step(self.character["slot"], self.task_id, step, text, **data)
         if self.on_step:
             self.on_step(step, text)  # runner._emit 이 화면 쪽 오류를 삼킨다
+        # 정해진 시간에만 하는 일이 열렸으면 여기(단계가 바뀌는 때)서 끊고 그 일을 먼저 — 기록한 뒤라 이 단계부터 이어 한다
+        cutpoint.check(self, step)
 
     def check_in(self) -> None:
         """작업·숙제를 시작할 때마다 (처음이든 일시정지 뒤 이어 하기든) 지금 상태부터 다시 본다 — 패킷이 기억하는 지난

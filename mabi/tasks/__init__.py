@@ -15,10 +15,17 @@ TASKS = {
     "field_boss": ("필드 보스", field_boss.run),
 }
 
-# 지금 시작해도 되나 — 안 되면 까닭 (열린 시간이 아님 등). 그 숙제만 도는 카드는 될 때까지 큐에서 비켜 있다 (작업 큐)
+# 정해진 시간에만 하는 숙제 → 지금 시작하면 안 되는 까닭 (열린 시간이 아님 등, 되면 ""). 새로 생기면 여기에 한 줄.
+# 이 숙제들만 담은 카드는 작업 큐가 '시간 정해진 카드' 로 다룬다 (DailyKind.timed · ready): 닫혀 있으면 비켜 있다가,
+# 열리면 돌던 카드를 끊어도 되는 자리에서 끊고 먼저 (mabi/cutpoint)
 READY = {
     "field_boss": field_boss.not_ready,
 }
+
+
+def timed(order) -> bool:
+    """정해진 시간에만 하는 숙제만으로 된 순서인가."""
+    return bool(order) and all(t in READY for t in order)
 
 
 def not_ready(order) -> str:
