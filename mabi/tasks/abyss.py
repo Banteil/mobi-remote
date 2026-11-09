@@ -224,7 +224,15 @@ def _open_list(bot: Bot, menu_open: bool = False) -> None:
 
 
 def loot_pending(bot: Bot) -> tuple[int, int] | None:
-    """어비스 목록 왼쪽 아래 '주간 전리품' 칸의 '전리품 받기' 버튼 자리 — 정산할 게 남았을 때만 (받고 나면 '전리품 보기')."""
+    """어비스 목록 왼쪽 아래 '주간 전리품' 칸의 '전리품 받기' 버튼 자리 — 정산할 게 남았을 때만.
+    글자만으로는 모른다: 정산한 뒤에도 버튼은 '전리품 받기' 그대로 흐려지고 'N일 후 수령 가능' 이 붙는다 (2026-11-09 11:27
+    이걸 정산 남음으로 보고 눌러 움직이지 않아 실패). 받을 수 있을 때만 버튼 오른쪽 위에 빨간 점이 있다."""
+    x, y, w, h = gd.region("abyss_loot_dot")
+    dot = bot.frame()[y:y + h, x:x + w].astype(int)
+    b, g, r = dot[..., 0], dot[..., 1], dot[..., 2]
+    # 팝업에 가려 어두워져도 빨강은 남는다 (어둡게 가린 화면에서 RGB 63,08,03)
+    if int(((r > 70) & (r > 3 * g) & (r > 3 * b)).sum()) < 12:
+        return None
     return _find_text(bot, gd.text("abyss_loot"), gd.region("abyss_loot"))
 
 

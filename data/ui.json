@@ -92,6 +92,7 @@
     "abyss_difficulty": [40, 160, 700, 60],
     "abyss_entry_right": [1180, 560, 740, 500],
     "abyss_loot": [40, 890, 660, 130],
+    "abyss_loot_dot": [628, 908, 36, 32],
     "abyss_loot_done": [760, 190, 400, 90],
     "abyss_popup": [660, 740, 600, 140],
     "confirm_button": [460, 300, 1000, 780],
