@@ -23,6 +23,7 @@ async function loadDaily() {
   paintDailyTable();
   paintDrillChars();
   paintFieldBoss();
+  paintPick('vg', 'vgChars');
   paintDailyRunning(dl.st.running);
   paintDailySettings();
 }
@@ -224,6 +225,12 @@ function drillSpec() {
   return chars.length ? { kind: 'daily', label: '나이트메어 드릴', chars: chars, only: ['drill'], force: true } : null;
 }
 
+/* 주간 숙제 — 뱅가드 브리치. 이번 주에 했는지는 들어가기 전에 게임(성장 가이드)으로 보므로 늘 force */
+function vanguardSpec() {
+  const chars = pickedSlots('vgChars');
+  return chars.length ? { kind: 'daily', label: '뱅가드 브리치', chars: chars, only: ['vanguard'], force: true } : null;
+}
+
 /* 주간 숙제 — 필드 보스. 일일 숙제 카드(kind 'daily')에 only=['field_boss'] 로, 고른 보스·난이도는 카드의 fieldBoss.
  * 이번 주에 잡았는지는 들어가기 전에 게임(성장 가이드)으로 보므로 늘 force. 열린 시간(12·18·20·22시부터 30분)이
  * 아니면 큐에서 비켜 있다가 열리면 돈다 (gui_app DailyKind.ready) */
@@ -257,7 +264,7 @@ function fieldBossSpec() {
 }
 
 function dailyAmount(x) {
-  if (x.only && x.only.length === 1 && x.only[0] === 'drill') return (x.chars || []).length + '명';
+  if (x.only && x.only.length === 1 && ['drill', 'vanguard'].includes(x.only[0])) return (x.chars || []).length + '명';
   if (x.only && x.only.length === 1 && x.only[0] === 'field_boss') {
     return (x.chars || []).length + '명' + (x.fieldBoss ? ' · ' + x.fieldBoss.difficulty : '');
   }
@@ -668,3 +675,6 @@ bindPick('fb', 'fbChars');
 $('#fb-boss').addEventListener('change', () => paintFieldBossLevels($('#fb-level').value));
 $('#fb-start').addEventListener('click', () => { const it = fieldBossSpec(); if (it) startHomework(it, '필드 보스'); });
 $('#fb-queue').addEventListener('click', () => { const it = fieldBossSpec(); if (it) queueHomework(it, '필드 보스'); });
+bindPick('vg', 'vgChars');
+$('#vg-start').addEventListener('click', () => { const it = vanguardSpec(); if (it) startHomework(it, '뱅가드 브리치'); });
+$('#vg-queue').addEventListener('click', () => { const it = vanguardSpec(); if (it) queueHomework(it, '뱅가드 브리치'); });

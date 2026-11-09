@@ -168,27 +168,35 @@ def daily_achieved(bot: Bot, label: str) -> bool:
     return done
 
 
-def daily_tab(bot: Bot) -> None:
-    """(가이드가 열린 채로) '일일 콘텐츠' 탭을 누른다. 가이드는 마지막에 본 탭으로 열리는데, 주간 콘텐츠 탭에도
+def guide_tab(bot: Bot, weekly: bool = False) -> None:
+    """(가이드가 열린 채로) '일일 콘텐츠' · '주간 콘텐츠' 탭을 누른다. 가이드는 마지막에 본 탭으로 열리는데, 주간 콘텐츠 탭에도
     같은 제목의 카드(검은 구멍)가 있어 일일 것을 다 한 날에도 주간 카드의 바로 가기를 눌렀다 (2026-11-02)."""
     from .. import gamedata as gd
     from . import ui_text
-    hit = ui_text.find(bot, gd.text("guide_daily_tab"), gd.region("guide_tabs"), exact=False)
+    name = "주간 콘텐츠" if weekly else "일일 콘텐츠"
+    hit = ui_text.find(bot, gd.text("guide_weekly_tab" if weekly else "guide_daily_tab"), gd.region("guide_tabs"), exact=False)
     if not hit:
         bot.to_main()
-        raise CannotProceed(f"콘텐츠 가이드의 '일일 콘텐츠' 탭을 찾지 못함 → {bot.snapshot('guide').name}")
+        raise CannotProceed(f"콘텐츠 가이드의 '{name}' 탭을 찾지 못함 → {bot.snapshot('guide').name}")
     bot.click(hit)
     bot.sleep(0.8, 1.2)
 
 
-def open_guide_card(bot: Bot, card: str, opened: bool = False) -> bool:
-    """'/' 콘텐츠 가이드의 일일 콘텐츠에서 card(카드 제목 템플릿)의 '바로 가기'를 누른다.
-    오늘 끝낸 콘텐츠는 카드가 사라지므로 카드가 없으면 False (= 이미 완료). opened: 가이드가 이미 열려 있다."""
+def open_guide_card(bot: Bot, card: str, opened: bool = False, weekly: bool = False, text: bool = False) -> bool:
+    """'/' 콘텐츠 가이드의 일일(weekly 면 주간) 콘텐츠에서 card 카드의 '바로 가기'를 누른다. card 는 카드 제목 템플릿,
+    text 면 제목 글자 (카드 칸 guide_cards 에서 OCR — 위 '주간 달성' 칸의 같은 이름과 섞이지 않게).
+    끝낸 콘텐츠는 카드가 사라지므로 카드가 없으면 False (= 이미 완료). opened: 가이드가 이미 열려 있다."""
+    from .. import gamedata as gd
+    from . import ui_text
     ui = bot.ui
     if not opened:
         open_guide(bot)
-    daily_tab(bot)
-    title = bot.find(card)
+    guide_tab(bot, weekly)
+    if text:
+        hit = ui_text.find(bot, card, gd.region("guide_cards"), exact=False)
+        title = type("Title", (), {"x": hit[0], "y": hit[1]}) if hit else None
+    else:
+        title = bot.find(card)
     if not title:
         bot.to_main()
         return False
