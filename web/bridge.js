@@ -90,7 +90,7 @@
     },
     update: {
       check: c('update.check'), download: c('update.download'), install: c('update.install'), page: c('update.page'),
-      notes: c('update.notes'),
+      notes: c('update.notes'), whatsNew: c('update.whatsNew'), seen: c('update.seen'),
       onProgress: (cb) => on('mm:update-progress', cb),
     },
     cursorNudge: c('cursor.nudge'),

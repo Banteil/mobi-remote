@@ -176,9 +176,9 @@ async function checkUpdate() {
   return r;
 }
 
-/* ── 패치 내역 ── 릴리스 본문을 판마다 보여 준다.
- * which: 'newer' 받을 새 판들 · 'all' 최근 판 전부 · {after} 그 판 뒤부터 지금 판까지 (패치 받고 처음 켰을 때)
- *        · {after: null} 지금 판만 (이 기능이 들어간 판을 처음 켰을 때 — 전에 본 판을 모른다) */
+/* ── 패치 내역 ── 릴리스 본문을 버전마다 보여 준다.
+ * which: 'newer' 받을 새 버전들 · 'all' 최근 버전 전부 · {after} 그 버전 뒤부터 지금 버전까지 (패치 받고 처음 켰을 때)
+ *        · {after: null} 지금 버전만 (본 버전 기록이 없는 설치판을 처음 켰을 때) */
 function verCmp(a, b) {
   const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
   for (let i = 0; i < Math.max(x.length, y.length); i++) {
@@ -206,8 +206,8 @@ function notesHtml(md) {
 
 async function showNotes(which) {
   const body = $('#relnotes-body');
-  $('#relnotes-title').textContent = which === 'newer' ? '새 판에서 바뀐 점'
-    : which === 'all' ? '패치 내역' : '이번 판에서 바뀐 점';
+  $('#relnotes-title').textContent = which === 'newer' ? '새 버전에서 바뀐 점'
+    : which === 'all' ? '패치 내역' : '이번 버전에서 바뀐 점';
   body.innerHTML = '<p class="muted">불러오는 중…</p>';
   $('#relnotes').classList.remove('hidden');
   const r = await mm.update.notes().catch((e) => ({ ok: false, error: e.message }));
@@ -219,24 +219,21 @@ async function showNotes(which) {
     : which === 'all' ? true : which.after ? verCmp(x.version, which.after) > 0 && !x.newer : x.current);
   body.innerHTML = rels.length ? rels.map((x) =>
     '<div class="card"><h3 class="rel-ver">' + esc(x.version) +
-    (x.current ? ' <span class="pill pill-ok">지금 판</span>' : x.newer ? ' <span class="pill pill-warn">새 판</span>' : '') +
+    (x.current ? ' <span class="pill pill-ok">지금 버전</span>' : x.newer ? ' <span class="pill pill-warn">새 버전</span>' : '') +
     ' <small>' + esc(x.date) + '</small></h3><div class="rel-body">' +
     (notesHtml(x.notes) || '<p class="muted">적힌 내용이 없습니다</p>') + '</div></div>').join('')
     : '<p class="muted">보여 줄 내역이 없습니다</p>';
   return Object.assign({}, r, { shown: rels.length });
 }
 
-// 패치를 받고 처음 켜졌으면 그 사이 판들의 바뀐 점을 한 번 띄운다 (판마다 한 번 — 본 판은 기억해 둔다)
+// 패치를 받고 처음 켜졌으면 그 사이 버전들의 바뀐 점을 한 번 띄운다. 띄울지·본 버전은 파이썬이 정하고 기억한다
+// (update_whatsNew — 화면 저장소는 켤 때마다 비어 여기서 기억하면 매번 떴다)
 async function showNotesAfterUpdate() {
-  const now = mm.appInfo && mm.appInfo.version;
-  if (!now) return;
-  let seen = null;
-  try { seen = localStorage.getItem('mm.seenVersion'); } catch (e) { return; }  // 기억 못 하면 매번 뜨므로 안 띄운다
-  if (!seen || verCmp(now, seen) > 0) {
-    const r = await showNotes({ after: seen });
-    if (!r || !r.ok || !r.shown) { $('#relnotes').classList.add('hidden'); if (!r || !r.ok) return; }  // 오프라인이면 다음에
-  }
-  try { localStorage.setItem('mm.seenVersion', now); } catch (e) { /* 다음에 다시 */ }
+  const w = await mm.update.whatsNew().catch(() => null);
+  if (!w || !w.show) return;
+  const r = await showNotes({ after: w.after });
+  if (!r || !r.ok || !r.shown) { $('#relnotes').classList.add('hidden'); if (!r || !r.ok) return; }  // 오프라인이면 다음에
+  mm.update.seen(w.version);
 }
 
 /* ══ 새 판 알림 끝 ══════════════════════════════════════════════ */

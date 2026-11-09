@@ -803,6 +803,19 @@ class Api(DailyApi, CharsApi, QueueApi):
         out.sort(key=lambda x: _ver(x["version"]), reverse=True)
         return {"ok": True, "app": APP_VERSION, "releases": out, "page": self.UPDATE_PAGE}
 
+    def update_whatsNew(self):  # noqa: N802
+        """켤 때 '이번 버전에서 바뀐 점' 을 띄울까 — 설치판이 지난번에 본 버전(settings seenVersion)보다 올랐을 때만.
+        {show, after(지난번에 본 버전, 모르면 None = 이번 버전만), version}. 띄운 뒤 화면이 update_seen 으로 기록한다.
+        본 버전을 화면 저장소(localStorage)에 두었더니 웹 화면 프로필이 기록을 남기지 않아(off-the-record) 켤 때마다 비어,
+        패치를 받지 않은 소스 실행에서도 매번 떴다 (2026-11-09 사용자). 소스로 돌리는 판은 패치를 받지 않으므로 띄우지 않는다."""
+        seen = self.settings.get("seenVersion")
+        show = bool(self._install_home()) and (not seen or _ver(seen) < _ver(APP_VERSION))
+        return {"show": show, "after": seen if show else None, "version": APP_VERSION}
+
+    def update_seen(self, version=None):
+        self._save_settings({"seenVersion": version or APP_VERSION})
+        return {"ok": True}
+
     def update_download(self, asset=None):
         """설치 파일은 임시 폴더, 패치는 설치 폴더 update\\ 에 받는다 (다 받은 뒤에 제 이름으로 — 받다 만 파일을 쓰지 않게)."""
         import tempfile
