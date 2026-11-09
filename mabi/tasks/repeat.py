@@ -8,6 +8,7 @@ raid.RaidRepeat). 공통으로 쥐는 것: 판 수·시간·사망 집계, 진�
 import ctypes
 import time
 
+from .. import cutpoint
 from ..bot import Bot
 from . import login, repair
 from .boss_skills import BossSkills, slot_of
@@ -85,6 +86,19 @@ class Repeat:
         self.bot.log.info(f"클리어 {self.stat['clears']}판 (부활 {self.stat['revives']} · 쓰러져 나감 {self.stat['deaths']} "
                           f"· 경과 {secs // 60}분 {secs % 60}초)")
         self.emit(stage="clear")
+
+    def yield_between(self, go_out) -> bool:
+        """판 사이에 시간 정해진 카드(필드 보스)가 열렸으면 다시 하기 대신 go_out() 으로 나간다 → True. 다음 입장 단계(필드)
+        에서 작업 큐가 이 카드를 밀어내고 그 카드를 먼저 한 뒤 이어 한다 (cutpoint). 마지막 판 뒤엔 어차피 나가므로 안 본다.
+        사용자: 어비스·레이드처럼 판 중간에 끊기 애매한 것은 클리어 뒤에 비켜 준다 (2026-11-09)."""
+        if self.done():
+            return False
+        why = cutpoint.due()
+        if not why:
+            return False
+        self.bot.log.info(f"{why} → 판이 끝났으니 다시 하기 대신 나가서 비켜 줌 (끝나면 이어서)")
+        go_out()
+        return True
 
     def repair_between(self, go_out) -> bool:
         """판 사이 수리. 마지막 판 뒤엔 가지 않는다. go_out() 으로 콘텐츠를 나가 대장간에서 수리했으면 True."""

@@ -7,6 +7,8 @@
     따로 들어가는 곳 안이면 그 판이 끝나 밖으로 나온 뒤의 단계에서 끊는다 — 중간에 나가면 판·횟수·재화가 날아간다.
   - 맵을 모르면 (로딩 중·패킷 없음) 끊지 않는다. 매칭을 걸어 둔 채 · 쓰러진 채도 끊지 않는다.
   봇 없이 CLI 걸음으로 도는 일(제작·가공·채집 목표 카드)은 걸음 사이가 늘 끊어도 되는 자리라 그 사이마다 cut 을 바로 부른다.
+  어비스·레이드 반복은 판이 끝나면 '다시 하기' 로 안에서 다음 판을 잡아 필드에 나오지 않는다 — 판 사이에 due() 로 묻고
+  열렸으면 다시 하기 대신 나간다 (tasks.repeat.yield_between). 그러면 다음 입장 단계(필드)에서 여기서 끊긴다.
 끊는 일은 작업 큐가 한다 (set_hook — 그 카드를 맨 위로 올리고 지금 카드를 밀어낸다 → 봇은 다음 대기에서 멈춘다).
 """
 import logging
@@ -17,11 +19,23 @@ OPEN_FIELD = "Field"            # 마을·일반 필드의 맵 종류 (사냥터
 NO_CUT_STEPS = ("abyss_match",)  # 입장을 누른 뒤에 기록하는 단계 — 아직 필드에 있어도 곧 들어간다
 
 _hook = None  # () -> str: 먼저 할 일이 있어 지금 카드를 밀어냈으면 까닭, 아니면 "" (작업 큐)
+_due = None   # () -> str: 먼저 할 일이 열렸나 — 묻기만 (작업 큐)
 
 
-def set_hook(fn) -> None:
-    global _hook
-    _hook = fn
+def set_hook(fn, due=None) -> None:
+    global _hook, _due
+    _hook, _due = fn, due
+
+
+def due() -> str:
+    """먼저 할 일이 열려 있나 (밀어내지는 않는다). 열렸으면 까닭, 아니면 ""."""
+    if _due is None:
+        return ""
+    try:
+        return _due() or ""
+    except Exception:  # noqa: BLE001 — 끼워 넣기 확인이 하던 일을 막으면 안 된다
+        log.exception("끼워 넣기 확인 실패")
+        return ""
 
 
 def safe(bot) -> bool:

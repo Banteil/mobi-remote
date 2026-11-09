@@ -295,19 +295,31 @@ class WorkQueue:
         self._changed()
         self.tick()
 
+    def _timed_due(self):
+        """(lock 안에서) 돌던 카드를 밀어내고 먼저 할 시간 정해진 카드 (Kind.timed 이고 지금 열림). 없으면 None.
+        돌던 카드가 없거나, 큐가 서는 중이거나, 돌던 카드가 그런 카드면 없다."""
+        cur = self.current()
+        timed = lambda x: getattr(self.kind_of(x), "timed", lambda _: False)(x)  # noqa: E731 — 없는 종류는 아님
+        if not cur or self.stop or timed(cur):
+            return None
+        return next((x for x in self.items if x.get("status") == "wait" and timed(x) and not self.kind_of(x).ready(x)),
+                    None)
+
+    def timed_due(self) -> str:
+        """먼저 할 시간 정해진 카드가 열렸나 — 묻기만 한다 (판 사이에 '다시 하기' 대신 나갈지 정할 때). 열렸으면 까닭, 아니면 ""."""
+        with self.lock:
+            due = self._timed_due()
+        return f"'{due.get('label')}' 열림" if due else ""
+
     def cut_for_timed(self) -> str:
         """시간 정해진 카드(Kind.timed)가 지금 열렸으면 그 카드를 맨 위로 올리고 돌던 카드를 밀어낸다 ('지금 바로' 와 같은
         preempt — 밀린 카드는 대기로 돌아가 그 카드가 끝나면 끊긴 자리부터 이어 한다). 돌던 일이 끊어도 되는 자리에서
         부른다 (mabi/cutpoint). 밀어냈으면 까닭, 아니면 ""."""
         with self.lock:
-            cur = self.current()
-            timed = lambda x: getattr(self.kind_of(x), "timed", lambda _: False)(x)  # noqa: E731 — 없는 종류는 아님
-            if not cur or self.stop or timed(cur):
-                return ""
-            due = next((x for x in self.items if x.get("status") == "wait" and timed(x) and not self.kind_of(x).ready(x)),
-                       None)
+            due = self._timed_due()
             if not due:
                 return ""
+            cur = self.current()
             self.items.remove(due)
             self.items.insert(0, due)
             cur["note"] = f"'{due.get('label')}' 먼저 — 끝나면 이어서"

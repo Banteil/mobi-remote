@@ -588,7 +588,7 @@ class RaidRepeat(Repeat):
                         continue
                     go_out()
                     break
-                if self.repair_between(go_out):
+                if self.yield_between(go_out) or self.repair_between(go_out):
                     stage = "entry"
                     continue
                 if self.done():

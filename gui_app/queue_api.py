@@ -430,7 +430,8 @@ class QueueApi:
                                 "action": ActionKind(self)},
                                on_drained=self._q_drained, pause_note=self._q_pause_note,
                                snap=self._q_snap, on_report=self._q_report)
-        cutpoint.set_hook(self.queue.cut_for_timed)  # 시간 정해진 카드가 열리면 돌던 일을 끊어도 되는 자리에서 끊는다
+        # 시간 정해진 카드가 열리면 돌던 일을 끊어도 되는 자리에서 끊는다
+        cutpoint.set_hook(self.queue.cut_for_timed, self.queue.timed_due)
         threading.Thread(target=self._q_hotkey, name="queue-f12", daemon=True).start()
 
     # ---- 결과 창: 큐가 다 비면 (다 끝남·전체 중단·마지막 카드 뺌) mabi/workqueue 가 보고서를 넘긴다

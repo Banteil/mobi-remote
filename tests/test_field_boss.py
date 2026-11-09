@@ -167,6 +167,28 @@ class QueueSkipTest(unittest.TestCase):
         self.assertTrue(self.wait_for(lambda: k.ran == ["긴 일", "필보"], timeout=35))
         self.assertEqual(cut, ["", ""])
 
+    def test_timed_due_only_asks(self):
+        # 판 사이에 묻기만 한다 (어비스 '다시 하기' 대신 나갈지) — 카드를 옮기거나 큐를 세우지 않는다
+        k, q = self.k, self.q
+        k.timed = lambda it: it.get("label") == "필보"
+        asked = []
+
+        def run(q_, it):
+            if it["label"] == "긴 일":
+                asked.append(q_.timed_due())
+                k.open = True
+                asked.append(q_.timed_due())
+                asked.append([x["label"] for x in q_.items])
+                asked.append(q_.stop)
+            k.ran.append(it["label"])
+            return True
+        k.run = run
+        q.add({"kind": "daily", "label": "긴 일"})
+        q.add({"kind": "daily", "label": "필보"})
+        q.tick()
+        self.assertTrue(self.wait_for(lambda: k.ran == ["긴 일", "필보"]))
+        self.assertEqual(asked, ["", "'필보' 열림", ["긴 일", "필보"], None])
+
     def test_pause_while_waiting(self):
         self.q.add({"kind": "daily", "label": "필보"})
         self.q.tick()
@@ -174,6 +196,31 @@ class QueueSkipTest(unittest.TestCase):
         self.q.pause()
         self.assertTrue(self.wait_for(lambda: not self.q.running, timeout=3))
         self.assertEqual(self.k.ran, [])
+
+
+
+class YieldBetweenTest(unittest.TestCase):
+    """어비스·레이드 반복의 판 사이 (tasks.repeat.Repeat.yield_between)."""
+
+    def run_yield(self, due, done=False):
+        from mabi.tasks.repeat import Repeat
+        me = types.SimpleNamespace(done=lambda: done, bot=types.SimpleNamespace(log=types.SimpleNamespace(info=lambda m: None)))
+        out = []
+        cutpoint.set_hook(lambda: "", lambda: due)
+        try:
+            got = Repeat.yield_between(me, lambda: out.append("나감"))
+        finally:
+            cutpoint.set_hook(None)
+        return got, out
+
+    def test_leaves_when_timed_card_open(self):
+        self.assertEqual(self.run_yield("'필보' 열림"), (True, ["나감"]))
+
+    def test_retries_when_nothing_due(self):
+        self.assertEqual(self.run_yield(""), (False, []))
+
+    def test_last_round_not_asked(self):
+        self.assertEqual(self.run_yield("'필보' 열림", done=True), (False, []))
 
 
 if __name__ == "__main__":

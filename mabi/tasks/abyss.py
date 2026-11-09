@@ -700,7 +700,7 @@ class AbyssRepeat(Repeat):
                 if self.done():
                     exit_reward(bot)
                     break
-                if self.repair_between(lambda: exit_reward(bot)):
+                if self.yield_between(lambda: exit_reward(bot)) or self.repair_between(lambda: exit_reward(bot)):
                     stage = "entry"
                     continue
                 self._again()
