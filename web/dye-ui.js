@@ -141,6 +141,11 @@ async function wireUpdate() {
 
   // 켜자마자 묻지 않는다. 첫 화면이 다 그려진 뒤에 조용히 확인한다.
   setTimeout(checkUpdate, 4000);
+  setTimeout(showNotesAfterUpdate, 2500);
+
+  $('#update-notes').addEventListener('click', () => showNotes('newer'));
+  $('#relnotes-close').addEventListener('click', () => $('#relnotes').classList.add('hidden'));
+  document.addEventListener('click', (e) => { if (e.target.closest('#upd-notes')) showNotes('all'); });
 
   // 옵션 창 '새 판 확인' — 다시 켜지 않고 그 자리에서 묻는다 (버전 칸은 옵션을 열 때마다 새로 그려진다)
   document.addEventListener('click', async (e) => {
@@ -169,6 +174,69 @@ async function checkUpdate() {
   if (!updUI.file) showUpdate('새 판이 나왔습니다 — ' + r.version + size, true);
   else $('#update-banner').classList.remove('hidden');
   return r;
+}
+
+/* ── 패치 내역 ── 릴리스 본문을 판마다 보여 준다.
+ * which: 'newer' 받을 새 판들 · 'all' 최근 판 전부 · {after} 그 판 뒤부터 지금 판까지 (패치 받고 처음 켰을 때)
+ *        · {after: null} 지금 판만 (이 기능이 들어간 판을 처음 켰을 때 — 전에 본 판을 모른다) */
+function verCmp(a, b) {
+  const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const d = (x[i] || 0) - (y[i] || 0);
+    if (d) return d;
+  }
+  return 0;
+}
+
+function notesHtml(md) {
+  // 릴리스에 쓰는 마크다운만: ## 제목, - 줄, **굵게**. 나머지는 글자 그대로
+  const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  let html = '', list = false;
+  for (const raw of String(md || '').split(/\r?\n/)) {
+    const line = raw.trim();
+    const li = line.match(/^[-*]\s+(.*)$/);
+    if (list && !li) { html += '</ul>'; list = false; }
+    if (!line) continue;
+    if (li) { if (!list) { html += '<ul>'; list = true; } html += '<li>' + inline(li[1]) + '</li>'; continue; }
+    const h = line.match(/^#{1,6}\s+(.*)$/);
+    html += h ? '<h4>' + inline(h[1]) + '</h4>' : '<p>' + inline(line) + '</p>';
+  }
+  return html + (list ? '</ul>' : '');
+}
+
+async function showNotes(which) {
+  const body = $('#relnotes-body');
+  $('#relnotes-title').textContent = which === 'newer' ? '새 판에서 바뀐 점'
+    : which === 'all' ? '패치 내역' : '이번 판에서 바뀐 점';
+  body.innerHTML = '<p class="muted">불러오는 중…</p>';
+  $('#relnotes').classList.remove('hidden');
+  const r = await mm.update.notes().catch((e) => ({ ok: false, error: e.message }));
+  if (!r || !r.ok) {
+    body.innerHTML = '<p class="muted">패치 내역을 받지 못했습니다' + (r && r.error ? ' — ' + esc(r.error) : '') + '</p>';
+    return r;
+  }
+  const rels = r.releases.filter((x) => which === 'newer' ? x.newer
+    : which === 'all' ? true : which.after ? verCmp(x.version, which.after) > 0 && !x.newer : x.current);
+  body.innerHTML = rels.length ? rels.map((x) =>
+    '<div class="card"><h3 class="rel-ver">' + esc(x.version) +
+    (x.current ? ' <span class="pill pill-ok">지금 판</span>' : x.newer ? ' <span class="pill pill-warn">새 판</span>' : '') +
+    ' <small>' + esc(x.date) + '</small></h3><div class="rel-body">' +
+    (notesHtml(x.notes) || '<p class="muted">적힌 내용이 없습니다</p>') + '</div></div>').join('')
+    : '<p class="muted">보여 줄 내역이 없습니다</p>';
+  return Object.assign({}, r, { shown: rels.length });
+}
+
+// 패치를 받고 처음 켜졌으면 그 사이 판들의 바뀐 점을 한 번 띄운다 (판마다 한 번 — 본 판은 기억해 둔다)
+async function showNotesAfterUpdate() {
+  const now = mm.appInfo && mm.appInfo.version;
+  if (!now) return;
+  let seen = null;
+  try { seen = localStorage.getItem('mm.seenVersion'); } catch (e) { return; }  // 기억 못 하면 매번 뜨므로 안 띄운다
+  if (!seen || verCmp(now, seen) > 0) {
+    const r = await showNotes({ after: seen });
+    if (!r || !r.ok || !r.shown) { $('#relnotes').classList.add('hidden'); if (!r || !r.ok) return; }  // 오프라인이면 다음에
+  }
+  try { localStorage.setItem('mm.seenVersion', now); } catch (e) { /* 다음에 다시 */ }
 }
 
 /* ══ 새 판 알림 끝 ══════════════════════════════════════════════ */

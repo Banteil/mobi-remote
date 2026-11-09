@@ -786,6 +786,23 @@ class Api(DailyApi, CharsApi, QueueApi):
         except Exception as e:  # 오프라인 등 — 조용히 넘긴다
             return {"ok": False, "newer": False, "page": self.UPDATE_PAGE, "error": str(e)}
 
+    def update_notes(self, limit=20):
+        """패치 내역 — 최근 릴리스 본문을 새것부터. 지금 판보다 새것이면 newer, 지금 판이면 current."""
+        try:
+            with self._http(self.UPDATE_API.replace("/latest", f"?per_page={int(limit)}")) as r:
+                rels = json.loads(r.read().decode("utf-8"))
+        except Exception as e:  # 오프라인 등
+            return {"ok": False, "error": str(e), "page": self.UPDATE_PAGE}
+        out = []
+        for rel in rels:
+            ver = str(rel.get("tag_name") or "").lstrip("vV")
+            if not ver or rel.get("draft") or rel.get("prerelease"):
+                continue
+            out.append({"version": ver, "date": (rel.get("published_at") or "")[:10], "notes": rel.get("body") or "",
+                        "newer": _ver(ver) > _ver(APP_VERSION), "current": _ver(ver) == _ver(APP_VERSION)})
+        out.sort(key=lambda x: _ver(x["version"]), reverse=True)
+        return {"ok": True, "app": APP_VERSION, "releases": out, "page": self.UPDATE_PAGE}
+
     def update_download(self, asset=None):
         """설치 파일은 임시 폴더, 패치는 설치 폴더 update\\ 에 받는다 (다 받은 뒤에 제 이름으로 — 받다 만 파일을 쓰지 않게)."""
         import tempfile

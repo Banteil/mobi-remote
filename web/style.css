@@ -558,6 +558,12 @@ select.sort { min-width: 0; max-width: 170px; padding: 5px 8px; font-size: 12px;
 }
 /* 창 안에서는 카드 바깥 여백이 두 번 들어가 보이므로 줄인다 */
 .modal-scroll .card:last-child { margin-bottom: 0; }
+/* 패치 내역 — 판마다 카드 하나, 본문은 릴리스에 쓴 마크다운(## 제목 · - 줄 · **굵게**)만 그린다 */
+.rel-ver { display: flex; align-items: baseline; gap: 8px; margin: 0 0 6px; }
+.rel-ver small { color: var(--muted); }
+.rel-body h4 { margin: 10px 0 4px; font-size: 13px; }
+.rel-body ul { margin: 0 0 4px; padding-left: 18px; }
+.rel-body li { margin: 2px 0; line-height: 1.5; }
 /* 옵션 창 탭·숙제 탭 안쪽 탭 — 위 탭(.tab)과 같은 모양. 클래스가 다른 건 위 탭 전환($$('.tab'))에 걸리지 않게 */
 #opt-tabs, #hw-tabs { display: flex; flex-wrap: wrap; gap: 2px; margin: -4px 0 10px; border-bottom: 1px solid var(--edge); }
 .opt-tab, .hw-tab {

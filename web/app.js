@@ -1290,7 +1290,8 @@ async function loadCompat(refresh) {
     ['MM CLI', info.cliVersion || '읽을 수 없음', info.cliFull || ''],
   ].map(([k, v, tip]) =>
     '<dt>' + esc(k) + '</dt><dd' + (tip ? ' title="' + esc(tip) + '"' : '') + '>' + esc(v) + '</dd>').join('') +
-    '<dt>새 판</dt><dd><button class="btn btn-tiny" id="upd-check">새 판 확인</button> <span class="muted" id="upd-msg"></span></dd>' +
+    '<dt>새 판</dt><dd><button class="btn btn-tiny" id="upd-check">새 판 확인</button> <span class="muted" id="upd-msg"></span>' +
+      ' <button class="btn btn-tiny btn-ghost" id="upd-notes">패치 내역</button></dd>' +
     '<dt>패킷 감시</dt><dd>' + packetHtml(info.packet) + '</dd>';
 
   const s = LEVEL_STYLE[res.levelName] || LEVEL_STYLE.info;

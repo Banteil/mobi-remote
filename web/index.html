@@ -59,6 +59,7 @@
 <div id="update-banner" class="banner hidden">
   <span class="banner-mark">↑</span>
   <span id="update-text"></span>
+  <button id="update-notes" class="btn btn-tiny btn-ghost">바뀐 점</button>
   <button id="update-go" class="btn btn-tiny">받아서 설치</button>
   <button id="update-later" class="btn btn-tiny btn-ghost">나중에</button>
 </div>
@@ -733,6 +734,15 @@
       <button id="modal-cancel" class="btn">취소</button>
       <button id="modal-ok" class="btn btn-primary">실행</button>
     </div>
+  </div>
+</div>
+
+<!-- 패치 내역 (릴리스 본문) -->
+<div id="relnotes" class="modal hidden">
+  <div class="modal-box modal-wide">
+    <div class="modal-head"><h3 id="relnotes-title">패치 내역</h3>
+      <button id="relnotes-close" class="btn btn-tiny btn-ghost">닫기</button></div>
+    <div class="modal-scroll" id="relnotes-body"></div>
   </div>
 </div>
 
