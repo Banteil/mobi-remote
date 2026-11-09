@@ -15,7 +15,7 @@ from .web_shell import WEB, WebWindow
 log = logging.getLogger("mabi")
 SINGLE = "MobiRemote-single"
 # 이미 떠 있는 리모콘에 보내는 명령 (gui.py --resume / --halt). 키보드를 못 만질 때 원격으로 이어 하기·멈추기
-COMMANDS = {"--resume": b"resume", "--halt": b"halt"}
+COMMANDS = {"--resume": b"resume", "--halt": b"halt", "--enhance": b"enhance"}
 
 
 def _command(argv: list[str]) -> bytes:
@@ -23,6 +23,7 @@ def _command(argv: list[str]) -> bytes:
       --halt 일시정지 · --resume 이어 하기 · --daily 슬롯,슬롯 [숙제,숙제] [--force] 일일 숙제 카드를 넣고 시작 (--force: 오늘 완료 기록이 있어도 다시)
       --abyss 슬롯 던전 [판수] [난이도] [solo|party] 어비스 카드를 큐 뒤에 넣는다 (판수 0 = 멈출 때까지). 여러 번 부르면 차례로 쌓인다
       --raid 슬롯 레이드 [판수] [난이도] [solo|party] 레이드 카드를 큐 뒤에 넣는다 (어비스와 같음)
+      --enhance 각인 강화 반복을 지금 시작 (열어 둔 각인 강화 창에서 — 다른 작업이 돌면 시작하지 않는다)
       마지막 칸은 혼자하기(solo) / 함께하기(party). 비우면 설정 탭에 고른 대로"""
     for flag in ("--abyss", "--raid"):
         if flag in argv:
@@ -46,6 +47,12 @@ def _on_message(win: "MainWindow", conn) -> None:
     elif msg == b"halt":
         log.info("명령 → 작업 큐 일시정지")
         win.api.queue_halt()
+    elif msg == b"enhance":  # 화면의 '시작' 버튼(web/daily.js startEnhance)과 같다
+        if q.running:
+            log.warning("명령 → 각인 강화 반복: 시작하지 않음 (다른 작업이 도는 중)")
+            return
+        log.info("명령 → 각인 강화 반복 시작")
+        win.api.queue_add({"kind": "enhance", "label": "각인 강화 반복"}, "now")
     elif msg.startswith(b"daily:"):
         parts = msg.decode().split(":")[1:]
         slots = [int(x) for x in (parts[0] if parts else "").split(",") if x.strip().isdigit()]

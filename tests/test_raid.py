@@ -73,6 +73,7 @@ class CommandTest(unittest.TestCase):
         from gui_app.web_main import _command
         self.assertEqual(_command(["gui.py", "--raid", "3", "카브락", "5", "어려움"]), "raid:3:카브락:5:어려움".encode())
         self.assertEqual(_command(["gui.py", "--abyss", "1", "광기의 동굴"]), "abyss:1:광기의 동굴".encode())
+        self.assertEqual(_command(["gui.py", "--enhance", "--no-elevate"]), b"enhance")
 
 
 class CardTest(unittest.TestCase):
