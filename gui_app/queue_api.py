@@ -4,6 +4,7 @@
   daily · abyss · raid : 숙제·어비스·레이드 (DailyApi 의 _daily_launch · _abyss_launch · _raid_launch 를 기다린다)
   goal          : 제작·채집·가공 목표 (판단 엔진 mabi.craft.goal 의 걸음을 하나씩 실행)
   action        : 한 번 하는 행동 (버튼 하나 = 명령 하나, 전체 수령)
+  enhance       : 각인 강화 반복 (열어 둔 창에서 성공할 때까지 Space)
 실행 중 사람에게 물어야 하면(재료를 직접 구해 와야 함) 'mm:queue-ask' 로 묻고 queue.answer 를 기다린다.
 화면 설정 맞추기는 큐 한 번에 한 번 (q.session), 큐가 다 끝나면 한 번 되돌린다.
 변화는 'mm:queue' {items, running} 로 화면에 보낸다.
@@ -417,6 +418,64 @@ class ActionKind(Kind):
         return bool(r.get("ok"))
 
 
+class EnhanceKind(Kind):
+    """각인 강화 반복 — 열어 둔 각인 강화 창에서 성공할 때까지 Space (mabi.tasks.enhance). 어디로 찾아가지 않는다."""
+
+    def __init__(self, api):
+        self.api = api
+        self.bot = None
+
+    @staticmethod
+    def detail(x) -> str:
+        return "성공할 때까지"
+
+    def view(self, it):
+        v = super().view(it)
+        p = it.get("prog") or {}
+        if p.get("tries"):
+            v["now"] = f"+{p['target']} 실패 {p['tries']}번"
+        return v
+
+    def run(self, q, it):
+        from mabi import outcome
+        from mabi.bot import Bot
+        from mabi.tasks import enhance
+        if (err := self.api._busy_reason()):
+            q.note(it, f"시작 못 함 — {err}")
+            return False
+        q.patch(it["id"], {"prog": {}, "note": ""})
+        bot = None
+        try:
+            self.api._daily_hook_log()
+            bot = self.bot = Bot(load_config(self.api.paths), self.api.paths, force_exit=False)
+            if not bot.window.find():
+                q.note(it, "실패 — 게임이 꺼져 있습니다")
+                return False
+            bot.background = True  # 게임을 앞으로 가져오지 않는다 — 키는 창에 직접
+            r = enhance.repeat(bot, lambda n, t: q.patch(it["id"], {"prog": {"tries": n, "target": t}}))
+            q.note(it, f"+{r['level']} 성공 ({r['tries']}번째)")
+            return True
+        except Exception as e:  # noqa: BLE001 — 가르는 규칙은 다른 반복과 같은 outcome
+            if bot is None:
+                log.exception("각인 강화 반복 시작 실패")
+                q.note(it, f"실패 — {e}")
+                return False
+            status, summary, _ = outcome.classify(bot, "enhance", "각인 강화 반복", e)
+            if status == "STOP":  # F12·멈추기 → 일시정지 (▶ 로 다시 — 창이 그대로면 이어서 누른다)
+                q.set_stop("stopped")
+            else:
+                q.note(it, f"실패 — {summary}")
+            return False
+        finally:
+            self.bot = None
+            if bot:
+                bot.stopper.close()
+
+    def stop(self, reason):
+        if self.bot:
+            self.bot.stopper.request(STOP_WHY.get(reason, ""))
+
+
 class QueueApi:
     """self.paths, self.cd, self._emit, DailyApi 가 있는 클래스에 섞는다. _init_queue() 를 __init__ 에서 부른다."""
 
@@ -427,7 +486,7 @@ class QueueApi:
         self._q_pending_ask: dict | None = None
         self.queue = WorkQueue(self.cd.queue_file, self.cd.history_file, emit,
                                {"daily": DailyKind(self), "abyss": AbyssKind(self), "raid": RaidKind(self), "goal": GoalKind(self),
-                                "action": ActionKind(self)},
+                                "action": ActionKind(self), "enhance": EnhanceKind(self)},
                                on_drained=self._q_drained, pause_note=self._q_pause_note,
                                snap=self._q_snap, on_report=self._q_report)
         # 시간 정해진 카드가 열리면 돌던 일을 끊어도 되는 자리에서 끊는다

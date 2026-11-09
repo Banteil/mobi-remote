@@ -225,6 +225,17 @@ function drillSpec() {
   return chars.length ? { kind: 'daily', label: '나이트메어 드릴', chars: chars, only: ['drill'], force: true } : null;
 }
 
+/* 기타 숙제 — 각인 강화 반복. 열어 둔 창에서 바로 하는 일이라 큐 맨 아래에 담지 않고, 다른 작업이 돌면 시작하지 않는다
+ * (그 작업을 밀어내면 게임 화면이 바뀐다). 실행은 파이썬 (gui_app/queue_api.py EnhanceKind) */
+function startEnhance() {
+  const cur = qItems.find((x) => x.status === 'run');
+  if (cur) { toast('다른 작업이 도는 중입니다', '"' + cur.label + '" 이 끝난 뒤 각인 강화 창을 열고 시작하세요', 'bad'); return; }
+  toast('각인 강화 반복 시작', '성공할 때까지 Space · ' + stopKey() + ' = 일시정지', 'ok');
+  qStartNow({ kind: 'enhance', label: '각인 강화 반복' }, false);
+}
+
+Q_KINDS.enhance = { amount: () => '성공할 때까지' };
+
 /* 주간 숙제 — 뱅가드 브리치. 이번 주에 했는지는 들어가기 전에 게임(성장 가이드)으로 보므로 늘 force */
 function vanguardSpec() {
   const chars = pickedSlots('vgChars');
@@ -671,6 +682,7 @@ $('#dl-table').addEventListener('change', (e) => {
 bindPick('dr', 'drillChars');
 $('#dr-start').addEventListener('click', () => { const it = drillSpec(); if (it) startHomework(it, '나이트메어 드릴'); });
 $('#dr-queue').addEventListener('click', () => { const it = drillSpec(); if (it) queueHomework(it, '나이트메어 드릴'); });
+$('#en-start').addEventListener('click', startEnhance);
 bindPick('fb', 'fbChars');
 $('#fb-boss').addEventListener('change', () => paintFieldBossLevels($('#fb-level').value));
 $('#fb-start').addEventListener('click', () => { const it = fieldBossSpec(); if (it) startHomework(it, '필드 보스'); });
