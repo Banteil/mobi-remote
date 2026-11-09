@@ -1,4 +1,4 @@
-"""콘텐츠 가이드 카드 찾기 (mabi.tasks.content.open_guide_card) — 뒤쪽 카드는 목록을 내려가며 글자로 찾는다."""
+"""콘텐츠 가이드에서 콘텐츠로 가기 (mabi.tasks.content) — 위쪽 달성 칸의 글자가 먼저, 안 되면 카드 (뒤쪽 카드는 목록을 내려가며)."""
 import types
 import unittest
 from unittest import mock
@@ -76,6 +76,72 @@ class OpenGuideCardTest(unittest.TestCase):
         bot = FakeBot(shows_at=1, button=False)
         self.assertFalse(self.open(bot))
         self.assertEqual(bot.clicked, [])
+
+
+class GoalBot:
+    """위쪽 주간 달성 칸 글자 하나만 그린 화면. white: 하얀 글자(아니면 회색), check: 아이콘 모서리 초록 체크."""
+    X, Y = 1549, 257
+
+    def __init__(self, white, check):
+        self.cfg = {"guide": {"daily_panel": [385, 125, 520, 180], "weekly_panel": [907, 125, 768, 180]}}
+        f = np.full((1080, 1920, 3), 30, dtype=np.uint8)
+        f[self.Y - 3:self.Y + 4, self.X - 30:self.X + 30] = 255 if white else 100
+        if check:
+            f[self.Y + 5:self.Y + 15, self.X - 60:self.X - 50] = (60, 200, 60)  # BGR 초록
+        self.f = f
+
+    def frame(self):
+        return self.f
+
+
+class GuideGoalTest(unittest.TestCase):
+    def goal(self, bot):
+        with mock.patch.object(ui_text, "find", lambda b, want, region=None, exact=True: (GoalBot.X, GoalBot.Y)):
+            return content.guide_goal(bot, "뱅가드 브리치", weekly=True)
+
+    def test_white_is_not_done(self):
+        self.assertIs(self.goal(GoalBot(white=True, check=False)).done, False)
+
+    def test_grey_with_check_is_done(self):
+        self.assertIs(self.goal(GoalBot(white=False, check=True)).done, True)
+
+    def test_mismatch_is_unknown(self):
+        self.assertIsNone(self.goal(GoalBot(white=True, check=True)).done)
+        self.assertIsNone(self.goal(GoalBot(white=False, check=False)).done)
+
+    def test_missing(self):
+        with mock.patch.object(ui_text, "find", lambda *a, **k: None):
+            self.assertIsNone(content.guide_goal(GoalBot(True, False), "뱅가드 브리치", weekly=True))
+
+
+class GoFromGuideTest(unittest.TestCase):
+    def go(self, goal, closes=True, card=True):
+        bot = mock.Mock()
+        bot.ui = {"guide_title": "guide_title"}
+        bot.exists.return_value = not closes  # 눌렀는데 가이드 제목이 그대로 = 안 넘어감
+        with mock.patch.object(content, "open_guide"), mock.patch.object(content, "guide_goal", return_value=goal), \
+                mock.patch.object(content, "open_guide_card", return_value=card) as by_card:
+            got = content.go_from_guide(bot, "뱅가드 브리치", weekly=True, card="뱅가드", text=True)
+        return got, bot, by_card
+
+    def test_white_goal_clicked(self):
+        got, bot, by_card = self.go(content.Goal(1549, 257, False))
+        self.assertTrue(got)
+        bot.click.assert_called_once_with((1549, 257))
+        by_card.assert_not_called()
+
+    def test_done_goal(self):
+        got, bot, by_card = self.go(content.Goal(1549, 257, True))
+        self.assertFalse(got)
+        bot.click.assert_not_called()
+        by_card.assert_not_called()
+
+    def test_falls_back_to_card(self):
+        # 달성 칸에서 못 읽음 · 색과 체크가 어긋남 · 눌러도 가이드가 그대로 → 아래 카드 (이미 열린 가이드에서)
+        for goal, closes in ((None, True), (content.Goal(1549, 257, None), True), (content.Goal(1549, 257, False), False)):
+            got, bot, by_card = self.go(goal, closes=closes)
+            self.assertTrue(got)
+            by_card.assert_called_once_with(bot, "뱅가드", opened=True, weekly=True, text=True)
 
 
 if __name__ == "__main__":

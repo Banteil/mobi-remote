@@ -11,7 +11,7 @@
 import difflib
 import re
 import time
-from typing import Callable
+from typing import Callable, NamedTuple
 
 from .. import gamedata as gd, keys
 from ..bot import Bot, StepTimeout
@@ -242,6 +242,55 @@ def open_guide_card(bot: Bot, card: str, opened: bool = False, weekly: bool = Fa
         raise RuntimeError(f"콘텐츠 가이드 '{card}' 카드의 바로 가기를 찾지 못함")
     bot.click(go[0])
     return True
+
+
+# 위쪽 '일일 달성'·'주간 달성' 칸의 글자: 안 끝낸 것은 하얀 글자, 끝낸 것은 회색 글자 + 아이콘 모서리 초록 체크 (사용자).
+# 2026-11-09 두 화면에서 잼 — 글자 가운데 밝기(95% 값) 하양 254~255 · 회색 91~106, 글자 왼쪽 초록 화소 끝냄 147~157 · 안 끝냄 0~15
+GOAL_WHITE = 180
+GOAL_CHECK = 60
+
+
+class Goal(NamedTuple):
+    x: int
+    y: int
+    done: bool | None  # 끝냈나 — 글자 색과 체크가 어긋나면 None (모름)
+
+
+def guide_goal(bot: Bot, name: str, weekly: bool = False) -> Goal | None:
+    """(가이드가 열린 채로) 위쪽 일일(weekly 면 주간) 달성 칸에서 name 글자를 찾는다. 없으면 None."""
+    import numpy as np
+    from . import ui_text
+    g = bot.cfg["guide"]
+    hit = ui_text.find(bot, name, g["weekly_panel" if weekly else "daily_panel"], exact=False)
+    if not hit:
+        return None
+    x, y = hit
+    frame = bot.frame()
+    white = np.percentile(frame[y - 10:y + 10, x - 30:x + 30].mean(axis=2), 95) >= GOAL_WHITE
+    p = frame[y - 5:y + 25, max(0, x - 140):x].reshape(-1, 3).astype(int)  # 글자 왼쪽 = 아이콘과 그 오른쪽 아래 체크
+    check = int(((p[:, 1] > 120) & (p[:, 2] < 120) & (p[:, 0] < 160)).sum()) >= GOAL_CHECK
+    return Goal(x, y, None if white == check else check)
+
+
+def go_from_guide(bot: Bot, name: str, weekly: bool = False, card: str | None = None, text: bool = False) -> bool:
+    """'/' 콘텐츠 가이드에서 name 콘텐츠로 간다 ('바로 가기'). 끝낸 콘텐츠라 갈 게 없으면 False.
+    위쪽 달성 칸의 하얀 글자를 누르면 카드의 '바로 가기' 와 같다 (사용자) — 카드가 아래로 밀려 안 보여도 되므로 그게 먼저.
+    글자가 안 보이거나 색과 체크가 어긋나거나 눌러도 가이드가 그대로면 아래 카드로 (card: 제목 템플릿, text 면 제목 글자)."""
+    open_guide(bot)
+    goal = guide_goal(bot, name, weekly)
+    if goal and goal.done:
+        bot.log.info(f"콘텐츠 가이드 {'주간' if weekly else '일일'} 달성: '{name}' 끝냄 (회색 글자 + 체크)")
+        bot.to_main()
+        return False
+    if goal and goal.done is False:
+        bot.click((goal.x, goal.y))
+        bot.sleep(1.5, 2)
+        if not bot.exists(bot.ui["guide_title"]):
+            return True
+        bot.log.info(f"콘텐츠 가이드 달성 칸 '{name}' 을 눌러도 가이드가 그대로 → 아래 카드로")
+    elif not goal:
+        bot.log.info(f"콘텐츠 가이드 달성 칸에서 '{name}' 을 못 읽음 → 아래 카드로")
+    return open_guide_card(bot, card or name, opened=True, weekly=weekly, text=text)
 
 
 def wait_until(bot: Bot, pred: Callable[[], bool], timeout: float, interval: float = 3.0, what: str = "") -> None:

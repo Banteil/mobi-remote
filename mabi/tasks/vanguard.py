@@ -1,7 +1,8 @@
 """뱅가드 브리치 (주간 숙제): 캐릭터마다 이번 주 1번 클리어한다 ('남은 주간 전리품 1/1회').
 
 흐름 (2026-11-09 직접 해 봄, 사용자 설명):
-  '/' 콘텐츠 가이드 → 주간 콘텐츠 탭 → '뱅가드 브리치' 카드 '바로 가기' → 입구까지 자동 이동 (빠른 이동 T)
+  '/' 콘텐츠 가이드 → 위쪽 '주간 달성' 칸의 하얀 '뱅가드 브리치' 글자 (카드의 '바로 가기' 와 같다. 안 되면 주간 콘텐츠 탭 카드
+  — 남은 주간 콘텐츠가 많으면 카드가 아래로 밀려 있다) → 입구까지 자동 이동 (빠른 이동 T)
   → 도착하면 입장 창 (왼쪽 위 '뱅가드 브리치', 우연한 만남 켜짐) → 고를 것 없이 입장하기(Space)
   → 우연한 만남 매칭 (어비스와 같은 매칭 패킷) → 모이면 자동 입장 → 안에서는 자동 진행 (제한 20분)
   → 클리어하면 다른 던전과 같은 '화면을 터치해 주세요' → 보상 화면 '나가기(ESC) · 다시 하기' → 나가기 (다시 할 필요 없음)
@@ -9,14 +10,15 @@
 안: 맵 ID 가 패킷 표에 없어 맵 종류를 모르고 CLI 도 던전으로 치지 않는다 (Dungeon NotInDungeon) — CLI 장소 이름
   ('뱅가드 브리치 • 여신의 뜰') 으로 본다. 그래서 클리어는 던전의 화면 판정(dungeon_touch)과 클리어 뒤 정리(after_clear) 그대로.
 입장한 뒤로는 게임을 뒤로 보내고 한다 (드릴·어비스와 같음).
-끝냈나: CLI 성장 가이드 '뱅가드 브리치' Weekly IsCompleted (클리어 화면 때 바로 바뀌었다). 모를 때만 주간 탭 카드가 사라졌나로.
+끝냈나: CLI 성장 가이드 '뱅가드 브리치' Weekly IsCompleted (클리어 화면 때 바로 바뀌었다). 모를 때만 주간 달성 칸(회색 글자 + 체크),
+  그것도 모르면 주간 탭 카드가 사라졌나로.
 """
 import time
 
 from .. import gamedata as gd, monitor
 from ..bot import Bot, StepTimeout
 from . import ui_text
-from .content import CannotProceed, after_clear, cleared_now, game_space, growth_done, open_guide_card, watch
+from .content import CannotProceed, after_clear, cleared_now, game_space, go_from_guide, growth_done, watch
 
 GROWTH = "뱅가드 브리치"   # CLI 성장 가이드의 Target, 가이드 카드 제목
 SPACE = "뱅가드"           # 안일 때 CLI 장소 이름에 들어가는 글자
@@ -129,11 +131,11 @@ def run(bot: Bot, cfg: dict) -> str:
     if not inside(bot) and done(bot):
         return "이번 주 이미 함"
     if not inside(bot):
-        if not open_guide_card(bot, gd.text("vg_title"), weekly=True, text=True):
-            # 카드가 없으면 이번 주 끝낸 것 — CLI 가 모를 때만 이것으로 친다 (사용자: 카드 확인은 최후의 방법)
+        if not go_from_guide(bot, GROWTH, weekly=True, card=gd.text("vg_title"), text=True):
+            # 주간 달성 칸이 끝냄이거나 카드가 없으면 이번 주 끝낸 것 — CLI 가 모를 때만 이것으로 친다 (사용자: 카드 확인은 최후의 방법)
             if done(bot) is False:
-                raise CannotProceed(f"주간 콘텐츠에 뱅가드 브리치 카드가 없는데 성장 가이드는 안 끝남 → {bot.snapshot('guide').name}")
-            return "이번 주 이미 함 (가이드 카드 없음)"
+                raise CannotProceed(f"콘텐츠 가이드엔 뱅가드 브리치가 끝났거나 없는데 성장 가이드는 안 끝남 → {bot.snapshot('guide').name}")
+            return "이번 주 이미 함 (콘텐츠 가이드)"
         travel(bot)
         enter(bot)
     else:
