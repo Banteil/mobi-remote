@@ -698,11 +698,15 @@ class Bot:
             return False
         return "오랫동안실행" in texts or "재시작해주세요" in texts
 
-    def at_main(self) -> bool:
-        """필드 메인 화면인가 — 패킷이 맵 로딩 중이라고 하면 아니다 (로딩 화면 직전·직후 HUD 가 잠깐 보인다).
-        '창이 하나도 안 열림' 은 패킷에 없어서 그 다음은 HUD 그림으로 본다."""
+    def at_main(self, frame=None) -> bool:
+        """필드 메인 화면인가 — 메인 화면 판정은 모두 여기 하나로 본다 (frame 을 주면 그 화면으로).
+        패킷이 맵 로딩 중이라고 하면 아니다 (로딩 화면 직전·직후 HUD 가 잠깐 보인다).
+        '창이 하나도 안 열림' 은 패킷·CLI 에 없어서 (get_activity MainButtonState 는 창을 열어도 Compass — 2026-11-09)
+        그 다음은 HUD 그림으로 본다: ESC 글자, 애매하면 K·I 키 표시까지 (templates/index.json hud_main assist)."""
         if self.map_loading() or self.packets.at_charselect():
             return False
+        if frame is not None:
+            return self.vision.find(frame, self.ui["main_hud"]) is not None
         return self.exists(self.ui["main_hud"])
 
     def no_food(self, look: bool = True) -> bool:

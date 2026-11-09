@@ -110,7 +110,22 @@ class Vision:
 
     def find(self, frame: np.ndarray, name: str, region=None, threshold: float | None = None) -> Match | None:
         m = self.best(frame, name, region)
-        return m if m is not None and m.score >= self.threshold_for(name, threshold) else None
+        if m is None:
+            return None
+        if m.score >= self.threshold_for(name, threshold):
+            return m
+        return m if self._assisted(frame, name, m.score, threshold) else None
+
+    def _assisted(self, frame: np.ndarray, name: str, score: float, threshold: float | None) -> bool:
+        """index.json 의 assist {min, all}: 문턱엔 못 미쳐도 min 이상이고 함께 보이는 표시(all)가 모두 보이면 찾은 것으로 본다.
+        반투명한 표시는 뒤 배경이 밝으면 점수가 떨어진다 — 메인 화면 'ESC' 글자가 식당 흰 창틀 앞에서 0.844 로
+        문턱(0.85)을 놓쳐 메인 화면을 못 알아봤다 (2026-11-09). 불투명한 K·I 키 표시는 배경을 타지 않는다.
+        이 그림 이름으로 찾는 곳(at_main·wait_any·리모콘 화면)은 모두 여기를 거쳐 같은 기준을 쓴다.
+        문턱을 직접 준 호출(threshold)은 그 값만 본다."""
+        a = self._index.get(name, {}).get("assist")
+        if not a or threshold is not None or score < a.get("min", 1.0):
+            return False
+        return all(self.has(n) and self.find(frame, n) is not None for n in a.get("all", ()))
 
     def find_all(self, frame: np.ndarray, name: str, region=None, threshold: float | None = None) -> list[Match]:
         """같은 템플릿이 여러 개 있을 때 (예: 미션 '받기' 버튼). 위에서 아래 순서로 반환."""

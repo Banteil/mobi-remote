@@ -315,6 +315,7 @@ class NpcVisitTest(unittest.TestCase):
         b.packets.ok = True
         b.packets.state.fresh, b.packets.state.in_dialogue, b.packets.state.dialogue_menu = True, True, menu
         b.vision.find.return_value = hud
+        b.at_main.side_effect = lambda f=None: b.vision.find(f, "hud") is not None  # 메인 화면 판정은 bot.at_main 하나로
         return b
 
     def test_lines_advanced_by_packet(self):
@@ -339,6 +340,7 @@ class LineReadyTest(unittest.TestCase):
         b.frame.return_value = frame()
         b.skip_button.return_value = skip
         b.vision.find.return_value = hud
+        b.at_main.side_effect = lambda f=None: b.vision.find(f, "hud") is not None  # 메인 화면 판정은 bot.at_main 하나로
         return b
 
     def test_waits_for_dialog_window(self):
@@ -436,6 +438,7 @@ class AttendanceTest(unittest.TestCase):
         b._attendance_clicked = 0
         b.vision.has.return_value = True
         b.vision.find.side_effect = lambda f, n: skip if n == "attendance_skip" else None
+        b.at_main.side_effect = lambda f=None: b.vision.find(f, "hud") is not None  # 메인 화면 판정은 bot.at_main 하나로
         return b
 
     def test_lines_then_skip(self):

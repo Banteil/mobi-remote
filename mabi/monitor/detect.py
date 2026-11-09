@@ -113,7 +113,7 @@ def look(bot, frame=None, skip=(), ocr: bool = False) -> Seen:
         return Seen(EXIT_ASK, frame=frame)
     # 메인 HUD 가 보이면 창이 하나도 안 열린 것 — 창 템플릿(대부분 화면 전체를 뒤져 하나에 0.2초)을 건너뛴다.
     # HUD 가 보인 채로 뜨는 것(퀘스트 클리어 '확인'·화면 터치·연출)만 본다. 한 번 보는 데 2초 걸리던 것 (2026-10-26)
-    if f(ui.get("main_hud")):
+    if ui.get("main_hud") not in skip and bot.at_main(frame):
         from ..tasks.dialogue import _packet
         if (p := _packet(bot)) is not None and p.in_dialogue:
             return Seen(DIALOG, src="packet", frame=frame)  # 대화가 막 열리는 중 (HUD 가 아직 남음)

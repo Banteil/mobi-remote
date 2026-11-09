@@ -277,7 +277,29 @@
       38,
       16
     ],
-    "threshold": 0.7
+    "assist": {
+      "min": 0.6,
+      "all": [
+        "hud_key_k",
+        "hud_key_i"
+      ]
+    }
+  },
+  "hud_key_k": {
+    "roi": [
+      1586,
+      1020,
+      20,
+      20
+    ]
+  },
+  "hud_key_i": {
+    "roi": [
+      1706,
+      1020,
+      20,
+      20
+    ]
   },
   "map_castle": {
     "threshold": 0.75

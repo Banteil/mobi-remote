@@ -30,6 +30,28 @@ class VariantTest(unittest.TestCase):
             self.assertEqual((m.name, m.x, m.y), ("btn", 60, 50))
 
 
+class AssistTest(unittest.TestCase):
+    def test_weak_match_needs_all_assist_marks(self):
+        """index.json 의 assist: 문턱엔 못 미쳐도 min 이상이고 함께 보이는 표시가 모두 있으면 찾은 것 (메인 화면 ESC, 11-09)."""
+        import json
+        rng = np.random.default_rng(2)
+        main = rng.integers(0, 255, (16, 38, 3), np.uint8)
+        k = rng.integers(0, 255, (20, 20, 3), np.uint8)
+        frame = np.zeros((300, 300, 3), np.uint8)
+        noisy = main.astype(np.int16) + rng.integers(-90, 90, main.shape)  # 밝은 배경에 가려 점수가 떨어진 꼴
+        frame[20:36, 20:58] = np.clip(noisy, 0, 255).astype(np.uint8)
+        with tempfile.TemporaryDirectory() as t:
+            save(Path(t) / "main.png", main)
+            save(Path(t) / "k.png", k)
+            (Path(t) / "index.json").write_text(json.dumps({"main": {"assist": {"min": 0.3, "all": ["k"]}}}), encoding="utf-8")
+            v = Vision(Path(t))
+            score = v.best(frame, "main").score
+            self.assertTrue(0.3 <= score < 0.85, score)
+            self.assertIsNone(v.find(frame, "main"))  # 함께 보일 표시가 없다
+            frame[200:220, 200:220] = k
+            self.assertIsNotNone(Vision(Path(t)).find(frame, "main"))
+            self.assertIsNone(Vision(Path(t)).find(frame, "main", threshold=0.85))  # 문턱을 직접 주면 그 값만
+
 
 class AreaTest(unittest.TestCase):
     def test_area_limits_search(self):

@@ -76,7 +76,7 @@ def clear_attendance(bot, frame=None) -> str | None:
         return "출석부 건너뛰기"
     if p.ok and p.state.attending():
         # 패킷은 대사 창이 그려지기 전에 온다 — HUD 가 남아 있으면 아직 (그때 가운데를 누르면 필드의 무언가가 눌린다)
-        if time.monotonic() - getattr(bot, "_attendance_clicked", 0) < 2 or bot.vision.find(frame, bot.ui["main_hud"]):
+        if time.monotonic() - getattr(bot, "_attendance_clicked", 0) < 2 or bot.at_main(frame):
             return "출석 대사 기다림"
         bot._attendance_clicked = time.monotonic()
         bot.click(tuple(c["first_dialog_xy"]))

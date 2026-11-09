@@ -169,7 +169,7 @@ def _dialog_blocker(bot, seen):
     s = _packet(bot)
     # HUD 가 보이면 대화 창이 아직 안 열렸다 — 그때 '대화 넘기기' 자리를 누르면 HUD 버튼(어비스 나가기 근처)이 눌릴 수 있다
     talk = (s is not None and s.in_dialogue and menu_open(bot) is False
-            and not (seen.frame is not None and bot.vision.find(seen.frame, bot.ui["main_hud"])))
+            and not (seen.frame is not None and bot.at_main(seen.frame)))
     if not (hit and hit[0] == "dialog") and not talk:
         bot._skip_seen = None
         return None

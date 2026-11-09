@@ -110,7 +110,7 @@ def check(bot: Bot | None = None, window=None, interface: bool = True) -> dict:
             win.focus()
             time.sleep(0.8)
         frame = bot.screen.grab()
-        if not bot.vision.find(frame, bot.ui["main_hud"]):
+        if not bot.at_main(frame):
             problems.append(f"인터페이스가 PC · {SCALE}% 가 아님 (메인 화면 표시가 기준과 다름) — '맞추기'")
     return {"ok": not problems, "running": True, "problems": problems, "client": (r.width, r.height), "dpi": dpi}
 

@@ -97,7 +97,7 @@ def line_ready(bot: Bot, frame=None) -> bool:
     hit = bot.skip_button(frame)
     if hit and hit[0] == "dialog":
         return True
-    return not bot.vision.find(frame, bot.ui["main_hud"])
+    return not bot.at_main(frame)
 
 
 def next_line(bot: Bot, wait: bool = True, ready_within: float = 5) -> bool:
