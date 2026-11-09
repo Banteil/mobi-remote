@@ -12,6 +12,8 @@
 기록을 저장해 두지 않는다 — 드릴은 끝·초기화 시기가 정해져 있지 않아 매번 지금 기록으로 본다 (사용자).
 입장한 뒤로는 게임을 뒤로 보내고 키(Space·ESC)는 창에 직접 보낸다 — 어비스 반복과 같다.
 배고프면 판 중에 먹는다 (사용자).
+궁극기·팔라딘 변신도 어비스·레이드와 같은 설정(기본값 + 캐릭터별)으로 쓴다 (사용자, 2026-11-09). 드릴은 구역마다 제한 시간이 있어
+보스전을 따로 가리지 않고 드릴 안 전투 중이면 게이지가 찰 때마다 쓴다 (boss_skills.BossSkills).
 """
 import re
 import time
@@ -20,6 +22,7 @@ from .. import gamedata as gd, monitor
 from ..bot import Bot, StepTimeout
 from ..ocr import find_texts, nospace, read_text
 from . import ui_text
+from .boss_skills import BossSkills, slot_of
 from .content import CannotProceed, watch
 
 GOAL = 20
@@ -161,7 +164,14 @@ def skip_cutscene(bot: Bot) -> None:
 
 # ---- 구역 진행
 
-def wait_zone(bot: Bot) -> int:
+def skills_for(bot: Bot) -> BossSkills:
+    """지금 캐릭터의 궁극기·팔라딘 설정. 드릴 안 전체를 보스전으로 친다."""
+    name = bot.packets.state.my_name if bot.packets.ok else ""
+    return BossSkills.for_character(bot, bot.cfg, slot_of(bot, bot.character, name or ""),
+                                    lambda s: s.channel_type == MAP)
+
+
+def wait_zone(bot: Bot, skills: BossSkills | None = None) -> int:
     """한 구역이 끝날 때까지 — 결과 창이 뜨면 깬 구역 번호, 못 깨고 끝났으면 0.
     패킷이 있으면 결과 패킷을 기다리고 결과 창 글자는 결과가 왔거나 제한 시간이 지났을 때만 본다 (못 깬 결과는 패킷을 모른다)."""
     ctx = monitor.Ctx("drill", "나이트메어 드릴 진행", revive=True)
@@ -177,6 +187,8 @@ def wait_zone(bot: Bot) -> int:
                 return zone or read_zone(bot, "drill_result_zone") or -1
             return 0  # 다음으로가 없는 결과 — 못 깸
         act = bot.activity() or {}
+        if skills:
+            skills.tick(act)
         seen = watch(bot, ctx, act)
         if seen.finish and seen.finish.result == "dead":
             bot.log.warning(f"드릴에서 쓰러짐 → {bot.snapshot('drill_dead').name}")
@@ -214,9 +226,12 @@ def play(bot: Bot) -> str:
         bot.background = True
         bot.window.give_back(bot.user_window)
     cleared = []
+    skills = skills_for(bot)
+    if skills.enabled:
+        bot.log.info(f"드릴에서 쓸 것: {skills.describe()}")
     while True:
         bot.step("drill_play", f"나이트메어 드릴 진행 중{f' ({cleared[-1] + 1}구역)' if cleared and cleared[-1] > 0 else ''}")
-        zone = wait_zone(bot)
+        zone = wait_zone(bot, skills)
         if zone <= 0:
             bot.log.warning(f"드릴 구역을 못 깸 → 나감 ({bot.snapshot('drill_fail').name})")
             leave(bot)

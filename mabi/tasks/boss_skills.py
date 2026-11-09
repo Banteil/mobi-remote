@@ -1,4 +1,4 @@
-"""보스전 궁극기·팔라딘 변신 — 어비스·레이드 반복(Repeat)의 판 진행 중에 쓴다. 일반 던전·숙제에서는 쓰지 않는다.
+"""보스전 궁극기·팔라딘 변신 — 어비스·레이드 반복(Repeat)의 판 진행 중과 나이트메어 드릴 안에서 쓴다. 일반 던전·일일 숙제에서는 쓰지 않는다.
 
 기본값([boss_skills] ultimate · paladin, 어비스·레이드 탭)을 따르고, 캐릭터 탭에서 따로 정한 캐릭터만 다르게
 (ultimate_slots · paladin_slots = 따로 켬, ultimate_off_slots · paladin_off_slots = 따로 끔 — on_for). 키는 [game] ultimate_key · paladin_key.
