@@ -2,6 +2,7 @@
 import unittest
 
 from gui_app.queue_api import GoalKind, QueueApi
+from mabi import cutpoint
 
 
 class FakeQ:
@@ -169,6 +170,37 @@ class GoalKindTest(unittest.TestCase):
         ok = GoalKind(api).run(q, q.item)
         self.assertFalse(ok)
         self.assertEqual(len(api.calls), 1)
+
+    def test_timed_card_cuts_in_between_steps(self):
+        # 가공·제작은 걸음 사이가 끊어도 되는 자리 — 시간 정해진 카드가 열리면 다음 걸음 전에 밀려난다
+        api = FakeApi([(0, {"kind": "gather", "name": "철광석"}), (5, {"kind": "gather", "name": "구리"})])
+        q = FakeQ()
+        q.item = card()
+        asked = []
+
+        def hook():  # 작업 큐의 cut_for_timed 처럼: 열렸으면 큐를 세우고 까닭을
+            asked.append(1)
+            if len(asked) < 2:
+                return ""
+            q.set_stop("preempt")
+            return "'필드 보스' 열림"
+        cutpoint.set_hook(hook)
+        try:
+            ok = GoalKind(api).run(q, q.item)
+        finally:
+            cutpoint.set_hook(None)
+        self.assertFalse(ok)
+        self.assertEqual(len(api.calls), 1)
+        self.assertEqual(q.stop["reason"], "preempt")
+
+    def test_timed_card_cuts_in_while_waiting(self):
+        # 가공 완료 대기(몇 분)도 끊어도 되는 자리 — 가공은 시설에서 계속된다
+        q = FakeQ()
+        cutpoint.set_hook(lambda: q.set_stop("preempt") or "'필드 보스' 열림")
+        try:
+            self.assertFalse(GoalKind(FakeApi([]))._wait(q, card(), {"seconds": 300}))
+        finally:
+            cutpoint.set_hook(None)
 
     def test_collect_not_ready_waits_and_retries(self):
         # 조회는 완료인데 수령은 아직 없다고 할 때가 있다 — 실패로 끝내지 않고 기다렸다 다시

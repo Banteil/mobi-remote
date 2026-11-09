@@ -14,6 +14,7 @@ import math
 import threading
 import time
 
+from mabi import cutpoint
 from mabi import gamedata as gd
 from mabi import queue_report
 from mabi.runner import RunOptions, load_config
@@ -296,7 +297,8 @@ class GoalKind(Kind):
             if steps >= self.MAX_STEPS:
                 q.note(it, f"걸음 상한({self.MAX_STEPS})에 닿아 멈춤 — 만든 {_num(it.get('made'))}개")
                 break
-            if q.stop:
+            # 걸음 사이는 끊어도 되는 자리 — 시간 정해진 카드(필드 보스)가 열렸으면 밀려났다가 이어 한다
+            if q.stop or cutpoint.cut("가공·제작 걸음 사이"):
                 break
             r = api.goal_next(name, (it.get("base") or 0) + int(it.get("target") or 0))  # 수량은 도중에 바뀔 수 있다 (✎)
             if r.get("error"):
@@ -343,10 +345,10 @@ class GoalKind(Kind):
         return ok
 
     def _wait(self, q, it, st) -> bool:
-        """가공이 끝나기를 기다린다. 남은 시간을 카드에 적고, 큐가 서면 그만."""
+        """가공이 끝나기를 기다린다. 남은 시간을 카드에 적고, 큐가 서거나 먼저 할 카드가 열리면 그만 (가공은 시설에서 계속된다)."""
         until = time.monotonic() + max(5, float(st.get("seconds") or 0))
         while time.monotonic() < until:
-            if q.stop:
+            if q.stop or cutpoint.cut("가공 완료 대기"):
                 return False
             left = int(until - time.monotonic())
             q.note(it, f"가공 완료까지 {left // 60}분 {left % 60}초 대기" if left >= 60 else f"가공 완료까지 {left}초 대기")
@@ -428,7 +430,6 @@ class QueueApi:
                                 "action": ActionKind(self)},
                                on_drained=self._q_drained, pause_note=self._q_pause_note,
                                snap=self._q_snap, on_report=self._q_report)
-        from mabi import cutpoint
         cutpoint.set_hook(self.queue.cut_for_timed)  # 시간 정해진 카드가 열리면 돌던 일을 끊어도 되는 자리에서 끊는다
         threading.Thread(target=self._q_hotkey, name="queue-f12", daemon=True).start()
 
