@@ -276,7 +276,8 @@
       68,
       38,
       16
-    ]
+    ],
+    "threshold": 0.7
   },
   "map_castle": {
     "threshold": 0.75
