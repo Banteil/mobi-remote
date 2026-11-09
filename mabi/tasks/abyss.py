@@ -251,7 +251,10 @@ def settle_loot(bot: Bot) -> None:
     주간 초기화(월요일) 뒤에는 정산하기 전엔 어느 어비스도 못 들어간다 ('입장 불가 — 주간 전리품을 먼저 정산하세요', 2026-11-09).
     흐름 (그날 실기로 확인): '전리품 받기' → 퀘스트 '주간 전리품 수령' 으로 관청 에반에게 자동 이동 → 도착하면 대화가 열림
     → 인사말 넘김 → 메뉴 '주간 전리품 받기'(Space) → 대사 넘김 → '전리품 정산' 보상 화면 → 확인(Space) → 필드 메인 화면.
-    대사로 판단하지 않는다 — 메뉴 버튼 글자(점검자 choose)와 보상 화면 제목으로만 본다.
+    지난주 덜 돈 콘텐츠(결계 등)가 있으면 그 사이 '마물 퇴치 증표 사용하기' 화면이 뜬다 — 증표로 놓친 전리품을 받는 화면.
+    뜨면 바로 '전리품 받기'(Space)로 받는다 (사용자, 2026-11-09: 재화를 써서라도 받을 것).
+    메뉴 버튼은 '전리품받기' 만 본다 — OCR 이 빛나는 버튼의 '주간' 을 '추간' 으로 읽어 1분 넘게 못 골랐다 (같은 날 12:29).
+    대사로 판단하지 않는다 — 메뉴 버튼 글자(점검자 choose)와 화면 제목으로만 본다.
     됐는지는 여기서 시간으로 정하지 않는다 — 다시 연 어비스 목록에 '전리품 받기' 가 남았나로 본다 (enter_screen).
     그래서 단계 상한이 지나도 실패로 치지 않고 로그·화면만 남긴다 (움직이지도 못한 것만 CannotProceed — go_talk)."""
     hit = loot_pending(bot)
@@ -264,6 +267,12 @@ def settle_loot(bot: Bot) -> None:
         ctx = monitor.Ctx("abyss", "주간 전리품", choose=gd.text("abyss_loot_claim"), choose_region="board_choices")
         chosen, waits, end = False, 0, time.monotonic() + LOOT_MENU_LIMIT
         while time.monotonic() < end:
+            if _find_text(bot, gd.text("abyss_loot_token"), gd.region("abyss_loot_token"), exact=False):
+                bot.log.info("지난주 놓친 전리품 → 마물 퇴치 증표로 받기 (Space)")
+                bot.key("space")
+                bot.sleep(2, 2.5)
+                chosen, end = True, time.monotonic() + LOOT_FINISH_LIMIT
+                continue
             if _find_text(bot, gd.text("abyss_loot_done"), gd.region("abyss_loot_done")):
                 bot.sleep(2.5, 3)  # 받은 물품이 하나씩 그려지는 동안은 확인 버튼이 아직 없다
                 bot.key("space")
