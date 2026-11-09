@@ -182,26 +182,62 @@ def guide_tab(bot: Bot, weekly: bool = False) -> None:
     bot.sleep(0.8, 1.2)
 
 
+def list_views(bot: Bot, area, at, step: int, steps: int):
+    """스크롤 목록을 맨 위부터 조금씩 내려가며 한 화면씩 넘겨준다 (yield 때마다 지금 화면을 본다). 더 내려가지 않으면 (맨 아래) 끝.
+    한 번에 많이 내리면 가운데 줄을 건너뛴다 (2026-10-25, 미션 선물 7개를 못 보고 넘어감).
+    area: 목록 영역 [x, y, 너비, 높이] (스크롤해도 안 바뀌면 맨 아래), at: 휠을 굴릴 자리, step: 한 번에 내리는 휠 칸 수."""
+    def scroll(notches):
+        bot.scroll(*at, notches)
+        bot.sleep(0.8, 1.0)
+    x, y, w, h = area
+    scroll(15)
+    before = None
+    for _ in range(steps):
+        yield
+        now = bot.frame()[y:y + h, x:x + w].astype("int16")
+        if before is not None and abs(now - before).mean() < 2:
+            return
+        before = now
+        scroll(-step)
+
+
+GUIDE_CARD_W = 650   # 콘텐츠 가이드 카드 폭 — 같은 카드의 '바로 가기' 는 제목 아래 이 폭 안
+GUIDE_SCROLL = 3     # 가이드 카드 목록을 한 번에 내리는 휠 칸 수
+GUIDE_SCROLLS = 8    # 최대 몇 번 내려가며 볼지 (카드는 2열, 주간 콘텐츠가 다 남으면 3줄)
+
+
 def open_guide_card(bot: Bot, card: str, opened: bool = False, weekly: bool = False, text: bool = False) -> bool:
     """'/' 콘텐츠 가이드의 일일(weekly 면 주간) 콘텐츠에서 card 카드의 '바로 가기'를 누른다. card 는 카드 제목 템플릿,
     text 면 제목 글자 (카드 칸 guide_cards 에서 OCR — 위 '주간 달성' 칸의 같은 이름과 섞이지 않게).
-    끝낸 콘텐츠는 카드가 사라지므로 카드가 없으면 False (= 이미 완료). opened: 가이드가 이미 열려 있다."""
+    끝낸 콘텐츠는 카드가 사라지므로 카드가 없으면 False (= 이미 완료). opened: 가이드가 이미 열려 있다.
+    카드는 아직 안 끝낸 것만 2열로 놓여, 남은 게 많으면 뒤쪽 카드(뱅가드 브리치 등)는 아래로 내려야 보인다 — 글자로 찾을 때는
+    목록을 내려가며 찾는다 (2026-11-09: 주간 콘텐츠가 다 남은 캐릭터는 뱅가드 브리치가 6번째 카드라 첫 화면에 없었다)."""
     from .. import gamedata as gd
     from . import ui_text
     ui = bot.ui
     if not opened:
         open_guide(bot)
     guide_tab(bot, weekly)
+
+    def go_of(title):  # 같은 카드의 '바로 가기' = 제목보다 아래, 카드 폭 안에 있는 버튼
+        return [b for b in bot.find_all(ui["guide_go"]) if b.y > title.y and 0 <= b.x - title.x < GUIDE_CARD_W]
+
     if text:
-        hit = ui_text.find(bot, card, gd.region("guide_cards"), exact=False)
-        title = type("Title", (), {"x": hit[0], "y": hit[1]}) if hit else None
-    else:
-        title = bot.find(card)
+        area = gd.region("guide_cards")
+        at = (area[0] + area[2] // 2, area[1] + area[3] // 2)
+        for _ in list_views(bot, area, at, GUIDE_SCROLL, GUIDE_SCROLLS):
+            hit = ui_text.find(bot, card, area, exact=False)
+            go = go_of(type("Title", (), {"x": hit[0], "y": hit[1]})) if hit else []
+            if go:  # 제목만 보이고 버튼이 아래로 잘렸으면 더 내려서
+                bot.click(go[0])
+                return True
+        bot.to_main()
+        return False
+    title = bot.find(card)
     if not title:
         bot.to_main()
         return False
-    # 같은 카드의 '바로 가기' = 제목보다 아래, 카드 폭(약 650px) 안에 있는 버튼
-    go = [b for b in bot.find_all(ui["guide_go"]) if b.y > title.y and 0 <= b.x - title.x < 650]
+    go = go_of(title)
     if not go:
         raise RuntimeError(f"콘텐츠 가이드 '{card}' 카드의 바로 가기를 찾지 못함")
     bot.click(go[0])

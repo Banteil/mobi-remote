@@ -15,7 +15,7 @@ import time
 from .. import gamedata as gd, keys, monitor, ocr
 from ..bot import Bot, StepTimeout
 from ..ocr import read_ko, read_text
-from .content import CannotProceed, has_word, wait_until
+from .content import CannotProceed, has_word, list_views, wait_until
 
 
 def _ctx(what: str) -> monitor.Ctx:
@@ -112,18 +112,8 @@ def _scroll_list(bot: Bot, c: dict, notches: int) -> None:
 
 
 def _list_views(bot: Bot, c: dict):
-    """목록 맨 위부터 조금씩 내려가며 한 화면씩 넘겨준다. 더 내려가지 않으면 (맨 아래) 끝.
-    한 번에 많이 내리면 가운데 줄을 건너뛴다 (2026-10-25, 선물 7개를 못 보고 넘어감)."""
-    x, y, w, h = c["list_area"]
-    _scroll_list(bot, c, 15)
-    before = None
-    for _ in range(c["list_steps"]):
-        yield
-        now = bot.frame()[y:y + h, x:x + w].astype("int16")
-        if before is not None and abs(now - before).mean() < 2:
-            return
-        before = now
-        _scroll_list(bot, c, -c["list_step"])
+    """미션 목록 맨 위부터 조금씩 내려가며 한 화면씩 (content.list_views)."""
+    return list_views(bot, c["list_area"], c["list_scroll_at"], c["list_step"], c["list_steps"])
 
 
 def _ensure_window(bot: Bot, c: dict) -> None:
