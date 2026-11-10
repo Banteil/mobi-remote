@@ -8,10 +8,11 @@ from mabi.tasks.content import CannotProceed
 
 
 class OutcomeTest(unittest.TestCase):
-    def bot(self, window=True, limited=False):
+    def bot(self, window=True, limited=False, popup=False):
         b = mock.MagicMock()
         b.window.find.return_value = window
-        b.run_limited.return_value = limited
+        b.cli.run_limited = limited
+        b.run_limit_popup.return_value = popup
         b.snapshot.return_value.name = "s.png"
         b.dump_box.return_value = None
         return b
@@ -31,6 +32,10 @@ class OutcomeTest(unittest.TestCase):
         self.assertEqual(outcome.escalate(self.bot(window=False), "FAIL", "x")[0], "STOP")
         self.assertEqual(outcome.escalate(self.bot(limited=True), "ERROR", "x")[0], "STOP")
         self.assertEqual(outcome.escalate(self.bot(window=False), "HEAVY", "x"), ("HEAVY", "x"))
+        # 화면에 제한 창만 떠 있으면 (CLI 는 안 막힘) 멈추지 않고 실패에 메모만 붙인다
+        status, summary = outcome.escalate(self.bot(popup=True), "FAIL", "x")
+        self.assertEqual(status, "FAIL")
+        self.assertIn("연속 실행 제한 창", summary)
 
     def test_overweight(self):
         b = mock.MagicMock()

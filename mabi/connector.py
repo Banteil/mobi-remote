@@ -156,7 +156,9 @@ class Connector:
         self.log = log
         self.on_call: Callable[[str, object, Result], None] | None = None  # 호출 기록용
         # 게임을 오래 켜 두면 AI 에이전트 명령에 '연속 실행 제한'이 걸린다 (게임 데이터 CliForAi_ExecuteCommon_
-        # MsgContinuousRunLimit · 화면에는 '게임이 너무 오랫동안 실행되고 있습니다' 창). 한 번 걸리면 게임을 다시 켜야 풀린다
+        # MsgContinuousRunLimit · 화면에는 '게임이 너무 오랫동안 실행되고 있습니다' 창). 실측 전 — 메시지가 execute_* 공통
+        # 묶음이라 실행 명령만 막힐 가능성이 크다 (창이 떠 있어도 조회 명령·어비스는 돌았다, 2026-11-10 사용자).
+        # 게임을 다시 켜야 풀린다고 보고, 게임과 연결이 끊기면(disconnected — 껐다 켬) 지운다
         self.run_limited = False
 
     # ---- 실행 파일 ----
@@ -239,6 +241,8 @@ class Connector:
                    ms=int((time.monotonic() - t0) * 1000))
         if not r.ok and is_run_limit(r.error, r.message):
             self.run_limited = True
+        elif r.error == "disconnected":
+            self.run_limited = False  # 게임이 꺼졌다 — 다시 켜면 제한이 풀려 있다
         self._notify(command, body, r)
         return r
 

@@ -13,7 +13,7 @@ import time
 from .profile import game_date
 
 # look() 결과
-RUN_LIMIT = "run_limit"            # '게임이 너무 오랫동안 실행되고 있습니다' (CLI 가 알려 준 것만 — 화면 OCR 은 Bot.run_limited)
+RUN_LIMIT = "run_limit"            # '게임이 너무 오랫동안 실행되고 있습니다' (CLI 가 알려 준 것만 — 화면 OCR 은 Bot.run_limit_popup)
 LOADING = "loading"                # 맵 로딩 중 (패킷)
 CHARSELECT = "charselect"          # 캐릭터 선택 화면 (패킷, 모르면 그림)
 TITLE = "title"                    # 타이틀 화면 ('게임 시작')

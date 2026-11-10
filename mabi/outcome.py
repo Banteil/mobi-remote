@@ -63,13 +63,18 @@ def recover(bot: Bot) -> None:
 
 def escalate(bot: Bot, status: str, summary: str) -> tuple[str, str]:
     """실패가 작업 탓이 아니라 게임 탓이면 멈춤으로 바꾼다 — 남은 일마다 같은 실패를 쌓지 않게.
-    게임이 꺼짐(튕김·사람이 끔) · '재시작해 주세요' 창(AI 에이전트 연속 실행 제한 — 창은 '종료' 뿐이라 누르지 않는다)."""
+    게임이 꺼짐(튕김·사람이 끔) · CLI 가 연속 실행 제한 오류를 줌 (AI 에이전트 — 게임을 다시 켜야 풀린다).
+    화면에 제한 창만 떠 있는 건 멈춤이 아니다 — 창이 떠 있어도 명령이 계속 되는 일이 있다 (2026-11-10 사용자).
+    그때 실패는 그대로 두고 요약에 창이 떠 있다고만 붙인다 (진짜 막혔으면 다음 캐릭터도 같은 실패라 연달아 실패 규칙이 멈춘다)."""
     if status not in ("FAIL", "ERROR"):
         return status, summary
     if not bot.window.find():
         log.error("게임이 꺼짐 → 일시정지 (게임을 켠 뒤 다시 시작하면 이어 함)")
         return "STOP", "게임이 꺼짐 — 게임을 켠 뒤 다시 시작하면 이어 합니다"
-    if bot.run_limited():
-        log.error("게임 연속 실행 제한 창 → 일시정지 (게임을 다시 켠 뒤 이어 하기)")
+    if bot.cli.run_limited:
+        log.error("CLI 연속 실행 제한 → 일시정지 (게임을 다시 켠 뒤 이어 하기)")
         return "STOP", "게임을 너무 오래 켜 둠 — 게임을 다시 켠 뒤 이어 하기를 누르면 이어 합니다"
+    if bot.run_limit_popup():
+        log.warning("화면에 연속 실행 제한 창이 떠 있음 (CLI 는 막히지 않음 → 멈추지 않고 실패만 남김)")
+        return status, f"{summary} · 화면에 연속 실행 제한 창이 떠 있음"
     return status, summary
