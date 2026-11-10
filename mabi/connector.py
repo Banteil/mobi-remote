@@ -158,6 +158,7 @@ class Connector:
         # 게임을 오래 켜 두면 AI 에이전트 명령에 '연속 실행 제한'이 걸린다 (게임 데이터 CliForAi_ExecuteCommon_
         # MsgContinuousRunLimit · 화면에는 '게임이 너무 오랫동안 실행되고 있습니다' 창). 실측 전 — 메시지가 execute_* 공통
         # 묶음이라 실행 명령만 막힐 가능성이 크다 (창이 떠 있어도 조회 명령·어비스는 돌았다, 2026-11-10 사용자).
+        # 걸려도 멈추지 않는다 (사용자 결정) — 처음 걸릴 때 경고 로그, 실패 요약에 메모(outcome.escalate)만.
         # 게임을 다시 켜야 풀린다고 보고, 게임과 연결이 끊기면(disconnected — 껐다 켬) 지운다
         self.run_limited = False
 
@@ -240,6 +241,8 @@ class Connector:
                    or err.decode("utf-8", "replace").strip() or EXIT_REASON.get(code),
                    ms=int((time.monotonic() - t0) * 1000))
         if not r.ok and is_run_limit(r.error, r.message):
+            if not self.run_limited:
+                self.log.warning(f"CLI 연속 실행 제한 ({command}: {r.error} · {r.message}) — 멈추지 않고 계속 (게임 재시작 권장)")
             self.run_limited = True
         elif r.error == "disconnected":
             self.run_limited = False  # 게임이 꺼졌다 — 다시 켜면 제한이 풀려 있다

@@ -94,11 +94,12 @@ class UnknownTest(unittest.TestCase):
                     mon.check(ctx)
         b.to_main.assert_called_once()
 
-    def test_run_limit_raises(self):
-        mon = monitor.Monitor(fake_bot())
-        with mock.patch.object(d, "look", return_value=Seen(d.RUN_LIMIT, src="cli")):
-            with self.assertRaises(RuntimeError):
-                mon.check(monitor.Ctx("t"))
+    def test_run_limit_does_not_stop(self):
+        """CLI 연속 실행 제한이 걸려 있어도 점검자는 평소대로 화면을 본다 (멈추지 않는다 — 2026-11-10 사용자)."""
+        b = fake_bot()
+        b.cli.run_limited = True
+        b.map_loading.return_value = "loading"
+        self.assertEqual(d.look(b).what, d.LOADING)
 
     def test_exit_question_untouched(self):
         b = fake_bot()

@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from .. import situation as sit
 
 # 상황 이름 (situation.py 의 것에 아르바이트·제작·던전 화면을 더한 것)
-RUN_LIMIT, LOADING, CHARSELECT, TITLE = sit.RUN_LIMIT, sit.LOADING, sit.CHARSELECT, sit.TITLE
+LOADING, CHARSELECT, TITLE = sit.LOADING, sit.CHARSELECT, sit.TITLE
 ATTENDANCE, DELIVER, DUNGEON_WINDOW, DIALOG, FAREWELL = sit.ATTENDANCE, sit.DELIVER, sit.DUNGEON_WINDOW, sit.DIALOG, sit.FAREWELL
 MAIN, UNKNOWN, CRAFT = sit.MAIN, sit.UNKNOWN, sit.CRAFT
 EXIT_ASK = "exit_ask"              # '게임을 종료하시겠습니까?' · '던전에서 퇴장하시겠습니까?' — Space·확인이 '예' 라 건드리지 않는다
@@ -33,7 +33,7 @@ EVENT_POPUP = "event_popup"        # '새로운 이벤트' 안내 창 (회색 '�
 NETWORK = "network"                # '네트워크가 불안정' 창 ('시작 화면으로' · '다시 시도하기') — 언제 어디서든 뜰 수 있다
 NETWORK_EVERY = 15                 # 모르는 화면일 때 이 창을 글자로 찾아보는 간격 (초) — OCR 이 1~3초라 매번은 못 본다
 
-OUTSIDE = (RUN_LIMIT, CHARSELECT, TITLE, EXIT_ASK)  # 게임 밖이거나 사람 몫 — 점검자가 누르지 않는다
+OUTSIDE = (CHARSELECT, TITLE, EXIT_ASK)  # 게임 밖이거나 사람 몫 — 점검자가 누르지 않는다
 
 
 @dataclass
@@ -89,9 +89,9 @@ def network_popup(bot, frame):
 
 def look(bot, frame=None, skip=(), ocr: bool = False) -> Seen:
     """지금 상황. skip 에 든 템플릿은 보지 않는다 (기다리는 쪽이 지금 찾는 것). ocr: 템플릿이 잘 안 맞는 '확인'·'화면 터치' 를
-    글자로도 본다 (느려서 가끔만)."""
-    if bot.cli.run_limited is True:
-        return Seen(RUN_LIMIT, src="cli")
+    글자로도 본다 (느려서 가끔만).
+    게임 연속 실행 제한('너무 오랫동안 실행 · 재시작해주세요' 창, CLI 오류)은 상황으로 보지 않는다 — 창이 떠 있어도 일은
+    계속 되고, 멈추지 말라는 사용자 결정 (2026-11-10). 경고는 Connector, 실패 요약 메모는 outcome.escalate."""
     if bot.map_loading():
         return Seen(LOADING, src="packet")
     if bot.packets.at_charselect():

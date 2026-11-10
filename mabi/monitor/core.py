@@ -134,9 +134,6 @@ class Monitor:
         if seen.what != self._sit:
             self.record(ctx, "상황", seen)
             self._sit = seen.what
-        if seen.what == d.RUN_LIMIT:
-            # '종료' 하나뿐인 창 — 누르지 않고 사람에게. runner 가 실패 + 연속 실행 제한이면 일시정지한다
-            raise RuntimeError("게임 연속 실행 제한 창 ('게임을 재시작해주세요')")
         if (r := ctx.finish_on.get(seen.what)) and seen.what != d.DUNGEON_WINDOW:
             out = Finish(r, seen.what)  # 태스크가 기다리던 화면 (던전 창은 처리기가 사진을 남긴다)
         else:

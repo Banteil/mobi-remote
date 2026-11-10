@@ -689,8 +689,8 @@ class Bot:
 
     def run_limit_popup(self) -> bool:
         """화면 위쪽에 '너무 오랫동안 실행되고 있습니다 · 재시작' 창이 떠 있나 (AI 에이전트 연속 실행 제한, 실패했을 때만 부른다 —
-        OCR 이 무겁다). 창만 떠 있고 명령은 계속 되는 일이 있어 이것만으로 멈추지 않는다 — 멈춤은 CLI 가 제한 오류를 줬을 때
-        (cli.run_limited). 이 창은 '종료' 하나뿐이라 누르면 게임이 꺼진다 → 누르지 않는다."""
+        OCR 이 무겁다). 창이 떠 있어도 일은 계속 되어 멈추지 않고 실패 요약에 적기만 한다 (outcome.escalate).
+        이 창은 '종료' 하나뿐이라 누르면 게임이 꺼진다 → 누르지 않는다."""
         from . import ocr
         try:
             texts = "".join(t for t, _, _ in ocr.find_texts(self.frame(), (0, 0, 1920, 600))).replace(" ", "")
