@@ -375,7 +375,7 @@ class Runner:
                 status, summary, messy = outcome.classify(bot, tid, label, e)
                 if messy:
                     recover(tid)
-            # 게임이 꺼졌거나(튕김·사람이 끔) 연속 실행 제한 창이면 남은 일마다 실패를 쌓지 않고 일시정지.
+            # 게임이 꺼졌으면(튕김·사람이 끔) 남은 일마다 실패를 쌓지 않고 일시정지 (연속 실행 제한은 메모만 — outcome.escalate).
             # 단계 기록은 남아 있어 게임을 켜고 다시 시작(F12)하면 이 자리부터 이어 한다
             status, summary = outcome.escalate(bot, status, summary)
             halted = status == "STOP"
