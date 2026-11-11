@@ -77,17 +77,51 @@ def prune_shots(shot_dir: Path, log=None, keep_days: int = SHOT_KEEP_DAYS) -> in
 LOADING_DOUBT = 20.0  # 패킷 로딩이 이보다 길면 새 맵 진입을 놓쳤나 CLI 로 본다 (Bot.map_loading)
 
 
+def _share(frame, name: str, test) -> float:
+    """화면의 ui.json 영역 name 에서 test(픽셀 BGR 줄 → 참거짓)가 참인 픽셀의 비율 (0~1)."""
+    from . import gamedata as gd
+    x, y, w, h = gd.region(name)
+    px = frame[y:y + h, x:x + w].reshape(-1, 3).astype(int)
+    return float(test(px).mean()) if px.size else 0.0
+
+
+def _green(px):
+    """게임의 초록 버튼 색 (초록이 파랑·빨강보다 40 넘게 큼)."""
+    return (px[:, 1] > px[:, 2] + 40) & (px[:, 1] > px[:, 0] + 40)
+
+
+def _dark_panel(px):
+    """창 바탕의 어두운 회색 (서버 연결 끊김 창 — BGR 약 51·39·34)."""
+    return (px.max(axis=1) < 70) & (np.ptp(px, axis=1) < 25)
+
+
 def run_limit_shown(frame) -> bool:
     """연속 실행 제한 창이 이 화면에 떠 있나. 창의 '종료' 버튼 자리(ui.json regions run_limit_button)가 초록인지 먼저 보고
     (창이 있으면 97% 초록, 없는 화면은 0% — 2026-11-10 캡처), 초록이면 창 자리 글자로 확인한다 (OCR). 끊는 자리마다
     부르므로(mabi/restart.watch) 평소엔 색만 본다."""
     from . import gamedata as gd, ocr
-    x, y, w, h = gd.region("run_limit_button")
-    px = frame[y:y + h, x:x + w].reshape(-1, 3).astype(int)
-    if not px.size or ((px[:, 1] > px[:, 2] + 40) & (px[:, 1] > px[:, 0] + 40)).mean() < 0.6:
+    if _share(frame, "run_limit_button", _green) < 0.6:
         return False
     texts = "".join(t for t, _, _ in ocr.find_texts(frame, gd.region("run_limit_popup"))).replace(" ", "")
     return "오랫동안실행" in texts or "재시작해주세요" in texts
+
+
+def server_down_shown(frame) -> bool:
+    """게임 서버와 연결이 끊긴 창('게임 서버와 연결이 끊어졌습니다. 잠시 후 다시 접속해주세요. (ERROR 83)' + 넓은 초록
+    '확인')이 이 화면에 떠 있나. 목요일 정기 점검·임시 점검으로 서버가 내려가면 뜨고 게임을 끌 때까지 남는다
+    (2026-11-12 06:00 — 리모콘은 어비스 보스방에서 13분을 그대로 있었다). 창 아래 넓은 초록 버튼(server_down_button)과
+    그 위 어두운 창 바탕(server_down_panel)을 색으로 먼저 보고 (이 창 97%·100% — 녹화·실패 화면 262장 중 둘 다 맞는 다른
+    화면 없음, 2026-11-12), 맞으면 창 글자로 확인한다 (OCR). 점검자가 상황을 볼 때마다 부르므로 평소엔 색만 본다.
+    보다가 터지면(OCR 오류 등) 아니라고 본다 — 이 확인 하나 때문에 상황 판단(monitor.detect.look)이 막히면 안 된다."""
+    from . import gamedata as gd, ocr
+    try:
+        if _share(frame, "server_down_button", _green) < 0.6 or _share(frame, "server_down_panel", _dark_panel) < 0.6:
+            return False
+        texts = "".join(ocr.nospace(t) for t, _, _ in ocr.find_texts(frame, gd.region("server_down_popup")))
+    except Exception:  # noqa: BLE001
+        logging.getLogger("mabi").debug("서버 연결 끊김 창을 확인하지 못함", exc_info=True)
+        return False
+    return any(w in texts for w in gd.words("server_down"))
 
 
 class Bot:
@@ -706,6 +740,14 @@ class Bot:
         창의 '종료' 는 누르지 않는다 — 게임을 다시 켤 때는 창 닫기 신호로 끈다 (mabi/restart)."""
         try:
             return run_limit_shown(self.frame())
+        except Exception:  # noqa: BLE001 — 확인 실패가 실패 처리를 막으면 안 된다
+            return False
+
+    def server_down_popup(self) -> bool:
+        """게임 서버와 연결이 끊긴 창(점검 등)이 떠 있나 (server_down_shown). 점검자는 상황마다 보고(monitor.detect
+        SERVER_DOWN), 일이 실패했을 때도 본다(outcome.escalate) — 떠 있으면 게임을 끄고 일시정지 (mabi/restart.server_down)."""
+        try:
+            return server_down_shown(self.frame())
         except Exception:  # noqa: BLE001 — 확인 실패가 실패 처리를 막으면 안 된다
             return False
 

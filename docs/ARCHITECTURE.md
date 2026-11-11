@@ -28,6 +28,7 @@ mabi/
 | 작업이 예외로 끝났을 때 결과 가르기·정리 (게임 꺼짐 → 멈춤, 연속 실행 제한 창 → 게임 다시 켜기 뒤 이어 함, 가방 무게 → HEAVY) | `outcome.classify` · `outcome.escalate` · `outcome.recover` | runner, `daily_api._repeat_launch` |
 | 돌던 카드를 끊어도 되는 자리에서 끊고 먼저 할 카드(시간 정해진 카드·게임 다시 켜기)를 하기 | `cutpoint.check`·`cut`·`due` → 큐 `cut_for_timed` (먼저 할 카드는 `Kind.timed`) | `Bot.step`, `Repeat.yield_between`, CLI 걸음 카드 |
 | 연속 실행 제한 창 → 게임 다시 켜기 (창 감지 `run_limit_shown`, 창 닫기 신호 → 넥슨 플러그 바로실행 → 같은 캐릭터로 접속) | `restart.watch`·`now`·`run` · 큐 카드 `queue_api.RestartKind` · 맨 위에 올리기 `WorkQueue.put_first` | cutpoint, `outcome.escalate` |
+| 서버 연결 끊김 창(점검 등) → 게임 끄고 큐 일시정지 (창 감지 `server_down_shown` — 색 먼저, 글자로 확인) | `restart.server_down` · 큐 고리 `restart.set_pause_hook` | 점검자 `detect.look` SERVER_DOWN → `handlers.server_down`, `outcome.escalate` |
 | 인터페이스 PC·80% 맞추기 (한 번, 게임 안·콘텐츠 밖일 때) | `tasks/display.InterfaceFit` → `'interface'` 이벤트 | runner, Repeat |
 | 빠른 이동(T) — 이동 시작을 기다린 뒤 | `Bot.fast_travel(wait)` | 숙제 이동, 아르바이트(점검자), 어비스·레이드 입구, 수리 |
 | 가방이 꽉 찼나 | `Bot.overweight()` (패킷, 모르면 CLI) | runner 접속 뒤, `Bot.check_weight` |

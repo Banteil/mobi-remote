@@ -65,6 +65,8 @@ def recover(bot: Bot) -> None:
 def escalate(bot: Bot, status: str, summary: str) -> tuple[str, str]:
     """실패가 작업 탓이 아니라 게임 탓이면 멈춤으로 바꾼다 — 남은 일마다 같은 실패를 쌓지 않게.
     게임이 꺼짐(튕김·사람이 끔).
+    게임 서버와 연결이 끊긴 창(점검 등)이 떠 있으면 남은 일도 다 막힌다 → 게임을 끄고 멈춤 (mabi/restart.server_down —
+    보통은 점검자가 먼저 보고 끈다. 여기는 그 전에 실패한 일).
     화면에 연속 실행 제한 창('재시작해주세요')이 떠 있으면 그 창이 가려 실패했을 수 있다 → 작업 큐가 게임을 다시 켜고
     (mabi/restart — 큐가 돌 때·설정이 켜져 있을 때) 이 일은 실패가 아니라 멈춤으로 두어 다시 켠 뒤 그 자리부터 이어 한다.
     다시 켜지 않을 때와 CLI 의 제한 오류는 멈추지 않고 요약에 메모만 붙인다 (2026-11-10 사용자 결정 — 창이 떠 있어도
@@ -74,6 +76,8 @@ def escalate(bot: Bot, status: str, summary: str) -> tuple[str, str]:
     if not bot.window.find():
         log.error("게임이 꺼짐 → 일시정지 (게임을 켠 뒤 다시 시작하면 이어 함)")
         return "STOP", "게임이 꺼짐 — 게임을 켠 뒤 다시 시작하면 이어 합니다"
+    if bot.server_down_popup():
+        return "STOP", restart.server_down(bot)
     if bot.run_limit_popup():
         if restart.now(bot, "연속 실행 제한 창이 떠 있는 채 실패"):
             log.warning("실패 — 화면에 연속 실행 제한 창 → 게임을 다시 켠 뒤 이 자리부터 이어 함")

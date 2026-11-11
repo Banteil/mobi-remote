@@ -30,6 +30,7 @@
     "tribute_quest": "모험가 길드의 고난도 심층 공략",
     "network_unstable": "네트워크가불안정",
     "network_retry": "다시시도하기",
+    "server_down": ["연결이끊어", "다시접속해주세요"],
     "arbeit_accept": "수락",
     "arbeit_report": "결과보고",
     "charscan_main": "대표",
@@ -141,7 +142,10 @@
     "fb_exit_button": [1856, 20, 40, 40],
     "enhance_button": [1240, 960, 620, 90],
     "run_limit_popup": [700, 38, 520, 200],
-    "run_limit_button": [740, 160, 440, 40]
+    "run_limit_button": [740, 160, 440, 40],
+    "server_down_popup": [653, 380, 613, 180],
+    "server_down_panel": [680, 560, 560, 30],
+    "server_down_button": [710, 620, 500, 50]
   },
 
   "covers": {

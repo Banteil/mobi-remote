@@ -12,7 +12,9 @@
     제한 창의 '종료' 는 누르지 않는다 — 창 닫기는 실기에서 확인됐고(2026-11-11) 그 창이 없어도 같은 길이라 명령으로
     시험할 수 있다 (force — gui.py --restart-game).
   - 못 하면(넥슨 로그인 풀림·업데이트·점검 등) CannotProceed — 큐는 그 카드에서 일시정지 (사람이 게임을 켜고 ▶).
-큐와는 set_hook 으로만 잇는다 (cutpoint 와 같은 방식 — 여기는 큐를 모른다).
+게임 서버와 연결이 끊긴 창(점검 등 — bot.server_down_shown)이 뜨면 같은 닫기 신호로 게임을 끄고 큐를 일시정지한다
+(server_down — 점검은 몇 시간이라 다시 켜지는 않는다).
+큐와는 set_hook·set_pause_hook 으로만 잇는다 (cutpoint 와 같은 방식 — 여기는 큐를 모른다).
 """
 from __future__ import annotations
 
@@ -28,6 +30,7 @@ if TYPE_CHECKING:  # bot 이 cutpoint → restart 를 불러오므로 여기서 
 log = logging.getLogger("mabi")
 
 _hook = None  # (까닭, now) -> bool: 작업 큐가 '게임 다시 켜기' 를 받았으면 True (gui_app/queue_api._q_restart)
+_pause = None  # (메모) -> None: 작업 큐를 이 메모로 일시정지 (gui_app/queue_api — 서버 연결이 끊겨 게임을 끔)
 
 SYNCHRONIZE, WAIT_TIMEOUT, ERROR_ACCESS_DENIED, WM_CLOSE = 0x00100000, 0x102, 5, 0x0010
 CONFIRM_TAKES = 3  # 첫 신호 뒤 '게임을 종료하시겠습니까?' 창이 뜨길 기다리는 초 — 그다음 신호가 '게임 종료'
@@ -38,6 +41,11 @@ CLOSE_TRIES = 3
 def set_hook(fn) -> None:
     global _hook
     _hook = fn
+
+
+def set_pause_hook(fn) -> None:
+    global _pause
+    _pause = fn
 
 
 def enabled(cfg: dict) -> bool:
@@ -157,6 +165,44 @@ def _quit(bot: Bot, timeout: float) -> None:
     if not _until(bot, lambda: not (pid and _alive(pid)), timeout):
         raise CannotProceed(f"게임 창은 닫혔는데 {timeout:.0f}초 안에 프로세스가 끝나지 않음")
     bot.log.info("게임 꺼짐")
+
+
+# ---------------------------------------------------------------- 서버 연결 끊김 (점검)
+DOWN_NOTE = "게임 서버 연결이 끊겨(점검 등) 게임을 껐습니다 — 점검이 끝나면 게임을 켜고 ▶"
+
+
+def server_down(bot: Bot) -> str:
+    """게임 서버와 연결이 끊긴 창이 떠 있다 (bot.server_down_shown — 목요일 점검·임시 점검). 그 창은 게임을 끌 때까지
+    남고, 리모콘은 그 앞에서 하던 일만 붙잡고 있었다 (2026-11-12 06:00~06:13 어비스 보스방). 그래서 게임을 끄고 작업 큐를
+    일시정지한다 (2026-11-12 사용자). 점검은 몇 시간이라 다시 켜지는 않는다 — 점검 뒤 사람이 게임을 켜고 ▶ 면 하던 카드를
+    그 자리부터 이어 한다. 끄는 길은 다시 켜기와 같은 창 닫기 신호(_quit). 창의 '확인' 이 무엇을 하는지는 아직 몰라 먼저
+    누르지 않고, 닫기 신호로 창이 안 닫힐 때만 '확인'(Space) 뒤 한 번 더 보낸다. 큐에 남길 메모를 돌려준다 —
+    봇은 멈춤 요청 상태가 된다 (뒤이어 무엇을 하려 해도 StopRequested)."""
+    from .tasks.content import CannotProceed
+    timeout = float(bot.cfg["restart"]["exit_timeout"])
+    bot.log.error(f"게임 서버와 연결이 끊김 (점검 등) → 게임을 끄고 작업 큐 일시정지 ({bot.snapshot('server_down').name})")
+    note = DOWN_NOTE
+    try:
+        try:
+            _quit(bot, timeout)
+        except CannotProceed as e:
+            if not bot.window.find():
+                raise  # 창은 닫혔는데 프로세스가 안 끝남 — '확인' 을 누를 창이 없다
+            bot.log.warning(f"{e} → 창의 '확인'(Space)을 누르고 다시 닫기")
+            bot.key("space")
+            bot.sleep(3)
+            if bot.window.find():
+                _quit(bot, timeout)
+    except CannotProceed as e:
+        bot.log.error(f"게임을 끄지 못함: {e}")
+        note = f"게임 서버 연결이 끊김(점검 등) — 게임을 끄지 못함 ({e}) · 게임을 끄고, 점검이 끝나면 켠 뒤 ▶"
+    if _pause is not None:
+        try:
+            _pause(note)
+        except Exception:  # noqa: BLE001 — 큐에 메모를 못 남겨도 멈추기는 한다
+            log.exception("작업 큐 일시정지 요청 실패")
+    bot.stopper.request(note)
+    return note
 
 
 def _launch(bot: Bot, cfg: dict) -> None:

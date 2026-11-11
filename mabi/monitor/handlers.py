@@ -288,6 +288,15 @@ def network(bot, ctx, seen):
     return "네트워크 다시 시도"
 
 
+def server_down(bot, ctx, seen):
+    """게임 서버와 연결이 끊긴 창(점검 등) → 게임을 끄고 작업 큐 일시정지 (mabi/restart.server_down — 사용자 2026-11-12).
+    창의 '확인' 은 먼저 누르지 않는다. 하던 일은 여기서 멈추고, 점검 뒤 게임을 켜고 ▶ 면 그 자리부터 이어 한다."""
+    from .. import restart
+    from ..bot import StopRequested
+    restart.server_down(bot)
+    raise StopRequested()
+
+
 def stella(bot, ctx, seen):
     c = bot.cfg["login"]
     bot.click(tuple(c["stella_card_xy"]))  # 어느 카드든 상관없음
@@ -553,7 +562,7 @@ def fast_travel(bot) -> bool:
 # 어느 일이든 (기다리는 중에 끼어든 창 포함)
 BASE = {d.LOADING: loading, d.ATTENDANCE: attendance, d.FAREWELL: farewell, d.SCENE: scene, d.DIALOG: dialog,
         d.CONFIRM: confirm, d.TOUCH: touch, d.DEAD: dead, d.STELLA: stella, d.NOTICE: notice, d.EVENT_POPUP: event_popup,
-        d.NETWORK: network}
+        d.NETWORK: network, d.SERVER_DOWN: server_down}
 # NPC 메뉴·전달·던전 창을 다루는 일 (ctx.menus — 아르바이트·정리). 기다리는 중의 정리는 메뉴를 누르지 않는다
 MENUS = {d.REPORT: menu_space, d.ACCEPT: menu_space, d.DELIVER: deliver, d.DUNGEON_WINDOW: dungeon_window}
 # 채집·제작·가공 창 (ctx.job — 아르바이트 한 건을 하는 중)

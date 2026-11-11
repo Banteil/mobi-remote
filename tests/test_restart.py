@@ -247,6 +247,7 @@ class WatchTest(unittest.TestCase):
         b = mock.Mock()
         b.cfg = {"restart": {"auto": auto}}
         b.run_limit_popup.return_value = popup
+        b.server_down_popup.return_value = False
         return b
 
     def test_watch(self):

@@ -8,11 +8,12 @@ from mabi.tasks.content import CannotProceed
 
 
 class OutcomeTest(unittest.TestCase):
-    def bot(self, window=True, limited=False, popup=False):
+    def bot(self, window=True, limited=False, popup=False, down=False):
         b = mock.MagicMock()
         b.window.find.return_value = window
         b.cli.run_limited = limited
         b.run_limit_popup.return_value = popup
+        b.server_down_popup.return_value = down
         b.snapshot.return_value.name = "s.png"
         b.dump_box.return_value = None
         return b
@@ -39,6 +40,10 @@ class OutcomeTest(unittest.TestCase):
         status, summary = outcome.escalate(self.bot(popup=True), "FAIL", "x")
         self.assertEqual(status, "FAIL")
         self.assertIn("연속 실행 제한 창", summary)
+        # 서버 연결이 끊긴 창(점검 등) → 게임을 끄고 멈춤 (메모는 restart.server_down 이 정한다)
+        with mock.patch.object(outcome.restart, "server_down", return_value="메모") as down:
+            self.assertEqual(outcome.escalate(self.bot(down=True), "FAIL", "x"), ("STOP", "메모"))
+        down.assert_called_once()
 
     def test_overweight(self):
         b = mock.MagicMock()

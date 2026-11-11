@@ -548,6 +548,8 @@ class QueueApi:
         cutpoint.set_hook(self.queue.cut_for_timed, self.queue.timed_due)
         # 연속 실행 제한 창을 보면 '게임 다시 켜기' 카드를 맨 위에 (같은 끊는 자리로 먼저 한다)
         restart.set_hook(self._q_restart)
+        # 서버 연결이 끊겨(점검 등) 게임을 끄면 그 까닭을 카드 메모로 남기고 큐를 일시정지 (점검 뒤 게임을 켜고 ▶ 면 이어 함)
+        restart.set_pause_hook(lambda note: self.queue.set_stop("stopped", {"note": note}))
         threading.Thread(target=self._q_hotkey, name="queue-f12", daemon=True).start()
 
     def _q_restart(self, why: str, now: bool) -> bool:

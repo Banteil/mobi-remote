@@ -32,6 +32,7 @@ NOTICE = "notice"                  # 공지사항 웹 팝업 (ESC 로 닫힘)
 EVENT_POPUP = "event_popup"        # '새로운 이벤트' 안내 창 (회색 '닫기')
 NETWORK = "network"                # '네트워크가 불안정' 창 ('시작 화면으로' · '다시 시도하기') — 언제 어디서든 뜰 수 있다
 NETWORK_EVERY = 15                 # 모르는 화면일 때 이 창을 글자로 찾아보는 간격 (초) — OCR 이 1~3초라 매번은 못 본다
+SERVER_DOWN = "server_down"        # '게임 서버와 연결이 끊어졌습니다 (ERROR 83)' — 점검 등. 게임을 끄고 일시정지 (restart.server_down)
 
 OUTSIDE = (CHARSELECT, TITLE, EXIT_ASK)  # 게임 밖이거나 사람 몫 — 점검자가 누르지 않는다
 
@@ -91,7 +92,9 @@ def look(bot, frame=None, skip=(), ocr: bool = False) -> Seen:
     """지금 상황. skip 에 든 템플릿은 보지 않는다 (기다리는 쪽이 지금 찾는 것). ocr: 템플릿이 잘 안 맞는 '확인'·'화면 터치' 를
     글자로도 본다 (느려서 가끔만).
     게임 연속 실행 제한('너무 오랫동안 실행 · 재시작해주세요' 창, CLI 오류)은 상황으로 보지 않는다 — 창이 떠 있어도 일은
-    계속 되고, 멈추지 말라는 사용자 결정 (2026-11-10). 경고는 Connector, 실패 요약 메모는 outcome.escalate."""
+    계속 되고, 멈추지 말라는 사용자 결정 (2026-11-10). 경고는 Connector, 실패 요약 메모는 outcome.escalate.
+    서버 연결이 끊긴 창(점검 등)은 HUD 가 보이는 채로 가운데에 떠 메인 화면처럼 보이므로 화면을 잡자마자 먼저 본다
+    (색 두 군데만 먼저 봐서 가볍다 — bot.server_down_shown)."""
     if bot.map_loading():
         return Seen(LOADING, src="packet")
     if bot.packets.at_charselect():
@@ -101,6 +104,9 @@ def look(bot, frame=None, skip=(), ocr: bool = False) -> Seen:
         # 게임이 저절로 살려 준다 (사용자 2026-10-26) — 그 신호가 오기 전에도 부활하려 하지 말고 클리어 화면을 본다
         return Seen(DEAD, src="packet")
     frame = bot.frame() if frame is None else frame
+    from ..bot import server_down_shown
+    if server_down_shown(frame):
+        return Seen(SERVER_DOWN, src="screen+ocr", frame=frame)
     ui, a = bot.ui, bot.cfg["arbeit"]
 
     def f(name):
