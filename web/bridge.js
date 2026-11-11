@@ -101,6 +101,7 @@
       playOne: c('queue.playOne'), pauseOne: c('queue.pauseOne'), pause: c('queue.pause'), halt: c('queue.halt'),
       playAll: c('queue.playAll'), tidy: c('queue.tidy'), clear: c('queue.clear'), edit: c('queue.edit'),
       patch: c('queue.patch'), answer: c('queue.answer'), history: c('queue.history'), lastReport: c('queue.lastReport'),
+      chars: c('queue.chars'),
       onReport: (cb) => on('mm:queue-report', cb),
       onChange: (cb) => on('mm:queue', cb), onAsk: (cb) => on('mm:queue-ask', cb),
       onDone: (cb) => on('mm:queue-done', cb), onToast: (cb) => on('mm:queue-toast', cb),

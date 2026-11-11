@@ -160,7 +160,7 @@ class RunTest(unittest.TestCase):
 
         def start(link):
             bot.launched, bot.calls = True, 0
-        with mock.patch.object(restart, "_character", return_value={"slot": 2, "name": "둘"}), \
+        with mock.patch("mabi.tasks.login.current_character", return_value={"slot": 2, "name": "둘"}), \
                 mock.patch.object(restart, "_pid", return_value=pid), \
                 mock.patch.object(restart, "_close", side_effect=bot.closes.append), \
                 mock.patch.object(restart.os, "startfile", side_effect=start) as startfile, \

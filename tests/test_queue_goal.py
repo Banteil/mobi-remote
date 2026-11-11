@@ -51,6 +51,9 @@ class FakeApi(QueueApi):
     def _q_toast(self, title, text="", kind="ok"):
         self.toasts.append(title)
 
+    def _q_char(self, q, it):  # 캐릭터 맞추기는 게임 화면이 필요하다 — 판단 규칙은 test_queue_char 가 본다
+        return True
+
 
 def card(**kw):
     return {"id": 1, "name": "못", "label": "못", "target": 10, **kw}

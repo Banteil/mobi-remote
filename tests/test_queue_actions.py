@@ -36,6 +36,9 @@ class FakeApi(QueueApi):
     def _emit(self, ch, v=None):
         self.events.append((ch, v))
 
+    def _q_char(self, q, it):  # 캐릭터 맞추기는 게임 화면이 필요하다 — 판단 규칙은 test_queue_char 가 본다
+        return True
+
 
 class ActionKindTest(unittest.TestCase):
     def test_single_action_ok(self):

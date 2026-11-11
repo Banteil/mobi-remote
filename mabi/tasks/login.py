@@ -215,6 +215,20 @@ def current_name(bot: Bot) -> str:
     return name_in_frame(bot.frame())
 
 
+def current_character(bot: Bot) -> dict | None:
+    """지금 접속한 캐릭터 (프로필의 슬롯·이름). 이름을 모르거나 프로필에 없으면 None.
+    게임 다시 켜기(restart)와 작업 큐 카드의 캐릭터 기억(queue_api)이 같이 쓴다."""
+    from .. import profile as prof
+    try:
+        name = current_name(bot)
+    except Exception:  # noqa: BLE001 — 이름을 못 읽으면 모르는 것으로
+        name = ""
+    if not name:
+        return None
+    chars = prof.characters(prof.load_profile(bot.paths.profile) or {"slots": []})
+    return next((ch for ch in chars if name_matches(name, ch["name"])), None)
+
+
 def _name_score(a: str, b: str) -> float:
     import difflib
     return difflib.SequenceMatcher(None, _norm_name(a), _norm_name(b)).ratio()

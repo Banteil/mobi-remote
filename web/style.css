@@ -1043,3 +1043,8 @@ input[type="number"].num-in { min-width: 0; width: 72px; }
 .card h3.dr-head .dr-all { margin-left: auto; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--fg); }
 .card h3.dr-head .dr-all + .count { margin-left: 0; }
 .dr-chars { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 4px 0 10px; }
+
+/* 작업 큐 카드의 캐릭터 줄 (제작·채집·가공) */
+.q-link { background: none; border: 0; padding: 0; font: inherit; color: var(--fg-dim); cursor: pointer; text-decoration: underline dotted; }
+.q-link:hover { color: var(--fg); }
+select.q-who-pick { width: 100%; padding: 6px 8px; margin: 6px 0; }

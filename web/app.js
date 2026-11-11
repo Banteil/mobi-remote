@@ -1894,6 +1894,7 @@ function wire() {
     if (t.dataset.qPlay !== undefined) return void qPlayOne(t.dataset.qPlay);
     if (t.dataset.qPause !== undefined) return void qPauseOne(t.dataset.qPause);
     if (t.dataset.qEdit !== undefined) return void qEdit(t.dataset.qEdit);
+    if (t.dataset.qWho !== undefined) return void qWho(t.dataset.qWho);
     if (t.dataset.qUp !== undefined) return void qMove(t.dataset.qUp, -1);
     if (t.dataset.qDn !== undefined) return void qMove(t.dataset.qDn, 1);
 

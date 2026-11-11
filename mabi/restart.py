@@ -87,7 +87,7 @@ def run(bot: Bot, cfg: dict, character: dict | None = None, keep=lambda ch: None
             bot.log.info("연속 실행 제한 창이 없음 → 다시 켜지 않고 접속만 확인")
             bot.log.info(login.run(bot, cfg, character))
             return "연속 실행 제한 창이 없음 — 다시 켜지 않음"
-        character = _character(bot) or character
+        character = login.current_character(bot) or character
         keep(character)
         _quit(bot, float(c["exit_timeout"]))
     else:
@@ -95,24 +95,6 @@ def run(bot: Bot, cfg: dict, character: dict | None = None, keep=lambda ch: None
     _launch(bot, cfg)
     bot.log.info(login.run(bot, cfg, character))
     return f"게임을 다시 켜고 {character['name'] if character else '마지막 캐릭터'} 로 접속"
-
-
-def _character(bot: Bot) -> dict | None:
-    """지금 캐릭터 (슬롯·이름) — 다시 켜서 이 캐릭터로 접속한다. 프로필에 없으면 None (선택 화면에서 골라져 있던
-    캐릭터 = 마지막으로 한 캐릭터로 들어간다)."""
-    from . import profile as prof
-    from .tasks.login import current_name, name_matches
-    p = bot.packets
-    name = (p.state.my_name if p.ok else None) or ""
-    if not name:
-        try:
-            name = current_name(bot)
-        except Exception:  # noqa: BLE001 — 이름을 못 읽어도 다시 켜기는 한다
-            name = ""
-    if not name:
-        return None
-    chars = prof.characters(prof.load_profile(bot.paths.profile) or {"slots": []})
-    return next((ch for ch in chars if name_matches(name, ch["name"])), None)
 
 
 def _pid(hwnd: int) -> int:

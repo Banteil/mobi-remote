@@ -164,6 +164,23 @@ class DailyKind(Kind):
         self.api.daily_stop(reason in ("remove", "skip"), STOP_WHY.get(reason, ""))
 
 
+def card_character(it: dict, chars: list[dict]) -> tuple[str, dict | None]:
+    """제작·채집·가공 카드(goal·action)를 어느 캐릭터로 할까. 카드 칸 slot: 0·없음 = 접속 캐릭터, 그 밖 = 그 슬롯 캐릭터.
+    접속 캐릭터 카드는 처음 집을 때의 캐릭터를 pin 에 적어 두고, 밀렸다 돌아오면 그 캐릭터로 돌아간다
+    (필드 보스처럼 여러 캐릭터를 도는 카드가 끼어든 뒤 엉뚱한 캐릭터로 이어 가지 않게 — 2026-11-12 사용자).
+    돌려주는 것: ("any", None) 확인 없이 지금 캐릭터로 · ("remember", None) 지금 캐릭터를 pin 에 적기 ·
+    ("want", 캐릭터) 이 캐릭터인지 확인하고 아니면 접속 · ("missing", None) 고른 슬롯이 캐릭터 목록에 없음."""
+    slot = int(it.get("slot") or 0)
+    if slot:
+        ch = next((c for c in chars if int(c["slot"]) == slot), None)
+        return ("want", ch) if ch else ("missing", None)
+    if it.get("pin"):
+        return "want", it["pin"]
+    if it.get("kind") == "action":
+        return "any", None  # 한 번 하는 행동은 끼어들 틈이 없다 — 지금 캐릭터로 바로
+    return "remember", None
+
+
 class AbyssKind(Kind):
     own_loot = True  # 반복이 캐릭터 접속 뒤부터 잰다 ('loot' 이벤트 — 일일 숙제와 같은 queue_report.LootMeter)
     STAGE = {"match": "매칭 중", "play": "진행 중", "clear": "클리어", "repair": "장비 수리"}
@@ -287,6 +304,8 @@ class GoalKind(Kind):
 
     def run(self, q, it):
         api, name = self.api, it.get("name")
+        if not api._q_char(q, it):  # 보유량(base)은 그 캐릭터 것이어야 한다 — 먼저 맞춘다
+            return False
         if it.get("base") is None:
             try:
                 base = int(api.goal_next(name, 0).get("have") or 0)
@@ -345,6 +364,9 @@ class GoalKind(Kind):
             done += 1
             q.patch(it["id"], {"spent": (it.get("spent") or 0) + got, "steps": (it.get("steps") or 0) + 1})
         return ok
+
+    def stop(self, reason):
+        self.api._q_char_stop(reason)
 
     def _wait(self, q, it, st) -> bool:
         """가공이 끝나기를 기다린다. 남은 시간을 카드에 적고, 큐가 서거나 먼저 할 카드가 열리면 그만 (가공은 시설에서 계속된다)."""
@@ -410,6 +432,8 @@ class ActionKind(Kind):
         return x.get("detail") or ""
 
     def run(self, q, it):
+        if not self.api._q_char(q, it):
+            return False
         if it.get("act") == "collectAll":
             return self.api._q_collect_all(q, it)
         r = self.api.exec(it.get("command"), it.get("body"), origin={"label": it.get("label"), "act": it.get("act")})
@@ -417,6 +441,9 @@ class ActionKind(Kind):
             ko = r.get("ko") or {}
             q.note(it, "실패 — " + (ko.get("text") or r.get("message") or r.get("error") or "알 수 없음"))
         return bool(r.get("ok"))
+
+    def stop(self, reason):
+        self.api._q_char_stop(reason)
 
 
 class EnhanceKind(Kind):
@@ -653,6 +680,67 @@ class QueueApi:
     def _q_toast(self, title: str, text: str = "", kind: str = "ok") -> None:
         self._emit("mm:queue-toast", {"title": title, "text": text, "kind": kind})
 
+    _q_char_bot = None
+
+    def _q_char(self, q: WorkQueue, it: dict) -> bool:
+        """제작·채집·가공 카드를 시작하기 전 캐릭터 맞추기 (card_character). 다른 캐릭터면 그 캐릭터로 접속한다.
+        못 맞추면 카드 메모에 까닭을 적고 False (멈추기·F12 는 일시정지)."""
+        from mabi import outcome
+        from mabi import profile as prof
+        from mabi.bot import Bot
+        from mabi.tasks import login
+        chars = prof.characters(prof.load_profile(self.paths.profile) or {"slots": []})
+        what, want = card_character(it, chars)
+        if what == "any":
+            return True
+        if what == "missing":
+            q.note(it, f"실패 — 슬롯 {it.get('slot')} 캐릭터가 캐릭터 목록에 없습니다")
+            return False
+        if (err := self._busy_reason()):
+            q.note(it, f"시작 못 함 — {err}")
+            return False
+        bot = None
+        try:
+            cfg = load_config(self.paths)
+            self._daily_hook_log()
+            bot = self._q_char_bot = Bot(cfg, self.paths, force_exit=False)
+            if not bot.window.find():
+                q.note(it, "실패 — 게임이 꺼져 있습니다")
+                return False
+            if what == "remember":
+                now = login.current_character(bot)
+                if now:  # 모르면 적지 않는다 — 다음에 집을 때 다시 본다
+                    q.patch(it["id"], {"pin": {"slot": now["slot"], "name": now["name"]}})
+                return True
+            name = login.current_name(bot)
+            if name and login.name_matches(name, want["name"]):
+                return True
+            if not self._q_display(q, it):
+                return False
+            log.info(f"{it.get('label') or '카드'}: {want['name']} 로 하는 카드 → 접속을 바꿈 (지금 {name or '이름 모름'})")
+            bot.log.info(login.run(bot, cfg, want))
+            return True
+        except Exception as e:  # noqa: BLE001 — 가르는 규칙은 다른 반복과 같은 outcome
+            if bot is None:
+                log.exception("카드 캐릭터 맞추기 시작 실패")
+                q.note(it, f"실패 — {e}")
+                return False
+            status, summary, _ = outcome.classify(bot, "login", "캐릭터 맞추기", e)
+            if status == "STOP":
+                q.set_stop("stopped")
+            else:
+                q.note(it, f"캐릭터 맞추기 실패 — {summary}")
+            return False
+        finally:
+            self._q_char_bot = None
+            if bot:
+                bot.stopper.close()
+
+    def _q_char_stop(self, reason: str) -> None:
+        """큐가 선다 — 캐릭터를 바꾸는 중이면 멈춘다 (걸음 사이에서 멈추는 것은 q.stop 이 한다)."""
+        if self._q_char_bot:
+            self._q_char_bot.stopper.request(STOP_WHY.get(reason, ""))
+
     def _q_fit(self) -> bool:
         """옵션 창 '화면 설정 맞추기' ([run] fit_display) — 숙제·어비스·레이드 카드가 시작할 때 모두 이 값을 따른다
         (예전엔 탭마다 체크박스가 있어 카드에 담겼다 — 2026-10-28 사용자: 옵션 창으로 완전히 옮김)."""
@@ -809,6 +897,12 @@ class QueueApi:
     def queue_edit(self, item_id, target) -> dict:
         self.queue.edit(item_id, int(target))
         return {"ok": True}
+
+    def queue_chars(self) -> list:
+        """제작·채집·가공 카드의 캐릭터 고르기 목록 [{slot, name}] (카드의 캐릭터 버튼)."""
+        from mabi import profile as prof
+        return [{"slot": c["slot"], "name": c["name"]}
+                for c in prof.characters(prof.load_profile(self.paths.profile) or {"slots": []})]
 
     def queue_patch(self, item_id, fields) -> dict:
         self.queue.patch(item_id, fields if isinstance(fields, dict) else {})

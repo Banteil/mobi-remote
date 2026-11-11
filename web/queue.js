@@ -182,6 +182,48 @@ async function qEdit(id) {
 /** 실패한 항목을 치운다. 완료는 끝나는 즉시 스스로 빠지므로, 남는 것은 막혔거나 실패한 것들이다. */
 function qTidy() { mm.queue.tidy(); }
 
+/* ── 제작·채집·가공 카드의 캐릭터 ──
+ * slot 0·없음 = 접속 캐릭터: 처음 집을 때의 캐릭터를 pin 에 기억했다가, 다른 카드에 밀렸다 돌아오면 그 캐릭터로 돌아간다.
+ * 슬롯을 고르면 그 캐릭터로 접속해서 한다 (판단은 파이썬 queue_api.card_character). */
+let qChars = [];  // [{slot, name}] — 고르기 창을 열 때 새로 읽는다
+
+function qWhoText(x) {
+  const slot = +(x.slot || 0);
+  if (slot) {
+    const c = qChars.find((y) => +y.slot === slot);
+    return slot + '. ' + (c ? c.name : '슬롯 ' + slot);
+  }
+  return '접속 캐릭터' + (x.pin && x.pin.name ? ' (' + x.pin.name + ')' : '');
+}
+
+/** 제작·채집·가공 카드(goal·action)에만. 도는 중에는 글자만 (바꾸면 하던 일과 어긋난다). */
+function qWhoLine(x, run) {
+  const k = x.kind || 'goal';
+  if (k !== 'goal' && k !== 'action') return '';
+  const text = esc(qWhoText(x));
+  return '<div class="q-sub q-who">캐릭터: ' +
+    (run ? text : '<button class="q-link" data-q-who="' + x.id + '" title="이 카드를 할 캐릭터 바꾸기">' + text + ' ▾</button>') +
+    '</div>';
+}
+
+async function qWho(id) {
+  const it = qFind(id);
+  if (!it) return;
+  try { qChars = await mm.queue.chars(); } catch (_) { /* 못 읽으면 지난 목록 */ }
+  const cur = +(it.slot || 0);
+  const opts = '<option value="0"' + (cur ? '' : ' selected') + '>접속 캐릭터 (처음 시작할 때 접속해 있던 캐릭터)</option>' +
+    qChars.map((c) => '<option value="' + c.slot + '"' + (+c.slot === cur ? ' selected' : '') + '>' +
+      c.slot + '. ' + esc(c.name) + '</option>').join('');
+  const ok = await confirmModal('할 캐릭터',
+    '<p>"' + esc(it.label) + '" 을(를) 어느 캐릭터로 할까요?</p>' +
+    '<select id="q-who-pick" class="q-who-pick">' + opts + '</select>' +
+    '<p class="hint">다른 캐릭터면 시작할 때 그 캐릭터로 접속을 바꿉니다. 접속 캐릭터로 두면 처음 시작할 때의 캐릭터를 기억해, ' +
+    '다른 카드(필드 보스 등)에 밀렸다 돌아와도 그 캐릭터로 이어 합니다.</p>', '바꾸기');
+  if (!ok) return;
+  const slot = +$('#q-who-pick').value || 0;
+  mm.queue.patch(id, { slot: slot, pin: null });  // 다시 고르면 기억도 새로 (접속 캐릭터면 다음에 집을 때 다시 기억)
+}
+
 /** 전부 지운다. 되돌릴 수 없으니 한 번 물어본다. */
 async function qClear() {
   if (!qItems.length) return;
@@ -426,6 +468,7 @@ function paintQueue() {
       '<span class="spacer"></span>' + btns +
       '</div>' +
       (k.card ? k.card(x) : '<div class="q-amt">' + esc(k.amount(x)) + '</div>') +
+      qWhoLine(x, run) +
       qProgress(x) +
       (x.note ? '<div class="q-note">' + esc(x.note) + '</div>' : '') +
       (run
