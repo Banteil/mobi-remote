@@ -53,6 +53,11 @@ class DecodeTest(unittest.TestCase):
         self.assertIsNotNone(got)
         return got[1]
 
+    def test_server_notices(self):
+        """서버 연결 끊김 단서로 로그에 남기는 서버 알림(system.*)이 표에 있다 — 표를 다시 묶어도 빠지지 않게 (2026-11-12)."""
+        keys = {e.key for e in self.t.events() if e.key.startswith("system.")}
+        self.assertTrue({"system.session_kicked", "system.kicked_by_block", "system.scheduled_block"} <= keys, keys)
+
     def test_spear_monster_follows_markers(self):
         """물길 주술사 위치·종류는 표식으로 찾는다 — 앞 내용이 늘거나 줄어 칸이 밀려도 (11-05 패치 64바이트) 같은 값."""
         pos_mark = bytes.fromhex("0000403f00010000000000000000ffffffff")

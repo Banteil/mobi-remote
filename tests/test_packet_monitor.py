@@ -469,5 +469,62 @@ class DeathTest(unittest.TestCase):
         self.assertEqual((s.dialogue_action, s.dialogue_menu, s.in_dialogue), ("", False, False))
 
 
+class LinkLogTest(unittest.TestCase):
+    """서버 연결 끊김 단서는 로그로만 남긴다 (점검 등 — 판단에 쓰기 전에 무엇이 오는지 본다, 2026-11-12)."""
+
+    def setUp(self):
+        self.m = PacketMonitor(None)
+        self.m.state.in_game = True
+
+    def test_silence_once_with_server_close(self):
+        m = self.m
+        m._link("10.0.0.1", 0x12)  # 새 연결 (SYN·ACK)
+        m.last_rx = time.monotonic()
+        m._link("10.0.0.1", 0x11)  # 서버가 닫음 (FIN·ACK)
+        m.last_rx = time.monotonic() - 31
+        with self.assertLogs("mabi", "INFO") as cm:
+            m._watch_silence()
+            m._watch_silence()  # 한 번만
+        self.assertEqual(len(cm.output), 1)
+        self.assertIn("31초째 안 옴", cm.output[0])
+        self.assertIn("연결을 닫음 (FIN · 10.0.0.1), 그 뒤 새 연결 없음", cm.output[0])
+        with self.assertLogs("mabi", "INFO") as cm:
+            m._link("10.0.0.2", 0x12)  # 다시 받음
+        self.assertIn("다시 옴", cm.output[0])
+
+    def test_open_connection(self):
+        m = self.m
+        m._link("10.0.0.1", 0x14)  # RST
+        m._link("10.0.0.2", 0x12)  # 그 뒤 다른 서버와 새 연결 (맵 이동)
+        m.last_rx = time.monotonic() - 40
+        with self.assertLogs("mabi", "INFO") as cm:
+            m._watch_silence()
+        self.assertIn("연결은 열린 채 (마지막 새 연결", cm.output[0])
+
+    def test_quiet_when_recent_or_outside(self):
+        m = self.m
+        m.last_rx = time.monotonic() - 5
+        with self.assertNoLogs("mabi", "INFO"):
+            m._watch_silence()  # 아직 짧다
+            m.state.in_game = False  # 캐릭터 선택 화면 — 서버 패킷이 원래 안 온다
+            m.last_rx = time.monotonic() - 100
+            m._watch_silence()
+            m.state.in_game, m.last_rx = True, 0.0  # 감시를 켠 뒤 아직 받은 적 없음
+            m._watch_silence()
+
+    def test_server_notice_logged_and_recorded(self):
+        from unittest import mock
+        from mabi.packet_table import Event
+        m = self.m
+        ev = Event("system.session_kicked", 0x33467, "candidate", "")
+        m.table = mock.Mock()
+        m.table.event.return_value = ev
+        m.table.decode.return_value = (ev, {})
+        with self.assertLogs("mabi", "WARNING") as cm:
+            m._handle(0x33467, 0, b"\x01\x02")
+        self.assertIn("서버 알림 system.session_kicked — 본문 2바이트 01 02", cm.output[0])
+        self.assertEqual(m.recent[-1].key, "system.session_kicked")  # 블랙박스에도 남는다
+
+
 if __name__ == "__main__":
     unittest.main()

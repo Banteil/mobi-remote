@@ -42,6 +42,11 @@ OPEN_MAPS = ("Field", "BattleField", "FieldBoss", "HousingInn", "ScenarioField")
 CLI_FACTS = ("dungeon_state", "field_state", "dead")
 MATCH_KEEP = 600     # 작업 시작 점검: 이보다 오래전에 받은 매칭(요청·찾는 중)은 끝난 것으로 (초)
 CUTSCENE_KEEP = 120  # 작업 시작 점검: 이보다 오래전에 시작한 연출은 끝 신호를 놓친 것으로 (초)
+SILENT_LOG = 30      # 게임 안인데 서버 패킷이 이만큼(초) 안 오면 로그 — 하트비트가 약 2초마다 와서 평소 최대 무수신 2.3초 (11월 캡처)
+
+
+def _hms(t: float) -> str:
+    return time.strftime("%H:%M:%S", time.localtime(t))
 
 
 def map_contradicts(channel_type: str, act: dict) -> bool:
@@ -494,6 +499,10 @@ class PacketMonitor:
         # 지금 값만 보고 기다리면, 화면을 보는 사이에 지나가 버려 놓친다 (2026-10-28 사용자와 정한 규칙)
         self.history: deque[tuple[int, PacketState]] = deque(maxlen=3000)
         self.last_rx = 0.0           # 마지막으로 서버 패킷을 받은 때 (monotonic)
+        # 서버 연결 끊김 단서 (점검 등) — 판단에 쓰기 전에 실제로 무엇이 오는지 로그로 먼저 본다 (2026-11-12 사용자)
+        self._closed: tuple[float, str, str] | None = None  # 서버가 마지막으로 연결을 닫은 때 (시각, FIN·RST, 서버 주소)
+        self._opened = 0.0           # 서버와 새 연결이 마지막으로 열린 때 (시각)
+        self._silent = False         # 무수신 로그를 남겼다 (다시 받으면 한 줄 더 남기고 푼다)
         self._seq = 0
         self._cond = threading.Condition()
         self._stop = threading.Event()
@@ -645,11 +654,13 @@ class PacketMonitor:
             while not self._stop.is_set():
                 frame = cap.next()
                 if frame is None:
+                    self._watch_silence()
                     continue
                 p = parse_tcp(frame, cap.link)
                 if p is None or p[1] != SERVER_PORT:
                     continue
                 src, _, dport, seq, flags, payload = p
+                self._link(src, flags)
                 self.last_rx = time.monotonic()
                 key = (src, dport)
                 st = streams.get(key)
@@ -657,7 +668,7 @@ class PacketMonitor:
                     st = streams[key] = Stream(self.table.known, lambda why, k=key: self._desync(why, k))
                 for proto, flag, body in st.feed(seq, flags, payload):
                     self._handle(proto, flag, body)
-                if flags & 0x05:  # FIN/RST — 다른 서버로 옮겨 감
+                if flags & 0x05:  # FIN/RST — 다른 서버로 옮겨 감 (끊김일 수도 — _link 가 적어 둔다)
                     streams.pop(key, None)
         except OSError as e:
             self.status, self.error = "error", str(e)
@@ -675,6 +686,8 @@ class PacketMonitor:
         if ev is None:
             self.table.decode(proto, b"")  # 처음 보는 번호면 기록만
             return
+        if ev.key.startswith("system."):
+            self._server_notice(ev.key, flag, body)
         if ev.key.startswith("spear.") and not self.spear.active:
             return  # 흩어진 물길 밖 — 이동 메시지 등은 풀지도 않는다
         if flag and ev.fields:  # 읽을 필드가 없으면 풀 필요도 없다
@@ -693,6 +706,45 @@ class PacketMonitor:
             if vals["mine"]:
                 vals["name"] = appearing_name(body)
         self.apply(ev.key, vals)
+
+    # 서버 연결 끊김 단서 (점검 등) — 로그로만 남긴다. 점검 때 무엇이 오는지 본 뒤 판단에 쓸지 정한다 (2026-11-12 사용자)
+
+    def _server_notice(self, key: str, flag: int, body: bytes) -> None:
+        """세션 강제 종료·접속 차단 같은 서버 알림 (표의 system.*). 평소엔 안 오는 것들이라(11월 캡처 17분·서버 이동
+        12번에 0번) 오면 본문 앞부분까지 남긴다."""
+        if flag:
+            try:
+                import brotli
+                body = brotli.decompress(body)
+            except Exception:  # noqa: BLE001 — 못 풀면 압축된 채로 남긴다
+                pass
+        log.warning("패킷: 서버 알림 %s — 본문 %d바이트 %s", key, len(body), body[:48].hex(" "))
+
+    def _link(self, src: str, flags: int) -> None:
+        """서버 패킷을 받을 때마다: 연결이 열리고(SYN) 닫힌(FIN·RST) 때를 적어 두고, 무수신 로그 뒤 다시 받았으면 한 줄."""
+        if self._silent:
+            self._silent = False
+            log.info("패킷: 서버 패킷 다시 옴 (%.0f초 만)", time.monotonic() - self.last_rx)
+        if flags & 0x02:
+            self._opened = time.time()
+        if flags & 0x05:
+            self._closed = (time.time(), "RST" if flags & 0x04 else "FIN", src)
+
+    def _watch_silence(self) -> None:
+        """게임 안인데 서버 패킷이 SILENT_LOG 초 넘게 안 오면 한 번 남긴다 — 마지막 연결을 서버가 닫았는지, 열린 채인지와 함께.
+        판단에는 아직 안 쓴다. 게임이 켜져 있는지는 여기서 모른다 — 사람이 게임을 꺼도 한 줄 남는다."""
+        if self._silent or not self.last_rx or not self.state.in_game:
+            return
+        gap = time.monotonic() - self.last_rx
+        if gap < SILENT_LOG:
+            return
+        self._silent = True
+        if self._closed and self._closed[0] >= self._opened:
+            at, how, src = self._closed
+            last = f"서버가 {_hms(at)} 에 연결을 닫음 ({how} · {src}), 그 뒤 새 연결 없음"
+        else:
+            last = "연결은 열린 채" + (f" (마지막 새 연결 {_hms(self._opened)})" if self._opened else "")
+        log.info("패킷: 게임 안인데 서버 패킷이 %.0f초째 안 옴%s — %s", gap, " · 맵 로딩 중" if self.state.loading else "", last)
 
     def _spear(self, key: str, vals: dict) -> None:
         """투창 패턴 이벤트 — 알릴 일(내가 대상·파훼·끝 등)이면 남기고 기다리는 봇을 깨운다."""
