@@ -4,17 +4,16 @@
 /* ── 시작 ───────────────────────────────────────── */
 
 (async function start() {
+  // 화면에서 고른 것(마지막 탭 등)을 wire 가 되살리므로 먼저 읽는다
+  try { uiPrefs = (await mm.cfg.get()) || {}; } catch (_) { /* 못 읽으면 기본값으로 */ }
   wire();
 
   // 표를 그리기 전에 정렬 기준과 즐겨찾기를 읽어 둔다.
   // 나중에 읽으면 기본 순서로 한 번 그렸다가 튄다.
   await loadSortPrefs();
   await loadFavorites();
-  try {
-    const c = await mm.cfg.get();
-    worksFolded = c.alterWorksFolded === true;
-    queueFolded = c.queueFolded === true;
-  } catch (_) { /* 설정을 못 읽어도 펼친 채로 돈다 */ }
+  worksFolded = uiPrefs.alterWorksFolded === true;  // 못 읽었으면 펼친 채로
+  queueFolded = uiPrefs.queueFolded === true;
   applyQueueFold();
   // 접힌 채로 뜬다면 창도 그만큼 좁혀 둔다. 창 크기는 저장하지 않으므로 기본 폭으로 뜬다.
   if (queueFolded) {

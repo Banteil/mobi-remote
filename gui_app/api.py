@@ -66,8 +66,11 @@ DEFAULTS = {
     "askFacilityLevelMismatch": True,  # 정해 둔 시설 레벨이 실제와 어긋날 때 물어볼지
 }
 # 화면이 바꿀 수 있는 설정. 아무 키나 받으면 무엇이 어디서 바뀌는지 알 수 없게 된다
+# 화면에서 고른 것도 여기에 둔다 (마지막에 본 탭·고른 보스 등 — web/app.js pref·setPref). 웹 화면 저장소(localStorage)는
+# 화면 프로필이 기록을 남기지 않아(off-the-record) 켤 때마다 비므로 쓰지 않는다 (2026-11-12 사용자 — 앞으로도 같은 방식)
 CFG_KEYS = {"askFacilityLevelMismatch": bool, "alterWorksFolded": bool, "queueFolded": bool,
-            "dyeNudge": bool, "closeToTray": bool, "npcapNoAsk": bool}
+            "dyeNudge": bool, "closeToTray": bool, "npcapNoAsk": bool,
+            "hwPane": str, "optPane": str, "autoInterval": str, "playlist": str, "fieldBoss": dict}
 # 별표를 달 수 있는 목록 (레거시 favorites.js). 악보는 재생목록이 곧 즐겨찾기라 없다
 FAV_LISTS = ("craft", "alter", "gather", "items", "facial", "behaviour")
 

@@ -418,7 +418,15 @@ async function updateNameNow(st, me) {
  *   - 값이 그대로면 DOM을 건드리지 않는다 (paint 참고)
  * setInterval이 아니라 setTimeout 연쇄라, 한 번이 느려도 호출이 겹치지 않는다.
  */
-const AUTO_KEY = 'mobi-remote.interval';
+/* 화면에서 고른 것 기억 (다시 켜도 그대로) — 파이썬 settings 파일에 둔다 (mm.cfg.set, 허용 키는 api.CFG_KEYS).
+ * 웹 화면 저장소(localStorage)는 화면 프로필이 기록을 남기지 않아(off-the-record) 켤 때마다 비므로 쓰지 않는다.
+ * uiPrefs 는 시작할 때(main.js) 한 번 읽는다. */
+let uiPrefs = {};
+function pref(key, fallback) { return uiPrefs[key] !== undefined && uiPrefs[key] !== null ? uiPrefs[key] : fallback; }
+function setPref(key, value) {
+  uiPrefs[key] = value;
+  mm.cfg.set(key, value).catch(() => { /* 저장 실패가 화면을 막지 않는다 */ });
+}
 let autoTimer = null;
 let autoRunning = false;
 
@@ -484,14 +492,12 @@ async function tickAuto() {
 }
 
 function initAuto() {
-  let saved = null;
-  // 이름을 바꾸기 전 키도 한 번 본다. 안 그러면 쓰던 설정이 조용히 초기화된다.
-  try { saved = localStorage.getItem(AUTO_KEY); } catch (_) { /* 접근 불가해도 무시 */ }
+  const saved = pref('autoInterval', null);
   if (saved !== null && $('#auto-interval').querySelector('option[value="' + saved + '"]')) {
     $('#auto-interval').value = saved;
   }
   $('#auto-interval').addEventListener('change', () => {
-    try { localStorage.setItem(AUTO_KEY, $('#auto-interval').value); } catch (_) {}
+    setPref('autoInterval', $('#auto-interval').value);
     autoStatus(autoIntervalMs() ? '' : '꺼짐');
     scheduleAuto();
   });
@@ -1362,20 +1368,20 @@ async function openOptions() {
 }
 
 /** 옵션 창 탭. 마지막에 본 탭을 기억한다 (이 PC 에서만). */
-function showOptionPane(name) {
+function showOptionPane(name, remember = true) {
   if (!$('.opt-pane[data-pane="' + name + '"]')) name = 'general';
   $$('.opt-tab').forEach((t) => t.classList.toggle('active', t.dataset.pane === name));
   $$('.opt-pane').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== name));
   $('#options .modal-scroll').scrollTop = 0;
-  try { localStorage.setItem('optPane', name); } catch (_) {}
+  if (remember) setPref('optPane', name);
 }
 
-/** 숙제 탭 안쪽 탭 (일일 · 주간 · 기타). 마지막에 본 탭을 기억한다 (이 PC 에서만). */
-function showHomeworkPane(name) {
+/** 숙제 탭 안쪽 탭 (일일 · 주간 · 기타). 마지막에 본 탭을 기억한다 (remember — 시작할 때 되살리는 것은 다시 적지 않는다). */
+function showHomeworkPane(name, remember = true) {
   if (!$('.hw-pane[data-hw="' + name + '"]')) name = 'daily';
   $$('.hw-tab').forEach((t) => t.classList.toggle('active', t.dataset.hw === name));
   $$('.hw-pane').forEach((p) => p.classList.toggle('hidden', p.dataset.hw !== name));
-  try { localStorage.setItem('hwPane', name); } catch (_) {}
+  if (remember) setPref('hwPane', name);
 }
 
 function closeOptions() {
@@ -1510,7 +1516,7 @@ function debounce(fn, ms) {
 function wire() {
   $$('.tab').forEach((t) => t.addEventListener('click', () => showTab(t.dataset.tab)));
   $$('.hw-tab').forEach((t) => t.addEventListener('click', () => showHomeworkPane(t.dataset.hw)));
-  try { showHomeworkPane(localStorage.getItem('hwPane') || 'daily'); } catch (_) { showHomeworkPane('daily'); }
+  showHomeworkPane(pref('hwPane', 'daily'), false);
 
   // 테마 — 지금 값은 <html data-theme>에 이미 붙어 있다(theme.js). 여기서는 뒤집기만 한다.
   paintThemeBtn();
@@ -1700,7 +1706,7 @@ function wire() {
   $('#btn-options').addEventListener('click', openOptions);
   $('#options-close').addEventListener('click', closeOptions);
   $$('.opt-tab').forEach((t) => t.addEventListener('click', () => showOptionPane(t.dataset.pane)));
-  try { showOptionPane(localStorage.getItem('optPane') || 'general'); } catch (_) { showOptionPane('general'); }
+  showOptionPane(pref('optPane', 'general'), false);
   // 바깥을 눌러도 닫는다. 창이 커서 닫기 버튼까지 가기 번거롭다.
   $('#options').addEventListener('click', (e) => { if (e.target.id === 'options') closeOptions(); });
   // Esc 로도 닫는다. 확인 모달이 떠 있을 때는 그쪽이 먼저 받아야 하므로 건너뛴다.
@@ -1752,7 +1758,7 @@ function wire() {
     if (!name) return;
     const made = await mm.pl.create(name);
     await refreshPlaylists(made.id);
-    try { localStorage.setItem(PL_KEY, made.id); } catch (_) {}
+    setPref('playlist', made.id);
   });
   $('#pl-rename').addEventListener('click', async () => {
     if (!plCurrent) return;

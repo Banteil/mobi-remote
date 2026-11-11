@@ -135,7 +135,6 @@ let plCurrent = null;
 /** 재생 상태. setInterval 대신 루프 안에서 플래그를 보고 멈춘다. */
 const player = { active: false, stopping: false, index: 0, title: null };
 
-const PL_KEY = 'mobi-remote.playlist';
 
 function ownedTitles() {
   return new Set((musicCache && musicCache.items ? musicCache.items : []).map((x) => x.title));
@@ -183,15 +182,14 @@ function renderPlaylists() {
 
 async function loadPlaylists() {
   playlists = await mm.pl.list();
-  let savedId = null;
-  try { savedId = localStorage.getItem(PL_KEY); } catch (_) {}
+  const savedId = pref('playlist', null);
   plCurrent = playlists.find((p) => p.id === savedId) || playlists[0] || null;
   renderPlaylists();
 }
 
 function selectPlaylist(id) {
   plCurrent = playlists.find((p) => p.id === id) || null;
-  try { if (plCurrent) localStorage.setItem(PL_KEY, plCurrent.id); } catch (_) {}
+  if (plCurrent) setPref('playlist', plCurrent.id);
   renderPlaylists();
 }
 

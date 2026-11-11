@@ -252,8 +252,7 @@ function paintFieldBoss() {
   paintPick('fb', 'fbChars');
   const boss = $('#fb-boss');
   if (!boss.options.length) {
-    let saved = {};
-    try { saved = JSON.parse(localStorage.getItem('mm.fieldBoss') || '{}'); } catch (e) { /* 저장 못 함 — 기본값 */ }
+    const saved = pref('fieldBoss', {});
     boss.innerHTML = Object.keys(FB_BOSSES).map((b) => '<option>' + b + '</option>').join('');
     boss.value = FB_BOSSES[saved.boss] ? saved.boss : '드로흐에넴';
     paintFieldBossLevels(saved.difficulty || '매우 어려움');
@@ -270,7 +269,7 @@ function fieldBossSpec() {
   const chars = pickedSlots('fbChars');
   if (!chars.length) return null;
   const pick = { boss: $('#fb-boss').value, difficulty: $('#fb-level').value };
-  try { localStorage.setItem('mm.fieldBoss', JSON.stringify(pick)); } catch (e) { /* 저장 못 해도 이번 카드는 됨 */ }
+  setPref('fieldBoss', pick);
   return { kind: 'daily', label: '필드 보스 · ' + pick.boss, chars: chars, only: ['field_boss'], force: true, fieldBoss: pick };
 }
 
