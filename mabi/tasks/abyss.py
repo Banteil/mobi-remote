@@ -18,11 +18,10 @@ import time
 
 from .. import gamedata as gd, judge
 from ..bot import Bot, StepTimeout
-from ..ocr import find_texts
 from ..place import place
 from .. import monitor
 from ..monitor import detect as d, handlers
-from . import ui_text
+from . import entry, ui_text
 from .content import CannotProceed, go_talk, touch_prompt_visible, watch
 from .exits import DungeonExit, Exit
 from .repeat import Repeat
@@ -34,7 +33,6 @@ DUNGEONS = ["허상의 정박지", "광기의 동굴", "흩어진 물길"]
 FRONT_ONLY = ("흩어진 물길",)
 
 
-_norm = ui_text.norm
 _find_text = ui_text.find
 
 
@@ -106,17 +104,6 @@ def inside(bot: Bot) -> bool:
     return phase(bot) == "play"
 
 
-def _chance_on(bot: Bot) -> tuple[bool, tuple[int, int]] | None:
-    """입장 화면 '우연한 만남' 토글이 켜져 있나 (켜지면 초록), 토글 자리. 글자를 못 찾으면 None."""
-    hit = _find_text(bot, gd.text("abyss_chance"), gd.region("abyss_entry_right"))
-    if not hit:
-        return None
-    x, y = hit[0] + 95, hit[1]  # 토글은 글자 오른쪽 (1920 기준 약 95px)
-    patch = bot.frame()[y - 6:y + 6, x - 20:x + 20].reshape(-1, 3).astype(int)
-    green = ((patch[:, 1] > 150) & (patch[:, 2] < 120) & (patch[:, 0] < 150)).mean()
-    return green > 0.2, (x, y)
-
-
 def _wait_settled(bot: Bot, timeout: float) -> bool:
     """로딩·자동 이동이 끝나 메인 화면이 보일 때까지. 보이면 True.
     로딩이 끝났는데(CLI 가 답함) 메인 화면이 아니면 막는 창을 넘긴다 — 판을 마치고 나가거나 캐릭터를 바꾸려는 순간
@@ -149,7 +136,7 @@ def _travel_to_entry(bot: Bot) -> bool:
         if bot.map_loading():
             bot.wait_loaded(end - time.monotonic())
             continue
-        if _find_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top")):
+        if entry.visible(bot):
             bot.log.info("어비스 입구 도착 → 입장 화면")
             return True
         if bot.at_main() and not bot.auto_traveling():
@@ -163,22 +150,12 @@ def _travel_to_entry(bot: Bot) -> bool:
     raise CannotProceed(f"어비스 입구로 가지 못함 → {bot.snapshot('abyss_travel').name}")
 
 
-def _entry_button(bot: Bot) -> str:
-    """입장 화면 오른쪽 아래 버튼: 'enter'(입장하기) · 'move'(이동하기) · ''(둘 다 없음 — 매칭 중 등)."""
-    texts = [_norm(t) for t, _, _ in find_texts(bot.frame(), gd.region("abyss_entry_right"))]
-    if _norm(gd.text("abyss_enter")) in texts:
-        return "enter"
-    if _norm(gd.text("abyss_move")) in texts:
-        return "move"
-    return ""
-
-
 def where(bot: Bot, dungeon: str) -> str:
     """지금 어느 화면인가 — 어디서 시작해도 그 자리부터 잇는다 (2026-10-24: 입장 화면을 띄운 채 시작하면
     메인 화면만 기다리며 멍하니 있었다).
       play     어비스 안 (나가기 버튼)              reward  클리어·보상 화면
       main     필드 메인 화면                       menu    메뉴(ESC)가 열려 있음
-      entry    입장 화면 (위쪽 '혼자하기 / 함께하기' 탭)
+      entry    입장 화면 (오른쪽 아래 버튼·'주요 전리품' — tasks/entry.py)
       matching 매칭 중 — 패킷의 매칭 상태로, 없으면 입장 화면인데 입장하기·이동하기 버튼이 없는 것으로.
                매칭 중 화면은 필드 + 오른쪽 '우연한 만남' 창 (2026-10-25 captures/abyss)
       list     어비스 목록 (dungeon 이름이 오른쪽 목록에)
@@ -192,8 +169,8 @@ def where(bot: Bot, dungeon: str) -> str:
         return "main"
     if bot.exists(bot.ui["menu_quit"]):
         return "menu"
-    if _find_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top")):
-        return "entry" if _entry_button(bot) else "matching"
+    if (e := entry.read(bot)):
+        return "entry" if e.button else "matching"
     if _find_text(bot, dungeon, gd.region("abyss_list")):
         return "list"
     if bot.map_loading() is None and bot.is_loading():
@@ -330,9 +307,9 @@ def open_entry(bot: Bot, dungeon: str, difficulty: str = "", _moved: bool = Fals
             raise LootPending()
         _click_text(bot, dungeon, gd.region("abyss_list"), what=f"어비스 '{dungeon}'")
         bot.sleep(1.0, 1.5)
-        # 입장 화면이 열렸나: 위쪽 '혼자하기 / 함께하기' 탭 글자로 본다 (버튼 글자는 탭·위치에 따라 바뀐다)
+        # 입장 화면이 열렸나: 오른쪽 아래(버튼·'주요 전리품')로 본다 — 위쪽 탭은 연속 실행 제한 창이 가릴 수 있다
         for _ in range(6):
-            if _find_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top")):
+            if entry.visible(bot):
                 break
             # 전리품 버튼을 못 읽고 지나쳤으면 '입장 불가 — 주간 전리품을 먼저 정산하세요' 가 뜬다 → 닫고 멈춤 (목록은 그대로)
             if _find_text(bot, gd.text("abyss_loot_first"), gd.region("abyss_popup"), exact=False):
@@ -342,15 +319,12 @@ def open_entry(bot: Bot, dungeon: str, difficulty: str = "", _moved: bool = Fals
             bot.sleep(1.0, 1.4)
         else:
             raise CannotProceed(f"'{dungeon}' 입장 화면이 열리지 않음 → {bot.snapshot('abyss').name}")
-    if solo:  # 탭 글자는 고르면 끝에 따옴표 같은 표시가 붙어 읽힌다 — 들어 있기만 하면 된다 (레이드와 같음)
-        _click_text(bot, gd.text("raid_solo"), gd.region("abyss_entry_top"), exact=False, what="혼자하기")
-    else:
-        _click_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top"), what="함께하기")
+    entry.set_tab(bot, solo, "abyss")
     if difficulty:
         _click_text(bot, difficulty, gd.region("abyss_difficulty"), what=f"난이도 '{difficulty}'")
     # '입장하기' 가 보일 때까지 ('이동하기' 면 입구로 가서 다시)
     for _ in range(5):
-        button = _entry_button(bot)
+        button = entry.button(bot)
         if button == "enter":
             break
         if button == "move" and not _moved:
@@ -361,13 +335,13 @@ def open_entry(bot: Bot, dungeon: str, difficulty: str = "", _moved: bool = Fals
         raise CannotProceed(f"'{dungeon}' {'혼자하기' if solo else '함께하기'}에 '입장하기' 가 없음 → {bot.snapshot('abyss').name}")
     if solo:
         return  # 혼자하기는 매칭(우연한 만남)이 없다
-    on = _chance_on(bot)
+    on = entry.chance(bot)
     if on is None:
         raise CannotProceed(f"'우연한 만남' 을 찾지 못함 → {bot.snapshot('abyss').name}")
     if not on[0]:
         bot.click(on[1])
         bot.sleep(1.0, 1.3)
-        on = _chance_on(bot)
+        on = entry.chance(bot)
         if not on or not on[0]:
             raise CannotProceed(f"'우연한 만남' 을 켜지 못함 → {bot.snapshot('abyss').name}")
         bot.log.info("우연한 만남 켬")
@@ -473,7 +447,8 @@ def revive_here(bot: Bot) -> bool:
     # 못 찾아도(전멸이면 버튼이 없다) 그냥 누른다 — 판단은 아래 시간 제한이 한다
     # 전멸이면 '여기서 부활' 이 없고 나가서 다시 들어가는 수밖에 없다 — 함께하기는 나가기 말고 할 수 있는 게 없고,
     # '캠프파이어에서 부활' 도 캠프파이어를 건드린 적이 없으면 안 된다 (2026-11-03 사용자). 버튼이 없고 화면 가운데
-    # '전멸하였습니다' 가 보이면 R 을 누르며 기다리지 않고 바로 나간다 (예전엔 20초쯤 걸렸다)
+    # '전멸하였습니다' 화면이면 R 을 누르며 기다리지 않고 바로 나간다 (예전엔 20초쯤 걸렸다). 전멸은 그 아래 '…재도전…' 줄로
+    # 본다 — 첫 줄은 연속 실행 제한 창이 가리는 자리다. 쓰러지기만 한 화면은 '행동불능 · 부활 제한 구역' 이라 '재도전' 이 없다
     for _ in range(3):
         if bot.vision.find(bot.frame(), "revive_here"):
             break

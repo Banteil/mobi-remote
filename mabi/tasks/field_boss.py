@@ -5,7 +5,7 @@
   → 사냥터 안 보스 지역으로 자동 이동 (빠른 이동) → 도착하면 '○○의 영역에 들어가시겠습니까'(고른 난이도) → 입장하기(Space)
   → 맵 FieldBoss → 그 출현 시간의 캐릭터별 첫 입장엔 컷신 — 로딩이 끝나고 오른쪽 위 '장면 넘기기' 가 뜨면 약 1초 뒤 누른다
     (너무 일찍 누르면 안 먹고, 컷신이 끝난 뒤 그 자리를 누르면 지도가 열린다) → Space 한 번 = 자동 전투
-  → 보스가 쓰러지면 결과 창 '처치 완료' → 확인(Space). 다른 사람들이 금방 잡아 컷신 중에 끝나기도 한다 —
+  → 보스가 쓰러지면 결과 창 '처치 완료' → 확인(Space) — 창은 아래 가운데 '확인' 으로 본다 (위쪽 글자는 연속 실행 제한 창이 가린다). 다른 사람들이 금방 잡아 컷신 중에 끝나기도 한다 —
     '전투에 참여하지 않아 획득할 수 있는 보상이 없습니다' 면 영역을 나갔다가 다시 들어간다 (새 보스)
   → 오른쪽 위 나가기 → '영역에서 나가시겠습니까' 나가기(Space). 나가지 않으면 퇴장 시간(4분) 뒤 보관함 쪽으로 뛰어간다.
 열리는 때: 매일 12:00 · 18:00 · 20:00 · 22:00 (PC 시계, 한국 시간) 부터 30분. 한 캐릭터에 1~3분 (전환 포함).
@@ -21,7 +21,7 @@ from .. import gamedata as gd, monitor
 from ..bot import Bot
 from . import ui_text
 from .boss_skills import BossSkills, slot_of
-from .content import CannotProceed, growth_done, watch
+from .content import CannotProceed, confirm_text, growth_done, watch
 
 MAP = "FieldBoss"
 HOURS = (12, 18, 20, 22)   # 출현 시간 (시)
@@ -162,11 +162,18 @@ def fight(bot: Bot) -> bool:
             asked = time.monotonic()
             if done(bot):
                 bot.log.info("필드 보스 처치 완료 (성장 가이드)")
+                if confirm_text(bot.frame()):
+                    bot.key("space")  # 결과 창이 떠 있으면 닫고 나간다
+                    bot.sleep(1.2, 1.6)
                 return True
-        seen_text = _texts(bot, "fb_result")
-        if gd.text("fb_result") in seen_text:
+        if confirm_text(bot.frame()):  # 결과 창 '처치 완료' (아래 가운데 '확인')
             bot.sleep(1.0, 1.5)  # 보상이 그려지는 동안
             got = gd.text("fb_noreward") not in _texts(bot, "fb_noreward")
+            if got and done(bot) is False:  # '확인' 은 있는데 아직 안 잡음 — 퀘스트 완료 같은 다른 창 → 넘기고 계속
+                bot.log.info("필드 보스 전투 중 '확인' 창 → 넘김")
+                bot.key("space")
+                bot.sleep(1.0, 1.3)
+                continue
             bot.log.info("필드 보스 처치 완료 — " + ("보상 받음" if got else "전투에 참여하지 않아 보상 없음"))
             bot.key("space")  # 확인
             bot.sleep(1.2, 1.6)

@@ -406,12 +406,48 @@ def item_use(bot, ctx, seen):
 
 
 def _short_toast(bot) -> bool:
-    """방금 누른 버튼 뒤 '재료가 부족합니다.' 가 떴나."""
+    """방금 누른 버튼 뒤 '재료가 부족합니다.' 가 떴나. 알림 자리는 연속 실행 제한 창이 가릴 수 있다 (ui.json covers) —
+    안 떴다고 재료가 있다고 보지 말고, 일이 일어났나를 따로 본다 (material_short · _alter_started)."""
     try:
         bot.wait(bot.cfg["arbeit"]["craft_short_toast"], timeout=2.5, interval=0.3)
         return True
     except StepTimeout:
         return False
+
+
+def material_short(bot, before: str) -> bool:
+    """방금 누른 Space(제작하러 가기·제작하기·가공하러 가기)가 재료가 모자라 아무 일도 안 했나. 모자라면 게임은
+    '재료가 부족합니다.' 알림만 띄우고 아무것도 하지 않는다 — 알림은 보이면 빨리 알 뿐이고(가려질 수 있다), 판단은 누른 뒤
+    일이 일어났나로 한다: 이동이 시작됐거나 상황(detect)이 before 에서 바뀌면 된 것. 3초 동안 그대로면 키를 놓쳤을 수도
+    있어 한 번 더 누르고, 그래도 그대로면 모자란 것."""
+    toast = bot.cfg["arbeit"]["craft_short_toast"]
+    for attempt in range(2):
+        if attempt:
+            bot.log.info("Space 뒤에도 창이 그대로 → 한 번 더 누름")
+            bot.key("space")
+        mark, end = bot.input_mark, time.monotonic() + 3
+        while time.monotonic() < end:
+            bot.sleep(0.4)
+            frame = bot.frame()
+            if bot.vision.find(frame, toast):
+                return True
+            if _travel_started(bot, mark) or d.look(bot, frame).what != before:
+                return False
+    bot.log.info("Space 를 두 번 눌러도 창이 그대로 → 재료가 모자란 것으로 봄")
+    return True
+
+
+def _travel_started(bot, mark: int | None) -> bool:
+    """mark(누르기 직전 패킷 번호) 뒤에 자동 이동이 시작됐나. 패킷이 모르면 CLI 의 지금 자동 이동."""
+    p = bot.packets
+    if p.ok and p.state.traveling is not None and mark is not None:
+        return p.saw(lambda s: bool(s.traveling), mark)
+    return bot.auto_traveling()
+
+
+def _alter_window(frame) -> bool:
+    """가공 시설 창인가 — 왼쪽 위 제목이 '…가공' ('식재료 가공' 등)."""
+    return any(t.endswith(ALTER_TITLE) for t, _, _ in ocr.find_texts(frame, CRAFT_TITLE_AREA))
 
 
 def alter(bot, ctx, seen):
@@ -434,7 +470,9 @@ def alter(bot, ctx, seen):
     # 받는 길이 번거롭다 → 그 일은 포기하고 넘어간다 (사용자 2026-11-02). 가공 목록에 이 가공품이 늘지 않으면 꽉 찬 것
     if before is not None and not _alter_started(bot, names, before):
         _esc(bot)
-        return Finish("alter_full", f"가공이 걸리지 않음 (가공 칸이 꽉 참) → {_shot(bot, 'arbeit_alter')}")
+        # 알림을 못 봤으면 칸이 꽉 찬 것 — 다만 제한 창이 알림 자리를 가렸으면 재료 부족일 수도 있다 (어느 쪽이든 그 일은 건너뜀)
+        why = "가공 칸이 꽉 찼거나 재료 부족 — 알림 자리가 가려짐" if bot.run_limit_popup() else "가공 칸이 꽉 참"
+        return Finish("alter_full", f"가공이 걸리지 않음 ({why}) → {_shot(bot, 'arbeit_alter')}")
     end = time.monotonic() + bot.cfg["arbeit"].get("alter_wait", 180)
     while True:
         bot.sleep(3, 3.5)
@@ -492,8 +530,9 @@ def _alter_go(bot, ctx, seen):
     bot.click((hit[0], hit[1] - 60))
     bot.sleep(1.2, 1.5)
     ctx.note("arb_alter", "가공하러 감")
+    before = d.look(bot).what  # 카드를 누른 뒤의 창 — Space 뒤에도 그대로면 아무 일도 안 일어난 것
     bot.key("space")
-    if _short_toast(bot):
+    if material_short(bot, before):
         _esc(bot)
         return Finish("alter_short", f"가공 재료 부족 → {_shot(bot, 'arbeit_alter')}")
     bot.sleep(0.5, 1)
@@ -510,16 +549,12 @@ def craft_transfer(bot, ctx, seen):
 
 
 def craft_go(bot, ctx, seen):
-    """제작: 재료는 숫자를 읽지 않고 그냥 Space — 모자라면 게임이 '재료가 부족합니다.' 를 띄우고 아무것도 하지 않는다."""
-    a = bot.cfg["arbeit"]
+    """제작: 재료는 숫자를 읽지 않고 그냥 Space — 모자라면 게임이 '재료가 부족합니다.' 를 띄우고 아무것도 하지 않는다 (material_short)."""
     ctx.note("arb_craft", "제작")
     bot.key("space")
-    try:
-        bot.wait(a["craft_short_toast"], timeout=2.5, interval=0.3)
+    if material_short(bot, seen.what):
         _esc(bot)
         return Finish("short", f"제작 재료 부족 → {_shot(bot, 'arbeit_craft')}")
-    except StepTimeout:
-        pass
     # 한 번에 1개씩 만든다 — 5개가 필요한 일(두꺼운 가죽 갑옷 상의)은 구하는 방법 → 제작을 거듭하므로, 만들 때마다
     # 창·구하는 방법 횟수를 새로 센다 (아니면 세 번째쯤 '제작 창 버튼을 알아보지 못함' 으로 끝난다, 2026-11-01)
     ctx.n["craft"] = ctx.n["howto"] = 0
@@ -532,7 +567,7 @@ def craft_go(bot, ctx, seen):
 def craft(bot, ctx, seen):
     """제작 창 첫 화면: 아르바이트가 요구하는 물품 하나만 보인다 → 그 카드. 가공 시설 창('식재료 가공' 등)도 첫 화면이 같아
     가공 칸이 다 찬 채면 '가공하기' 가 안 떠 헤맸다 (2026-10-26) → 창 제목으로 가공을 알아본다."""
-    if any(t.endswith(ALTER_TITLE) for t, _, _ in ocr.find_texts(seen.frame, CRAFT_TITLE_AREA)):
+    if _alter_window(seen.frame):
         if ctx.alter or ctx.alter_ok:
             return _alter_go(bot, ctx, seen)
         _esc(bot)

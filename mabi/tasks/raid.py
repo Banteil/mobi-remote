@@ -1,11 +1,12 @@
 """레이드 반복 (혼자하기). 사람이 멈추거나(F12) 정한 횟수·시간이 될 때까지 같은 레이드를 다시 돈다.
 
 흐름 (2026-10-28 카브락 어려움 5판으로 확인, 캡처 caps/raid1):
-  메뉴(ESC) → '레이드' → 레이드 카드(적월의 스카스 / 카브락 / 에이렐 / 화이트 서큐버스) → 입장 창(위쪽 '혼자하기 / 함께하기' 탭, 왼쪽 난이도)
+  메뉴(ESC) → '레이드' → 레이드 카드(적월의 스카스 / 카브락 / 에이렐 / 화이트 서큐버스) → 입장 창(위쪽 '혼자하기 / 함께하기' 탭, 왼쪽 난이도 —
+  입장 창인가·지금 탭은 tasks/entry.py 가 오른쪽 아래로 본다)
   → 오른쪽 아래 '이동하기' 또는 '출항하기'(둘 다 Space). 이동하기면 선착장까지 걸어가고(같은 맵, 몇 분) 창에서 다시 출항하기
   → 출항선(맵 InstanceRaidLobby '시작의 갑판'). 숏컷 퀘스트 '출항하기 · 조타로 이동 후 출항'
   → 그 퀘스트를 진행하면 연출 뒤 레이드 맵(InstanceRaid)으로. 안에서는 자동 진행·자동 전투가 저절로 켜진다
-  → 보스 처치 (패킷 레이드 상태 Cleared + 결과) → 연출 → 결과 화면 '처치 완료' 확인(Space)
+  → 보스 처치 (패킷 레이드 상태 Cleared + 결과) → 연출 → 결과 화면 '처치 완료' 확인(Space) — 화면은 아래 가운데 '확인' 으로 본다
   → 오른쪽 맨 위 나가기 → '레이드에서 나가시겠습니까?' 출항선으로 이동(Space) → 배에서 다시 출항.
 쓰러지면 '여기서 부활' (부활 제한 3회). 다 쓰면 나가기 → 출항선으로 이동 → 다시 출항.
 장비 내구도가 낮으면 나가기 창에서 '파티&던전 나가기'(필드로) → 대장간 수리 → 메뉴에서 다시 입장.
@@ -18,8 +19,8 @@ from .. import gamedata as gd, keys
 from ..bot import Bot, StepTimeout
 from .. import monitor
 from ..place import RAID_LOBBY, place
-from . import ui_text
-from .content import CannotProceed, watch
+from . import entry, ui_text
+from .content import CannotProceed, confirm_text, watch
 from .exits import Exit
 from .repeat import Repeat
 
@@ -50,6 +51,12 @@ def _map(bot: Bot) -> str | None:
     return "loading" if loading else bot.packets.state.channel_type
 
 
+def result_ok(bot: Bot) -> bool:
+    """결과 화면('처치 완료')의 아래 가운데 '확인'(Space)이 보이나. 위쪽 '처치 완료' 글자는 연속 실행 제한 창이 가리는
+    자리라 (ui.json covers) 쓰지 않는다. 퀘스트 완료 창도 같은 자리에 '확인' 이 있다 — 판이 끝난 뒤엔 둘 다 넘기면 된다."""
+    return confirm_text(bot.frame()) is not None
+
+
 def cleared(bot: Bot) -> bool:
     """이 레이드 판의 보스를 잡았나 (패킷 결과·상태 Cleared). 결과 화면이 떠 있는 동안 CLI 퀘스트는 빈 목록이다."""
     st = bot.packets.state
@@ -73,7 +80,7 @@ def _quest_title(bot: Bot) -> str:
 def where(bot: Bot, raid: str) -> str:
     """지금 어디인가 — 어디서 시작해도 그 자리부터 잇는다.
       loading  맵 로딩 중            ship   출항선 (배)               play   레이드 맵, 보스를 아직 안 잡음
-      cleared  레이드 맵, 보스를 잡음 (연출·결과 화면·나가기 전)        entry  입장 창 (혼자하기 / 함께하기 탭)
+      cleared  레이드 맵, 보스를 잡음 (연출·결과 화면·나가기 전)        entry  입장 창 (tasks/entry.py)
       list     레이드 목록           menu   메뉴(ESC)                  main   그 밖의 메인 화면 (필드)
       other    그 밖의 창 — ESC 로 닫으면 된다"""
     m = _map(bot)
@@ -98,9 +105,9 @@ def where(bot: Bot, raid: str) -> str:
             return "play"
         if title.endswith(gd.text("raid_quest_done")):
             return "cleared"
-        if not title and _find_text(bot, gd.text("raid_result"), gd.region("raid_result")):
+        if not title and result_ok(bot):
             return "cleared"  # 결과 화면 동안은 CLI 퀘스트가 빈 목록이다
-    if _find_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top")):
+    if entry.visible(bot):
         return "entry"
     if _find_text(bot, raid, gd.region("raid_list")):
         return "list"
@@ -127,15 +134,6 @@ def _wait_settled(bot: Bot, timeout: float) -> bool:
     return settled(bot, timeout)
 
 
-def _entry_button(bot: Bot) -> str:
-    """입장 창 오른쪽 아래 버튼: 'sail'(출항하기) · 'move'(이동하기) · ''."""
-    if _find_text(bot, gd.text("raid_sail"), gd.region("abyss_entry_right")):
-        return "sail"
-    if _find_text(bot, gd.text("abyss_move"), gd.region("abyss_entry_right")):
-        return "move"
-    return ""
-
-
 def open_entry(bot: Bot, raid: str, difficulty: str = "", at: str = "", solo: bool = True) -> None:
     """raid 입장 창을 열고 탭('혼자하기', solo 가 아니면 '함께하기' + 우연한 만남 켬) · 난이도를 맞춘다.
     at 이 entry·list·menu 면 그 자리부터."""
@@ -156,13 +154,9 @@ def open_entry(bot: Bot, raid: str, difficulty: str = "", at: str = "", solo: bo
             _click_text(bot, gd.text("raid_menu"), gd.region("menu_right"), what="메뉴의 레이드")
             bot.sleep(1.0, 1.5)
         _click_text(bot, raid, gd.region("raid_list"), what=f"레이드 '{raid}'")
-        if not ui_text.wait(bot, gd.text("abyss_together"), gd.region("abyss_entry_top"), timeout=8):
+        if not entry.wait(bot, 8):
             raise CannotProceed(f"'{raid}' 입장 창이 열리지 않음 → {bot.snapshot('raid').name}")
-    # 탭 글자는 고르면 끝에 따옴표 같은 표시가 붙어 읽힌다 ('혼자하기'') — 들어 있기만 하면 된다
-    if solo:
-        _click_text(bot, gd.text("raid_solo"), gd.region("abyss_entry_top"), exact=False, what="혼자하기")
-    else:
-        _click_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top"), exact=False, what="함께하기")
+    entry.set_tab(bot, solo, "raid")
     if difficulty:
         _click_text(bot, difficulty, gd.region("raid_difficulty"), what=f"난이도 '{difficulty}'")
     if not solo:
@@ -171,14 +165,13 @@ def open_entry(bot: Bot, raid: str, difficulty: str = "", at: str = "", solo: bo
 
 def _chance(bot: Bot) -> None:
     """함께하기 탭 '우연한 만남' 을 켠다 (어비스 입장 화면과 같은 자리·모양)."""
-    from .abyss import _chance_on
-    on = _chance_on(bot)
+    on = entry.chance(bot)
     if on is None:
         raise CannotProceed(f"'우연한 만남' 을 찾지 못함 → {bot.snapshot('raid').name}")
     if not on[0]:
         bot.click(on[1])
         bot.sleep(1.0, 1.3)
-        on = _chance_on(bot)
+        on = entry.chance(bot)
         if not on or not on[0]:
             raise CannotProceed(f"'우연한 만남' 을 켜지 못함 → {bot.snapshot('raid').name}")
         bot.log.info("우연한 만남 켬")
@@ -193,7 +186,7 @@ def _travel_to_dock(bot: Bot) -> bool:
         if bot.map_loading():
             bot.wait_loaded(end - time.monotonic())
             continue
-        if _find_text(bot, gd.text("abyss_together"), gd.region("abyss_entry_top")):
+        if entry.visible(bot):
             bot.log.info("선착장 도착 → 입장 창")
             return True
         if bot.at_main() and not bot.auto_traveling():
@@ -215,7 +208,7 @@ def board(bot: Bot, raid: str, difficulty: str, at: str = "", solo: bool = True)
         at = ""
         button = ""
         for _ in range(5):
-            if (button := _entry_button(bot)):
+            if (button := entry.button(bot)):
                 break
             bot.sleep(1.0, 1.4)
         if not button:
@@ -362,13 +355,14 @@ def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: No
 
 def finish_result(bot: Bot) -> None:
     """보스 처치 연출이 끝나고 뜨는 결과 화면('처치 완료', 확인 Space)을 넘긴다. 연출은 기다린다 (뒤에서면).
-    나가기 버튼(abyss_exit)이 보이면 결과 화면이 이미 지나갔다."""
+    결과 화면은 아래 가운데 '확인' 으로 본다 (result_ok). 퀘스트 완료 창이 먼저 뜨면 그것도 넘기고, 넘긴 뒤 잠깐 더 봐서
+    이어 뜨는 결과 화면을 놓치지 않는다. 나가기 버튼(abyss_exit)이 보이면 결과 화면이 이미 지나갔다."""
     end = time.monotonic() + bot.cfg["raid"].get("result_timeout", 300)
-    presses = 0
+    presses, closed = 0, 0.0
     while time.monotonic() < end:
         if _map(bot) not in (RAID_MAP, None, "loading"):
             return  # 이미 레이드 맵 밖 — 함께하기는 결과 뒤 저절로 콜헨 선착장(필드)으로 나온다 (2026-11-03 11초 뒤)
-        if _find_text(bot, gd.text("raid_result"), gd.region("raid_result")):
+        if result_ok(bot):
             bot.sleep(1.0, 1.5)
             presses += 1
             if presses <= 2:
@@ -377,12 +371,14 @@ def finish_result(bot: Bot) -> None:
                 bot.log.info("결과 화면 Space 가 안 들음 → 확인 버튼을 누름")
                 bot.click(RESULT_OK)
             bot.sleep(1.5, 2)
-            if not _find_text(bot, gd.text("raid_result"), gd.region("raid_result")):
+            if not result_ok(bot):
                 bot.log.info("결과 화면 확인")
-                return
+                presses, closed = 0, time.monotonic()
             continue
         if bot.exists(bot.ui["abyss_exit"]) and bot.at_main():
             return
+        if closed and time.monotonic() - closed > 4:
+            return  # 확인한 뒤 4초 동안 다른 '확인' 이 안 뜸
         bot.clear_blockers()
         bot.sleep(1.5, 2)
     raise StepTimeout(f"레이드 결과 화면을 넘기지 못함 → {bot.snapshot('raid_result').name}")

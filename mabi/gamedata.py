@@ -45,6 +45,24 @@ def region(key: str) -> tuple[int, int, int, int]:
     return tuple(_load("ui.json")["regions"][key])
 
 
+def covers() -> dict[str, tuple[int, int, int, int]]:
+    """게임이 다른 화면 위에 띄워 가리는 창들의 자리 (ui.json covers → regions). 이 자리는 판단에 쓰지 않는다."""
+    ui = _load("ui.json")
+    return {k: tuple(ui["regions"][k]) for k in ui.get("covers", {}) if not k.startswith("_")}
+
+
+def covering(rect) -> list[str]:
+    """rect([x, y, 너비, 높이])와 겹치는 covers 이름들 — 비었으면 가려질 일이 없는 자리."""
+    x, y, w, h = rect
+    return [k for k, (cx, cy, cw, ch) in covers().items()
+            if x < cx + cw and cx < x + w and y < cy + ch and cy < y + h]
+
+
+def covered_ok() -> dict[str, str]:
+    """covers 자리와 겹쳐도 되는 영역 → 까닭 (ui.json covered_ok)."""
+    return {k: v for k, v in _load("ui.json").get("covered_ok", {}).items() if not k.startswith("_")}
+
+
 def rules() -> dict:
     return _load("game-rules.json")
 

@@ -781,8 +781,9 @@ def clear_blockers(bot: Bot, skip=(), ocr: bool = False) -> str | None:
     return monitor.of(bot).clear(skip=skip, ocr=ocr)
 
 
-def _confirm_text(frame) -> tuple[int, int] | None:
-    """화면 아래 가운데 초록 버튼 글자가 '확인' 이면 그 자리 (OCR)."""
+def confirm_text(frame) -> tuple[int, int] | None:
+    """화면 아래 가운데 버튼 글자가 '확인' 이면 그 자리 (OCR). 퀘스트 클리어 창·레이드·필드 보스 결과 창이 이 자리에
+    '확인'(Space)을 둔다 — 결과 창 위쪽 '처치 완료' 글자는 연속 실행 제한 창이 가리는 자리라 결과 창도 이것으로 본다."""
     from ..ocr import find_texts
     return next(((x, y) for t, x, y in find_texts(frame, gd.region("confirm_button"))
                  if "".join(t.split()) == gd.text("confirm")), None)

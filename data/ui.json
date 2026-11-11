@@ -50,6 +50,7 @@
     "abyss_move": "이동하기",
     "abyss_together": "함께하기",
     "abyss_chance": "우연한만남",
+    "entry_loot": "주요전리품",
     "abyss_loot": "전리품받기",
     "abyss_loot_claim": "전리품받기",
     "abyss_loot_token": "마물퇴치증표",
@@ -65,11 +66,10 @@
     "raid_solo": "혼자하기",
     "raid_sail": "출항하기",
     "raid_go": "진행하기",
-    "raid_result": "처치완료",
     "raid_leave_ship": "출항선으로이동",
     "raid_leave_field": "파티&던전나가기",
     "raid_leave_town": "콜헨으로돌아갑니다",
-    "abyss_wiped": "전멸하였습니다",
+    "abyss_wiped": "재도전",
     "raid_leave_ok": "나가기",
     "raid_ship": "시작의 갑판",
     "raid_quest_clear": "클리어",
@@ -86,7 +86,6 @@
     "fb_move_confirm": "이동하시겠습니까",
     "fb_enter": "들어가시겠습니까",
     "fb_skip": "넘기기",
-    "fb_result": "처치완료",
     "fb_noreward": "보상이없습니다",
     "fb_exit": "나가시겠습니까"
   },
@@ -98,9 +97,9 @@
     "menu_right": [1360, 0, 560, 1080],
     "abyss_list": [1150, 60, 770, 520],
     "abyss_entry_top": [600, 20, 700, 80],
-    "abyss_wiped": [660, 170, 600, 110],
-    "abyss_entry_title": [30, 90, 800, 80],
-    "abyss_difficulty": [40, 160, 700, 60],
+    "abyss_wiped": [560, 245, 800, 65],
+    "abyss_entry_title": [30, 90, 670, 80],
+    "abyss_difficulty": [40, 160, 660, 60],
     "abyss_entry_right": [1180, 560, 740, 500],
     "abyss_loot": [40, 890, 660, 130],
     "abyss_loot_dot": [628, 908, 36, 32],
@@ -114,9 +113,8 @@
     "repair_buttons": [200, 980, 840, 90],
     "repair_confirm": [640, 960, 640, 110],
     "raid_list": [0, 745, 1920, 60],
-    "raid_entry_title": [30, 135, 700, 55],
-    "raid_difficulty": [30, 195, 700, 55],
-    "raid_result": [660, 190, 600, 60],
+    "raid_entry_title": [30, 135, 670, 55],
+    "raid_difficulty": [30, 195, 670, 55],
     "raid_leave_buttons": [560, 830, 800, 80],
     "raid_leave_party_buttons": [560, 930, 800, 70],
     "quest_hud": [1560, 225, 360, 80],
@@ -139,9 +137,34 @@
     "fb_difficulty": [300, 185, 420, 55],
     "fb_dialog": [660, 440, 600, 400],
     "fb_skip": [1680, 15, 240, 60],
-    "fb_result": [760, 150, 400, 70],
     "fb_noreward": [560, 560, 800, 60],
     "fb_exit_button": [1856, 20, 40, 40],
-    "enhance_button": [1240, 960, 620, 90]
+    "enhance_button": [1240, 960, 620, 90],
+    "run_limit_popup": [700, 38, 520, 200]
+  },
+
+  "covers": {
+    "_설명": [
+      "게임이 다른 화면 위에 띄워 그 자리를 가리는 창 (자리는 regions 의 같은 이름). 언제 뜰지 모르므로 이 자리의 글자·그림은",
+      "판단(어느 화면인가·끝났나·모자라나)에 쓰지 않는다. regions · templates ROI · config 영역이 이 자리와 겹치면",
+      "tests/test_covers.py 가 실패한다 — 겹쳐도 되는 것만 covered_ok 에 까닭과 함께 적는다."
+    ],
+    "run_limit_popup": "연속 실행 제한 창 '게임이 너무 오랫동안 실행되고 있습니다. 게임을 재시작해주세요.' (초록 '종료' 버튼 하나, 게임을 끌 때까지 남는다 — 2026-11-10)"
+  },
+
+  "covered_ok": {
+    "_설명": "covers 자리와 겹쳐도 되는 영역(regions 이름 · templates/이름 · config/섹션.키)과 그 까닭. 판단에 안 쓰거나, 다른 신호가 먼저이거나, 겹치는 건 가장자리뿐인 것. '아직' 은 다음에 고칠 것.",
+    "abyss_entry_top": "탭 누르기 전용 — 입장 창·지금 탭은 오른쪽 아래(버튼·우연한 만남)로 본다 (tasks/entry.py)",
+    "abyss_list": "가장자리 — 목록 글자는 x 1225 부터 (2026-11-11 캡처), 창은 x 1218 까지",
+    "abyss_loot_done": "아직 — 주간 전리품 정산 화면 글자 (못 보면 정산 제한 시간까지 기다림)",
+    "char_menu": "아직 — 퀵 내비 '주요' 탭 자리 캡처가 없어 가려지는지 모름",
+    "drill_result_zone": "패킷(drill_result)이 먼저 — 화면은 패킷이 없을 때만",
+    "fb_difficulty": "가장자리 — 오른쪽 끝 20px (난이도 글자가 거기까지 오는지는 캡처 없음)",
+    "templates/craft_facility_move": "가장자리 — 버튼은 y 238 아래 (2026-11-07 캡처)",
+    "templates/field_recommend_thumb": "아직 — 은동전 사냥터 추천 난이도 (못 찾으면 지난 난이도로 들어감)",
+    "templates/toast_no_material": "보조 — '재료가 부족합니다' 는 보이면 빨리 알 뿐, 판단은 누른 뒤 창이 그대로인가로 (monitor/handlers.material_short)",
+    "config/guide.daily_panel": "CLI 성장 가이드가 먼저 (content.growth_done) — 화면은 CLI 가 모를 때만",
+    "config/guide.weekly_panel": "CLI 성장 가이드가 먼저 (content.growth_done) — 화면은 CLI 가 모를 때만",
+    "config/map.safe_area": "누를 수 있는 범위일 뿐 — 실제로는 찾은 성 아이콘만 누른다 (아직: 성이 창 밑이면 못 찾음)"
   }
 }

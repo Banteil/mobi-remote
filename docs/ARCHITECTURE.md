@@ -25,7 +25,7 @@ mabi/
 | 캐릭터로 접속 (타이틀·선택 화면·다른 캐릭터에서) | `tasks/login.run` · 이름 비교 `login.current_name` / `name_matches` | runner, Repeat |
 | 반복 콘텐츠의 틀 (판 수·시간, 진행 알림, 캐릭터 확인, 판 사이 수리, 뒤로 보내기, 가방 무게 감시) | `tasks/repeat.Repeat` | `abyss.AbyssRepeat`, `raid.RaidRepeat` |
 | 콘텐츠 안에서 나가기 (나가기 → 확인 창 → 확인 → 밖 메인) | `tasks/exits.Exit` · 자리에 맞게 고르기 `exits.leave_instance` | `DungeonExit`, `abyss.AbyssExit`, `raid.RaidExit`/`ShipExit`, 실패 뒤 정리, 접속 |
-| 작업이 예외로 끝났을 때 결과 가르기·정리 (게임 꺼짐·연속 실행 제한 → 멈춤, 가방 무게 → HEAVY) | `outcome.classify` · `outcome.escalate` · `outcome.recover` | runner, `daily_api._repeat_launch` |
+| 작업이 예외로 끝났을 때 결과 가르기·정리 (게임 꺼짐 → 멈춤, 연속 실행 제한은 요약 메모만, 가방 무게 → HEAVY) | `outcome.classify` · `outcome.escalate` · `outcome.recover` | runner, `daily_api._repeat_launch` |
 | 인터페이스 PC·80% 맞추기 (한 번, 게임 안·콘텐츠 밖일 때) | `tasks/display.InterfaceFit` → `'interface'` 이벤트 | runner, Repeat |
 | 빠른 이동(T) — 이동 시작을 기다린 뒤 | `Bot.fast_travel(wait)` | 숙제 이동, 아르바이트(점검자), 어비스·레이드 입구, 수리 |
 | 가방이 꽉 찼나 | `Bot.overweight()` (패킷, 모르면 CLI) | runner 접속 뒤, `Bot.check_weight` |
@@ -36,6 +36,10 @@ mabi/
 | 작업 시작 점검 (지난 패킷 상태를 믿지 않고 CLI 로 맞춤) | `bot.check_in()` | 모든 작업 시작·이어 하기 |
 | NPC 대화·메뉴·확인 창 처리 | `monitor` + `Ctx` (대사 내용이 아니라 메뉴·단계·버튼 글자로 판단) | 아르바이트·숙제 |
 | 화면 글자 찾기·누르기 | `tasks/ui_text` | 곳곳 |
+| 화면 판단에 쓰면 안 되는 자리 (게임이 위에 띄우는 창 — 연속 실행 제한 창) | `data/ui.json` covers · `gamedata.covering` · 예외 covered_ok · 시험 `tests/test_covers.py` | 모든 글자 영역·그림 ROI·설정 영역 |
+| 어비스·레이드 입장 창 (입장 창인가·버튼·지금 탭·우연한 만남, 탭 바꾸기) | `tasks/entry` (`parse`·`read`·`set_tab`) | 어비스, 레이드 |
+| 아래 가운데 '확인' (퀘스트 완료·레이드·필드 보스 결과 창) | `content.confirm_text` | 점검자, 레이드·필드 보스 결과 |
+| 제작·가공 Space 뒤 재료 부족 (누른 뒤 일이 일어났나) | `monitor/handlers.material_short` | 아르바이트 제작·가공 |
 | 게임 단축키 (Z 카메라·X 보관함·J 퀘스트 … 옵션에서 바꿈) — 글자를 직접 쓰지 않는다 | `keys.of(bot, "camera")` · 목록 `keys.GAME_KEYS` | 곳곳. 이동 WASD·버튼 확인 키(Space·Esc·R)는 고정 |
 | 여러 신호(패킷·CLI·화면)로 우선순위 판단 | `judge.decide` | 어비스 단계, 쓰러짐, 로딩 |
 | 게임 화면(실제 픽셀) 위에 Qt 창 겹치기 — 게임이 있는 모니터·배율 | `queue_overlay.to_logical` | 작업 큐 오버레이, 염색 표시 |
@@ -51,6 +55,9 @@ mabi/
    `where` · `leave_for_switch` · `loop` 같은 종류별 단계만 구현한다. 큐 카드는 `Kind` 를 상속한다.
 4. **판단은 CLI 가 기준**, 패킷은 실시간 변화·CLI 에 없는 정보에. 화면 전환은 고정 sleep 이 아니라 시간 상한 + 확실한 신호.
 5. 테스트(`tests/`)를 함께 단다. 공통 부품은 그 부품의 테스트로, 하위 클래스는 다른 부분만.
+6. **화면 위 가운데(연속 실행 제한 창 자리, `data/ui.json` covers)는 판단에 쓰지 않는다.** 그 창은 언제든 떠서 끌 때까지 남는다.
+   그 자리에 글자 영역·그림 ROI 를 두면 `tests/test_covers.py` 가 막는다 — 그 밖의 신호를 찾고, 누르기 전용이거나 다른 신호가
+   먼저인 것만 covered_ok 에 까닭을 적는다.
 
 ## 한 길로 모은 기록 (2026-10-30)
 

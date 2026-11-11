@@ -586,6 +586,7 @@
     "threshold": 0.8
   },
   "toast_no_material": {
+    "roi": [800, 40, 320, 80],
     "threshold": 0.8
   },
   "arbeit_accept": {

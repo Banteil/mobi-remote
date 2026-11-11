@@ -163,8 +163,8 @@ def look(bot, frame=None, skip=(), ocr: bool = False) -> Seen:
     if (hit := bot.skip_button(frame, skip)) and hit[0] == "scene":
         return Seen(SCENE, hit[1], frame=frame)
     if ocr and "confirm_green" not in skip:
-        from ..tasks.content import _confirm_text
-        if (xy := _confirm_text(frame)):
+        from ..tasks.content import confirm_text
+        if (xy := confirm_text(frame)):
             return Seen(CONFIRM, xy, src="ocr", frame=frame)  # 템플릿과 모양이 다른 '확인' (어비스 도중 퀘스트 완료 창)
     if f(ui.get("dungeon_touch")):
         return Seen(TOUCH, frame=frame)
