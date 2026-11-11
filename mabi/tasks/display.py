@@ -9,7 +9,8 @@
   해상도는 LocalLow 설정 파일의 StandaloneResolutionScale (1 = 1920x1080, 1280x720 은 그보다 작은 값),
   화면 모드는 레지스트리(Unity Screenmanager), 인터페이스는 설정 파일 InterfaceStyleType(1 = PC)·InterfaceStyleScale.
   설정 파일은 Base(전체) + Changed(바뀐 것을 '+형식 : 키 : 값' 으로 덧붙이는 기록) 두 개라 둘 다 맞춘다.
-  게임은 넥슨 런처가 로그인 정보를 넣어 켜므로 다시 켜는 건 사람이 한다.
+  게임은 넥슨 런처가 로그인 정보를 넣어 켜므로 파일로 고친 뒤 다시 켜는 건 사람이 한다 (연속 실행 제한 창으로 다시 켤 때만
+  mabi/restart 가 넥슨 플러그 바로실행 링크로 켠다).
 """
 import ctypes
 import json

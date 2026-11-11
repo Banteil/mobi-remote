@@ -48,6 +48,8 @@ const Q_KINDS = {
   action: {
     amount: (x) => x.detail || '',  // 실행은 파이썬 (queue_api.ActionKind) — 결과는 mm:exec-done 으로 알린다
   },
+  // 연속 실행 제한 창을 보면 파이썬이 맨 위에 올린다 (queue_api.RestartKind) — 끝나면 밀린 카드를 이어 한다
+  restart: { amount: (x) => x.why || '연속 실행 제한' },
 };
 
 function qKind(x) { return Q_KINDS[x.kind || 'goal'] || Q_KINDS.goal; }

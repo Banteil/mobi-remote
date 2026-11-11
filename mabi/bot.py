@@ -78,8 +78,14 @@ LOADING_DOUBT = 20.0  # 패킷 로딩이 이보다 길면 새 맵 진입을 놓�
 
 
 def run_limit_shown(frame) -> bool:
-    """연속 실행 제한 창이 이 화면에 떠 있나 — 창 자리(ui.json regions run_limit_popup)의 글자로 본다 (OCR)."""
+    """연속 실행 제한 창이 이 화면에 떠 있나. 창의 '종료' 버튼 자리(ui.json regions run_limit_button)가 초록인지 먼저 보고
+    (창이 있으면 97% 초록, 없는 화면은 0% — 2026-11-10 캡처), 초록이면 창 자리 글자로 확인한다 (OCR). 끊는 자리마다
+    부르므로(mabi/restart.watch) 평소엔 색만 본다."""
     from . import gamedata as gd, ocr
+    x, y, w, h = gd.region("run_limit_button")
+    px = frame[y:y + h, x:x + w].reshape(-1, 3).astype(int)
+    if not px.size or ((px[:, 1] > px[:, 2] + 40) & (px[:, 1] > px[:, 0] + 40)).mean() < 0.6:
+        return False
     texts = "".join(t for t, _, _ in ocr.find_texts(frame, gd.region("run_limit_popup"))).replace(" ", "")
     return "오랫동안실행" in texts or "재시작해주세요" in texts
 
@@ -695,9 +701,9 @@ class Bot:
         return closed
 
     def run_limit_popup(self) -> bool:
-        """화면 위 가운데에 '너무 오랫동안 실행되고 있습니다 · 재시작' 창이 떠 있나 (run_limit_shown). 실패했을 때·탭을 못 찾았을 때
-        까닭을 붙이려고 부른다. 창이 떠 있어도 일은 계속 되어 멈추지 않는다 (outcome.escalate) — 그 자리를 판단에 쓰지 않게
-        영역을 둔다 (ui.json covers). 이 창은 '종료' 하나뿐이라 누르면 게임이 꺼진다 → 누르지 않는다."""
+        """화면 위 가운데에 '너무 오랫동안 실행되고 있습니다 · 재시작' 창이 떠 있나 (run_limit_shown). 끊어도 되는 자리마다
+        (mabi/restart.watch)와 실패했을 때(outcome.escalate) 본다. 그 자리는 판단에 쓰지 않는다 (ui.json covers).
+        이 창은 '종료' 하나뿐이라 누르면 게임이 꺼진다 → 게임을 다시 켤 때만 누른다 (mabi/restart)."""
         try:
             return run_limit_shown(self.frame())
         except Exception:  # noqa: BLE001 — 확인 실패가 실패 처리를 막으면 안 된다

@@ -439,6 +439,7 @@ class DailyApi:
             "game_keys": [{"name": n, "label": label, "default": d, "key": gkeys.of(doc, n)}
                           for n, (d, label) in gkeys.GAME_KEYS.items()],
             "fit_display": bool(doc["run"].get("fit_display", True)),
+            "restart_auto": bool(doc["restart"].get("auto", True)),
             "paths": {k: over.get(k, "") for k in ("data", "logs", "shots")},
             "current": {"data": str(self.paths.data), "logs": str(self.paths.logs), "shots": str(self.paths.shots)},
         }
@@ -481,6 +482,8 @@ class DailyApi:
             doc["game"][f"{n}_key"] = str(k or "").strip().lower()
         if "fit_display" in v:
             doc["run"]["fit_display"] = bool(v["fit_display"])
+        if "restart_auto" in v:
+            doc["restart"]["auto"] = bool(v["restart_auto"])
         userconfig.save(self.paths, doc)
         p = v.get("paths")
         if p is not None:

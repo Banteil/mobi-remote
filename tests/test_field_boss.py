@@ -97,6 +97,13 @@ class QueueSkipTest(unittest.TestCase):
         self.addCleanup(d.cleanup)
         self.k = Timed()
         self.q = WorkQueue(Path(d.name) / "q.json", Path(d.name) / "h.jsonl", lambda ch, v: None, {"daily": self.k})
+        self.addCleanup(self.settle)  # 임시 폴더보다 먼저 (나중에 넣은 정리가 먼저 돈다)
+
+    def settle(self):
+        """큐 스레드가 끝나길 기다린다 — 아직 큐 파일을 쓰는 중에 임시 폴더를 지우면 '디렉터리가 비어 있지 않음' 으로 실패한다."""
+        self.q.pause()
+        if self.q._thread:
+            self.q._thread.join(5)
 
     def wait_for(self, cond, timeout=5):
         end = time.monotonic() + timeout

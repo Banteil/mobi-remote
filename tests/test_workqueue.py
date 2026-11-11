@@ -91,6 +91,8 @@ class WorkQueueTest(unittest.TestCase):
         self.assertTrue(wait_for(lambda: self.long.started == [1, 1]))  # 숙제 다시
         self.long.finish()
         self.assertTrue(wait_for(lambda: not self.q.running and not self.q.items))
+        # 끝 처리(on_drained)는 running 을 내린 바로 뒤에 불린다 — 바로 재면 부하가 클 때 그 사이에 걸린다
+        self.assertTrue(wait_for(lambda: self.drained == 1))
         self.assertEqual(self.drained, 1)
 
     def test_self_stop_pauses_queue(self):

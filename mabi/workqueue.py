@@ -235,11 +235,32 @@ class WorkQueue:
         self._changed()
         if where == "now":
             if cur:
-                self.patch(cur["id"], {"note": "뒤로 미루는 중…"})
-                self.request_stop("preempt")
+                self.preempt("뒤로 미루는 중…")
             else:
                 self.tick()
         return dict(it)
+
+    def put_first(self, spec: dict) -> bool:
+        """먼저 할 카드를 맨 위에 둔다 (게임 다시 켜기 — gui_app/queue_api._q_restart). 같은 종류가 이미 남아 있으면
+        (대기·진행·일시정지) 그대로. 돌던 카드는 건드리지 않는다 — 그 종류의 Kind.timed 가 참이면 끊어도 되는 자리에서
+        cut_for_timed 가 밀어내고, 아니면 돌던 카드가 끝난 뒤 맨 위라 이것부터 돈다. 넣었으면 True."""
+        with self.lock:
+            if any(x.get("kind") == spec.get("kind") and x.get("status") in LIVE for x in self.items):
+                return False
+            it = {k: v for k, v in spec.items() if k != "id"}
+            it.update(id=self._seq, status="wait")
+            it.setdefault("note", "")
+            self._seq += 1
+            self.items.insert(0, it)
+        self._changed()
+        return True
+
+    def preempt(self, note: str) -> None:
+        """돌던 카드를 대기로 돌리고(note 를 적어) 맨 위 카드부터 다시 돈다 — '지금 바로' 와 같은 밀어내기."""
+        cur = self.current()
+        if cur:
+            self.patch(cur["id"], {"note": note})
+            self.request_stop("preempt")
 
     def remove(self, item_id) -> None:
         with self.lock:
@@ -532,7 +553,8 @@ class WorkQueue:
                 else:  # 사람이 멈춘 것(⏸·■·F12)은 실패가 아니다 — 일시정지로 두고 ▶ 로 하던 자리에서 이어 간다
                     it["status"] = "pause"
                     where = self.kind_of(it).where(it)
-                    it["note"] = (f"{where}에서 멈춤 · " if where else "") + self.pause_note()
+                    # 카드가 스스로 멈추며 까닭을 남겼으면 그것 (게임을 다시 켜지 못함 등 — set_stop 의 note)
+                    it["note"] = self.stop.get("note") or ((f"{where}에서 멈춤 · " if where else "") + self.pause_note())
                 self._record(it, {"fail": "fail", "pause": "pause"}.get(it["status"], "stop"))
                 report({"fail": "fail", "pause": "pause", "wait": "preempt"}.get(it["status"], "stop"))
                 self._changed()

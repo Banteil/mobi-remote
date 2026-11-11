@@ -18,6 +18,7 @@ import time
 from mabi import cutpoint
 from mabi import gamedata as gd
 from mabi import queue_report
+from mabi import restart
 from mabi.runner import RunOptions, load_config
 from mabi.workqueue import STOP_WHY, Kind, WorkQueue
 
@@ -476,6 +477,58 @@ class EnhanceKind(Kind):
             self.bot.stopper.request(STOP_WHY.get(reason, ""))
 
 
+class RestartKind(Kind):
+    """게임 다시 켜기 (mabi/restart) — 연속 실행 제한 창을 보면 _q_restart 가 맨 위에 올린다. 시간 정해진 카드처럼(timed)
+    끊어도 되는 자리에서 돌던 카드를 밀어내고 먼저 한 뒤 밀린 카드를 이어 한다. 못 하면 일시정지 (사람이 게임을 켜고 ▶)."""
+    own_loot = True  # 얻는 것이 없다 — 앞뒤로 가방을 재지 않는다 (꺼진 게임에 CLI 를 묻지 않게)
+
+    def __init__(self, api):
+        self.api = api
+        self.bot = None
+
+    @staticmethod
+    def detail(x) -> str:
+        return x.get("why") or "연속 실행 제한"
+
+    def timed(self, it) -> bool:
+        return True
+
+    def run(self, q, it):
+        from mabi import outcome
+        from mabi.bot import Bot
+        bot = None
+        try:
+            if (err := self.api._busy_reason()):
+                raise RuntimeError(err)
+            self.api._daily_hook_log()
+            cfg = load_config(self.api.paths)
+            bot = self.bot = Bot(cfg, self.api.paths, force_exit=False)
+            q.note(it, "게임을 다시 켜는 중…")
+            # 끄기 전 캐릭터를 카드에 적어 둔다 — 켜다 실패해 ▶ 로 다시 할 때 같은 캐릭터로 들어가게
+            q.note(it, restart.run(bot, cfg, it.get("who"), keep=lambda ch: q.patch(it["id"], {"who": ch}, quiet=True)))
+            return True
+        except Exception as e:  # noqa: BLE001 — 가르는 규칙은 다른 카드와 같은 outcome
+            summary = str(e)
+            if bot is None:
+                log.exception("게임 다시 켜기 시작 실패")
+            else:
+                status, summary, _ = outcome.classify(bot, "restart", "게임 다시 켜기", e)
+                if status == "STOP":  # F12·멈추기
+                    q.set_stop("stopped")
+                    return False
+            # 다음 카드가 꺼진 게임에서 돌지 않게 큐를 세운다 — ▶ 면 이 카드부터 (게임이 켜져 있으면 접속만 확인)
+            q.set_stop("stopped", {"note": f"게임을 다시 켜지 못함 — {summary} · 게임을 켠 뒤 ▶"})
+            return False
+        finally:
+            self.bot = None
+            if bot:
+                bot.stopper.close()
+
+    def stop(self, reason):
+        if self.bot:
+            self.bot.stopper.request(STOP_WHY.get(reason, ""))
+
+
 class QueueApi:
     """self.paths, self.cd, self._emit, DailyApi 가 있는 클래스에 섞는다. _init_queue() 를 __init__ 에서 부른다."""
 
@@ -486,12 +539,28 @@ class QueueApi:
         self._q_pending_ask: dict | None = None
         self.queue = WorkQueue(self.cd.queue_file, self.cd.history_file, emit,
                                {"daily": DailyKind(self), "abyss": AbyssKind(self), "raid": RaidKind(self), "goal": GoalKind(self),
-                                "action": ActionKind(self), "enhance": EnhanceKind(self)},
+                                "action": ActionKind(self), "enhance": EnhanceKind(self), "restart": RestartKind(self)},
                                on_drained=self._q_drained, pause_note=self._q_pause_note,
                                snap=self._q_snap, on_report=self._q_report)
         # 시간 정해진 카드가 열리면 돌던 일을 끊어도 되는 자리에서 끊는다
         cutpoint.set_hook(self.queue.cut_for_timed, self.queue.timed_due)
+        # 연속 실행 제한 창을 보면 '게임 다시 켜기' 카드를 맨 위에 (같은 끊는 자리로 먼저 한다)
+        restart.set_hook(self._q_restart)
         threading.Thread(target=self._q_hotkey, name="queue-f12", daemon=True).start()
+
+    def _q_restart(self, why: str, now: bool) -> bool:
+        """mabi/restart 가 부른다 (연속 실행 제한 창): 맨 위에 '게임 다시 켜기' 카드를 둔다. now(그 창 때문에 일이 실패함)면
+        돌던 카드를 바로 밀어내고, 아니면 끊어도 되는 자리에서 큐가 밀어낸다 (cut_for_timed). 받았으면 True.
+        큐가 쉬면(사람이 하는 중) 하지 않는다 — 돌던 카드가 그 카드 자신일 때도."""
+        q = self.queue
+        cur = q.current()
+        if not q.running or not cur or cur.get("kind") == "restart":
+            return False
+        if q.put_first({"kind": "restart", "label": "게임 다시 켜기", "why": why}):
+            log.warning(f"{why} → 작업 큐 맨 위에 '게임 다시 켜기' (하던 일은 끊어도 되는 자리에서 멈추고, 다시 켠 뒤 이어서)")
+        if now:
+            q.preempt("게임을 다시 켠 뒤 이어서")
+        return True
 
     # ---- 결과 창: 큐가 다 비면 (다 끝남·전체 중단·마지막 카드 뺌) mabi/workqueue 가 보고서를 넘긴다
     def _q_snap(self):

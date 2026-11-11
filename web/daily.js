@@ -333,6 +333,7 @@ async function loadPathSettings() {
   $('#opt-stop-key').innerHTML = fkeys(s.stop_key);
   $('#opt-dye-key').innerHTML = fkeys(s.dye_key);
   $('#opt-fit-display').checked = s.fit_display !== false;
+  $('#opt-restart-auto').checked = s.restart_auto !== false;
   ['data', 'logs', 'shots'].forEach((k) => { $('#dl-p-' + k).value = s.paths[k] || ''; });
   $('#dl-p-now').textContent = '지금: ' + s.current.data + ' (바꾸면 다음 실행부터)';
 }
@@ -627,6 +628,7 @@ $('#dl-start').addEventListener('click', () => {
 });
 $('#dl-queue').addEventListener('click', queueDaily);
 $('#opt-fit-display').addEventListener('change', () => mm.daily.saveSettings({ fit_display: $('#opt-fit-display').checked }));
+$('#opt-restart-auto').addEventListener('change', () => mm.daily.saveSettings({ restart_auto: $('#opt-restart-auto').checked }));
 $('#ab-dungeon').addEventListener('change', paintAbyssBg);
 $('#ab-start').addEventListener('click', () => startRepeat(abyssSpec(), '어비스'));
 $('#ab-queue').addEventListener('click', () => { const it = abyssSpec(); queueRepeat(it, abyssAmount(it)); });

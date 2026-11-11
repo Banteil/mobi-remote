@@ -93,7 +93,7 @@ class Repeat:
         사용자: 어비스·레이드처럼 판 중간에 끊기 애매한 것은 클리어 뒤에 비켜 준다 (2026-11-09)."""
         if self.done():
             return False
-        why = cutpoint.due()
+        why = cutpoint.due(self.bot)
         if not why:
             return False
         self.bot.log.info(f"{why} → 판이 끝났으니 다시 하기 대신 나가서 비켜 줌 (끝나면 이어서)")

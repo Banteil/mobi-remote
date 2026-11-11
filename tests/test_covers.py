@@ -1,17 +1,16 @@
 """게임이 위에 띄우는 창(ui.json covers — 연속 실행 제한 창)이 가리는 자리를 판단에 쓰지 않는가.
 
 새 글자 영역·그림 ROI·설정 영역을 그 자리에 두면 CoversTest 가 걸린다 — 그 자리 밖의 신호를 찾거나, 판단에 안 쓰는 것이면
-ui.json covered_ok 에 까닭을 적는다. 나머지는 그 자리 대신 쓰는 신호(입장 창·전멸·재료 부족)가 맞게 읽히는지 본다.
+ui.json covered_ok 에 까닭을 적는다. 나머지는 그 자리 대신 쓰는 신호(입장 창·전멸·결과 창)가 맞게 읽히는지와
+창 감지(run_limit_shown — 게임 다시 켜기의 신호)를 본다.
 """
 import json
 import tomllib
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest import mock
 
 from mabi import gamedata as gd
-from mabi.monitor import handlers
 from mabi.tasks import entry
 from mabi.tasks.content import CannotProceed
 
@@ -145,37 +144,29 @@ class WipeTest(unittest.TestCase):
         self.assertNotIn(gd.text("abyss_wiped"), self.texts("abyss_dead_revives3.png"))
 
 
-class MaterialShortTest(unittest.TestCase):
-    """제작·가공 Space 뒤 재료 부족 — 알림(가려질 수 있다)이 아니라 누른 뒤 일이 일어났나로."""
+class ResultConfirmTest(unittest.TestCase):
+    """레이드·필드 보스 결과 창은 위쪽 '처치 완료'(창 자리 y 약 216) 대신 아래 가운데 '확인' 으로 본다 (content.confirm_text).
+    2026-11-11 화이트 서큐버스 결과 창 — 버튼 띠만 남긴 그림."""
 
-    def run_case(self, looks, toast_at=None, travel=False):
-        clock, polls = [0.0], [0]
-        bot = mock.Mock()
-        bot.cfg = {"arbeit": {"craft_short_toast": "toast"}}
-        bot.input_mark = 1
-        bot.packets.ok = False
-        bot.auto_traveling.return_value = travel
-        bot.sleep.side_effect = lambda a, b=None: clock.__setitem__(0, clock[0] + a)
-        bot.vision.find.side_effect = lambda frame, name: toast_at is not None and polls[0] >= toast_at
-        seq = iter(looks)
+    def test_raid_result(self):
+        from mabi.tasks.content import confirm_text
+        x, y = confirm_text(_frame("raid_result_confirm.png"))
+        self.assertTrue(abs(x - 959) < 15 and abs(y - 1009) < 15)
 
-        def look(b, frame=None):
-            polls[0] += 1
-            return SimpleNamespace(what=next(seq, looks[-1]))
-        with mock.patch.object(handlers.time, "monotonic", lambda: clock[0]), mock.patch.object(handlers.d, "look", look):
-            return handlers.material_short(bot, "craft_go"), bot.key.call_count
 
-    def test_toast_seen(self):
-        self.assertEqual(self.run_case(["craft_go"], toast_at=0), (True, 0))
+class RunLimitShownTest(unittest.TestCase):
+    """제한 창 감지는 '종료' 버튼 색을 먼저 본다 — 끊는 자리마다 부르므로 창이 없으면 글자를 읽지 않는다."""
 
-    def test_window_changed(self):
-        self.assertEqual(self.run_case(["craft_go", "craft_transfer"]), (False, 0))
+    def test_popup(self):
+        from mabi.bot import run_limit_shown
+        self.assertTrue(run_limit_shown(_frame("abyss_entry_run_limit.png")))
 
-    def test_travel_started(self):
-        self.assertEqual(self.run_case(["craft_go"], travel=True), (False, 0))
-
-    def test_nothing_happens_twice(self):  # 알림이 가려져도 — 한 번 더 눌러 보고 그래도 그대로면 모자람
-        self.assertEqual(self.run_case(["craft_go"]), (True, 1))
+    def test_no_popup_skips_ocr(self):
+        from mabi.bot import run_limit_shown
+        with mock.patch("mabi.ocr.find_texts") as ocr:
+            for name in ("abyss_entry_together.png", "raid_entry_scas.png", "raid_result_confirm.png"):
+                self.assertFalse(run_limit_shown(_frame(name)), name)
+        ocr.assert_not_called()
 
 
 if __name__ == "__main__":

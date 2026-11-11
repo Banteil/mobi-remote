@@ -10,8 +10,11 @@
   어비스·레이드 반복은 판이 끝나면 '다시 하기' 로 안에서 다음 판을 잡아 필드에 나오지 않는다 — 판 사이에 due() 로 묻고
   열렸으면 다시 하기 대신 나간다 (tasks.repeat.yield_between). 그러면 다음 입장 단계(필드)에서 여기서 끊긴다.
 끊는 일은 작업 큐가 한다 (set_hook — 그 카드를 맨 위로 올리고 지금 카드를 밀어낸다 → 봇은 다음 대기에서 멈춘다).
+끊는 자리에서는 연속 실행 제한 창도 본다 (restart.watch) — 떠 있으면 '게임 다시 켜기' 카드가 맨 위에 올라 같은 길로 먼저 한다.
 """
 import logging
+
+from . import restart
 
 log = logging.getLogger("mabi")
 
@@ -27,8 +30,11 @@ def set_hook(fn, due=None) -> None:
     _hook, _due = fn, due
 
 
-def due() -> str:
-    """먼저 할 일이 열려 있나 (밀어내지는 않는다). 열렸으면 까닭, 아니면 ""."""
+def due(bot=None) -> str:
+    """먼저 할 일이 열려 있나 (밀어내지는 않는다). 열렸으면 까닭, 아니면 "". bot 을 주면(어비스·레이드 판 사이)
+    연속 실행 제한 창도 본다 — 떠 있으면 '게임 다시 켜기' 가 먼저 할 일이 된다."""
+    if bot is not None:
+        restart.watch(bot)
     if _due is None:
         return ""
     try:
@@ -51,6 +57,7 @@ def check(bot, step: str) -> None:
     """단계가 바뀔 때 (bot.step). 먼저 할 일이 열렸고 끊어도 되는 곳이면 큐가 지금 일을 밀어낸다."""
     if step in NO_CUT_STEPS or not safe(bot):
         return
+    restart.watch(bot)  # 연속 실행 제한 창이면 '게임 다시 켜기' 카드가 맨 위에 — 아래 cut 이 지금 일을 밀어낸다
     cut(f"'{step}' 단계 앞")
 
 
