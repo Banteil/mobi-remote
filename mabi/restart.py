@@ -30,6 +30,7 @@ log = logging.getLogger("mabi")
 _hook = None  # (까닭, now) -> bool: 작업 큐가 '게임 다시 켜기' 를 받았으면 True (gui_app/queue_api._q_restart)
 
 SYNCHRONIZE, WAIT_TIMEOUT, ERROR_ACCESS_DENIED = 0x00100000, 0x102, 5
+CLICK_TAKES = 15  # '종료' 를 누르고 게임 창이 닫히길 기다리는 초 — 안 닫히면 한 번 더 누른다
 
 
 def set_hook(fn) -> None:
@@ -123,27 +124,32 @@ def _alive(pid: int) -> bool:
         k32.CloseHandle(ctypes.c_void_p(h))
 
 
-def _gone(bot: Bot, pid: int, timeout: float) -> bool:
+def _until(bot: Bot, cond, timeout: float) -> bool:
     end = time.monotonic() + timeout
-    while time.monotonic() < end:
-        if not bot.window.find() and not (pid and _alive(pid)):
+    while True:
+        if cond():
             return True
+        if time.monotonic() > end:
+            return False
         bot.sleep(1)
-    return False
 
 
 def _quit(bot: Bot, timeout: float) -> None:
-    """창의 '종료' 를 누르고 게임 프로세스가 끝날 때까지. 안 꺼지면 한 번 더 누른다."""
+    """창의 '종료' 를 누르고 게임 프로세스가 끝날 때까지. 창이 안 닫히면 한 번 더 누른다 — 닫혔으면 (없는 창을 누르지
+    않게) 다시 누르지 않고 프로세스가 끝나길 기다린다 (창이 닫힌 뒤에도 정리하느라 프로세스가 남아 있을 수 있다)."""
+    from .tasks.content import CannotProceed
     pid = _pid(bot.window.hwnd)
     x, y, w, h = gd.region("run_limit_button")
     for attempt in range(2):
         bot.log.info("연속 실행 제한 창 '종료' 누름 → 게임을 다시 켬" + (" (다시)" if attempt else ""))
         bot.click((x + w // 2, y + h // 2))
-        if _gone(bot, pid, timeout / 2):
-            bot.log.info("게임 꺼짐")
-            return
-    from .tasks.content import CannotProceed
-    raise CannotProceed(f"'종료' 를 눌러도 게임이 꺼지지 않음 → {bot.snapshot('restart_quit').name}")
+        if _until(bot, lambda: not bot.window.find(), CLICK_TAKES):
+            break
+    else:
+        raise CannotProceed(f"'종료' 를 눌러도 게임 창이 그대로 → {bot.snapshot('restart_quit').name}")
+    if not _until(bot, lambda: not (pid and _alive(pid)), timeout):
+        raise CannotProceed(f"게임 창은 닫혔는데 {timeout:.0f}초 안에 프로세스가 끝나지 않음")
+    bot.log.info("게임 꺼짐")
 
 
 def _launch(bot: Bot, cfg: dict) -> None:

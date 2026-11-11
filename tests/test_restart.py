@@ -1,5 +1,6 @@
 """게임 다시 켜기 (mabi/restart) — 연속 실행 제한 창을 보면 큐 맨 위에 카드를 올리고, 끊는 자리에서 하던 카드를 밀어내
 다시 켠 뒤 이어 한다. 큐 흐름은 가짜 카드로, 다시 켜는 순서는 가짜 봇으로 본다."""
+import itertools
 import tempfile
 import threading
 import time
@@ -154,13 +155,13 @@ class FakeBot:
 
 
 class RunTest(unittest.TestCase):
-    def run_with(self, bot, character=None):
+    def run_with(self, bot, character=None, pid=0):
         kept = []
 
         def start(link):
             bot.launched, bot.calls = True, 0
         with mock.patch.object(restart, "_character", return_value={"slot": 2, "name": "둘"}), \
-                mock.patch.object(restart, "_pid", return_value=0), \
+                mock.patch.object(restart, "_pid", return_value=pid), \
                 mock.patch.object(restart.os, "startfile", side_effect=start) as startfile, \
                 mock.patch("mabi.tasks.login.run", return_value="접속 완료") as login:
             out = restart.run(bot, CFG, character, keep=kept.append)
@@ -190,13 +191,30 @@ class RunTest(unittest.TestCase):
         startfile.assert_called_once()
         login.assert_called_once_with(bot, CFG, {"slot": 5, "name": "다섯"})
 
-    def test_game_does_not_quit(self):
+    def test_window_stays(self):
         bot = FakeBot(exits_after=10 ** 6)
-        with mock.patch.object(restart, "_pid", return_value=0), mock.patch.object(restart, "_character", return_value=None), \
-                mock.patch.object(restart.time, "monotonic", side_effect=[0, 0, 99, 0, 0, 99]), \
-                self.assertRaisesRegex(CannotProceed, "꺼지지 않음"):
-            restart.run(bot, CFG)
+        with mock.patch.object(restart.time, "monotonic", side_effect=itertools.count()), \
+                self.assertRaisesRegex(CannotProceed, "창이 그대로"):
+            self.run_with(bot)
         self.assertEqual(len(bot.clicks), 2)  # 한 번 더 누르고 포기
+
+    def test_process_lingers_after_window(self):
+        # 창은 닫혔는데 프로세스가 늦게 끝남 — 다시 누르지 않고 끝나길 기다린다 (다 끝나기 전에 켜면 '이미 실행 중')
+        bot = FakeBot()
+        alive = iter([True] * 5 + [False])
+        with mock.patch.object(restart, "_alive", side_effect=lambda pid: next(alive)):
+            out, kept, startfile, login = self.run_with(bot, pid=7)
+        self.assertEqual(bot.clicks, [(960, 180)])
+        startfile.assert_called_once()
+        self.assertIn("다시 켜고", out)
+
+    def test_process_never_ends(self):
+        bot = FakeBot()
+        with mock.patch.object(restart, "_alive", return_value=True), \
+                mock.patch.object(restart.time, "monotonic", side_effect=itertools.count()), \
+                self.assertRaisesRegex(CannotProceed, "프로세스가 끝나지 않음"):
+            self.run_with(bot, pid=7)
+        self.assertEqual(len(bot.clicks), 1)  # 창이 닫혔으면 다시 누르지 않는다
 
     def test_game_does_not_start(self):
         bot = FakeBot(window=False, opens_after=10 ** 6)
