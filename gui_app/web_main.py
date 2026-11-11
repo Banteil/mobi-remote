@@ -24,8 +24,8 @@ def _command(argv: list[str]) -> bytes:
       --abyss 슬롯 던전 [판수] [난이도] [solo|party] 어비스 카드를 큐 뒤에 넣는다 (판수 0 = 멈출 때까지). 여러 번 부르면 차례로 쌓인다
       --raid 슬롯 레이드 [판수] [난이도] [solo|party] 레이드 카드를 큐 뒤에 넣는다 (어비스와 같음)
       --enhance 각인 강화 반복을 지금 시작 (열어 둔 각인 강화 창에서 — 다른 작업이 돌면 시작하지 않는다)
-      --restart-game '게임 다시 켜기' 카드를 지금 (mabi/restart — 제한 창이면 끄고 다시 켬, 꺼져 있으면 켜서 접속,
-                     그 밖엔 접속만 확인. 돌던 카드는 밀렸다가 이어서)
+      --restart-game '게임 다시 켜기' 카드를 지금 (mabi/restart — 제한 창이 없어도 끄고 다시 켜서 같은 캐릭터로 접속,
+                     꺼져 있으면 켜서 접속. 다른 PC 에서 시험할 때도. 돌던 카드는 밀렸다가 이어서)
       마지막 칸은 혼자하기(solo) / 함께하기(party). 비우면 설정 탭에 고른 대로"""
     for flag in ("--abyss", "--raid"):
         if flag in argv:
@@ -57,7 +57,7 @@ def _on_message(win: "MainWindow", conn) -> None:
         win.api.queue_add({"kind": "enhance", "label": "각인 강화 반복"}, "now")
     elif msg == b"restart":
         log.info("명령 → 게임 다시 켜기")
-        win.api.queue_add({"kind": "restart", "label": "게임 다시 켜기", "why": "명령"}, "now")
+        win.api.queue_add({"kind": "restart", "label": "게임 다시 켜기", "why": "명령", "force": True}, "now")
     elif msg.startswith(b"daily:"):
         parts = msg.decode().split(":")[1:]
         slots = [int(x) for x in (parts[0] if parts else "").split(",") if x.strip().isdigit()]

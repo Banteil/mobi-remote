@@ -156,7 +156,7 @@
 
   "covered_ok": {
     "_설명": "covers 자리와 겹쳐도 되는 영역(regions 이름 · templates/이름 · config/섹션.키)과 그 까닭. 판단에 안 쓰거나, 다른 신호가 먼저이거나, 겹치는 건 가장자리뿐이거나, '다시 켬' — 가려지면 그 일이 늦어지거나 실패할 뿐 곧 게임을 다시 켜는 것 (mabi/restart).",
-    "run_limit_button": "제한 창 자신의 '종료' 버튼 — 창이 떴는지 색으로 먼저 보고(bot.run_limit_shown), 게임을 다시 켤 때 누른다 (mabi/restart)",
+    "run_limit_button": "제한 창 자신의 '종료' 버튼 — 창이 떴는지 색으로 먼저 본다(bot.run_limit_shown). 누르지는 않는다 (다시 켤 때는 창 닫기 신호 — mabi/restart)",
     "abyss_entry_top": "탭 누르기 전용 — 입장 창·지금 탭은 오른쪽 아래(버튼·우연한 만남)로 본다 (tasks/entry.py)",
     "abyss_list": "가장자리 — 목록 글자는 x 1225 부터 (2026-11-11 캡처), 창은 x 1218 까지",
     "abyss_loot_done": "다시 켬 — 주간 전리품 정산 글자가 가려지면 정산 제한 시간까지 기다릴 뿐, 판 사이에서 게임을 다시 켠다",

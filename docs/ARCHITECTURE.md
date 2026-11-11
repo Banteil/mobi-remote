@@ -27,7 +27,7 @@ mabi/
 | 콘텐츠 안에서 나가기 (나가기 → 확인 창 → 확인 → 밖 메인) | `tasks/exits.Exit` · 자리에 맞게 고르기 `exits.leave_instance` | `DungeonExit`, `abyss.AbyssExit`, `raid.RaidExit`/`ShipExit`, 실패 뒤 정리, 접속 |
 | 작업이 예외로 끝났을 때 결과 가르기·정리 (게임 꺼짐 → 멈춤, 연속 실행 제한 창 → 게임 다시 켜기 뒤 이어 함, 가방 무게 → HEAVY) | `outcome.classify` · `outcome.escalate` · `outcome.recover` | runner, `daily_api._repeat_launch` |
 | 돌던 카드를 끊어도 되는 자리에서 끊고 먼저 할 카드(시간 정해진 카드·게임 다시 켜기)를 하기 | `cutpoint.check`·`cut`·`due` → 큐 `cut_for_timed` (먼저 할 카드는 `Kind.timed`) | `Bot.step`, `Repeat.yield_between`, CLI 걸음 카드 |
-| 연속 실행 제한 창 → 게임 다시 켜기 (창 감지 `run_limit_shown`, '종료' → 넥슨 플러그 바로실행 → 같은 캐릭터로 접속) | `restart.watch`·`now`·`run` · 큐 카드 `queue_api.RestartKind` · 맨 위에 올리기 `WorkQueue.put_first` | cutpoint, `outcome.escalate` |
+| 연속 실행 제한 창 → 게임 다시 켜기 (창 감지 `run_limit_shown`, 창 닫기 신호 → 넥슨 플러그 바로실행 → 같은 캐릭터로 접속) | `restart.watch`·`now`·`run` · 큐 카드 `queue_api.RestartKind` · 맨 위에 올리기 `WorkQueue.put_first` | cutpoint, `outcome.escalate` |
 | 인터페이스 PC·80% 맞추기 (한 번, 게임 안·콘텐츠 밖일 때) | `tasks/display.InterfaceFit` → `'interface'` 이벤트 | runner, Repeat |
 | 빠른 이동(T) — 이동 시작을 기다린 뒤 | `Bot.fast_travel(wait)` | 숙제 이동, 아르바이트(점검자), 어비스·레이드 입구, 수리 |
 | 가방이 꽉 찼나 | `Bot.overweight()` (패킷, 모르면 CLI) | runner 접속 뒤, `Bot.check_weight` |

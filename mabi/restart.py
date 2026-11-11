@@ -6,9 +6,11 @@
   - 언제: 작업 큐가 돌 때만 (쉬고 있으면 사람이 하는 중). 끊어도 되는 자리(mabi/cutpoint — 필드에서 단계가 바뀔 때 ·
     어비스·레이드 판 사이)에서 창을 보면(watch) 큐 맨 위에 '게임 다시 켜기' 카드를 올린다 → 큐가 하던 카드를 그 자리에서
     밀어내고 이것부터 한 뒤 하던 카드를 이어 한다. 창 때문에 일이 실패했으면(outcome.escalate → now) 바로 밀어낸다.
-  - 어떻게(run): 끄기 전 캐릭터를 기억 → 창의 '종료' → 게임 프로세스가 끝날 때까지 → 넥슨 플러그 '바로실행' 링크
-    ([restart] launch — 런처가 로그인 정보를 넣어 켠다. 리모콘이 관리자 권한이면 그 아래로 켜져 UAC 창도 안 뜬다)
-    → 타이틀 → 그 캐릭터로 접속 (tasks.login).
+  - 어떻게(run): 끄기 전 캐릭터를 기억 → 게임 창 닫기 신호(WM_CLOSE — 창의 X 와 같다) → 게임 프로세스가 끝날 때까지
+    → 넥슨 플러그 '바로실행' 링크 ([restart] launch — 런처가 로그인 정보를 넣어 켠다. 넥슨 플러그·게임 실행 파일은
+    관리자 권한을 요구하지 않아(asInvoker) UAC 창도 안 뜬다) → 타이틀 → 그 캐릭터로 접속 (tasks.login).
+    제한 창의 '종료' 는 누르지 않는다 — 창 닫기는 실기에서 확인됐고(2026-11-11) 그 창이 없어도 같은 길이라 명령으로
+    시험할 수 있다 (force — gui.py --restart-game).
   - 못 하면(넥슨 로그인 풀림·업데이트·점검 등) CannotProceed — 큐는 그 카드에서 일시정지 (사람이 게임을 켜고 ▶).
 큐와는 set_hook 으로만 잇는다 (cutpoint 와 같은 방식 — 여기는 큐를 모른다).
 """
@@ -20,8 +22,6 @@ import os
 import time
 from typing import TYPE_CHECKING
 
-from . import gamedata as gd
-
 if TYPE_CHECKING:  # bot 이 cutpoint → restart 를 불러오므로 여기서 bot 을 바로 불러오면 돌고 돈다
     from .bot import Bot
 
@@ -29,8 +29,10 @@ log = logging.getLogger("mabi")
 
 _hook = None  # (까닭, now) -> bool: 작업 큐가 '게임 다시 켜기' 를 받았으면 True (gui_app/queue_api._q_restart)
 
-SYNCHRONIZE, WAIT_TIMEOUT, ERROR_ACCESS_DENIED = 0x00100000, 0x102, 5
-CLICK_TAKES = 15  # '종료' 를 누르고 게임 창이 닫히길 기다리는 초 — 안 닫히면 한 번 더 누른다
+SYNCHRONIZE, WAIT_TIMEOUT, ERROR_ACCESS_DENIED, WM_CLOSE = 0x00100000, 0x102, 5, 0x0010
+CONFIRM_TAKES = 3  # 첫 신호 뒤 '게임을 종료하시겠습니까?' 창이 뜨길 기다리는 초 — 그다음 신호가 '게임 종료'
+CLOSE_TAKES = 15  # 그 뒤로 신호마다 게임 창이 닫히길 기다리는 초 — 안 닫히면 다시 보낸다
+CLOSE_TRIES = 3
 
 
 def set_hook(fn) -> None:
@@ -66,14 +68,14 @@ def now(bot: Bot, why: str) -> bool:
 
 
 # ---------------------------------------------------------------- 다시 켜기 (큐의 '게임 다시 켜기' 카드)
-def run(bot: Bot, cfg: dict, character: dict | None = None, keep=lambda ch: None) -> str:
-    """창의 '종료' 로 끄고 다시 켜서 같은 캐릭터로 접속한다. character 는 앞서 기억한 캐릭터(이어 하기 — 이미 꺼진 게임),
-    keep(캐릭터) 는 끄기 전에 알아낸 캐릭터를 카드에 적어 두라는 것. 게임이 켜져 있는데 창이 없으면(사람이 이미 다시
-    켬 · ▶ 로 이어 하기) 끄지 않고 접속만 확인한다."""
+def run(bot: Bot, cfg: dict, character: dict | None = None, keep=lambda ch: None, force: bool = False) -> str:
+    """게임을 끄고 다시 켜서 같은 캐릭터로 접속한다. character 는 앞서 기억한 캐릭터(이어 하기 — 이미 꺼진 게임),
+    keep(캐릭터) 는 끄기 전에 알아낸 캐릭터를 카드에 적어 두라는 것. 게임이 켜져 있는데 제한 창이 없으면(사람이 이미
+    다시 켬 · ▶ 로 이어 하기) 끄지 않고 접속만 확인한다 — force(명령)면 창이 없어도 끈다."""
     from .tasks import login
     c = cfg["restart"]
     if bot.window.find():
-        if not bot.run_limit_popup():
+        if not force and not bot.run_limit_popup():
             bot.log.info("연속 실행 제한 창이 없음 → 다시 켜지 않고 접속만 확인")
             bot.log.info(login.run(bot, cfg, character))
             return "연속 실행 제한 창이 없음 — 다시 켜지 않음"
@@ -134,19 +136,24 @@ def _until(bot: Bot, cond, timeout: float) -> bool:
         bot.sleep(1)
 
 
+def _close(hwnd: int) -> None:
+    ctypes.windll.user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
+
+
 def _quit(bot: Bot, timeout: float) -> None:
-    """창의 '종료' 를 누르고 게임 프로세스가 끝날 때까지. 창이 안 닫히면 한 번 더 누른다 — 닫혔으면 (없는 창을 누르지
-    않게) 다시 누르지 않고 프로세스가 끝나길 기다린다 (창이 닫힌 뒤에도 정리하느라 프로세스가 남아 있을 수 있다)."""
+    """게임 창에 닫기 신호를 보내고 게임 프로세스가 끝날 때까지. 게임은 첫 신호에 '게임을 종료하시겠습니까?' (취소 /
+    게임 종료) 창을 띄우고 두 번째 신호에 꺼진다 (2026-11-11 실기 세 번 — 두 번째 뒤 5~16초). 그래서 3초 뒤 한 번 더
+    보내고, 그래도 창이 남아 있으면 다시 보낸다. 창이 닫혀도 정리하느라 프로세스가 남아 있을 수 있어 끝날 때까지
+    기다린다 (다 끝나기 전에 켜면 '이미 실행 중' 일 수 있다)."""
     from .tasks.content import CannotProceed
     pid = _pid(bot.window.hwnd)
-    x, y, w, h = gd.region("run_limit_button")
-    for attempt in range(2):
-        bot.log.info("연속 실행 제한 창 '종료' 누름 → 게임을 다시 켬" + (" (다시)" if attempt else ""))
-        bot.click((x + w // 2, y + h // 2))
-        if _until(bot, lambda: not bot.window.find(), CLICK_TAKES):
+    for attempt in range(CLOSE_TRIES):
+        bot.log.info("게임 창 닫기" + ("", " (종료 확인)", f" (다시 {attempt - 1})")[min(attempt, 2)])
+        _close(bot.window.hwnd)  # 앞의 _until 이 창을 다시 찾았다 (find 가 hwnd 를 새로 적는다)
+        if _until(bot, lambda: not bot.window.find(), CLOSE_TAKES if attempt else CONFIRM_TAKES):
             break
     else:
-        raise CannotProceed(f"'종료' 를 눌러도 게임 창이 그대로 → {bot.snapshot('restart_quit').name}")
+        raise CannotProceed(f"닫기 신호를 {CLOSE_TRIES}번 보내도 게임 창이 그대로 → {bot.snapshot('restart_quit').name}")
     if not _until(bot, lambda: not (pid and _alive(pid)), timeout):
         raise CannotProceed(f"게임 창은 닫혔는데 {timeout:.0f}초 안에 프로세스가 끝나지 않음")
     bot.log.info("게임 꺼짐")

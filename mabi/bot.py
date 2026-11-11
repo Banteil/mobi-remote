@@ -703,7 +703,7 @@ class Bot:
     def run_limit_popup(self) -> bool:
         """화면 위 가운데에 '너무 오랫동안 실행되고 있습니다 · 재시작' 창이 떠 있나 (run_limit_shown). 끊어도 되는 자리마다
         (mabi/restart.watch)와 실패했을 때(outcome.escalate) 본다. 그 자리는 판단에 쓰지 않는다 (ui.json covers).
-        이 창은 '종료' 하나뿐이라 누르면 게임이 꺼진다 → 게임을 다시 켤 때만 누른다 (mabi/restart)."""
+        창의 '종료' 는 누르지 않는다 — 게임을 다시 켤 때는 창 닫기 신호로 끈다 (mabi/restart)."""
         try:
             return run_limit_shown(self.frame())
         except Exception:  # noqa: BLE001 — 확인 실패가 실패 처리를 막으면 안 된다

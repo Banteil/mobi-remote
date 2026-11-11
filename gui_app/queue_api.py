@@ -504,8 +504,10 @@ class RestartKind(Kind):
             cfg = load_config(self.api.paths)
             bot = self.bot = Bot(cfg, self.api.paths, force_exit=False)
             q.note(it, "게임을 다시 켜는 중…")
-            # 끄기 전 캐릭터를 카드에 적어 둔다 — 켜다 실패해 ▶ 로 다시 할 때 같은 캐릭터로 들어가게
-            q.note(it, restart.run(bot, cfg, it.get("who"), keep=lambda ch: q.patch(it["id"], {"who": ch}, quiet=True)))
+            # 끄기 전 캐릭터를 카드에 적어 둔다 — 켜다 실패해 ▶ 로 다시 할 때 같은 캐릭터로 들어가게. 명령(force)은 한 번만
+            # 끈다 (이미 끈 카드를 ▶ 로 이어 하면 사람이 켠 게임을 다시 끄지 않게)
+            q.note(it, restart.run(bot, cfg, it.get("who"), force=bool(it.get("force")) and not it.get("closed"),
+                                   keep=lambda ch: q.patch(it["id"], {"who": ch, "closed": True}, quiet=True)))
             return True
         except Exception as e:  # noqa: BLE001 — 가르는 규칙은 다른 카드와 같은 outcome
             summary = str(e)

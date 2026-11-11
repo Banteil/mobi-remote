@@ -123,11 +123,11 @@ class QueueFlowTest(unittest.TestCase):
 
 
 class FakeBot:
-    def __init__(self, popup=True, window=True, exits_after=1, opens_after=2):
+    def __init__(self, popup=True, window=True, exits_after=1, opens_after=2, needs=1):
         self.cfg, self.ui = CFG, {"title_start": "t", "charselect_title": "c", "main_hud": "m"}
         self.popup, self.on = popup, window
-        self.clicks, self.calls = [], 0
-        self.exits_after, self.opens_after = exits_after, opens_after
+        self.clicks, self.closes, self.calls = [], [], 0
+        self.exits_after, self.opens_after, self.needs = exits_after, opens_after, needs
         self.window = mock.Mock()
         self.window.hwnd = 1
         self.window.find.side_effect = lambda: self.on
@@ -142,8 +142,8 @@ class FakeBot:
 
     def sleep(self, a, b=None):
         self.calls += 1
-        if self.clicks and self.calls >= self.exits_after and not self.launched:
-            self.on = False  # '종료' 뒤 꺼짐
+        if len(self.closes) >= self.needs and self.calls >= self.exits_after and not self.launched:
+            self.on = False  # 닫기 신호(needs 번) 뒤 꺼짐
         if self.launched and self.calls >= self.opens_after:
             self.on = True
 
@@ -155,39 +155,57 @@ class FakeBot:
 
 
 class RunTest(unittest.TestCase):
-    def run_with(self, bot, character=None, pid=0):
+    def run_with(self, bot, character=None, pid=0, force=False):
         kept = []
 
         def start(link):
             bot.launched, bot.calls = True, 0
         with mock.patch.object(restart, "_character", return_value={"slot": 2, "name": "둘"}), \
                 mock.patch.object(restart, "_pid", return_value=pid), \
+                mock.patch.object(restart, "_close", side_effect=bot.closes.append), \
                 mock.patch.object(restart.os, "startfile", side_effect=start) as startfile, \
                 mock.patch("mabi.tasks.login.run", return_value="접속 완료") as login:
-            out = restart.run(bot, CFG, character, keep=kept.append)
+            out = restart.run(bot, CFG, character, keep=kept.append, force=force)
         return out, kept, startfile, login
 
     def test_restart(self):
         bot = FakeBot()
         out, kept, startfile, login = self.run_with(bot)
-        self.assertEqual(bot.clicks, [(960, 180)])  # 창의 '종료' (ui.json run_limit_button 가운데)
+        self.assertEqual(bot.closes, [1])  # 게임 창(hwnd)에 닫기 신호
+        self.assertEqual(bot.clicks, [])  # 제한 창의 '종료' 는 누르지 않는다
         startfile.assert_called_once_with(CFG["restart"]["launch"])
         login.assert_called_once_with(bot, CFG, {"slot": 2, "name": "둘"})
         self.assertEqual(kept, [{"slot": 2, "name": "둘"}])
         self.assertIn("다시 켜고", out)
 
+    def test_confirm_takes_second_signal(self):
+        # 실제 게임: 첫 신호엔 '게임을 종료하시겠습니까?' 창, 두 번째 신호에 꺼진다 — 3초 뒤 바로 한 번 더
+        bot = FakeBot(needs=2)
+        with mock.patch.object(restart.time, "monotonic", side_effect=itertools.count()):
+            out, kept, startfile, login = self.run_with(bot)
+        self.assertEqual(bot.closes, [1, 1])
+        startfile.assert_called_once()
+        self.assertIn("다시 켜고", out)
+
     def test_no_popup_only_checks_login(self):
         bot = FakeBot(popup=False)
         out, kept, startfile, login = self.run_with(bot)
-        self.assertEqual(bot.clicks, [])
+        self.assertEqual(bot.closes, [])
         startfile.assert_not_called()
         login.assert_called_once()
         self.assertIn("다시 켜지 않음", out)
 
+    def test_force_without_popup(self):  # 명령(gui.py --restart-game) — 창이 없어도 끄고 다시 켠다 (다른 PC 에서 시험)
+        bot = FakeBot(popup=False)
+        out, kept, startfile, login = self.run_with(bot, force=True)
+        self.assertEqual(bot.closes, [1])
+        startfile.assert_called_once()
+        login.assert_called_once_with(bot, CFG, {"slot": 2, "name": "둘"})
+
     def test_game_already_off(self):  # 켜다 실패한 뒤 ▶ — 기억해 둔 캐릭터로
         bot = FakeBot(window=False)
         out, kept, startfile, login = self.run_with(bot, character={"slot": 5, "name": "다섯"})
-        self.assertEqual(bot.clicks, [])
+        self.assertEqual(bot.closes, [])
         startfile.assert_called_once()
         login.assert_called_once_with(bot, CFG, {"slot": 5, "name": "다섯"})
 
@@ -196,15 +214,15 @@ class RunTest(unittest.TestCase):
         with mock.patch.object(restart.time, "monotonic", side_effect=itertools.count()), \
                 self.assertRaisesRegex(CannotProceed, "창이 그대로"):
             self.run_with(bot)
-        self.assertEqual(len(bot.clicks), 2)  # 한 번 더 누르고 포기
+        self.assertEqual(len(bot.closes), restart.CLOSE_TRIES)  # 다시 보내다 포기
 
     def test_process_lingers_after_window(self):
-        # 창은 닫혔는데 프로세스가 늦게 끝남 — 다시 누르지 않고 끝나길 기다린다 (다 끝나기 전에 켜면 '이미 실행 중')
+        # 창은 닫혔는데 프로세스가 늦게 끝남 — 다시 보내지 않고 끝나길 기다린다 (다 끝나기 전에 켜면 '이미 실행 중')
         bot = FakeBot()
         alive = iter([True] * 5 + [False])
         with mock.patch.object(restart, "_alive", side_effect=lambda pid: next(alive)):
             out, kept, startfile, login = self.run_with(bot, pid=7)
-        self.assertEqual(bot.clicks, [(960, 180)])
+        self.assertEqual(bot.closes, [1])
         startfile.assert_called_once()
         self.assertIn("다시 켜고", out)
 
@@ -214,7 +232,7 @@ class RunTest(unittest.TestCase):
                 mock.patch.object(restart.time, "monotonic", side_effect=itertools.count()), \
                 self.assertRaisesRegex(CannotProceed, "프로세스가 끝나지 않음"):
             self.run_with(bot, pid=7)
-        self.assertEqual(len(bot.clicks), 1)  # 창이 닫혔으면 다시 누르지 않는다
+        self.assertEqual(bot.closes, [1])  # 창이 닫혔으면 다시 보내지 않는다
 
     def test_game_does_not_start(self):
         bot = FakeBot(window=False, opens_after=10 ** 6)
@@ -252,10 +270,41 @@ class WatchTest(unittest.TestCase):
             self.assertEqual(outcome.escalate(b, "FAIL", "x")[0], "FAIL")
 
 
+class KindTest(unittest.TestCase):
+    def test_force_only_once(self):
+        # 명령 카드(force)는 한 번만 끈다 — 켜다 실패해 사람이 게임을 켜고 ▶ 면 다시 끄지 않고 접속만 확인
+        from gui_app.queue_api import RestartKind
+        api = mock.Mock()
+        api._busy_reason.return_value = None
+        it = {"id": 1, "kind": "restart", "force": True}
+        q = mock.Mock()
+        q.patch.side_effect = lambda id_, d, quiet=False: it.update(d)
+        forced = []
+
+        def run(bot, cfg, who, keep, force):
+            forced.append(force)
+            keep({"slot": 1, "name": "하나"})
+            return "ok"
+        with mock.patch("gui_app.queue_api.load_config", return_value={}), mock.patch("mabi.bot.Bot"), \
+                mock.patch.object(restart, "run", side_effect=run):
+            self.assertTrue(RestartKind(api).run(q, it))
+            self.assertTrue(RestartKind(api).run(q, it))
+        self.assertEqual(forced, [True, False])
+        self.assertEqual(it["who"], {"slot": 1, "name": "하나"})
+
+
 class CommandTest(unittest.TestCase):
     def test_command(self):  # 밖에서 부리기 (gui.py --restart-game) — 시험·원격으로 게임 다시 켜기
         from gui_app.web_main import _command
         self.assertEqual(_command(["gui.py", "--restart-game", "--no-elevate"]), b"restart")
+
+    def test_command_forces(self):  # 명령은 제한 창이 없어도 끄고 다시 켠다 — 다른 PC 에서 시험
+        from gui_app.web_main import _on_message
+        win, conn = mock.Mock(), mock.Mock()
+        conn.readAll.return_value = b"restart"
+        _on_message(win, conn)
+        spec, where = win.api.queue_add.call_args[0]
+        self.assertEqual((spec["kind"], spec["force"], where), ("restart", True, "now"))
 
 
 if __name__ == "__main__":
