@@ -2,20 +2,37 @@
 
 태스크는 자기가 하는 일(Ctx)만 알려 준다: 무슨 일인지, 이 상황이면 그 일은 끝(finish_on), 태스크만 아는 판단(decide).
 처리기는 한 번에 한 걸음만 한다. 돌려주는 값:
-  str    — 한 일 (점검자가 기록하고 다시 본다)
+  str    — 한 일 (점검자가 기록하고 다시 본다). 다른 곳이 갈래를 나누는 데 쓰는 것은 Did
   Finish — 이 일은 여기서 끝 (결과). 점검자가 남은 화면을 정리하고 태스크에 돌려준다
   None   — 이 상황에서 할 일이 없다 (메인 화면 등 — 태스크 몫)
 """
 import time
 from dataclasses import dataclass
+from enum import StrEnum
 
 from .. import gamedata as gd, ocr, situation as sit
-from ..bot import StepTimeout
+from ..game_state import Activity
+from ..exceptions import StepTimeout, StopRequested
 from . import detect as d
 
 # 제작·가공 창 왼쪽 위 제목 칸 (1920 기준). 가공 시설 창은 제목이 '…가공' ('식재료 가공' 등)
 CRAFT_TITLE_AREA, ALTER_TITLE = (80, 15, 420, 60), "가공"
 ALTER_CARDS = (600, 160, 580, 560)  # 가공 시설 창 카드 목록 (x, y, w, h) — 카드 아래쪽에 이름
+
+
+class Did(StrEnum):
+    """처리기가 한 일 중 점검자·태스크가 갈래를 나누는 데 쓰는 것 (기다림인가, 수락했나 …). StrEnum 이라 로그·기록
+    (logs/acts)에는 예전 글자 그대로 남고 글자와 비교해도 같다. 그 밖의 한 일(누른 것 이름 등)은 그냥 글자다."""
+    LOADING = "로딩 대기"
+    SCENE = "연출 대기"
+    DELIVER_WAIT = "전달 물품 채워지길 기다림"
+    CHOICE_WAIT = "선택지 기다림"
+    ATTEND_WAIT = "출석 대사 기다림"
+    LINE = "대사 넘김"
+    ATTEND_LINE = "출석 대사 넘김"
+    TALK_SKIP = "대화 넘기기"
+    ACCEPT = "수락"
+    REPORT = "결과 보고"
 
 
 @dataclass
@@ -38,7 +55,7 @@ def _shot(bot, tag):
 
 def loading(bot, ctx, seen):
     bot.wait_loaded(10)
-    return "로딩 대기"
+    return Did.LOADING
 
 
 def attendance(bot, ctx, seen):
@@ -59,7 +76,7 @@ def scene(bot, ctx, seen):
         bot.click(seen.hit)
         return "장면 넘기기"
     bot.sleep(1.5, 2)
-    return "연출 대기"
+    return Did.SCENE
 
 
 def dialog(bot, ctx, seen):
@@ -120,25 +137,25 @@ def dialog(bot, ctx, seen):
         bot.log.debug(f"메뉴는 떠 있는데 '수락'·'결과 보고' 버튼을 못 찾음 ({bot.snapshot('arbeit_menu').name})")
         return "메뉴 버튼 기다림"
     next_line(bot)
-    return "대사 넘김"
+    return Did.LINE
 
 
 def _choose(bot, ctx, shown):
     """선택지 중 ctx.choose 낱말이 든 것을 누른다. 선택지 버튼은 메뉴(패킷 · 없으면 CLI)가 켜진 뒤 조금 늦게 그려진다 →
     버튼 줄을 글자로 읽고, 원하는 것이 없으면 아무거나 누르지 않고 기다린다 (시간 상한은 태스크 몫). 고른 뒤 남은 대사는 넘긴다."""
     from ..tasks.dialogue import next_line
-    if "chosen" not in ctx.events and (shown if shown is not None else bot._act(None).get("IsWaitingForSelection")):
+    if "chosen" not in ctx.events and (shown if shown is not None else Activity.of(bot.activity()).selecting):
         hit = next(((t, x, y) for t, x, y in ocr.find_texts(bot.frame(), gd.region(ctx.choose_region))
                     if ctx.choose in ocr.nospace(t)), None)
         if not hit:
             bot.sleep(1, 1.3)
-            return "선택지 기다림"
+            return Did.CHOICE_WAIT
         bot.click((hit[1], hit[2]))
         ctx.event("chosen")
         bot.sleep(1.2, 1.6)
         return f"선택지 '{hit[0]}'"
     next_line(bot)
-    return "대사 넘김"
+    return Did.LINE
 
 
 def _leave_line(bot):
@@ -147,10 +164,10 @@ def _leave_line(bot):
     from ..tasks.dialogue import menu_shown, next_line, step, wait_next
     shown = menu_shown(bot)
     if shown is None:
-        shown = bool(bot._act(None).get("IsWaitingForSelection"))
+        shown = bool(Activity.of(bot.activity()).selecting)
     if not shown:
         next_line(bot)
-        return "대사 넘김"
+        return Did.LINE
     before = step(bot)
     bot.key("esc")
     if wait_next(bot, before, 3) is None:
@@ -163,40 +180,40 @@ def _dialog_blocker(bot, seen):
     왔고 메뉴는 없다고 할 때 대사를 넘긴다. 주간 목표('모험가 길드의 정기 의뢰')를 그 주에 처음 채우면 조작이 돌아오는 순간
     에반이 찾아와 보상 이야기를 한다 — 나가기 뒤뿐 아니라 던전·사냥터 '다시 하기' 뒤 다음 판 안에서도 (사용자 2026-10-27).
     뒤에서 도는 중이면 클릭이 게임을 앞으로 가져오므로 스스로 넘어가길 기다리고, 30초 넘게 그대로일 때만 누른다."""
-    from ..tasks.dialogue import _packet, menu_open
+    from ..tasks.dialogue import packet_state, menu_open
 
     hit = bot.skip_button(seen.frame)
-    s = _packet(bot)
+    s = packet_state(bot)
     # HUD 가 보이면 대화 창이 아직 안 열렸다 — 그때 '대화 넘기기' 자리를 누르면 HUD 버튼(어비스 나가기 근처)이 눌릴 수 있다
     talk = (s is not None and s.in_dialogue and menu_open(bot) is False
             and not (seen.frame is not None and bot.at_main(seen.frame)))
     if not (hit and hit[0] == "dialog") and not talk:
-        bot._skip_seen = None
+        bot.marks.skip_seen = None
         return None
     if bot.behind():
-        since = getattr(bot, "_skip_seen", None)
+        since = bot.marks.skip_seen
         if since is None:
-            bot._skip_seen = time.monotonic()
+            bot.marks.skip_seen = time.monotonic()
             return None
         if time.monotonic() - since < 30:
             return None
-    bot._skip_seen = None
+    bot.marks.skip_seen = None
     if hit and hit[0] == "dialog":
         bot.click(hit[1])
-        return "대화 넘기기"
+        return Did.TALK_SKIP
     from ..tasks.dialogue import next_line
     next_line(bot)
-    return "대사 넘김"
+    return Did.LINE
 
 
 def confirm(bot, ctx, seen):
     """퀘스트 클리어 등의 '확인' — Space. 뒤에서 보낸 Space 가 안 먹어 같은 창이 그대로면 누른다."""
 
-    if bot.background and time.monotonic() - getattr(bot, "_confirm_keyed", 0) < 10:
+    if bot.background and time.monotonic() - bot.marks.confirm_keyed < 10:
         bot.click(seen.hit)
     else:
         bot.key("space")
-        bot._confirm_keyed = time.monotonic()
+        bot.marks.confirm_keyed = time.monotonic()
     if ctx.menus:
         bot.sleep(2, 2.5)
     ctx.event("confirmed")
@@ -214,7 +231,7 @@ def touch(bot, ctx, seen):
 def menu_space(bot, ctx, seen):
     ctx.note(*(("arb_report", "결과 보고") if seen.what == d.REPORT else ("arb_accept", "수락")))
     bot.key("space")
-    return "결과 보고" if seen.what == d.REPORT else "수락"
+    return Did.REPORT if seen.what == d.REPORT else Did.ACCEPT
 
 
 def deliver(bot, ctx, seen):
@@ -236,7 +253,7 @@ def deliver(bot, ctx, seen):
         bot.key("a")
     ctx.n["deliver"] = tries + 1
     bot.sleep(1, 1.3)
-    return "자동 넣기" if tries == 0 else "전달 물품 채워지길 기다림"
+    return "자동 넣기" if tries == 0 else Did.DELIVER_WAIT
 
 
 def dungeon_window(bot, ctx, seen):
@@ -270,15 +287,13 @@ def network(bot, ctx, seen):
     """'네트워크가 불안정' → '다시 시도하기'. NETWORK_WINDOW 안에 NETWORK_TRIES 번을 넘기면 사람에게 넘긴다 —
     F12 와 같은 일시정지 (사용자 2026-10-28). '시작 화면으로' 는 누르지 않는다."""
     now = time.monotonic()
-    tries = [t for t in getattr(bot, "_network_tries", []) if now - t < NETWORK_WINDOW]
+    tries = [t for t in bot.marks.network_tries if now - t < NETWORK_WINDOW]
     shot = _shot(bot, "network")
     if len(tries) >= NETWORK_TRIES:
         bot.log.error(f"'네트워크가 불안정' 이 {len(tries)}번 다시 시도해도 또 뜸 → 일시정지 ({shot})")
-        bot.stopper.by_key = True  # F12 일시정지와 같게 — F12 로 이어 한다
-        bot.stopper.stopped.set()
-        from ..bot import StopRequested
+        bot.pause_as_key()  # F12 일시정지와 같게 — F12 로 이어 한다
         raise StopRequested()
-    bot._network_tries = tries + [now]
+    bot.marks.network_tries = tries + [now]
     bot.log.warning(f"'네트워크가 불안정' → 다시 시도하기 ({len(tries) + 1}/{NETWORK_TRIES}, {shot})")
     if seen.hit and seen.hit != (0, 0):
         bot.click(seen.hit)
@@ -292,7 +307,6 @@ def server_down(bot, ctx, seen):
     """게임 서버와 연결이 끊긴 창(점검 등) → 게임을 끄고 작업 큐 일시정지 (mabi/restart.server_down — 사용자 2026-11-12).
     창의 '확인' 은 먼저 누르지 않는다. 하던 일은 여기서 멈추고, 점검 뒤 게임을 켜고 ▶ 면 그 자리부터 이어 한다."""
     from .. import restart
-    from ..bot import StopRequested
     restart.server_down(bot)
     raise StopRequested()
 

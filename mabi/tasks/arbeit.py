@@ -16,24 +16,24 @@ import time
 
 from .. import craft, gamedata as gd, monitor, ocr, richtext
 from ..bot import Bot
-from ..monitor import Ctx, Stuck, detect as d
+from ..monitor import Ctx, detect as d
+from ..exceptions import CannotProceed, Stuck
 from ..progress import Progress
-from .content import CannotProceed, open_arbeit_tab, questwin_text_ok
+from .content import open_arbeit_tab, questwin_text_ok
 
 PROGRESS, APPLY = gd.text("arbeit_progress"), gd.text("arbeit_apply")  # 카드 버튼 '진행하기' · '지원하기'
 HAVE = gd.text("arbeit_have_item")  # CLI 조건 '… 보유 3/10'
-
 
 
 def accepted(bot: Bot, raw: bool = False) -> list[dict]:
     """수락해 둔 아르바이트 [{title, objectives}]. 아르바이트는 수락하면 '사이드' 로 고정(pinned_sub)된다.
     사람이 고정해 둔 사이드 퀘스트('[긴급 의뢰] 뱅가드 브리치' 등)도 pinned_sub 라 CLI 로는 못 가른다
     (2026-10-26: 그걸 아르바이트로 알고 진행하다 아르바이트 탭 맨 위 '요일' 카드를 눌러 알비 던전으로 감)
-    → 아르바이트 탭에서 본 카드 제목(_arb_titles)에 있는 것만. 탭을 아직 안 봤거나 raw 면 걸러지지 않은 목록."""
+    → 아르바이트 탭에서 본 카드 제목(bot.marks.arb_titles)에 있는 것만. 탭을 아직 안 봤거나 raw 면 걸러지지 않은 목록."""
     qs = bot.state.query("get_quests") or []
     out = [{"title": q["QuestTitle"], "objectives": q.get("Objectives") or []}
            for q in qs if isinstance(q, dict) and q.get("Source") == "pinned_sub"]
-    known = getattr(bot, "_arb_titles", None)
+    known = bot.marks.arb_titles
     if raw or known is None:
         return out
     return [j for j in out if any(_same(j["title"], k) for k in known)]
@@ -67,11 +67,11 @@ def _item_name(desc: str) -> str:
 
 def gatherable(bot: Bot) -> set[str]:
     """채집으로 구할 수 있는 물품 이름 (CLI get_gatherable_items, 도구가 맞는 것). 한 번 묻고 기억한다."""
-    if not hasattr(bot, "_gatherable"):
+    if bot.marks.gatherable is None:
         data = bot.state.query("get_gatherable_items") or {}
         items = data.get("items", data) if isinstance(data, dict) else data
-        bot._gatherable = {i.get("DisplayName") for i in items if isinstance(i, dict) and i.get("ToolOk", True)}
-    return bot._gatherable
+        bot.marks.gatherable = {i.get("DisplayName") for i in items if isinstance(i, dict) and i.get("ToolOk", True)}
+    return bot.marks.gatherable
 
 
 def ungatherable(bot: Bot, job: dict) -> list[str]:
@@ -121,11 +121,11 @@ def _scroll_panel(bot: Bot, notches: int) -> None:
 
 def _find_card_button(bot: Bot, title: str | None, word: str):
     """title 카드의 word 버튼 (title 이 None 이면 맨 위 word 버튼). 목록을 내려 가며 찾는다.
-    못 찾았을 때 무엇을 읽었는지 bot._arb_read 에 남긴다 (쪽마다 글자 목록)."""
-    bot._arb_read = []
+    못 찾았을 때 무엇을 읽었는지 bot.marks.arb_read 에 남긴다 (쪽마다 글자 목록)."""
+    bot.marks.arb_read = []
     for page in range(bot.cfg["arbeit"]["list_pages"]):
         items = _buttons(bot)
-        bot._arb_read.append([t for t, _, _ in items])
+        bot.marks.arb_read.append([t for t, _, _ in items])
         btns = sorted(((x, y) for t, x, y in items if _is(t, word)), key=lambda b: b[1])
         if title is None:
             if btns:
@@ -189,24 +189,24 @@ def _panel_jobs(bot: Bot) -> list[tuple[str, tuple[int, int], int]]:
     open_arbeit_tab(bot)
     out = []
     pages = bot.cfg["arbeit"]["list_pages"]
-    bot._arb_scrolled = 0
-    bot._arb_closed = False
+    bot.marks.arb_scrolled = 0
+    bot.marks.arb_closed = False
     for page in range(pages):
         items = _buttons(bot)
         for t, x, y in items:
             if _is(t, PROGRESS) and not any(o[1] == (x, y) for o in out):
                 out.append((_card_title(items, x, y), (x, y), page))
                 if out[-1][0]:
-                    bot._arb_titles = {*(getattr(bot, "_arb_titles", None) or ()), out[-1][0]}
+                    bot.marks.arb_titles = {*(bot.marks.arb_titles or ()), out[-1][0]}
         # 구인 마감 ('새로운 아르바이트를 기다려주세요') — 남은 일도 지원할 일도 없다. 더 볼 것 없음
         if any(w in ocr.nospace(t) for t, _, _ in items for w in gd.words("arbeit_closed")):
-            bot._arb_closed = not out
+            bot.marks.arb_closed = not out
             break
         # 수락한 일('진행하기')은 목록 맨 위에 모이고 그 아래가 구인 중('지원하기') → '지원하기' 가 보이면 더 내릴 필요 없다
         if any(_is(t, APPLY) for t, _, _ in items) or page + 1 >= pages:
             break
         _scroll_panel(bot, -4)
-        bot._arb_scrolled += 1
+        bot.marks.arb_scrolled += 1
     return out
 
 
@@ -218,8 +218,8 @@ def _press_other(bot: Bot, exclude) -> str | None:
         return None
     guess, pos, page = jobs[0]
     # 내려가 있으면 그 쪽으로 돌아가서 누른다 (대개 맨 위 쪽이라 스크롤이 없다)
-    if getattr(bot, "_arb_scrolled", 0) != page:
-        _scroll_panel(bot, 4 * (bot._arb_scrolled + 1))
+    if bot.marks.arb_scrolled != page:
+        _scroll_panel(bot, 4 * (bot.marks.arb_scrolled + 1))
         for _ in range(page):
             _scroll_panel(bot, -4)
     items = _buttons(bot)
@@ -451,7 +451,7 @@ def _apply_top(bot: Bot) -> bool | None:
             b = _find_card_button(bot, None, APPLY)
             if b:
                 break
-            read = getattr(bot, "_arb_read", [])
+            read = bot.marks.arb_read
             closed = any(w in ocr.nospace(t) for page in read for t in page for w in gd.words("arbeit_closed"))
             # 수락해 둔 일('진행하기')만 보이고 구인 카드가 없으면 오늘 지원할 일이 없는 것 — 건너뛴 일(가공 필요 등)만
             # 남은 경우다 (2026-10-30 09:44 '옷감이 필요해' 카드 하나를 '못 읽음' 으로 봐 막힘 처리)
@@ -481,7 +481,7 @@ def _apply_top(bot: Bot) -> bool | None:
         end, still = time.monotonic() + a["travel_timeout"], 0
         while r and time.monotonic() < end:
             seen = mon.check(ctx)
-            if seen.done == "수락":
+            if seen.done == monitor.Did.ACCEPT:
                 mon.settle(Ctx("arbeit", menus=True))  # 수락 뒤 이어지는 대사
                 return True
             if seen.finish:
@@ -505,7 +505,7 @@ def verify(bot: Bot, cfg: dict) -> bool:
     CLI 는 추적 중인 일 하나만 보여 주므로 퀘스트 창 목록의 '진행하기' 카드로 본다."""
     if accepted(bot):
         return False
-    if getattr(bot, "_arb_closed", False):
+    if bot.marks.arb_closed:
         return True  # 숙제 끝에 본 목록이 '구인 마감' (남은 일 없음) — 창을 또 열지 않는다
     left = _panel_jobs(bot)
     bot.to_main()
@@ -526,7 +526,7 @@ def _task(bot: Bot, cfg: dict) -> str:
     unconfirmed = 0  # 지원했는데 수락한 일이 안 보인 횟수
     book = _book(bot) or {}
     # 아르바이트 탭 카드 제목을 먼저 읽어 둔다 — 고정해 둔 사이드 퀘스트를 아르바이트로 알지 않게 (accepted)
-    bot._arb_titles = set()
+    bot.marks.arb_titles = set()
     _panel_jobs(bot)
     bot.to_main()
     # 오늘 앞 실행에서 물품 부족으로 건너뛴 일은 다시 가 보지 않는다 (사람 몫). 막혔던 일은 다시 해 본다
@@ -574,7 +574,7 @@ def _task(bot: Bot, cfg: dict) -> str:
                     bot.log.info(f"아르바이트 '{title}': 이미 막힘·건너뜀으로 본 일 → 이번엔 그만")
                     _leave(bot)
                     break
-        if job is None and getattr(bot, "_arb_closed", False):
+        if job is None and bot.marks.arb_closed:
             break  # 방금 본 목록이 '구인 마감' — 지원하러 창을 또 열 필요 없다
         if job is None:
             # 할 수 있는 수락한 일이 없으면 새 일에 지원한다
@@ -598,7 +598,7 @@ def _task(bot: Bot, cfg: dict) -> str:
                 bot.sleep(1.5, 2)
             if new:
                 bot.log.info(f"아르바이트 지원: {new[0]['title']}")
-                bot._arb_titles = {*(getattr(bot, "_arb_titles", None) or ()), new[0]["title"]}
+                bot.marks.arb_titles = {*(bot.marks.arb_titles or ()), new[0]["title"]}
                 unconfirmed = 0
             else:
                 # 그래도 안 보이면 퀘스트 창 목록(_press_other)에서 '진행하기' 카드로 찾는다. 두 번 거푸면 그만

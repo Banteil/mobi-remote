@@ -24,6 +24,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import packet_diag
+from .game_state import NOT_IN_DUNGEON, Activity
+from .place import ABYSS, DUNGEON, FIELD, OPEN_MAPS, RAID, RAID_LOBBY, is_instance
 from .spear import MAP_NAME, SpearState
 
 log = logging.getLogger("mabi")
@@ -37,7 +39,6 @@ _ONE = bytes.fromhex("0000803f00000000")                          # 도구 목�
 HELLO = b"MMCG"             # 연결 첫머리 인사 블록 (메시지가 아니다)
 MAX_FRAME = 8 << 20         # 맵 진입 때 오는 것 중 큰 건 0.8MB 쯤
 MAX_PENDING = 512           # 순서가 뒤바뀐 조각을 이만큼까지 들고 기다린다
-OPEN_MAPS = ("Field", "BattleField", "FieldBoss", "HousingInn", "ScenarioField")  # 던전이 아닌 맵 종류
 # CLI 가 같은 뜻으로 알려 주는 오래 남는 상태 — CLI 를 물을 때마다 그 답으로 맞춘다 (merge_cli)
 CLI_FACTS = ("dungeon_state", "field_state", "dead")
 MATCH_KEEP = 600     # 작업 시작 점검: 이보다 오래전에 받은 매칭(요청·찾는 중)은 끝난 것으로 (초)
@@ -53,10 +54,10 @@ def map_contradicts(channel_type: str, act: dict) -> bool:
     """패킷 맵 종류가 CLI 와 어긋나나 — 마을인데 던전 안·사냥터 안이라 함, 던전·사냥터 맵인데 밖이라 함.
     장소 이름은 CLI 와 패킷이 글자가 달라 비교하지 않는다. 어비스·레이드는 CLI 가 던전으로 치지 않아 보지 않는다."""
     t = channel_type
-    dungeon = (act.get("Dungeon") or {}).get("State") not in (None, "NotInDungeon")
-    field = bool((act.get("Battlefield") or {}).get("IsInBattleField"))
-    return bool(t) and ((t in OPEN_MAPS and dungeon) or (t == "BattleField") != field
-                        or (t == "InstanceDungeon" and not dungeon))
+    a = Activity.of(act)
+    dungeon, field = a.in_dungeon, a.in_field
+    return bool(t) and ((t in OPEN_MAPS and dungeon) or (t == FIELD) != field
+                        or (t == DUNGEON and not dungeon))
 CLI_LAG = 5.0  # CLI 가 패킷보다 늦게 바뀌는 시간 (쓰러짐 약 3초, death1 실측) — 패킷이 이보다 최근에 바꿨으면 패킷을 믿는다
 SYNC_FRAMES = 3             # 중간부터 받기 시작했을 때 이만큼 연달아 말이 되면 맞춘 것으로 본다
 
@@ -790,14 +791,13 @@ class PacketMonitor:
         안에 바꾼 값은 패킷이 더 새로우니 둔다. 대화·이동·전투 같은 순간 상태는 패킷이 빠르고 CLI 와 뜻이 조금 달라
         (메뉴 대기 등) 여기서 덮지 않는다 — 작업 시작 점검(reconcile)에서만 맞춘다. 바뀐 것 ['이름 전 → 후']."""
         s = self.state
-        dungeon = (act.get("Dungeon") or {}).get("State") or None
-        field_in = bool((act.get("Battlefield") or {}).get("IsInBattleField"))
+        a = Activity.of(act)
         want = {
-            "dungeon_state": dungeon or s.dungeon_state,
+            "dungeon_state": a.dungeon or s.dungeon_state,
             # 사냥터 안이면 InProgress·WaitingForChannelTransfer 를 CLI 가 가르지 못한다 → 밖이라던 패킷만 모름으로
-            "field_state": ("NotInBattlefield" if not field_in
+            "field_state": ("NotInBattlefield" if not a.in_field
                             else None if s.field_state == "NotInBattlefield" else s.field_state),
-            "dead": bool(act.get("IsDead")),
+            "dead": a.dead,
         }
         out, fixed = [], False
         recent = min(asked_at, time.monotonic() - CLI_LAG)
@@ -843,8 +843,8 @@ class PacketMonitor:
         # CLI 가 알려 주지 않는 순간 상태는 시작 전에 생긴 것이 오래됐으면 지운다 — 사람이 그 사이 무엇을 했는지 모른다
         # (2026-11-07 17:32: 사람이 한 레이드 매칭의 '잡힘' 이 남아 어비스 반복이 오지 않을 입장을 기다림).
         # 작업마다 점검하므로 바로 앞 작업이 막 받은 것(매칭을 걸고 일시정지 → 이어 하기 등)은 남긴다
-        if s.abyss_matching and (s.abyss_matching == 3 or (s.channel_type or "").startswith("Instance") and
-                                 s.channel_type != "InstanceAbyssDungeon"
+        if s.abyss_matching and (s.abyss_matching == 3 or is_instance(s.channel_type) and
+                                 s.channel_type != ABYSS
                                  or now - s.changed_at.get("abyss_matching", 0.0) > MATCH_KEEP):
             s.abyss_matching = 0
         if s.cutscene and now - s.changed_at.get("cutscene", 0.0) > CUTSCENE_KEEP:
@@ -853,26 +853,27 @@ class PacketMonitor:
             s.loading = False
             if map_contradicts(s.channel_type, act):
                 s.channel, s.channel_type, s.channel_name = None, "", ""
-            s.dungeon_state = (act.get("Dungeon") or {}).get("State") or None
-            if not (act.get("Battlefield") or {}).get("IsInBattleField"):
+            a = Activity.of(act)
+            s.dungeon_state = a.dungeon
+            if not a.in_field:
                 s.field_state = "NotInBattlefield"
             elif s.field_state in (None, "NotInBattlefield"):
                 s.field_state = None  # 사냥터 안인데 패킷은 밖이라 한다 → 모름
-            s.dead = bool(act.get("IsDead"))
-            s.traveling = bool(act.get("IsAutoTraveling"))
-            s.combat = "InCombat" if act.get("IsInCombat") else "NonCombat"
-            s.boss_battle = bool((act.get("Dungeon") or {}).get("IsBossBattleInProgress"))
+            s.dead = a.dead
+            s.traveling = a.traveling
+            s.combat = "InCombat" if a.combat else "NonCombat"
+            s.boss_battle = a.boss_battle
             if not s.traveling:
                 s.fast_travel_ok = None  # 다음 자동 이동 때 다시 온다
-            if not act.get("IsDialoguePlaying"):
+            if not a.dialogue:
                 s.dialogue_npc, s.dialogue_action, s.dialogue_menu = None, "", False
-            if not (act.get("Mode") or {}).get("IsPlayingMiniGame"):
+            if not a.minigame:
                 s.dye_open_at = None  # 염색 미니게임 닫힘을 놓쳤어도
         else:
             s.dungeon_state = s.field_state = s.dead = s.traveling = s.combat = s.fast_travel_ok = None
-        if s.channel_type not in ("InstanceRaid", "InstanceRaidLobby"):
+        if s.channel_type not in (RAID, RAID_LOBBY):
             s.raid_state, s.raid_result, s.raid_boss = None, 0, False
-        if s.channel_type != "InstanceAbyssDungeon":
+        if s.channel_type != ABYSS:
             s.abyss_result = 0
             s.campfire = s.boss_scene = False
             s.revives_used = s.revives_max = None  # 지난 판의 부활 횟수로 '다 씀' 이라 보지 않게 (맵에 들어가면 다시 온다)
@@ -906,7 +907,7 @@ class PacketMonitor:
             # 출항선에 들어간 뒤에도 '잡힘' 이 남아, 다음 어비스 반복이 '매칭 중' 으로 보고 오지 않을 입장을 기다렸다
             # (2026-11-07 17:32). 콘텐츠 맵(Instance*)에 들어갔거나 잡힌(3) 뒤 맵을 옮겼으면 매칭은 끝났다.
             # 찾는 중(1·2)에 필드를 옮겨 다니는 것은 매칭이 이어진다
-            if (s.channel_type or "").startswith("Instance") or s.abyss_matching == 3:
+            if is_instance(s.channel_type) or s.abyss_matching == 3:
                 s.abyss_matching = 0
             s.abyss_result = 0  # 새 맵 — 지난 판 결과는 끝났다 (나갈 때 0 이 오는지 실측이 없어 여기서도 지운다)
             s.raid_result, s.raid_boss, s.campfire, s.boss_scene = 0, False, False, False
@@ -918,11 +919,11 @@ class PacketMonitor:
             s.dead = None  # 쓰러진 채 맵을 옮기면 부활 신호가 안 올 수 있다 → 다시 쓰러질 때까지 CLI 로
             # 마을·사냥터면 던전 밖이다. 던전을 나가는 패킷(NotInDungeon)을 놓치면 지난밤 'Cleared' 가 남아,
             # 아침에 접속 단계가 메인 화면을 던전 클리어 화면으로 알고 6명 모두 3분씩 헛돌았다 (2026-10-30 06:44)
-            if s.channel_type in OPEN_MAPS and s.dungeon_state not in (None, "NotInDungeon"):
-                s.dungeon_state = "NotInDungeon"
+            if s.channel_type in OPEN_MAPS and s.dungeon_state not in (None, NOT_IN_DUNGEON):
+                s.dungeon_state = NOT_IN_DUNGEON
             # 대화는 맵을 옮기면 끝난다 — 끝 패킷 없이 끊긴 대화가 '대화 중' 으로 남아 끼어들기·정리가 헛돌지 않게
             s.dialogue_npc, s.dialogue_action, s.dialogue_menu = None, "", False
-            self.spear.reset(s.channel_type == "InstanceAbyssDungeon" and MAP_NAME in (s.channel_name or ""))
+            self.spear.reset(s.channel_type == ABYSS and MAP_NAME in (s.channel_name or ""))
             log.info("패킷: 맵 진입 %s (%s)", s.channel_name or s.channel, s.channel_type or "?")
         elif key == "session.logout_ok":  # 캐릭터 선택 화면으로 (me1 03:29:30 — 맵 떠남·세션 정리와 같은 때)
             s.in_game, s.loading = False, False

@@ -18,10 +18,11 @@ leave() 에 넘기는 처리기(handlers)로 끼워 넣는다 — 처리기가 �
 import time
 
 from ..bot import Bot
+from ..game_state import Activity
 
 
-def _packet(bot: Bot):
-    """대화 상태를 믿을 수 있는 패킷 상태, 아니면 None (감시가 꺼졌거나 켠 뒤 맵을 옮긴 적이 없음)."""
+def packet_state(bot: Bot):
+    """대화 상태를 믿을 수 있는 패킷 상태, 아니면 None. 점검자(detect·handlers)도 쓴다 (감시가 꺼졌거나 켠 뒤 맵을 옮긴 적이 없음)."""
     p = bot.packets
     return p.state if p.ok and (p.state.fresh or p.state.in_dialogue) else None
 
@@ -32,7 +33,7 @@ def in_dialog(bot: Bot, frame=None) -> bool:
     두 버튼은 반투명이라 뒤 배경이 밝으면 한쪽 템플릿이 안 맞는다 (2026-10-23 부자 NPC: 흰 건물 앞에서
     '대화 기록' 0.78 < 0.85 → 대화를 못 알아보고 멈춤). 둘 중 하나만 맞아도 대화로 본다.
     그림만 보던 때는 보스 출현 연출의 '장면 넘기기' 를 대화로 알아보고 눌렀다 (2026-10-25)."""
-    s = _packet(bot)
+    s = packet_state(bot)
     if s is not None:
         return s.in_dialogue
     frame = bot.frame() if frame is None else frame
@@ -49,13 +50,13 @@ def talking(bot: Bot) -> bool:
 
 def action(bot: Bot) -> str | None:
     """지금 대사 뒤 할 일 (패킷). 대화가 아니면 '', 모르면 None."""
-    s = _packet(bot)
+    s = packet_state(bot)
     return s.dialogue_action if s is not None else None
 
 
 def menu_open(bot: Bot) -> bool | None:
     """NPC 메뉴(선택지 버튼)가 떠 있나 (패킷). 모르면 None."""
-    s = _packet(bot)
+    s = packet_state(bot)
     return s.dialogue_menu if s is not None else None
 
 
@@ -67,8 +68,8 @@ def lines_left(bot: Bot) -> bool:
     hit = bot.skip_button()
     if hit and hit[0] == "dialog":
         return True
-    act = bot.activity()
-    return bool(act and act.get("IsDialogueNextAvailable") and not act.get("IsWaitingForSelection"))
+    a = Activity.of(bot.activity())
+    return a.dialogue_next and not a.selecting
 
 
 def menu_shown(bot: Bot) -> bool | None:
@@ -78,7 +79,7 @@ def menu_shown(bot: Bot) -> bool | None:
 
 
 def step(bot: Bot) -> int | None:
-    s = _packet(bot)
+    s = packet_state(bot)
     return s.dialogue_step if s is not None else None
 
 

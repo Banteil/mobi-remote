@@ -19,11 +19,8 @@ from pathlib import Path
 import numpy as np
 
 from . import detect as d, handlers as h
-from .handlers import Finish
-
-
-class Stuck(RuntimeError):
-    """점검자가 보기에 같은 자리에서 헛돌고 있다."""
+from .handlers import Did, Finish
+from ..exceptions import StepTimeout, Stuck
 
 
 class Ctx:
@@ -71,11 +68,11 @@ class Ctx:
 
 
 # 기다리는 처리 — 화면이 그대로여도 헛도는 게 아니다 (각자 시간 상한이 있다)
-WAITS = {"로딩 대기", "연출 대기", "전달 물품 채워지길 기다림", "선택지 기다림", "출석 대사 기다림"}
-QUIET = WAITS | {"대사 넘김", "출석 대사 넘김"}  # 로그(INFO)에 남기지 않는 흔한 처리 (기록 파일에는 남는다)
+WAITS = {Did.LOADING, Did.SCENE, Did.DELIVER_WAIT, Did.CHOICE_WAIT, Did.ATTEND_WAIT}
+QUIET = WAITS | {Did.LINE, Did.ATTEND_LINE}  # 로그(INFO)에 남기지 않는 흔한 처리 (기록 파일에는 남는다)
 # 화면이 거의 같아도 나아가는 처리의 헛돌기 기준 (대사는 말풍선 글자만 바뀌어 줄인 화면으로는 같아 보인다 —
 # 패킷을 모를 때를 위해 넉넉히. 패킷이 알면 대사 순번이 바뀌는 것으로 나아간 것을 안다)
-SAME_LIMIT = {"대사 넘김": 20, "대화 넘기기": 20, "출석 대사 넘김": 30}
+SAME_LIMIT = {Did.LINE: 20, Did.TALK_SKIP: 20, Did.ATTEND_LINE: 30}
 
 
 def _thumb(frame):
@@ -118,13 +115,8 @@ class Monitor:
     # ---------------------------------------------------------------- 점검
     def check(self, ctx: Ctx, frame=None, skip=(), ocr: bool = False, guard: bool = True) -> d.Seen:
         # 점검하는 동안(처리기의 sleep·클릭 포함)은 끼어들지 않는다 — 점검자가 이미 지금 화면을 다룬다
-        if getattr(self.bot, "_interrupting", True) is not False:
+        with self.bot.no_interrupt():
             return self._check(ctx, frame, skip, ocr, guard)
-        self.bot._interrupting = True
-        try:
-            return self._check(ctx, frame, skip, ocr, guard)
-        finally:
-            self.bot._interrupting = False
 
     def _check(self, ctx: Ctx, frame=None, skip=(), ocr: bool = False, guard: bool = True) -> d.Seen:
         bot = self.bot
@@ -195,7 +187,6 @@ class Monitor:
             self._unknown_tried, self._unknown_since = True, now
             self.bot.log.warning(f"점검: [{ctx.what or ctx.task}] 모르는 상황이 {self.unknown_limit}초째 → 메인 화면으로 ({shot})")
             self.record(ctx, "모름", seen, did="메인 화면으로", shot=shot)
-            from ..bot import StepTimeout
             try:
                 self.bot.to_main(tries=3)
             except StepTimeout:
@@ -224,7 +215,6 @@ class Monitor:
 
     def leave(self, ctx: Ctx | None = None) -> None:
         """하던 일을 놓고 메인 화면으로 (남은 화면을 정리한 뒤 ESC)."""
-        from ..bot import StepTimeout
         self.settle(Ctx(ctx.task if ctx else "settle", ctx.what if ctx else "", menus=True))
         try:
             self.bot.to_main()
@@ -260,7 +250,7 @@ class Monitor:
 
 def of(bot) -> Monitor:
     """bot 의 점검자 (없으면 만든다)."""
-    m = getattr(bot, "_monitor", None)
+    m = bot.monitor
     if not isinstance(m, Monitor) or m.bot is not bot:
-        m = bot._monitor = Monitor(bot)
+        m = bot.monitor = Monitor(bot)
     return m

@@ -103,6 +103,7 @@ class WorkQueue:
         self.session: dict = {}  # 큐 한 번 도는 동안 종류들이 같이 쓰는 값 (화면 설정을 맞췄나 등). 다 끝나면 비운다
         self._thread: threading.Thread | None = None
         self._seq = 1
+        self._saved: str | None = None  # 마지막으로 파일에 쓴 글자 — 같으면 다시 쓰지 않는다 (_changed)
         self._load()
 
     # ---------------------------------------------------------------- 저장·알림
@@ -149,9 +150,14 @@ class WorkQueue:
             return {"goal": "", "now": "", "step": "", "stat": "", "bar": None}
 
     def _changed(self) -> None:
+        """카드가 바뀜 → 저장하고 화면에 알린다. 저장은 파일에 남는 칸(craft.queue.FIELDS)이 바뀌었을 때만 —
+        진행 줄(prog)·지금 캐릭터 같은 화면용 값은 판마다·누를 때마다 바뀌어, 같은 내용을 수없이 다시 썼다.
+        시간으로 미루지 않으므로 바뀐 내용은 그 자리에서 쓰인다 (꺼질 때 따로 쓸 것이 없다)."""
         with self.lock:
             self._one_pause()
-            store.save(self.file, {"items": self.items})
+            text = store.encode({"items": self.items})
+            if text != self._saved and store.write(self.file, text):
+                self._saved = text
             snap = self.snapshot()
         self.emit("mm:queue", snap)
         self._maybe_report()

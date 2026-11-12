@@ -11,6 +11,7 @@
 import time
 
 from .profile import game_date
+from .exceptions import StepTimeout
 
 # look() 결과
 LOADING = "loading"                # 맵 로딩 중 (패킷)
@@ -64,6 +65,7 @@ def clear_attendance(bot, frame=None) -> str | None:
       시작을 알렸으면 건너뛰기가 뜰 때까지 가운데를 2초에 한 번 눌러 대사를 넘긴다
     - 패킷이 없으면: 날짜가 바뀐 뒤(attendance_due)에 패킷이 NPC 대화 중이라는데 넘기기 버튼이 없을 때만 가운데를 누른다
       (4초에 한 번 — 대사가 뜬 뒤 잠깐 입력을 안 받는다)"""
+    from .monitor.handlers import Did  # 점검자가 이 모듈을 불러오므로 여기서
     frame = bot.frame() if frame is None else frame
     c = bot.cfg["login"]
     p = bot.packets
@@ -75,18 +77,18 @@ def clear_attendance(bot, frame=None) -> str | None:
         return "출석부 건너뛰기"
     if p.ok and p.state.attending():
         # 패킷은 대사 창이 그려지기 전에 온다 — HUD 가 남아 있으면 아직 (그때 가운데를 누르면 필드의 무언가가 눌린다)
-        if time.monotonic() - getattr(bot, "_attendance_clicked", 0) < 2 or bot.at_main(frame):
-            return "출석 대사 기다림"
-        bot._attendance_clicked = time.monotonic()
+        if time.monotonic() - bot.marks.attendance_clicked < 2 or bot.at_main(frame):
+            return Did.ATTEND_WAIT
+        bot.marks.attendance_clicked = time.monotonic()
         bot.click(tuple(c["first_dialog_xy"]))
-        return "출석 대사 넘김"
+        return Did.ATTEND_LINE
     if not attendance_due(bot):
         return None
     if not (p.ok and p.state.in_dialogue) or bot.skip_button(frame) or bot.at_main():
         return None
-    if time.monotonic() - getattr(bot, "_attendance_clicked", 0) < 4:
+    if time.monotonic() - bot.marks.attendance_clicked < 4:
         return None
-    bot._attendance_clicked = time.monotonic()
+    bot.marks.attendance_clicked = time.monotonic()
     bot.log.info("날짜가 바뀐 뒤 버튼 없는 대사 (출석 첫 대사) → 화면 한 번 클릭")
     bot.click(tuple(c["first_dialog_xy"]))
     return "출석 첫 대사"
@@ -99,7 +101,6 @@ def to_main(bot, timeout: float = 60) -> str:
     점검자(mabi.monitor)가 남은 대사·확인·전달 창·작별 화면·출석을 정리하고, 그래도 메인이 아니면 ESC (Bot.to_main).
     NPC 대화 도중이면 메뉴(수락·결과 보고)까지 처리한다 — ESC 가 하던 아르바이트를 날리지 않게."""
     from . import monitor
-    from .bot import StepTimeout
     mon = monitor.of(bot)
     end = time.monotonic() + timeout
     at = look(bot)

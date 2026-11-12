@@ -15,7 +15,7 @@ import time
 from .. import gamedata as gd
 from ..bot import Bot
 from ..ocr import find_texts, nospace
-from .content import CannotProceed
+from ..exceptions import CannotProceed
 
 PRESS_WAIT = 1.0   # 누른 뒤 강화 응답을 기다리는 시간 (보통 0.1초 안에 온다 — 연출 중에 눌렀으면 안 온다)
 RESULT_WAIT = 3.0  # 강화 응답 뒤 장비 갱신 (같이 온다)

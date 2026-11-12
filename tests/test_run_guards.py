@@ -61,7 +61,7 @@ class SkippedClickTest(unittest.TestCase):
         return b, Bot
 
     def test_front_task_raises_after_limit(self):
-        from mabi.bot import StepTimeout
+        from mabi.exceptions import StepTimeout
         b, Bot = self.bot(background=False)
         for _ in range(4):
             self.assertFalse(Bot.click_xy(b, 10, 10))
@@ -79,7 +79,8 @@ class DeadlineTest(unittest.TestCase):
 
     def test_deadline(self):
         import time
-        from mabi.bot import Bot, StepTimeout
+        from mabi.bot import Bot
+        from mabi.exceptions import StepTimeout
         b = mock.MagicMock()
         b.stopper.stopped.is_set.return_value = False
         b.deadline = time.monotonic() + 60

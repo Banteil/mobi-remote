@@ -10,6 +10,7 @@ import random
 import re
 import time
 from contextlib import contextmanager
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
@@ -19,33 +20,32 @@ import numpy as np
 from . import keys
 from .digits import DigitReader
 from .connector import Connector
-from .game_state import GameState
+from .game_state import Activity, GameState
 from .inputs import Input, StopWatcher, post_key, vk_of
 from . import cutpoint, judge, packet_monitor
 from .blackbox import BlackBox
 from .screen import Screen
 from .vision import Match, Vision
 from .window import GameWindow
+from .exceptions import AuthBlocked, MissingTemplate, Overweight, StepTimeout, StopRequested
 
 
-class StopRequested(Exception):
-    pass
-
-
-class StepTimeout(Exception):
-    pass
-
-
-class Overweight(Exception):
-    """가방 무게가 한도를 넘어 숙제를 이어갈 수 없음. 실행기는 그 캐릭터를 건너뛴다."""
-
-
-class MissingTemplate(Exception):
-    pass
-
-
-class AuthBlocked(Exception):
-    """'계정 인증 실패'가 거듭 나서 접속을 더 시도하지 않는다. 실행기는 전체 실행을 멈춘다."""
+@dataclass
+class Marks:
+    """Bot 하나에 걸쳐 다른 모듈(점검자·출석·아르바이트)이 기억하는 시각·값. 예전엔 모듈마다 bot 에 밑줄 속성
+    (bot._skip_seen 등)을 붙이고 getattr 기본값으로 읽어, 이름이 틀려도 조용히 기본값이 나왔다. 이제 칸을 여기 적는다."""
+    # 점검자 (monitor)
+    network_looked: float = 0.0       # '네트워크가 불안정' 창을 마지막으로 글자로 본 때 (detect.look)
+    network_tries: list[float] = field(default_factory=list)  # '다시 시도하기' 를 누른 때들 (handlers.network)
+    skip_seen: float | None = None    # 뒤에서 도는 중 '대화 넘기기' 를 처음 본 때 (handlers.skip)
+    confirm_keyed: float = 0.0        # 뒤에서 '확인' 을 Space 로 보낸 때 (handlers.confirm)
+    attendance_clicked: float = 0.0   # 출석 대사를 누른 때 (situation)
+    # 아르바이트 (tasks.arbeit)
+    gatherable: set[str] | None = None  # 채집으로 구할 수 있는 물품 (한 번 묻고 기억)
+    arb_titles: set[str] | None = None  # 아르바이트 탭에서 본 카드 제목 (None = 아직 안 봄)
+    arb_read: list[list[str]] = field(default_factory=list)  # 카드 버튼을 못 찾았을 때 쪽마다 읽은 글자
+    arb_scrolled: int = 0             # 아르바이트 목록을 내린 쪽 수
+    arb_closed: bool = False          # 구인 마감이고 수락한 일도 없음
 
 
 SHOT_KEEP_DAYS = 7
@@ -174,6 +174,8 @@ class Bot:
         self._cli_checked = 0.0  # CLI 연결 여부를 마지막으로 다시 물은 때
         self.deadline: float | None = None  # 지금 숙제의 시간 상한 (monotonic, runner 가 정함) — check_stop 이 본다
         self.on_step = None  # 단계가 바뀔 때 (step, text) — runner 가 화면(작업 큐 카드·오버레이)에 알리려고 설정
+        self.marks = Marks()  # 다른 모듈이 이 Bot 에 걸쳐 기억하는 것
+        self.monitor = None   # 이 Bot 의 점검자 (monitor.of 가 처음 부를 때 만든다)
         self._frame: np.ndarray | None = None
         # 게임을 앞으로 가져오지 않고 한다 — 화면은 가려져 있어도 찍고(PrintWindow), 키는 창에 직접 보낸다.
         # 클릭은 그렇게 안 되므로 누를 때만 잠깐 앞으로 가져왔다가 원래 창을 되돌린다 (어비스 반복 중에 쓴다)
@@ -313,6 +315,11 @@ class Bot:
         finally:
             self._interrupting = prev
 
+    def pause_as_key(self) -> None:
+        """멈춤 키(F12)를 누른 것과 같은 일시정지 — 사람이 F12 로 이어 한다. 뒤이어 대기·캡처 때 StopRequested.
+        (pause 는 조작 사이의 기본 대기다)"""
+        self.stopper.pause()
+
     def check_weight(self, every: float = 20) -> None:
         """watch_weight 가 켜져 있으면 every 초마다 CLI 로 가방 무게를 보고, 꽉 찼으면 Overweight."""
         if not self.watch_weight or time.monotonic() - self._weight_at < every:
@@ -385,15 +392,16 @@ class Bot:
             return p.state.in_game and not p.state.loading
         return self.state.query("get_my_info") is not None
 
-    def _act(self, act: dict | None) -> dict:
-        return act if act is not None else (self.activity() or {})
+    def _act_state(self, act: dict | None) -> Activity:
+        """CLI get_activity 를 읽은 것 (game_state.Activity). act 는 이미 받아 둔 답 — 없으면 묻는다 (activity)."""
+        return Activity.of(act if act is not None else self.activity())
 
     def auto_traveling(self, act: dict | None = None) -> bool:
         """자동 이동 중인가. 패킷(자동 이동 시작·끝, 나한테만 옴)이 알면 그것, 모르면 CLI IsAutoTraveling."""
         p = self.packets
         if p.ok and p.state.traveling is not None:
             return p.state.traveling
-        return bool(self._act(act).get("IsAutoTraveling"))
+        return self._act_state(act).traveling
 
     def fast_travel_ok(self, act: dict | None = None) -> bool:
         """지금 빠른 이동(T)을 누를 만한가. 패킷이면 게임이 알려 주는 빠른 이동 가능 상태,
@@ -401,8 +409,8 @@ class Bot:
         p = self.packets
         if p.ok and p.state.fast_travel_ok is not None and p.state.traveling is not None:
             return p.state.traveling and p.state.fast_travel_ok
-        a = self._act(act)
-        return bool(a.get("IsAutoTraveling") and a.get("AutoTravelRemainingPositionCount", 0) > 0)
+        a = self._act_state(act)
+        return a.traveling and a.travel_left > 0
 
     def fast_travel(self, wait: float = 0) -> bool:
         """빠른 이동(T) — 먼 곳으로 자동 이동 중이면 누른다. 눌렀으면 True. 모든 이동(숙제·아르바이트·어비스·레이드·수리)이 쓴다.
@@ -425,14 +433,14 @@ class Bot:
         p = self.packets
         if p.ok and p.state.in_combat is not None:
             return p.state.in_combat
-        return bool(self._act(act).get("IsInCombat"))
+        return self._act_state(act).combat
 
     def dialogue_playing(self, act: dict | None = None) -> bool:
         """NPC 대화 중인가. 패킷(대화 대상)이 알면 그것, 모르면 CLI IsDialoguePlaying."""
         p = self.packets
         if p.ok and (p.state.fresh or p.state.in_dialogue):
             return p.state.in_dialogue
-        return bool(self._act(act).get("IsDialoguePlaying"))
+        return self._act_state(act).dialogue
 
     def cutscene_playing(self) -> bool | None:
         """컷신(연출) 재생 중인가 — 패킷(컷신 시작·끝)으로만 안다. 모르면 None (CLI 에는 일반 컷신 상태가 없다)."""
@@ -498,7 +506,7 @@ class Bot:
         ui = self.ui.get("revive")
         return bool(judge.decide(self, "쓰러짐", [
             ("패킷 방금", lambda: st.dead if recent else None),  # 부활 창 신호가 CLI IsDead 보다 약 3초 빠르다
-            ("CLI", lambda: bool(act.get("IsDead")) if act else None),
+            ("CLI", lambda: Activity.of(act).dead if act else None),
             ("패킷", lambda: st.dead if p.ok else None),
             # 화면은 둘 다 모를 때만 본다 — 부활한 뒤에도 버튼이 잠깐 남는다
             ("화면 부활 버튼", lambda: True if (not act and not p.ok and ui and self.vision.has(ui)
@@ -842,7 +850,7 @@ class Bot:
             # 연출은 스스로 끝나길 기다리되, 120초가 넘으면 넘기기를 누른다
             from . import monitor
             seen = monitor.of(self).check(monitor.Ctx("to_main"), guard=False)
-            if seen.done == "연출 대기" and not waiting and (hit := self.skip_button()):
+            if seen.done == monitor.Did.SCENE and not waiting and (hit := self.skip_button()):
                 self.click(hit[1])
                 n += 1
                 continue

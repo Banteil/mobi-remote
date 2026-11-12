@@ -42,8 +42,15 @@ mabi/
 | 판 사이 수리할지 / 수리했는데 그대로인지 | `tasks/repair.due` · `repair.run` | Repeat |
 | 얻은 것 재기 (캐릭터 접속 뒤 open, 그 캐릭터 끝에 close) | `queue_report.LootMeter` → `'loot'` 이벤트 | runner, Repeat(부르는 쪽 `daily_api._repeat_launch`), 큐 Kind 들이 같은 이벤트로 받음 |
 | 지금 어디인가 | `place.place(bot)` | 복구·나가기·시작 점검 |
+| 맵 종류 이름 (패킷 channel_type) — 글자로 적지 않는다 | `place` 상수 `ABYSS`·`RAID`·`RAID_LOBBY`·`DUNGEON`·`DRILL`·`FIELD`(사냥터)·`OPEN_FIELD`(마을)·`FIELD_BOSS`·`OPEN_MAPS` · 콘텐츠 맵인가 `place.is_instance` | 패킷 감시, 끊는 자리, 어비스·레이드·드릴·필드 보스 |
+| CLI get_activity 읽기 (던전 상태·사냥터 안·쓰러짐·바쁨 …) — 키를 직접 읽지 않는다 | `game_state.Activity.of(act)` (`in_dungeon`·`in_field`·`busy` …) · Bot 안에서는 `_act_state` | 패킷 감시 맞추기, place, 점검자 idle, 태스크 |
+| 예외 (StepTimeout·CannotProceed·StopRequested·Stuck …) | `mabi/exceptions.py` (예전 자리 bot·content·monitor 에서 import 해도 같은 클래스) | 곳곳 |
 | 작업 시작 점검 (지난 패킷 상태를 믿지 않고 CLI 로 맞춤) | `bot.check_in()` | 모든 작업 시작·이어 하기 |
 | NPC 대화·메뉴·확인 창 처리 | `monitor` + `Ctx` (대사 내용이 아니라 메뉴·단계·버튼 글자로 판단) | 아르바이트·숙제 |
+| 점검자 처리 결과로 갈래 나누기 (기다림인가·수락했나) — 글자로 비교하지 않는다 | `monitor.Did` (StrEnum, 로그엔 글자 그대로) · 기다림 모음 `monitor.WAITS` | Bot.to_main, 접속, 어비스 정산, 아르바이트, 수리 |
+| 대화 상태를 믿을 수 있는 패킷 상태 · '화면을 터치해 주세요' 글자 | `dialogue.packet_state` · `content.touch_prompt_visible(bot, frame)` | 점검자, 대화, 클리어 뒤 |
+| 다른 모듈이 Bot 하나에 걸쳐 기억할 값 — bot 에 밑줄 속성을 붙이지 않는다 | `Bot.marks` (`bot.Marks` 에 칸을 더한다) · 점검자 `Bot.monitor` | 점검자, 출석, 아르바이트 |
+| 끼어들기 막는 구간 · F12 와 같은 일시정지 — stopper·_interrupting 을 직접 만지지 않는다 | `bot.no_interrupt()` · `bot.pause_as_key()` (`pause` 는 조작 사이 기본 대기) | 점검자 check, 네트워크 불안정 |
 | 화면 글자 찾기·누르기 (한 번 읽은 글자들에서 찾기는 `ui_text.match`) · 띄어쓰기 빼기 · 태그 지우기 | `tasks/ui_text` · `ocr.nospace` · `richtext.strip` | 곳곳 |
 | 화면 판단에 쓰면 안 되는 자리 (게임이 위에 띄우는 창 — 연속 실행 제한 창) | `data/ui.json` covers · `gamedata.covering` · 예외 covered_ok · 시험 `tests/test_covers.py` | 모든 글자 영역·그림 ROI·설정 영역 |
 | 어비스·레이드 입장 창 (입장 창인가·버튼·지금 탭·우연한 만남, 탭 바꾸기) | `tasks/entry` (`parse`·`read`·`set_tab`·`ensure_chance`·`wait_button`) | 어비스, 레이드 (버튼 기다리기는 드릴도) |
@@ -119,9 +126,27 @@ mabi/
 - 막힘 재시도 두 벌 → `_q_exec`, 목표 걸음의 게임 규칙 → `craft.execute.step_command`·`step_failure`
 - 설정 읽기: 부를 때마다 TOML 두 개 → `load_config` 캐시. 상수: APP_NAME·큐 상태 이름표·채집 100·제작 10 을 한 곳에
 
+(2026-11-12, 코어 정리 — bot·monitor·packet_monitor·place·queue)
+- 예외 열한 개가 bot·content·monitor.core·display·login·abyss 에 흩어짐 → `mabi/exceptions.py`
+- CLI get_activity 해석 여러 벌(packet_monitor 셋·place·content·display·점검자 idle·busy_why·cli_idle) → `game_state.Activity`.
+  display 는 대화를 `act["dialogue"]["IsDialoguePlaying"]` 로 읽어 늘 거짓이던 것도 함께 바로잡음
+- 맵 종류 글자·모듈마다 다시 정의한 상수(`ABYSS_MAP`·`RAID_MAP`·`LOBBY_MAP`·`field_boss.MAP`·`drill.MAP`·`OPEN_FIELD`·`OPEN_MAPS`) → `place` 상수
+- bot 에 붙이던 밑줄 속성(`_skip_seen`·`_network_*`·`_attendance_clicked`·`_arb_*`·`_gatherable`·`_monitor`) → `Bot.marks`·`Bot.monitor`,
+  `bot._act`·`bot._interrupting`·`stopper.by_key/stopped` 직접 만지기 → `Activity.of(bot.activity())`·`no_interrupt`·`pause_as_key`
+- 점검자가 `dialogue._packet`·`content._touch_texts` 를 가져다 씀 → `packet_state`·`touch_prompt_visible(bot, frame)`
+- 처리 결과 글자 비교 → `monitor.Did`
+- `Vision.find` 는 같은 frame 객체에 같은 질문이면 앞 답을 쓴다 (frame 이 바뀌면 버림) · `has` 는 이름마다 한 번
+- queue.json 은 파일에 남는 칸이 바뀔 때만 쓴다 (`craft.queue.encode` 로 비교 — 시간으로 미루지 않아 잃는 것 없음)
+
 새로 비슷한 것을 발견하면 아래 '아직 모으지 못한 것' 절에 적고, 모으면 위 기록으로 옮긴다.
 
 ## 아직 모으지 못한 것
+
+- 모듈 사이 밑줄 이름 import 가 아직 남음: `login` → `charscan._read_card`·`arbeit._settle`, `window` → `inputs._send`,
+  `craft.lists` → `query._fail`. 점검자(monitor) 밖이라 이번 정리(2026-11-12 코어)에서는 두었다.
+- `monitor.offline.screen_bot` 은 Mock 에 Bot 의 `_frame`·`_require_template` 을 심어 진짜 Bot 메서드를 빌려 쓴다 (화면 판정 시험 도구).
+- 화면의 '지금 하는 행동'(gui_app/legacy_shapes `q_activity`)은 get_activity 를 따로 읽는다 — 연주·선택지 기다림까지 '바쁨' 으로 보는
+  화면용 뜻이라 `Activity.busy` 와 다르다. 합치려면 `Activity` 에 연주·앉음 칸을 더하고 화면용 busy 를 따로 둔다.
 
 - 필드 보스 전투(`field_boss.fight`)·뱅가드 진행(`vanguard.play`)은 `content.Fight` 를 안 쓴다 — 패킷 기다림 없이 화면을 짧게
   보고(결과 창 '확인'·성장 가이드 15초마다·화면 터치), 필드 보스는 먹지 않고 뱅가드는 CLI 활동·궁극기가 없다. 옮기려면 Fight 에

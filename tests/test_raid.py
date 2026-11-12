@@ -28,21 +28,21 @@ class PacketStateTest(unittest.TestCase):
 
     def test_flow(self):
         bot = FakeBot()
-        bot.enter(raid.LOBBY_MAP)
+        bot.enter(raid.RAID_LOBBY)
         bot.packets.apply("raid.state", {"state_name": "Lobby"})
         self.assertEqual(raid.where(bot, "카브락"), "ship")
         bot.packets.apply("raid.depart", {})
         bot.packets.apply("raid.state", {"state_name": "InProgress"})
         bot.packets.apply("channel.leaving", {})
         self.assertEqual(raid.where(bot, "카브락"), "loading")
-        bot.packets.apply("channel.entering", {"channel": 2, "channel_type": raid.RAID_MAP, "channel_name": ""})
+        bot.packets.apply("channel.entering", {"channel": 2, "channel_type": raid.RAID, "channel_name": ""})
         self.assertEqual(raid.where(bot, "카브락"), "play")
         bot.packets.apply("raid.boss_begin", {})
         self.assertTrue(bot.packets.state.raid_boss)
         bot.packets.apply("raid.state", {"state_name": "Cleared"})
         bot.packets.apply("raid.result", {"raid": 1093425028})
         self.assertEqual(raid.where(bot, "카브락"), "cleared")
-        bot.enter(raid.LOBBY_MAP)  # 출항선으로 — 결과는 지운다
+        bot.enter(raid.RAID_LOBBY)  # 출항선으로 — 결과는 지운다
         self.assertEqual(bot.packets.state.raid_result, 0)
         self.assertFalse(bot.packets.state.raid_boss)
         self.assertEqual(raid.where(bot, "카브락"), "ship")
@@ -50,10 +50,10 @@ class PacketStateTest(unittest.TestCase):
     def test_result_cleared_on_new_raid_map(self):
         """지난 판 결과가 다음 판 레이드 맵에서 클리어로 보이면 안 된다."""
         bot = FakeBot()
-        bot.enter(raid.RAID_MAP)
+        bot.enter(raid.RAID)
         bot.packets.apply("raid.result", {"raid": 7})
         self.assertTrue(raid.cleared(bot))
-        bot.enter(raid.RAID_MAP)
+        bot.enter(raid.RAID)
         bot.packets.apply("raid.state", {"state_name": "InProgress"})
         self.assertFalse(raid.cleared(bot))
 

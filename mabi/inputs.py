@@ -222,6 +222,11 @@ class StopWatcher:
         self.why = why
         self.stopped.set()
 
+    def pause(self) -> None:
+        """키로 멈춘 것과 같게 (by_key) 멈춘다 — 코드가 사람에게 넘길 때. F12 로 이어 한다."""
+        self.by_key = True
+        self.stopped.set()
+
     def reason(self) -> str:
         """멈춘 까닭 (로그·결과에 쓴다)."""
         return self.why or "사용자 중단"

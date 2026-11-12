@@ -14,7 +14,10 @@ import time
 from typing import Callable, NamedTuple
 
 from .. import gamedata as gd, keys
-from ..bot import Bot, StepTimeout
+from ..bot import Bot
+from ..exceptions import CannotProceed, StepTimeout
+from ..game_state import Activity
+from ..place import FIELD, OPEN_FIELD
 from ..vision import green, green_ratio
 
 
@@ -190,7 +193,6 @@ def open_arbeit_tab(bot: Bot) -> None:
         bot.log.debug(f"아르바이트 탭 그림이 가려짐 → 탭 글자 {hit} 를 누름")
         bot.click(hit)  # 아이콘 쪽은 겹친 '진행하기' 버튼이라 글자를 누른다
     bot.sleep(1, 1.5)
-
 
 
 def open_guide(bot: Bot) -> None:
@@ -527,10 +529,6 @@ def go_talk(bot: Bot, start: Callable[[], None], what: str, shot: str) -> None:
                  f"{what} NPC 대화가 열리지 않음", retry_fast=True, interval=(1.5, 2))
 
 
-class CannotProceed(RuntimeError):
-    """던전 미해금, 장소를 못 찾음 등 진행할 수 없는 상황. 실행기는 실패로 기록하고 다음 숙제로 넘어간다."""
-
-
 def open_map(bot: Bot) -> None:
     """지도(M)를 연다. 처음에는 지금 있는 지역의 지역 맵이 열린다."""
     for _ in range(3):  # M 이 무시될 때가 있어 지도가 열렸는지 확인하고 다시 누른다
@@ -712,7 +710,7 @@ def _pick_from_list(bot: Bot, place: dict, name: str) -> bool:
 def other_town(bot: Bot, town: str) -> bool:
     """패킷: 지금 다른 마을(Field 맵)에 있나. 모르거나 마을이 아닌 곳(사냥터·던전)이면 False."""
     st = bot.packets.state if bot.packets.ok else None
-    if not st or st.loading or st.channel_type != "Field" or not st.channel_name:
+    if not st or st.loading or st.channel_type != OPEN_FIELD or not st.channel_name:
         return False
     here = st.channel_name.replace(" ", "")
     if here != town.replace(" ", ""):
@@ -776,8 +774,7 @@ def dungeon_state(bot: Bot) -> str | None:
     """던전 상태. 패킷 상태(바뀌는 즉시 + CLI 를 물을 때마다 CLI 답으로 맞춰짐), 모르면 CLI."""
     if bot.packets.ok and bot.packets.state.dungeon_state:
         return bot.packets.state.dungeon_state
-    act = bot.activity()
-    return (act or {}).get("Dungeon", {}).get("State")
+    return Activity.of(bot.activity()).dungeon
 
 
 def wait_dungeon(bot: Bot, pred: Callable[[str], bool], timeout: float, interval: float = 3.0) -> str | None:
@@ -898,8 +895,12 @@ def cleared_now(bot: Bot, what: str) -> None:
         bot.on_clear()
 
 
-def touch_prompt_visible(bot: Bot) -> bool:
-    return has_word(gd.text("clear_touch"), *_touch_texts(bot, bot.frame()))
+def touch_prompt_visible(bot: Bot, frame=None) -> bool:
+    """'화면을 터치해 주세요' 글자가 보이나 (OCR, 느리다). frame 이 없으면 지금 화면을 찍는다. 점검자(detect.look)도 쓴다."""
+    from ..ocr import read_ko, read_text
+    frame = bot.frame() if frame is None else frame
+    r = bot.cfg["dungeon"]["touch_text_region"]
+    return has_word(gd.text("clear_touch"), read_ko(frame, r), read_text(frame, r, white=220))
 
 
 def clear_blockers(bot: Bot, skip=(), ocr: bool = False) -> str | None:
@@ -920,12 +921,6 @@ def confirm_text(frame) -> tuple[int, int] | None:
     from .ui_text import match
     hit = match(find_texts(frame, gd.region("confirm_button")), gd.text("confirm"))
     return hit[1:] if hit else None
-
-
-def _touch_texts(bot: Bot, frame) -> tuple[str, str]:
-    from ..ocr import read_ko, read_text
-    r = bot.cfg["dungeon"]["touch_text_region"]
-    return read_ko(frame, r), read_text(frame, r, white=220)
 
 
 # 클리어 뒤 연출 — 콘텐츠마다 '아직 그 안인가' 를 패킷으로 안다. 클리어 패킷은 보스를 잡거나 목표를 채운 즉시 오고,
@@ -1094,7 +1089,7 @@ def play_field(bot: Bot, place: str, clear_timeout: float, on_enter=None, again:
     bot.step("field_enter", f"{place} 사냥터 입장", place=place)
     bot.key("space")
     # 패킷이 먼저 (사냥터 상태 InProgress + 사냥터 맵 로딩 끝 — 상태는 로딩 전에 먼저 온다), 못 쓰거나 안 오면 CLI 퀘스트 목록
-    entered = bot.wait_packet(lambda s: s.field_state == "InProgress" and s.channel_type == "BattleField" and not s.loading,
+    entered = bot.wait_packet(lambda s: s.field_state == "InProgress" and s.channel_type == FIELD and not s.loading,
                               bot.cfg["timing"]["loading"])
     if not entered:
         wait_until(bot, lambda: bool(hunt_quest(bot, place)), bot.cfg["timing"]["loading"] if entered is None else 10,

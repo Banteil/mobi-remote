@@ -18,13 +18,14 @@ import datetime as dt
 import time
 
 from .. import gamedata as gd, monitor
-from ..bot import Bot, StepTimeout
+from ..bot import Bot
+from ..exceptions import CannotProceed, StepTimeout
+from ..place import FIELD_BOSS
 from . import ui_text
 from .boss_skills import BossSkills
-from .content import CannotProceed, confirm_text, growth_done, wait_arrival, watch
+from .content import confirm_text, growth_done, wait_arrival, watch
 from .exits import Exit
 
-MAP = "FieldBoss"
 MIN_LEFT = 4 * 60          # 남은 시간이 이보다 적으면 새 캐릭터를 시작하지 않는다 (초) — 한 캐릭터 1~3분
 GROWTH = "필드 보스"       # CLI 성장 가이드의 Target
 SKIP_WAIT = 1.0            # '장면 넘기기' 가 뜬 뒤 누르기까지 (사용자 — 0.5초는 안 먹었다)
@@ -76,7 +77,7 @@ def done(bot: Bot) -> bool | None:
 
 def inside(bot: Bot) -> bool:
     p = bot.packets
-    return bool(p.ok and not p.state.loading and p.state.channel_type == MAP)
+    return bool(p.ok and not p.state.loading and p.state.channel_type == FIELD_BOSS)
 
 
 def _texts(bot: Bot, key: str) -> str:
@@ -122,7 +123,7 @@ def enter(bot: Bot) -> None:
     bot.step("fb_enter", "보스 영역 입장")
     bot.key("space")
     if bot.packets.ok:
-        if not bot.wait_packet(lambda s: s.channel_type == MAP and not s.loading, 40, since=bot.input_mark):
+        if not bot.wait_packet(lambda s: s.channel_type == FIELD_BOSS and not s.loading, 40, since=bot.input_mark):
             raise CannotProceed(f"보스 영역에 들어가지 못함 → {bot.snapshot('fb_enter').name}")
     else:
         bot.sleep(8, 9)
@@ -147,7 +148,7 @@ def enter(bot: Bot) -> None:
 def fight(bot: Bot) -> bool:
     """결과 창까지 기다려 확인(Space). 보상을 받았으면 True, '참여하지 않아 보상 없음' 이면 False."""
     bot.step("fb_fight", "보스와 전투 중")
-    skills = BossSkills.for_current(bot, bot.character, lambda s: s.channel_type == MAP)
+    skills = BossSkills.for_current(bot, bot.character, lambda s: s.channel_type == FIELD_BOSS)
     ctx = monitor.Ctx("field_boss", "필드 보스 전투", revive=True)
     end = time.monotonic() + bot.cfg["field_boss"]["fight_timeout"]
     asked = time.monotonic()
@@ -174,7 +175,7 @@ def fight(bot: Bot) -> bool:
             bot.key("space")  # 확인
             bot.sleep(1.2, 1.6)
             return got
-        if bot.packets.ok and not bot.packets.state.loading and bot.packets.state.channel_type not in (MAP, None):
+        if bot.packets.ok and not bot.packets.state.loading and bot.packets.state.channel_type not in (FIELD_BOSS, None):
             raise CannotProceed(f"결과 창 없이 보스 영역 밖으로 나옴 → {bot.snapshot('fb_fight').name}")
         act = bot.activity() or {}
         skills.tick(act)

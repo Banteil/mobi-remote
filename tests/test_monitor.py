@@ -1,10 +1,13 @@
 """점검자(mabi.monitor) — 헛돌기 방지, 모르는 상황, 동작 확인, 메뉴를 다루는 일과 기다리는 중의 정리의 차이."""
+import contextlib
+import threading
 import unittest
 from unittest import mock
 
 import numpy as np
 
 from mabi import monitor
+from mabi.bot import Marks
 from mabi.monitor import core, detect as d, handlers
 from mabi.monitor.detect import Seen
 import tomllib
@@ -19,6 +22,8 @@ def fake_bot():
     b.snapshot.return_value.name = "shot.png"
     b.background = False
     b.packets.ok = False
+    b.marks = Marks()
+    b.no_interrupt = contextlib.nullcontext
     return b
 
 
@@ -439,7 +444,6 @@ class AttendanceTest(unittest.TestCase):
         b.ui = {"main_hud": "hud"}
         b.packets.ok = True
         b.packets.state = PacketState(attendance_at=time.monotonic())
-        b._attendance_clicked = 0
         b.vision.has.return_value = True
         b.vision.find.side_effect = lambda f, n: skip if n == "attendance_skip" else None
         b.at_main.side_effect = lambda f=None: b.vision.find(f, "hud") is not None  # 메인 화면 판정은 bot.at_main 하나로
@@ -463,6 +467,25 @@ class AttendanceTest(unittest.TestCase):
         b.packets.at_charselect.return_value = False
         b.frame.return_value = frame()
         self.assertEqual(d.look(b).what, d.ATTENDANCE)
+
+
+class NetworkTest(unittest.TestCase):
+    """'네트워크가 불안정' — 다시 시도하기를 세며 (bot.marks), 너무 잦으면 F12 와 같은 일시정지 (StopWatcher.pause)."""
+    def test_retry_then_pause(self):
+        from mabi.exceptions import StopRequested
+        from mabi.bot import Bot
+        from mabi.inputs import StopWatcher
+        b = fake_bot()
+        seen = Seen(d.NETWORK, (5, 5), frame=frame())
+        for n in range(handlers.NETWORK_TRIES):
+            self.assertEqual(handlers.network(b, None, seen), "네트워크 다시 시도")
+        self.assertEqual(len(b.marks.network_tries), handlers.NETWORK_TRIES)
+        sw = StopWatcher.__new__(StopWatcher)  # 키 감시 스레드 없이
+        sw.by_key, sw.stopped = False, threading.Event()
+        b.stopper, b.pause_as_key = sw, Bot.pause_as_key.__get__(b)  # 진짜 Bot 의 것 (기본 대기 pause 와 헷갈리지 않게)
+        with self.assertRaises(StopRequested):
+            handlers.network(b, None, seen)
+        self.assertTrue(sw.by_key and sw.stopped.is_set())
 
 
 if __name__ == "__main__":

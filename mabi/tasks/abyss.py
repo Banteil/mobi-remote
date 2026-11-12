@@ -17,17 +17,17 @@
 import time
 
 from .. import gamedata as gd, judge
-from ..bot import Bot, StepTimeout
-from ..place import place
+from ..bot import Bot
+from ..exceptions import CannotProceed, LootPending, StepTimeout
+from ..game_state import Activity
+from ..place import ABYSS, place
 from .. import monitor
 from ..monitor import detect as d, handlers
 from . import entry, ui_text
-from .content import (CannotProceed, Fight, go_talk, touch_prompt_visible, wait_arrival, wait_settled,
-                      where_settled)
+from .content import Fight, go_talk, touch_prompt_visible, wait_arrival, wait_settled, where_settled
 from .exits import DungeonExit, Exit
 from .repeat import Repeat
 from .spear import SpearDodge
-
 
 
 def dungeons(now=None) -> list[str]:
@@ -44,7 +44,6 @@ def difficulties(dungeon: str | None = None, mode: str = "solo") -> list[str]:
 FRONT_ONLY = ("흩어진 물길",)
 
 
-ABYSS_MAP = "InstanceAbyssDungeon"  # 패킷의 맵 종류
 
 
 def phase(bot: Bot):
@@ -68,7 +67,7 @@ def phase(bot: Bot):
     def packet_map():
         if not known or st.loading:
             return None
-        if st.channel_type != ABYSS_MAP:
+        if st.channel_type != ABYSS:
             return "out"
         return None if st.abyss_result or st.abyss_matching in (1, 2, 3) else "play"
 
@@ -76,10 +75,10 @@ def phase(bot: Bot):
         if known:
             return None
         pl = place(bot)
-        return None if not pl.name else "abyss" if pl.kind == ABYSS_MAP else "out"
+        return None if not pl.name else "abyss" if pl.kind == ABYSS else "out"
 
     def cli_result() -> bool:
-        return bool((bot.activity() or {}).get("IsAbyssResultSequencePlaying"))
+        return Activity.of(bot.activity()).abyss_result
 
     def exit_button():  # 결과 연출 동안엔 나가기 버튼이 남는다 — 결과를 알면 보지 않는다 (어긋남이 아니다)
         if cli_result() or (p.ok and st.abyss_result):
@@ -152,7 +151,6 @@ def where(bot: Bot, dungeon: str) -> str:
     return "other"
 
 
-
 def loot_pending(bot: Bot) -> tuple[int, int] | None:
     """어비스 목록 왼쪽 아래 '주간 전리품' 칸의 '전리품 받기' 버튼 자리 — 정산할 게 남았을 때만.
     글자만으로는 모른다: 정산한 뒤에도 버튼은 '전리품 받기' 그대로 흐려지고 'N일 후 수령 가능' 이 붙는다 (2026-11-09 11:27
@@ -164,11 +162,6 @@ def loot_pending(bot: Bot) -> tuple[int, int] | None:
     if int(((r > 70) & (r > 3 * g) & (r > 3 * b)).sum()) < 12:
         return None
     return ui_text.find(bot, gd.text("abyss_loot"), gd.region("abyss_loot"))
-
-
-class LootPending(Exception):
-    """입장하려는데 정산 안 한 주간 전리품이 있다 — open_entry 는 여기서 멈추고, 정산(settle_loot)은 별개 과정으로 한 뒤
-    입장을 다시 이어 간다 (enter_screen). 어비스 목록은 열린 채로 둔다."""
 
 
 LOOT_MENU_LIMIT = 180   # 에반 대화가 열린 뒤 메뉴 '주간 전리품 받기' 를 고르기까지 (빛나는 버튼 글자를 1분 넘게 못 읽은 적 있음)
@@ -215,7 +208,7 @@ def settle_loot(bot: Bot) -> None:
             seen = mon.check(ctx, guard=False)
             if ctx.take("chosen") and not chosen:
                 chosen, end = True, time.monotonic() + LOOT_FINISH_LIMIT  # 여기부터는 마무리 상한
-            if seen.done == "선택지 기다림":
+            if seen.done == monitor.Did.CHOICE_WAIT:
                 waits += 1
                 if waits == 4:  # 메뉴는 떴는데 '주간 전리품 받기' 를 못 읽음 — 왜 못 읽는지 볼 화면을 남긴다
                     bot.log.debug(f"'주간 전리품 받기' 를 글자로 못 찾음 ({bot.snapshot('missed_abyss_loot_menu').name})")
@@ -299,7 +292,7 @@ def entered_since(bot: Bot, since: float) -> bool | None:
     if bot.map_loading() is None:
         return None
     st = bot.packets.state
-    return not st.loading and st.channel_type == ABYSS_MAP and st.entered_at > since
+    return not st.loading and st.channel_type == ABYSS and st.entered_at > since
 
 
 def wait_entered(bot: Bot, timeout: float, since: float | None = None) -> bool:
@@ -317,7 +310,7 @@ def wait_entered(bot: Bot, timeout: float, since: float | None = None) -> bool:
         if loading:
             bot.wait_loaded(end - time.monotonic())
             continue
-        if loading is False and st.channel_type == ABYSS_MAP and st.entered_at > start:
+        if loading is False and st.channel_type == ABYSS and st.entered_at > start:
             if time.monotonic() - st.entered_at > 10:
                 bot.log.info("패킷: 어비스 맵에 들어옴 (나가기 버튼은 가려짐)")
                 return True
@@ -456,7 +449,7 @@ class AbyssPlay(Fight):
             return self.NEXT
 
     def act_end(self, act):
-        return "clear" if act.get("IsAbyssResultSequencePlaying") else None
+        return "clear" if Activity.of(act).abyss_result else None
 
     def before_watch(self, act):
         self.here = inside(self.bot)
@@ -480,7 +473,6 @@ class AbyssPlay(Fight):
 def at_reward(bot: Bot) -> bool:
     """클리어 화면('화면을 터치해 주세요')이나 보상 화면(다시 하기 / 나가기)인가 (phase)."""
     return phase(bot) == "reward"
-
 
 
 def to_reward(bot: Bot) -> str:

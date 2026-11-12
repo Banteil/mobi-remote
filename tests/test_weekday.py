@@ -1,4 +1,5 @@
 """일요일 요일 던전 — 임무 게시판에서 던전 고르기 (mabi.tasks.weekday). 화면·CLI 는 가짜로 돌린다."""
+import contextlib
 import unittest
 from unittest import mock
 
@@ -7,7 +8,8 @@ import numpy as np
 from mabi.monitor import detect as d
 from mabi.monitor.detect import Seen
 from mabi.tasks import weekday
-from mabi.tasks.content import CannotProceed
+from mabi.bot import Marks
+from mabi.exceptions import CannotProceed
 import tomllib
 from pathlib import Path as _P
 MONITOR = tomllib.loads((_P(__file__).resolve().parent.parent / "config.default.toml").read_text(encoding="utf-8"))["monitor"]
@@ -37,13 +39,14 @@ def board_bot(acts):
     b = mock.Mock()
     b.cfg = {"arbeit": {"dialog_next_xy": [1800, 45]}, "monitor": MONITOR}
     b.shot_dir, b.packets.ok, b.character = None, False, None
+    b.marks, b.no_interrupt = Marks(), contextlib.nullcontext
     seq, now = list(acts), {"act": {}}
 
     def look(bot, frame=None, skip=(), ocr=False):
         now["act"] = seq.pop(0) if seq else {}
         return Seen(d.DIALOG if now["act"] else d.MAIN, frame=np.zeros((10, 10, 3), np.uint8))
 
-    b._act.side_effect = lambda a: now["act"]
+    b.activity.side_effect = lambda max_age=1.0: now["act"]
     b.dialogue_playing.side_effect = lambda a=None: bool(now["act"])
     b.clicks = lambda: [c.args[0] for c in b.click.call_args_list]
     b.skip_button.return_value = ("dialog", (1800, 45))  # 대화 창이 떠 있음 (dialogue.line_ready)

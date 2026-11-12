@@ -12,7 +12,7 @@ from unittest import mock
 
 from mabi import gamedata as gd
 from mabi.tasks import entry
-from mabi.tasks.content import CannotProceed
+from mabi.exceptions import CannotProceed
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "tests" / "fixtures"

@@ -29,7 +29,10 @@ import numpy as np
 from .. import gamedata as gd, ocr
 from . import ui_text
 from ..screen import BASE_H, BASE_W, REG_KEYS, exclusive_fullscreen, is_16_9, screen_mode
-from ..bot import Bot, MissingTemplate, StepTimeout
+from ..bot import Bot
+from ..exceptions import DisplayFixFailed, MissingTemplate, StepTimeout
+from ..game_state import Activity
+from ..place import ABYSS, RAID, RAID_LOBBY
 
 WIDTH, HEIGHT = 1920, 1080
 SCALE = 80
@@ -48,10 +51,6 @@ REG = {
     "Screenmanager Resolution Height_h": HEIGHT,
     "Screenmanager Fullscreen mode_h": 1,  # 1 = 테두리 없는 전체화면 (FullScreenWindow)
 }
-
-
-class DisplayFixFailed(RuntimeError):
-    pass
 
 
 MIN_W, MIN_H = 1280, 720  # 이보다 작으면 늘려 써도 글자·아이콘이 뭉개져 인식이 흔들린다
@@ -319,20 +318,20 @@ def busy(bot: Bot) -> str:
             return "던전 안"
         if st.field_state in ("InProgress", "WaitingForChannelTransfer"):
             return "사냥터 안"
-        if st.channel_type == "InstanceAbyssDungeon" or st.abyss_result or st.abyss_matching in (1, 2, 3):
+        if st.channel_type == ABYSS or st.abyss_result or st.abyss_matching in (1, 2, 3):
             return "어비스 안·매칭 중"
-        if st.channel_type in ("InstanceRaid", "InstanceRaidLobby"):
+        if st.channel_type in (RAID, RAID_LOBBY):
             return "레이드 안·출항선"
         if st.in_dialogue:
             return "NPC 대화 중"
-    act = bot.activity() or {}
-    if (act.get("Dungeon") or {}).get("State") in ("Entering", "InProgress", "Cleared"):
+    a = Activity.of(bot.activity())
+    if a.in_dungeon:
         return "던전 안"
-    if (act.get("Battlefield") or {}).get("IsInBattleField"):
+    if a.in_field:
         return "사냥터 안"
-    if act.get("IsAbyssResultSequencePlaying"):
+    if a.abyss_result:
         return "어비스 결과"
-    if (act.get("dialogue") or {}).get("IsDialoguePlaying"):
+    if a.dialogue:
         return "NPC 대화 중"
     if bot.cfg["black_hole"]["space_keyword"] in game_space(bot):
         return "검은 구멍 안"

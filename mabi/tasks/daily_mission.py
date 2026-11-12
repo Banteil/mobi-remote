@@ -13,9 +13,10 @@
 import time
 
 from .. import gamedata as gd, keys, monitor, ocr
-from ..bot import Bot, StepTimeout
+from ..bot import Bot
+from ..exceptions import CannotProceed, StepTimeout
 from ..ocr import read_ko, read_text
-from .content import CannotProceed, has_word, list_views, wait_until
+from .content import has_word, list_views, wait_until
 
 
 def _ctx(what: str) -> monitor.Ctx:
