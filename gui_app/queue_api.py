@@ -19,6 +19,8 @@ from mabi import cutpoint
 from mabi import gamedata as gd
 from mabi import queue_report
 from mabi import restart
+from mabi.craft.execute import (STEP_AGAIN, STEP_RETRY_LATER, STEP_STOP_SKILL, STEP_STOP_TRANSFER, step_command,
+                                step_failure)
 from mabi.runner import RunOptions, load_config
 from mabi.workqueue import STOP_WHY, Kind, WorkQueue
 
@@ -388,41 +390,27 @@ class GoalKind(Kind):
         return True
 
     def _execute(self, q, it, st, n) -> int | None:
-        """한 걸음을 실제로 실행한다. 쓴 날개를 돌려주고, 이어갈 수 없으면 None."""
+        """한 걸음을 실제로 실행한다 (명령·거절 가르기는 mabi.craft.execute 의 step_command·step_failure).
+        쓴 날개를 돌려주고, 이어갈 수 없으면 None."""
         api, kind, tag = self.api, st.get("kind"), f"({n}) "
-        if kind == "collect":
-            label = f"{tag}{st.get('facility')} 수령"
-            cmd, body, act = "complete_altering_work", {"displayName": st.get("name")}, "collect"
-        else:
-            is_alter = kind == "alter" or (kind == "learn" and st.get("via") == "가공")
-            cmd = "execute_gathering" if kind == "gather" else "execute_altering" if is_alter else "execute_crafting"
-            body = ({"displayName": st.get("name"), "craftCount": 1 if kind == "learn" else (st.get("batch") or 1)}
-                    if cmd == "execute_crafting" else {"displayName": st.get("name")})
-            label, act = tag + (st.get("why") or st.get("name") or ""), ("alter" if is_alter else "craft")
-        r = api.exec(cmd, body, origin={"label": label, "act": act})
-        # 게임 쪽 확인 창에 막혔으면 닫히길 기다렸다가 한 번 더. 가공은 막혀도 날개가 이미 나가므로(실측) 한 번만
-        if not r.get("ok") and r.get("error") == "blocked" and api._q_wait_dialog_closed(q, st.get("facility") or st.get("name") or ""):
-            r = api.exec(cmd, body, origin={"label": label + " (재시도)", "act": act})
+        cmd, body, act = step_command(st)
+        label = f"{tag}{st.get('facility')} 수령" if kind == "collect" else tag + (st.get("why") or st.get("name") or "")
+        r = api._q_exec(q, cmd, body, {"label": label, "act": act}, st.get("facility") or st.get("name") or "")
         if r.get("ok"):
             return int(r.get("wingsSpent") or 0)
-        if kind == "collect":
-            # 조회는 '완료' 인데 수령은 몇 초 동안 '완료된 게 없다' 고 할 때가 있다 (2026-10-30 20:56:54 — 12초 뒤엔 받음).
-            # 기다렸다 다시 판단한다. 계속 이러면 STUCK_LIMIT 에서 멈춘다
-            if r.get("error") == "no_completed_work":
-                return 0 if self._wait(q, it, {"seconds": self.COLLECT_RETRY}) else None
-            return None
-        if r.get("error") == "invalid_count":
-            return 0  # 상한을 넘겼다 — 엔진이 maxCount 를 배웠으니 다음 걸음에서 맞춰 부른다
-        if r.get("error") == "insufficient_living_skill_level":
-            # 기다린다고 풀리지 않는다 (같은 거절만 온다) → 카드를 접고 큐 전체를 세운다. 시작 전 거절이라 날개는 안 나간다
+        what = step_failure(kind, r)
+        if what == STEP_RETRY_LATER:  # 계속 이러면 STUCK_LIMIT 에서 멈춘다
+            return 0 if self._wait(q, it, {"seconds": self.COLLECT_RETRY}) else None
+        if what == STEP_AGAIN:
+            return 0
+        if what == STEP_STOP_SKILL:  # 카드를 접고 큐 전체를 세운다. 시작 전 거절이라 날개는 안 나간다
             data = r.get("data") if isinstance(r.get("data"), dict) else {}
             q.set_stop("skill", {"what": st.get("name"), "level": r.get("requiredLevel") or data.get("requiredLevel")})
             api._q_toast("생활 스킬 레벨이 모자랍니다",
                          f"{st.get('name')} 을(를) 캘 수 없어 작업 큐를 세웠습니다."
                          + (f" 필요 레벨 {data['requiredLevel']}." if data.get("requiredLevel") else ""), "bad")
-        if r.get("error") == "insufficient_transfer_cost":
-            # 계획은 보관함 반출 비용(분해된 장비 부품)이 늘 있다고 보고 세운다. 게임이 모자란다고 하면 여기서 멈춘다 —
-            # 장비 부품은 기다린다고 생기지 않고, 다음 카드도 같은 보관함 재료를 쓸 가능성이 크다
+        elif what == STEP_STOP_TRANSFER:
+            # 계획은 보관함 반출 비용이 늘 있다고 보고 세운다. 게임이 모자란다고 하면 여기서 멈춘다
             q.set_stop("transfer", {"what": st.get("name")})
             api._q_toast("분해된 장비 부품이 모자랍니다",
                          f"{st.get('name')} 의 재료를 보관함에서 꺼낼 수 없어 작업 큐를 세웠습니다.", "bad")
@@ -777,6 +765,14 @@ class QueueApi:
             time.sleep(2)
         return False
 
+    def _q_exec(self, q: WorkQueue, command: str, body: dict, origin: dict, wait_label: str) -> dict:
+        """큐 카드의 게임 명령 하나. 게임 쪽 확인 창에 막혔으면(blocked) 닫히길 기다렸다가 한 번 더 —
+        한 번만 (가공은 막혀도 날개가 이미 나간다, 실측). wait_label: 기다릴 때 알림에 쓰는 이름."""
+        r = self.exec(command, body, origin=origin)
+        if not r.get("ok") and r.get("error") == "blocked" and self._q_wait_dialog_closed(q, wait_label):
+            r = self.exec(command, body, origin={**origin, "label": origin["label"] + " (재시도)"})
+        return r
+
     def _q_collect_all(self, q: WorkQueue, it: dict) -> bool:
         """가공 완료분 전체 수령 — 완료분이 있는 시설마다 complete_altering_work 한 번.
         수령은 비용이 없고 되돌릴 것도 없어 묻지 않는다. 앞 시설의 보상 창이 남아 있으면 닫히길 기다린다."""
@@ -795,10 +791,7 @@ class QueueApi:
             if i > 0 and not self._q_wait_dialog_closed(q, label):
                 q.note(it, "확인 창이 닫히지 않아 멈춤")
                 break
-            origin = {"label": f"{label} 수령", "act": "collect"}
-            r = self.exec("complete_altering_work", {"displayName": name}, origin=origin)
-            if not r.get("ok") and r.get("error") == "blocked" and self._q_wait_dialog_closed(q, label):
-                r = self.exec("complete_altering_work", {"displayName": name}, origin={**origin, "label": f"{label} 수령(재시도)"})
+            r = self._q_exec(q, "complete_altering_work", {"displayName": name}, {"label": f"{label} 수령", "act": "collect"}, label)
             if r.get("ok"):
                 done += 1
             else:

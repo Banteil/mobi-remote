@@ -18,6 +18,12 @@ from ..connector import Connector
 
 FULL_ERRORS = ("blocked", "queue_full")
 
+# 목표 걸음이 거절됐을 때 할 일 (step_failure). 나머지 거절은 이어갈 수 없다
+STEP_RETRY_LATER = "later"      # 수령: 조회는 '완료' 인데 몇 초 동안 '완료된 게 없다' — 기다렸다 다시 판단
+STEP_AGAIN = "again"            # 제작 상한을 넘김 — 엔진이 maxCount 를 배웠으니 다음 걸음에서 맞춰 부른다 (날개 안 나감)
+STEP_STOP_SKILL = "skill"       # 생활 스킬 레벨 부족 — 기다려도 풀리지 않는다, 큐 전체를 세운다
+STEP_STOP_TRANSFER = "transfer"  # 보관함 반출 비용(분해된 장비 부품) 부족 — 다음 카드도 막힐 가능성이 크다, 큐를 세운다
+
 
 @dataclass
 class ExecResult:
@@ -31,6 +37,31 @@ class ExecResult:
     cost_info: dict | None = None  # knowledge.parse_cost 결과
     ko: dict | None = None         # errors.describe 결과 (실패일 때)
     facility_level: dict | None = None  # 이번에 칸 수·레벨이 새로 확정됐으면 {facility, level, slots}
+
+def step_command(st: dict) -> tuple[str, dict, str]:
+    """목표 엔진의 걸음(goal.next_for 의 step) → (CLI 명령, 본문, 화면 act). 실행은 작업 큐(queue_api.GoalKind)가 한다.
+    제작은 묶음 수(batch)만큼 한 번에, 배우기(learn)는 1회만 — 레시피는 1회 만들어 봐야 배운다."""
+    from .goal import VIA
+    kind = st.get("kind")
+    if kind == "collect":
+        return "complete_altering_work", {"displayName": st.get("name")}, "collect"
+    if kind == "gather":
+        return "execute_gathering", {"displayName": st.get("name")}, "craft"
+    if kind == "alter" or (kind == "learn" and st.get("via") == VIA["ALTER"]):
+        return "execute_altering", {"displayName": st.get("name")}, "alter"
+    return ("execute_crafting", {"displayName": st.get("name"), "craftCount": 1 if kind == "learn" else (st.get("batch") or 1)},
+            "craft")
+
+
+def step_failure(kind: str, r: dict) -> str | None:
+    """거절된 목표 걸음을 어떻게 할까 (STEP_*). None 이면 이어갈 수 없다. r: 명령 결과 {ok, error, …}."""
+    err = r.get("error")
+    if kind == "collect":
+        # 2026-10-30 20:56:54 — 수령이 '완료된 게 없다' 였다가 12초 뒤엔 받았다
+        return STEP_RETRY_LATER if err == "no_completed_work" else None
+    return {"invalid_count": STEP_AGAIN, "insufficient_living_skill_level": STEP_STOP_SKILL,
+            "insufficient_transfer_cost": STEP_STOP_TRANSFER}.get(err)
+
 
 def recipe_learn_kind(command: str, body) -> str | None:
     """레시피를 배울 수 있는 명령인가. 제작은 1회일 때만, 가공은 큐에 올리는 순간 재료가 빠진다."""

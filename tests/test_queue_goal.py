@@ -275,5 +275,27 @@ class AskTest(unittest.TestCase):
         self.assertEqual(a.queue_answer(5, True), {"ok": False})
 
 
+class StepRulesTest(unittest.TestCase):
+    """걸음 → 명령, 거절 → 할 일 은 게임 규칙이라 mabi.craft.execute 에 있다 (GoalKind 는 부르기만)."""
+
+    def test_step_command(self):
+        from mabi.craft.execute import step_command
+        self.assertEqual(step_command({"kind": "collect", "name": "철괴"}),
+                         ("complete_altering_work", {"displayName": "철괴"}, "collect"))
+        self.assertEqual(step_command({"kind": "gather", "name": "광석"}), ("execute_gathering", {"displayName": "광석"}, "craft"))
+        self.assertEqual(step_command({"kind": "learn", "via": "가공", "name": "x"})[0::2], ("execute_altering", "alter"))
+        self.assertEqual(step_command({"kind": "learn", "name": "못", "batch": 7})[1], {"displayName": "못", "craftCount": 1})
+        self.assertEqual(step_command({"kind": "craft", "name": "못", "batch": 7})[1], {"displayName": "못", "craftCount": 7})
+
+    def test_step_failure(self):
+        from mabi.craft import execute as ex
+        self.assertEqual(ex.step_failure("collect", {"error": "no_completed_work"}), ex.STEP_RETRY_LATER)
+        self.assertIsNone(ex.step_failure("collect", {"error": "invalid_count"}))
+        self.assertEqual(ex.step_failure("craft", {"error": "invalid_count"}), ex.STEP_AGAIN)
+        self.assertEqual(ex.step_failure("gather", {"error": "insufficient_living_skill_level"}), ex.STEP_STOP_SKILL)
+        self.assertEqual(ex.step_failure("alter", {"error": "insufficient_transfer_cost"}), ex.STEP_STOP_TRANSFER)
+        self.assertIsNone(ex.step_failure("alter", {"error": "no_completed_work"}))
+
+
 if __name__ == "__main__":
     unittest.main()
