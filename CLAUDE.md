@@ -39,6 +39,7 @@
 ## 작업 방식
 
 - 테스트: `.venv/Scripts/python.exe -m unittest discover -s tests` — 바꾼 동작에 테스트를 단다.
+  웹: `node tests/queue.test.js`, `node tests/web_load.test.js` (web/*.js 를 index.html 순서대로 따로 읽어 이름 겹침·순서 오류를 본다).
 - 커밋 메시지는 한국어, 제목에 무엇을, 본문에 왜(어떤 일이 있었나). 수정은 커밋까지, 판 올림·릴리스는 사용자가 정할 때.
 - 판 번호는 `gui_app/api.py` 의 `APP_VERSION`. 배포판은 `tools/build.py` (설치 파일 + 패치 zip 을 함께 릴리스).
   빌드 venv 에 개발용 패키지를 깔지 않는다 — 설치된 패키지 목록이 런타임 구성 값에 들어가 패치 대신 설치 파일을 받게 된다.
