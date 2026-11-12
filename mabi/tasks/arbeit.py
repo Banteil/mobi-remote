@@ -319,117 +319,173 @@ def _press_progress(bot: Bot, title: str) -> bool:
     return monitor.of(bot).act(Ctx("arbeit", title), "진행하기", do, lambda: _moved(bot), within=12) is not False
 
 
+_NEXT, _STOP = object(), object()  # 한 바퀴의 결과: 다음 바퀴로 · 돌기를 그만 (끝나지 않음)
+
+
 def _work(bot: Bot, title: str, alter=()) -> str:
     """한 아르바이트를 끝까지. 'done' | 'short'(물품 부족) | 'alter'(가공 필요) | 'dungeon'(던전 클리어 필요) | 'stuck'
-    | 'gather_stall'(채집이 멈춤). 화면 대응은 점검자, 여기서는 진척(채집 개수·끝남·멈춤)만 본다."""
-    a = bot.cfg["arbeit"]
-    mon, ctx = monitor.of(bot), _job_ctx(bot, title, alter)
-    # 일 전체: 채집 개수가 늘거나 채집을 마치면 시계를 되감는다 (job_timeout 동안 아무 진척이 없으면 막힘, job_max 가 상한)
-    work = Progress(stall=a["job_timeout"], cap=a.get("job_max", 1800))
-    gather = None  # 채집 중이면 Progress — 남은 개수가 gather_timeout 동안 그대로면 포기
-    idle_since, pushes, last_sig, last_check = None, 0, None, 0.0
-    busy_since, busy_told = None, False  # 메인 화면인데 '움직이는 중' 으로 보인 때부터
-    unseen, untracked = 0, False  # 멈춰 있을 때 추적 칸에 이 일이 안 보인 횟수 · 끝내 안 보여 추적 칸 없이 미는 중
-    try:
-        while not work.expired:
-            bot.sleep(1.0, 1.4)
-            # 채집하러 간 뒤: 조건이 채워지면 바로 완료하러 간다 (게임은 필요한 만큼만 캐고 멈춘다)
-            if gather and time.monotonic() - last_check > 3:
-                last_check = time.monotonic()
-                job = next((j for j in accepted(bot) if _same(j["title"], title)), None)
-                if job is None:
-                    if _finished(bot, title):
-                        return "done"
-                    continue  # 추적 칸이 잠깐 비었다 (이동·로딩 중) — 끝난 게 아니다
-                # 개수가 늘고 있으면 기다린다. 국경 수비대 물자 보급처럼 100개짜리를 두세 가지 캐는 일은 10분 넘게 걸려
-                # 정해진 시간(5분)으로 끊으면 82/100 에서 '물품 부족' 으로 건너뛰었다 (2026-10-24)
-                if gather.update(missing_items(job)):
-                    work.poke()
-                if not missing_items(job):
-                    gather = None
-                    work.poke()  # 전달·제작 등 남은 걸음에 시간을 새로
-                    _note(bot, title, "arb_gathered", "채집 끝 → 완료하러 이동")
-                    # 게임이 알아서 전달하러 가기도 한다 (2026-10-22: 40m 앞에서 '진행하기' 를 다시 누르려다 못 찾고
-                    # 막힘으로 끝냄) → 이동 중이면 그대로 두고, 멈춰 있을 때만 누른다. 못 눌러도 아래 '멈춤' 처리가 다시 민다
-                    if _idle(bot):
-                        bot.log.info(f"아르바이트 '{title}': 채집 완료 → 완료하러 이동")
-                        _press_progress(bot, title)
-                    else:
-                        bot.log.info(f"아르바이트 '{title}': 채집 완료 → 게임이 완료하러 가는 중")
-                        _fast_travel(bot)
-                    idle_since = None
+    | 'gather_stall'(채집이 멈춤). 화면 대응은 점검자, 여기서는 진척(채집 개수·끝남·멈춤)만 본다 (_Job)."""
+    return _Job(bot, title, alter).run()
+
+
+class _Job:
+    """아르바이트 한 건의 진척 보기. 한 바퀴(step): 채집 중이면 남은 개수 → 점검자가 본 화면 → '움직이는 중' 다시 보기
+    → 메인 화면에 멈춰 있으면 '진행하기' 로 민다. 시계·셈은 바퀴끼리 이어진다."""
+
+    def __init__(self, bot: Bot, title: str, alter=()):
+        self.bot, self.title = bot, title
+        self.a = a = bot.cfg["arbeit"]
+        self.mon, self.ctx = monitor.of(bot), _job_ctx(bot, title, alter)
+        # 일 전체: 채집 개수가 늘거나 채집을 마치면 시계를 되감는다 (job_timeout 동안 아무 진척이 없으면 막힘, job_max 가 상한)
+        self.work = Progress(stall=a["job_timeout"], cap=a.get("job_max", 1800))
+        self.gather = None  # 채집 중이면 Progress — 남은 개수가 gather_timeout 동안 그대로면 포기
+        self.idle_since, self.pushes, self.last_sig, self.last_check = None, 0, None, 0.0
+        self.busy_since, self.busy_told = None, False  # 메인 화면인데 '움직이는 중' 으로 보인 때부터
+        self.unseen, self.untracked = 0, False  # 멈춰 있을 때 추적 칸에 이 일이 안 보인 횟수 · 끝내 안 보여 추적 칸 없이 미는 중
+
+    def run(self) -> str:
+        bot, title = self.bot, self.title
+        try:
+            while not self.work.expired:
+                bot.sleep(1.0, 1.4)
+                r = self.step()
+                if r is _NEXT:
                     continue
-                if gather.stalled:
-                    # 물품이 없는 게 아니라 채집이 막힌 것 (길이 막힘·전투 등) → '사람 몫' 이 아니라 다음에 다시 해 볼 일
-                    bot.log.warning(f"아르바이트 '{title}': 채집이 {a['gather_timeout']}초째 늘지 않음 ({', '.join(missing_items(job))}) → {bot.snapshot('arbeit_gather').name}")
-                    _leave(bot, ctx)
-                    return "gather_stall"
-            seen = mon.check(ctx)
-            if seen.finish:
-                _leave(bot, ctx)
-                return seen.finish.result
-            if ctx.take("gather"):  # 점검자가 '구하는 방법' 으로 채집하러 보냈다
-                gather, last_check = Progress(stall=a["gather_timeout"]), time.monotonic()
-                work.poke()
-            if ctx.take("crafted"):  # 제작은 1개씩 — 진행하기를 거듭 누르는 것도 진척으로 센다
-                pushes = 0
-                work.poke()
-            if ctx.take("confirmed") and _finished(bot, title):  # 퀘스트 클리어 확인
-                return "done"
-            if seen.done:
-                idle_since = None
-                continue
-            if seen.what == d.MAIN and not seen.idle and not gather:
-                # 패킷 상태가 끝 신호를 놓쳐 '이동 중' 등으로 남으면 멈춘 캐릭터 앞에서 8분을 기다렸다
-                # ('행운의 편지' 첫 전달 뒤, 2026-10-28 07:06~07:14) → 오래가면 CLI 로 다시 보고 멈췄으면 멈춘 것으로
-                busy_since = busy_since or time.monotonic()
-                if time.monotonic() - busy_since > a.get("busy_recheck", 40) and d.cli_idle(bot):
-                    if not busy_told:
-                        bot.log.warning(f"아르바이트 '{title}': {time.monotonic() - busy_since:.0f}초째 '{d.busy_why(bot)}' 인데 "
-                                        f"CLI 는 멈춤 → 멈춘 것으로 봄")
-                        busy_told = True
-                    seen.idle = True
-            else:
-                busy_since, busy_told = None, False
-            if seen.what == d.MAIN and seen.idle and not gather:
-                idle_since = idle_since or time.monotonic()
-                # NPC 대화를 마친 뒤에는 짧게 — 'NPC 와 대화' 조건을 채워도 게임이 다음 걸음으로 가지 않는다 (2026-10-26 사용자)
-                if time.monotonic() - idle_since < (a.get("idle_wait_after_talk", 3) if ctx.talked else a["idle_wait"]):
-                    continue
-                job = next((j for j in accepted(bot) if _same(j["title"], title)), None)
-                if job is None and not untracked:
-                    if _finished(bot, title):
-                        return "done"  # 확인 창 없이 끝나는 일
-                    # 추적 칸(CLI)에 끝내 안 나오는 일이 있다 — '행운의 편지' 는 진행 중에도 get_quests 에 없어 여기서
-                    # 소리 없이 되돌기만 하며 NPC 사이에서 몇 분씩 서 있었다 (2026-10-28 07:06~07:14, 09:11~09:13).
-                    # 두 번 거푸 안 보이면 추적 칸 없이 진행하기로 민다 (끝남은 퀘스트 클리어 '확인' 으로 안다)
-                    unseen += 1
-                    if unseen < 2:
-                        idle_since = None
-                        continue
-                    untracked = True
-                    bot.log.info(f"아르바이트 '{title}': 추적 칸(CLI)에 안 나옴 → 조건을 보지 않고 진행하기로 민다")
-                # '주변을 살펴보는 중' 같은 짧은 동작은 CLI 에 진행 중으로 안 나온다 → 조건이 바뀌었으면 나아간 것으로 본다
-                sig = [(o.get("Description"), o.get("Count")) for o in job["objectives"]] if job else None
-                if sig != last_sig:
-                    last_sig, pushes = sig, 0
-                if pushes >= a["max_pushes"]:
+                if r is _STOP:
                     break
-                pushes += 1
-                ctx.talked = False
-                bot.log.info(f"아르바이트 '{title}': 멈춰 있음 → 진행하기 ({pushes})")
-                if not _press_progress(bot, title):
-                    break
-                idle_since = None
-                continue
-            idle_since = None
-    except Stuck as e:
-        bot.log.warning(f"아르바이트 '{title}': {e}")
-        _leave(bot, ctx)
+                if r is not None:
+                    return r
+                self.idle_since = None
+        except Stuck as e:
+            bot.log.warning(f"아르바이트 '{title}': {e}")
+            _leave(bot, self.ctx)
+            return "stuck"
+        bot.log.warning(f"아르바이트 '{title}': 끝나지 않음 → {bot.snapshot('arbeit_stuck').name}")
+        _leave(bot, self.ctx)
         return "stuck"
-    bot.log.warning(f"아르바이트 '{title}': 끝나지 않음 → {bot.snapshot('arbeit_stuck').name}")
-    _leave(bot, ctx)
-    return "stuck"
+
+    def step(self):
+        """한 바퀴. 결과 글자 · _NEXT · _STOP, 아무 일 없으면 None (멈춘 때를 지운다)."""
+        if self.gather and time.monotonic() - self.last_check > 3:
+            r = self.watch_gather()
+            if r is not None:
+                return r
+        seen = self.mon.check(self.ctx)
+        r = self.on_seen(seen)
+        if r is not None:
+            return r
+        self.recheck_busy(seen)
+        if seen.what == d.MAIN and seen.idle and not self.gather:
+            return self.push_idle()
+        return None
+
+    def job(self) -> dict | None:
+        """추적 칸(CLI)의 이 일."""
+        return next((j for j in accepted(self.bot) if _same(j["title"], self.title)), None)
+
+    def watch_gather(self):
+        """채집하러 간 뒤: 조건이 채워지면 바로 완료하러 간다 (게임은 필요한 만큼만 캐고 멈춘다).
+        늘고 있으면 기다리고, gather_timeout 동안 그대로면 'gather_stall'."""
+        bot, title, a = self.bot, self.title, self.a
+        self.last_check = time.monotonic()
+        job = self.job()
+        if job is None:
+            if _finished(bot, title):
+                return "done"
+            return _NEXT  # 추적 칸이 잠깐 비었다 (이동·로딩 중) — 끝난 게 아니다
+        # 개수가 늘고 있으면 기다린다. 국경 수비대 물자 보급처럼 100개짜리를 두세 가지 캐는 일은 10분 넘게 걸려
+        # 정해진 시간(5분)으로 끊으면 82/100 에서 '물품 부족' 으로 건너뛰었다 (2026-10-24)
+        if self.gather.update(missing_items(job)):
+            self.work.poke()
+        if not missing_items(job):
+            self.gather = None
+            self.work.poke()  # 전달·제작 등 남은 걸음에 시간을 새로
+            _note(bot, title, "arb_gathered", "채집 끝 → 완료하러 이동")
+            # 게임이 알아서 전달하러 가기도 한다 (2026-10-22: 40m 앞에서 '진행하기' 를 다시 누르려다 못 찾고
+            # 막힘으로 끝냄) → 이동 중이면 그대로 두고, 멈춰 있을 때만 누른다. 못 눌러도 아래 '멈춤' 처리가 다시 민다
+            if _idle(bot):
+                bot.log.info(f"아르바이트 '{title}': 채집 완료 → 완료하러 이동")
+                _press_progress(bot, title)
+            else:
+                bot.log.info(f"아르바이트 '{title}': 채집 완료 → 게임이 완료하러 가는 중")
+                _fast_travel(bot)
+            self.idle_since = None
+            return _NEXT
+        if self.gather.stalled:
+            # 물품이 없는 게 아니라 채집이 막힌 것 (길이 막힘·전투 등) → '사람 몫' 이 아니라 다음에 다시 해 볼 일
+            bot.log.warning(f"아르바이트 '{title}': 채집이 {a['gather_timeout']}초째 늘지 않음 ({', '.join(missing_items(job))}) → {bot.snapshot('arbeit_gather').name}")
+            _leave(bot, self.ctx)
+            return "gather_stall"
+        return None
+
+    def on_seen(self, seen):
+        """점검자가 본 것: 끝(결과) · 채집하러 감 · 제작함 · 퀘스트 클리어 확인 · 무언가 처리함(다음 바퀴)."""
+        bot, ctx = self.bot, self.ctx
+        if seen.finish:
+            _leave(bot, ctx)
+            return seen.finish.result
+        if ctx.take("gather"):  # 점검자가 '구하는 방법' 으로 채집하러 보냈다
+            self.gather, self.last_check = Progress(stall=self.a["gather_timeout"]), time.monotonic()
+            self.work.poke()
+        if ctx.take("crafted"):  # 제작은 1개씩 — 진행하기를 거듭 누르는 것도 진척으로 센다
+            self.pushes = 0
+            self.work.poke()
+        if ctx.take("confirmed") and _finished(bot, self.title):  # 퀘스트 클리어 확인
+            return "done"
+        if seen.done:
+            self.idle_since = None
+            return _NEXT
+        return None
+
+    def recheck_busy(self, seen) -> None:
+        """메인 화면인데 '움직이는 중' 이 오래가면 CLI 로 다시 보고, 멈췄으면 멈춘 것으로 (seen.idle)."""
+        bot = self.bot
+        if seen.what == d.MAIN and not seen.idle and not self.gather:
+            # 패킷 상태가 끝 신호를 놓쳐 '이동 중' 등으로 남으면 멈춘 캐릭터 앞에서 8분을 기다렸다
+            # ('행운의 편지' 첫 전달 뒤, 2026-10-28 07:06~07:14) → 오래가면 CLI 로 다시 보고 멈췄으면 멈춘 것으로
+            self.busy_since = self.busy_since or time.monotonic()
+            if time.monotonic() - self.busy_since > self.a.get("busy_recheck", 40) and d.cli_idle(bot):
+                if not self.busy_told:
+                    bot.log.warning(f"아르바이트 '{self.title}': {time.monotonic() - self.busy_since:.0f}초째 '{d.busy_why(bot)}' 인데 "
+                                    f"CLI 는 멈춤 → 멈춘 것으로 봄")
+                    self.busy_told = True
+                seen.idle = True
+        else:
+            self.busy_since, self.busy_told = None, False
+
+    def push_idle(self):
+        """메인 화면에 멈춰 있음: 잠깐 기다린 뒤 끝났나 보고, 아니면 '진행하기' (조건이 그대로인 채 max_pushes 번이면 그만)."""
+        bot, title, a, ctx = self.bot, self.title, self.a, self.ctx
+        self.idle_since = self.idle_since or time.monotonic()
+        # NPC 대화를 마친 뒤에는 짧게 — 'NPC 와 대화' 조건을 채워도 게임이 다음 걸음으로 가지 않는다 (2026-10-26 사용자)
+        if time.monotonic() - self.idle_since < (a.get("idle_wait_after_talk", 3) if ctx.talked else a["idle_wait"]):
+            return _NEXT
+        job = self.job()
+        if job is None and not self.untracked:
+            if _finished(bot, title):
+                return "done"  # 확인 창 없이 끝나는 일
+            # 추적 칸(CLI)에 끝내 안 나오는 일이 있다 — '행운의 편지' 는 진행 중에도 get_quests 에 없어 여기서
+            # 소리 없이 되돌기만 하며 NPC 사이에서 몇 분씩 서 있었다 (2026-10-28 07:06~07:14, 09:11~09:13).
+            # 두 번 거푸 안 보이면 추적 칸 없이 진행하기로 민다 (끝남은 퀘스트 클리어 '확인' 으로 안다)
+            self.unseen += 1
+            if self.unseen < 2:
+                self.idle_since = None
+                return _NEXT
+            self.untracked = True
+            bot.log.info(f"아르바이트 '{title}': 추적 칸(CLI)에 안 나옴 → 조건을 보지 않고 진행하기로 민다")
+        # '주변을 살펴보는 중' 같은 짧은 동작은 CLI 에 진행 중으로 안 나온다 → 조건이 바뀌었으면 나아간 것으로 본다
+        sig = [(o.get("Description"), o.get("Count")) for o in job["objectives"]] if job else None
+        if sig != self.last_sig:
+            self.last_sig, self.pushes = sig, 0
+        if self.pushes >= a["max_pushes"]:
+            return _STOP
+        self.pushes += 1
+        ctx.talked = False
+        bot.log.info(f"아르바이트 '{title}': 멈춰 있음 → 진행하기 ({self.pushes})")
+        if not _press_progress(bot, title):
+            return _STOP
+        self.idle_since = None
+        return _NEXT
 
 
 def _apply_top(bot: Bot) -> bool | None:
@@ -444,32 +500,11 @@ def _apply_top(bot: Bot) -> bool | None:
 
     def do():
         nonlocal missing
-        # 목록이 보이는데 '지원하기' 를 못 읽고 그냥 닫은 적이 있다 (2026-10-29 13:33, 0개 완료인데 OK) →
-        # '구인 마감' 이 아니면 창을 다시 열어 한 번 더 보고, 그래도 없으면 읽은 글자와 화면을 남기고 실패로
-        for n in range(1, 3):
-            open_arbeit_tab(bot)
-            b = _find_card_button(bot, None, APPLY)
-            if b:
-                break
-            read = bot.marks.arb_read
-            closed = any(w in ocr.nospace(t) for page in read for t in page for w in gd.words("arbeit_closed"))
-            # 수락해 둔 일('진행하기')만 보이고 구인 카드가 없으면 오늘 지원할 일이 없는 것 — 건너뛴 일(가공 필요 등)만
-            # 남은 경우다 (2026-10-30 09:44 '옷감이 필요해' 카드 하나를 '못 읽음' 으로 봐 막힘 처리)
-            accepted_only = any(_is(t, PROGRESS) for page in read for t in page)
-            if closed or accepted_only:
-                bot.to_main()
-                return False
-            bot.log.warning(f"아르바이트: 목록에서 '지원하기' 를 못 찾음 ({n}/2) — 읽은 글자 {read} "
-                            f"→ {bot.snapshot('arbeit_no_apply').name}")
-            bot.to_main()
-            bot.sleep(1.5, 2)
-        else:
+        pressed = _press_apply(bot)
+        if pressed is None:
             missing = True
             return False
-        bot.click(b)
-        bot.sleep(2, 2.5)
-        _fast_travel(bot)
-        return True
+        return pressed
 
     def started():  # 이동이나 대화가 시작됐나 — 엉뚱한 창(주간 미션 등)이 열렸으면 180초를 기다리지 않게 (2026-10-26 10:51)
         return bot.auto_traveling() or bot.dialogue_playing() or bot.exists(a["accept"])
@@ -478,26 +513,64 @@ def _apply_top(bot: Bot) -> bool | None:
         r = mon.act(ctx, "지원하기", do, started, within=15, tries=1)
         if r is False:
             return "missing" if missing else False
-        end, still = time.monotonic() + a["travel_timeout"], 0
-        while r and time.monotonic() < end:
-            seen = mon.check(ctx)
-            if seen.done == monitor.Did.ACCEPT:
-                mon.settle(Ctx("arbeit", menus=True))  # 수락 뒤 이어지는 대사
-                return True
-            if seen.finish:
-                break
-            if seen.what == d.MAIN and seen.idle:
-                still += 1
-                if still >= 4:
-                    break  # 이동도 대화도 끝났는데 수락하지 못했다
-            else:
-                still = 0
-                if seen.what == d.MAIN:
-                    _fast_travel(bot)
-            bot.sleep(0.5, 0.8)
+        if r and _wait_accept(bot, mon, ctx):
+            return True
         bot.log.warning(f"아르바이트: 지원하기 뒤 수락하지 못함 ({n}/2) → {bot.snapshot('arbeit_apply').name}")
         mon.leave(ctx)
     return None
+
+
+def _press_apply(bot: Bot) -> bool | None:
+    """퀘스트 창 목록 맨 위 '지원하기' 를 누른다. 눌렀으면 True, 지원할 일이 없으면 False ('구인 마감'·수락해 둔 일만),
+    두 번 봐도 못 읽었으면 None."""
+    # 목록이 보이는데 '지원하기' 를 못 읽고 그냥 닫은 적이 있다 (2026-10-29 13:33, 0개 완료인데 OK) →
+    # '구인 마감' 이 아니면 창을 다시 열어 한 번 더 보고, 그래도 없으면 읽은 글자와 화면을 남기고 실패로
+    for n in range(1, 3):
+        open_arbeit_tab(bot)
+        b = _find_card_button(bot, None, APPLY)
+        if b:
+            break
+        read = bot.marks.arb_read
+        closed = any(w in ocr.nospace(t) for page in read for t in page for w in gd.words("arbeit_closed"))
+        # 수락해 둔 일('진행하기')만 보이고 구인 카드가 없으면 오늘 지원할 일이 없는 것 — 건너뛴 일(가공 필요 등)만
+        # 남은 경우다 (2026-10-30 09:44 '옷감이 필요해' 카드 하나를 '못 읽음' 으로 봐 막힘 처리)
+        accepted_only = any(_is(t, PROGRESS) for page in read for t in page)
+        if closed or accepted_only:
+            bot.to_main()
+            return False
+        bot.log.warning(f"아르바이트: 목록에서 '지원하기' 를 못 찾음 ({n}/2) — 읽은 글자 {read} "
+                        f"→ {bot.snapshot('arbeit_no_apply').name}")
+        bot.to_main()
+        bot.sleep(1.5, 2)
+    else:
+        return None
+    bot.click(b)
+    bot.sleep(2, 2.5)
+    _fast_travel(bot)
+    return True
+
+
+def _wait_accept(bot: Bot, mon, ctx: Ctx) -> bool:
+    """'지원하기' 뒤 가는 길·NPC 대화를 점검자가 보는 동안 '수락' 할 때까지 (travel_timeout). 수락했으면 True,
+    끝남이 오거나 이동도 대화도 끝난 채 멈춰 있으면(4번) False."""
+    end, still = time.monotonic() + bot.cfg["arbeit"]["travel_timeout"], 0
+    while time.monotonic() < end:
+        seen = mon.check(ctx)
+        if seen.done == monitor.Did.ACCEPT:
+            mon.settle(Ctx("arbeit", menus=True))  # 수락 뒤 이어지는 대사
+            return True
+        if seen.finish:
+            break
+        if seen.what == d.MAIN and seen.idle:
+            still += 1
+            if still >= 4:
+                break  # 이동도 대화도 끝났는데 수락하지 못했다
+        else:
+            still = 0
+            if seen.what == d.MAIN:
+                _fast_travel(bot)
+        bot.sleep(0.5, 0.8)
+    return False
 
 
 def verify(bot: Bot, cfg: dict) -> bool:
@@ -521,38 +594,92 @@ def run(bot: Bot, cfg: dict) -> str:
 def _task(bot: Bot, cfg: dict) -> str:
     if not bot.state.available():
         raise CannotProceed("아르바이트는 진행 상태 확인에 CLI 가 필요함")
-    a = cfg["arbeit"]
-    done, skipped, stuck = [], {}, []
-    unconfirmed = 0  # 지원했는데 수락한 일이 안 보인 횟수
-    book = _book(bot) or {}
-    # 아르바이트 탭 카드 제목을 먼저 읽어 둔다 — 고정해 둔 사이드 퀘스트를 아르바이트로 알지 않게 (accepted)
-    bot.marks.arb_titles = set()
-    _panel_jobs(bot)
-    bot.to_main()
-    # 오늘 앞 실행에서 물품 부족으로 건너뛴 일은 다시 가 보지 않는다 (사람 몫). 막혔던 일은 다시 해 본다
-    skipped.update(book.get("skipped") or {})
-    # 다만 그 사이 물품이 다 모였으면 (채집을 시간으로 끊었는데 게임이 마저 캔 경우) 다시 해 본다
-    tracked = accepted(bot)
-    for j in tracked:
-        for t in [t for t in skipped if _same(t, j["title"])]:
-            if not missing_items(j):
-                bot.log.info(f"아르바이트 '{t}': 건너뛴 일인데 물품이 다 모임 → 다시 진행")
-                skipped.pop(t)
-            elif skipped[t] == "가공 필요" and (not (al := alter_missing(j, gatherable(bot))) or quick_alter(bot, al)):
-                # 가공 규칙이 바뀐 뒤(채집 가능·짧은 가공은 진행) 같은 날 다시 돌리면 앞서 건너뛴 일도 다시 본다
-                bot.log.info(f"아르바이트 '{t}': 가공 필요로 건너뛴 일인데 채집·짧은 가공으로 할 수 있음 → 다시 진행")
-                skipped.pop(t)
-    # 추적 칸에 없는 '가공 필요' 일은 조건을 몰라 여기서 못 가른다 → 다시 가서 가공 창 카드로 정한다 (_alter_go)
-    for t in [t for t, w in skipped.items() if w == "가공 필요" and not any(_same(t, j["title"]) for j in tracked)]:
-        bot.log.info(f"아르바이트 '{t}': 가공 필요로 건너뛴 일 (추적 칸에 없음) → 가공 창에서 다시 판단")
-        skipped.pop(t)
-    if book.get("current"):
-        bot.log.info(f"아르바이트 지난 기록: '{book['current']}' {book.get('stage', '')} ({book.get('at', '')}) → 이어서")
+    return _Round(bot, cfg["arbeit"]).run()
 
-    def save(title=None, key="arb_job", stage="진행"):
-        _note(bot, title, key, stage, done=[*dict.fromkeys([*(book.get("done") or []), *done])], skipped=skipped, stuck=stuck)
 
-    for _ in range(a["max_jobs"]):
+# 한 일의 결과 → 건너뛴 까닭 (장부 skipped). 여기 없는 결과(stuck · gather_stall)는 막힘 — 다음 실행 때 다시 해 본다
+SKIP_WHY = {"short": "전달 물품 부족", "alter": "가공 필요", "alter_short": "가공 재료 부족", "alter_full": "가공 칸 꽉 참",
+            "dungeon": "던전 클리어 필요"}
+# 한 일의 결과 → 단계 기록 글자
+RESULT_STAGE = {"done": "완료", "short": "건너뜀", "alter": "건너뜀(가공)", "alter_short": "건너뜀(가공 재료 부족)",
+                "alter_full": "건너뜀(가공 칸 꽉 참)", "dungeon": "건너뜀(던전)", "gather_stall": "막힘(채집이 멈춤)"}
+
+
+class _Round:
+    """아르바이트 숙제 한 번 — 수락한 일부터, 없으면 새 일에 지원하며 max_jobs 개까지. 단계:
+    준비(prepare: 카드 제목 읽기·오늘 장부 이어 받기) → [할 일 고르기(pick) → 없으면 지원(apply_new)
+    → 가공 확인(alter_or_skip) → 진행하기 → _work → 결과 적기(record)] → 마무리(finish).
+    완료·건너뜀·막힘 장부(done·skipped·stuck)를 단계끼리 같이 쓴다."""
+
+    def __init__(self, bot: Bot, a: dict):
+        self.bot, self.a = bot, a
+        self.done, self.skipped, self.stuck = [], {}, []
+        self.unconfirmed = 0  # 지원했는데 수락한 일이 안 보인 횟수
+        self.book = _book(bot) or {}
+
+    def save(self, title=None, key="arb_job", stage="진행"):
+        _note(self.bot, title, key, stage, done=[*dict.fromkeys([*(self.book.get("done") or []), *self.done])],
+              skipped=self.skipped, stuck=self.stuck)
+
+    def run(self) -> str:
+        bot = self.bot
+        self.prepare()
+        for _ in range(self.a["max_jobs"]):
+            picked = self.pick()
+            if picked is _STOP:
+                break
+            job, pressed = picked
+            if job is None:
+                # 할 수 있는 수락한 일이 없으면 새 일에 지원한다
+                if not self.apply_new():
+                    break
+                continue
+            alter = self.alter_or_skip(job)
+            if alter is None:
+                continue
+            bot.log.info(f"아르바이트 진행: {job['title']}")
+            self.save(job["title"])
+            if not pressed and not _press_progress(bot, job["title"]):
+                self.stuck.append(job["title"])
+                continue
+            self.record(job["title"], _work(bot, job["title"], tuple(alter)))
+        return self.finish()
+
+    def prepare(self) -> None:
+        """아르바이트 탭 카드 제목을 먼저 읽어 두고 (고정해 둔 사이드 퀘스트를 아르바이트로 알지 않게 — accepted),
+        오늘 앞 실행의 건너뜀 장부를 이어 받는다."""
+        bot, book = self.bot, self.book
+        bot.marks.arb_titles = set()
+        _panel_jobs(bot)
+        bot.to_main()
+        self.restore_skipped()
+        if book.get("current"):
+            bot.log.info(f"아르바이트 지난 기록: '{book['current']}' {book.get('stage', '')} ({book.get('at', '')}) → 이어서")
+
+    def restore_skipped(self) -> None:
+        """오늘 앞 실행에서 물품 부족으로 건너뛴 일은 다시 가 보지 않는다 (사람 몫). 막혔던 일은 다시 해 본다.
+        다만 그 사이 할 수 있게 된 일(물품이 다 모임·채집이나 짧은 가공으로 됨)과 조건을 모르는 '가공 필요' 일은 다시 본다."""
+        bot, skipped = self.bot, self.skipped
+        skipped.update(self.book.get("skipped") or {})
+        # 다만 그 사이 물품이 다 모였으면 (채집을 시간으로 끊었는데 게임이 마저 캔 경우) 다시 해 본다
+        tracked = accepted(bot)
+        for j in tracked:
+            for t in [t for t in skipped if _same(t, j["title"])]:
+                if not missing_items(j):
+                    bot.log.info(f"아르바이트 '{t}': 건너뛴 일인데 물품이 다 모임 → 다시 진행")
+                    skipped.pop(t)
+                elif skipped[t] == "가공 필요" and (not (al := alter_missing(j, gatherable(bot))) or quick_alter(bot, al)):
+                    # 가공 규칙이 바뀐 뒤(채집 가능·짧은 가공은 진행) 같은 날 다시 돌리면 앞서 건너뛴 일도 다시 본다
+                    bot.log.info(f"아르바이트 '{t}': 가공 필요로 건너뛴 일인데 채집·짧은 가공으로 할 수 있음 → 다시 진행")
+                    skipped.pop(t)
+        # 추적 칸에 없는 '가공 필요' 일은 조건을 몰라 여기서 못 가른다 → 다시 가서 가공 창 카드로 정한다 (_alter_go)
+        for t in [t for t, w in skipped.items() if w == "가공 필요" and not any(_same(t, j["title"]) for j in tracked)]:
+            bot.log.info(f"아르바이트 '{t}': 가공 필요로 건너뛴 일 (추적 칸에 없음) → 가공 창에서 다시 판단")
+            skipped.pop(t)
+
+    def pick(self):
+        """다음에 할 수락한 일 (job, 이미 '진행하기' 를 눌렀나). 할 일이 없으면 (None, False), 그만할 때는 _STOP."""
+        bot, skipped, stuck, done = self.bot, self.skipped, self.stuck, self.done
         pressed = False
         # 물품이 모자라도 바로 건너뛰지 않는다 — 진행하기를 누르면 게임이 '구하는 방법'(채집 장소)을 알려 주고,
         # 그걸 고르면 필요한 만큼만 채집한다. 구할 방법이 없을 때만 _work 가 'short' 로 돌려준다
@@ -573,80 +700,78 @@ def _task(bot: Bot, cfg: dict) -> str:
                 if any(_same(title, e) for e in [*skipped, *stuck, *done]):
                     bot.log.info(f"아르바이트 '{title}': 이미 막힘·건너뜀으로 본 일 → 이번엔 그만")
                     _leave(bot)
-                    break
+                    return _STOP
         if job is None and bot.marks.arb_closed:
-            break  # 방금 본 목록이 '구인 마감' — 지원하러 창을 또 열 필요 없다
-        if job is None:
-            # 할 수 있는 수락한 일이 없으면 새 일에 지원한다
-            before = {j["title"] for j in accepted(bot, raw=True)}
-            applied = _apply_top(bot)
-            if applied == "missing":
-                stuck.append("(지원하기를 못 찾음)")
-                break
-            if applied is None:
-                stuck.append("(지원 후 수락 대화 없음)")
-                break
-            if not applied:
-                break
-            # 수락 직후 후속 대화가 남아 있을 수 있다 → _work 가 정리하며 진행한다.
-            # 추적 칸은 대화·이동이 끝나야 떠서 CLI 에 늦게 나온다 (2026-10-23: 2~3초만 보고 '수락 확인 실패' 로 FAIL)
-            new = []
-            for _ in range(8):
-                new = [j for j in accepted(bot, raw=True) if j["title"] not in before]
-                if new:
-                    break
-                bot.sleep(1.5, 2)
+            return _STOP  # 방금 본 목록이 '구인 마감' — 지원하러 창을 또 열 필요 없다
+        return job, pressed
+
+    def apply_new(self) -> bool:
+        """새 일에 지원하고 추적 칸에 뜨는지 본다. 이어 돌면 True, 그만할 때(지원할 일 없음·지원 실패) False."""
+        bot, stuck = self.bot, self.stuck
+        before = {j["title"] for j in accepted(bot, raw=True)}
+        applied = _apply_top(bot)
+        if applied == "missing":
+            stuck.append("(지원하기를 못 찾음)")
+            return False
+        if applied is None:
+            stuck.append("(지원 후 수락 대화 없음)")
+            return False
+        if not applied:
+            return False
+        # 수락 직후 후속 대화가 남아 있을 수 있다 → _work 가 정리하며 진행한다.
+        # 추적 칸은 대화·이동이 끝나야 떠서 CLI 에 늦게 나온다 (2026-10-23: 2~3초만 보고 '수락 확인 실패' 로 FAIL)
+        new = []
+        for _ in range(8):
+            new = [j for j in accepted(bot, raw=True) if j["title"] not in before]
             if new:
-                bot.log.info(f"아르바이트 지원: {new[0]['title']}")
-                bot.marks.arb_titles = {*(bot.marks.arb_titles or ()), new[0]["title"]}
-                unconfirmed = 0
-            else:
-                # 그래도 안 보이면 퀘스트 창 목록(_press_other)에서 '진행하기' 카드로 찾는다. 두 번 거푸면 그만
-                unconfirmed += 1
-                bot.log.info("아르바이트 지원: 추적 칸에 안 보임 → 퀘스트 창 목록으로 확인")
-                if unconfirmed >= 2:
-                    stuck.append("(지원 후 수락 확인 실패)")
-                    break
-            continue
+                break
+            bot.sleep(1.5, 2)
+        if new:
+            bot.log.info(f"아르바이트 지원: {new[0]['title']}")
+            bot.marks.arb_titles = {*(bot.marks.arb_titles or ()), new[0]["title"]}
+            self.unconfirmed = 0
+        else:
+            # 그래도 안 보이면 퀘스트 창 목록(_press_other)에서 '진행하기' 카드로 찾는다. 두 번 거푸면 그만
+            self.unconfirmed += 1
+            bot.log.info("아르바이트 지원: 추적 칸에 안 보임 → 퀘스트 창 목록으로 확인")
+            if self.unconfirmed >= 2:
+                stuck.append("(지원 후 수락 확인 실패)")
+                return False
+        return True
+
+    def alter_or_skip(self, job: dict) -> list | None:
+        """모자란 가공품 (CLI 조건과 레시피 표로 미리 가름). 짧은 가공이면 그 목록을 들고 진행,
+        그 밖의 가공품이 모자라면 가지 않고 건너뛰고 None."""
+        bot = self.bot
         alter = alter_missing(job, gatherable(bot)) if "objectives" in job else []
         if alter and quick_alter(bot, alter):
             bot.log.info(f"아르바이트 '{job['title']}': 짧은 가공 ({', '.join(alter)}) → 가공해서 진행")
         elif alter:
             bot.log.info(f"아르바이트 '{job['title']}': 가공품이 모자람 ({', '.join(alter)}) → 가지 않고 건너뜀")
-            skipped[job["title"]] = "가공 필요"
-            save(None, "arb_result", f"건너뜀(가공): {job['title']}")
-            continue
-        bot.log.info(f"아르바이트 진행: {job['title']}")
-        save(job["title"])
-        if not pressed and not _press_progress(bot, job["title"]):
-            stuck.append(job["title"])
-            continue
-        r = _work(bot, job["title"], tuple(alter))
+            self.skipped[job["title"]] = "가공 필요"
+            self.save(None, "arb_result", f"건너뜀(가공): {job['title']}")
+            return None
+        return alter
+
+    def record(self, title: str, r: str) -> None:
+        """한 일의 결과를 장부에 적는다 — 완료 · 건너뜀(까닭) · 막힘."""
         if r == "done":
-            done.append(job["title"])
-            bot.log.info(f"아르바이트 완료: {job['title']}")
-        elif r == "short":
-            skipped[job["title"]] = "전달 물품 부족"
-        elif r == "alter":
-            skipped[job["title"]] = "가공 필요"
-        elif r == "alter_short":
-            skipped[job["title"]] = "가공 재료 부족"
-        elif r == "alter_full":
-            skipped[job["title"]] = "가공 칸 꽉 참"
-        elif r == "dungeon":
-            skipped[job["title"]] = "던전 클리어 필요"
+            self.done.append(title)
+            self.bot.log.info(f"아르바이트 완료: {title}")
+        elif r in SKIP_WHY:
+            self.skipped[title] = SKIP_WHY[r]
         else:  # stuck · gather_stall — 다음 실행 때 다시 해 본다
-            stuck.append(job["title"] + (" (채집이 멈춤)" if r == "gather_stall" else ""))
-        save(None, "arb_result", {"done": "완료", "short": "건너뜀", "alter": "건너뜀(가공)",
-                                  "alter_short": "건너뜀(가공 재료 부족)", "alter_full": "건너뜀(가공 칸 꽉 참)", "dungeon": "건너뜀(던전)",
-                                  "gather_stall": "막힘(채집이 멈춤)"}.get(r, "막힘")
-             + f": {job['title']}")
-    save(None, "arb_end", "아르바이트 목록 끝")
-    _leave(bot)
-    out = f"아르바이트 {len(done)}개 완료"
-    if skipped:
-        out += ", 건너뜀: " + ", ".join(f"{t}({w})" for t, w in skipped.items())
-    if stuck:
-        # 막힌 일은 사람 몫이 아니라 다시 해 볼 일 → 실패로 남겨 다음 실행 때 이어 한다 ('넘김(조건)' 은 물품·가공 부족 등 조건만)
-        raise CannotProceed(out + ", 막힘: " + ", ".join(dict.fromkeys(stuck)))
-    return out
+            self.stuck.append(title + (" (채집이 멈춤)" if r == "gather_stall" else ""))
+        self.save(None, "arb_result", RESULT_STAGE.get(r, "막힘") + f": {title}")
+
+    def finish(self) -> str:
+        """장부 마무리·메인 화면으로, 결과 글자. 막힌 일이 있으면 CannotProceed (다음 실행 때 이어 한다)."""
+        self.save(None, "arb_end", "아르바이트 목록 끝")
+        _leave(self.bot)
+        out = f"아르바이트 {len(self.done)}개 완료"
+        if self.skipped:
+            out += ", 건너뜀: " + ", ".join(f"{t}({w})" for t, w in self.skipped.items())
+        if self.stuck:
+            # 막힌 일은 사람 몫이 아니라 다시 해 볼 일 → 실패로 남겨 다음 실행 때 이어 한다 ('넘김(조건)' 은 물품·가공 부족 등 조건만)
+            raise CannotProceed(out + ", 막힘: " + ", ".join(dict.fromkeys(self.stuck)))
+        return out
