@@ -440,6 +440,9 @@ class GoalKind(Kind):
             q.set_stop("transfer", {"what": st.get("name")})
             api._q_toast("분해된 장비 부품이 모자랍니다",
                          f"{st.get('name')} 의 재료를 보관함에서 꺼낼 수 없어 작업 큐를 세웠습니다.", "bad")
+        else:  # 까닭을 카드에 남긴다 — 안 남기면 직전 걸음 메모('수령합니다')만 보여 무엇이 안 됐는지 모른다
+            ko = r.get("ko") or {}
+            q.note(it, f"실패 — {label}: {ko.get('text') or r.get('message') or r.get('error') or '알 수 없음'}")
         return None
 
 
@@ -779,14 +782,14 @@ class QueueApi:
             self._emit("mm:queue-ask", None)  # 화면이 띄운 질문 창을 닫는다 (큐가 서서 그만 기다린 경우)
 
     def _q_wait_dialog_closed(self, q: WorkQueue, label: str, limit: float = 120) -> bool:
-        """게임에 확인 창(대화)이 떠 있으면 사람이 닫을 때까지 기다린다 (처음 한 번 알림). 닫혔으면 True.
+        """게임에 확인 창(대화)이나 어비스 결과 연출이 떠 있으면 닫힐 때까지 기다린다 (처음 한 번 알림). 닫혔으면 True.
         큐가 서면(q.stop) 그만 기다린다."""
         end, told = time.monotonic() + limit, False
         while time.monotonic() < end:
             if q.stop:
                 return False
             a = self.query("activity", {})
-            if not (isinstance(a, dict) and a.get("dialogue")):
+            if not (isinstance(a, dict) and (a.get("dialogue") or a.get("abyssResult"))):
                 return True
             if not told:
                 told = True

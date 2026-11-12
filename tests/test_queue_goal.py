@@ -252,6 +252,24 @@ class GoalKindTest(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(self.waited, [GoalKind.COLLECT_RETRY])
 
+    def test_collect_blocked_waits_and_retries(self):
+        # 돌아와 수령하려는데 어비스 결과 연출이 화면을 막음 (2026-11-12 21:32) — 실패로 끝내지 않고 기다렸다 다시
+        blocked = {"ok": False, "error": "blocked", "data": {"kind": "unknown_modal"}}
+        api = FakeApi([(0, {"kind": "collect", "name": "진액", "facility": "약품"}),
+                       (0, {"kind": "collect", "name": "진액", "facility": "약품"}),
+                       (10, {"kind": "done"})],
+                      exec_results=[blocked, blocked, {"ok": True}])
+        ok, q = self.run_goal(api, wait=True)
+        self.assertTrue(ok)
+        self.assertEqual(self.waited, [GoalKind.COLLECT_RETRY])
+
+    def test_unknown_failure_notes_reason(self):
+        api = FakeApi([(0, {"kind": "alter", "name": "진액"})],
+                      exec_results=[{"ok": False, "error": "x", "ko": {"text": "재료가 부족합니다"}}])
+        ok, q = self.run_goal(api)
+        self.assertFalse(ok)
+        self.assertIn("재료가 부족합니다", q.notes[-1])
+
     def test_collect_never_ready_stops(self):
         api = FakeApi([(0, {"kind": "collect", "name": "진액"})] * 10,
                       exec_results=[{"ok": False, "error": "no_completed_work"}] * 10)

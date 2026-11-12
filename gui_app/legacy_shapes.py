@@ -439,6 +439,8 @@ class Shapes:
             "inCombat": _truthy(g(d, "IsInCombat")), "dead": _truthy(g(d, "IsDead")),
             "reviving": _truthy(g(d, "IsReviving")),
             "dialogue": _truthy(g(d, "IsDialoguePlaying")) or _truthy(g(d, "IsWaitingForSelection")),
+            # 어비스 결과 연출 — 그동안 수령·가공이 'blocked'(unknown_modal)로 거절된다 (2026-11-12 21:32)
+            "abyssResult": _truthy(g(d, "IsAbyssResultSequencePlaying")),
             "performing": _truthy(g(perf, "IsPlaying")),
             # 연주는 게임이 시간을 재서 준다. 진행바·남은 시간을 그릴 수 있는 유일한 값
             "perf": {"playing": _truthy(g(perf, "IsPlaying")), "instrument": _or(g(perf, "InstrumentName"), ""),

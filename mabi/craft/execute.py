@@ -57,8 +57,9 @@ def step_failure(kind: str, r: dict) -> str | None:
     """거절된 목표 걸음을 어떻게 할까 (STEP_*). None 이면 이어갈 수 없다. r: 명령 결과 {ok, error, …}."""
     err = r.get("error")
     if kind == "collect":
-        # 2026-10-30 20:56:54 — 수령이 '완료된 게 없다' 였다가 12초 뒤엔 받았다
-        return STEP_RETRY_LATER if err == "no_completed_work" else None
+        # 2026-10-30 20:56:54 — 수령이 '완료된 게 없다' 였다가 12초 뒤엔 받았다.
+        # 화면을 막는 것(blocked — 어비스 결과 연출 등, 2026-11-12 21:32)도 기다리면 풀린다. 수령은 비용이 없어 다시 해도 된다
+        return STEP_RETRY_LATER if err in ("no_completed_work", "blocked") else None
     return {"invalid_count": STEP_AGAIN, "insufficient_living_skill_level": STEP_STOP_SKILL,
             "insufficient_transfer_cost": STEP_STOP_TRANSFER}.get(err)
 
