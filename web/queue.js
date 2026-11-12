@@ -227,14 +227,15 @@ async function qWho(id) {
   if (!it) return;
   try { qChars = await mm.queue.chars(); } catch (_) { /* 못 읽으면 지난 목록 */ }
   const cur = +(it.slot || 0);
-  const opts = charOptions(qChars, cur, '접속 캐릭터 (처음 시작할 때 접속해 있던 캐릭터)');
-  const ok = await confirmModal('할 캐릭터',
-    '<p>"' + esc(it.label) + '" 을(를) 어느 캐릭터로 할까요?</p>' +
-    '<select id="q-who-pick" class="q-who-pick">' + opts + '</select>' +
-    '<p class="hint">다른 캐릭터면 시작할 때 그 캐릭터로 접속을 바꿉니다. 접속 캐릭터로 두면 처음 시작할 때의 캐릭터를 기억해, ' +
-    '다른 카드(필드 보스 등)에 밀렸다 돌아와도 그 캐릭터로 이어 합니다.</p>', '바꾸기');
-  if (!ok) return;
-  const slot = +$('#q-who-pick').value || 0;
+  const slot = await openModal({
+    title: '할 캐릭터', ok: '바꾸기', no: null,
+    body: '<p>"' + esc(it.label) + '" 을(를) 어느 캐릭터로 할까요?</p>' +
+      '<select id="q-who-pick" class="q-who-pick">' + charOptions(qChars, cur, '접속 캐릭터 (처음 시작할 때 접속해 있던 캐릭터)') + '</select>' +
+      '<p class="hint">다른 캐릭터면 시작할 때 그 캐릭터로 접속을 바꿉니다. 접속 캐릭터로 두면 처음 시작할 때의 캐릭터를 기억해, ' +
+      '다른 카드(필드 보스 등)에 밀렸다 돌아와도 그 캐릭터로 이어 합니다.</p>',
+    value: () => +$('#q-who-pick').value || 0,
+  });
+  if (slot === null) return;
   mm.queue.patch(id, { slot: slot, pin: null });  // 다시 고르면 기억도 새로 (접속 캐릭터면 다음에 집을 때 다시 기억)
 }
 

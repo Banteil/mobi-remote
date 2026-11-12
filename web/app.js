@@ -61,13 +61,19 @@ function setBusy(on, text) {
   if (text) $('#sb-busy-text').textContent = text;
 }
 
-/** 모달 확인. Promise<boolean> */
-function confirmModal(title, bodyHtml, okLabel, cancelLabel) {
+/**
+ * 모달 하나 (#modal) — 열고, 확인·취소·Esc·Enter 를 받아 닫고 값을 돌려준다. 모달 창은 모두 이 위에 얹는다.
+ *   title · body(HTML) · ok · cancel  제목·내용·버튼 글자 (버튼 기본 '확인'·'취소' — 매번 다시 적는다)
+ *   value()  확인(Enter)일 때 돌려줄 값 (없으면 true)
+ *   no       취소(Esc)일 때 돌려줄 값 (없으면 false)
+ * 내용에 #modal-input 이 있으면 거기에, 없으면 확인 버튼에 포커스. Promise
+ */
+function openModal(o) {
   return new Promise((resolve) => {
-    $('#modal-title').textContent = title;
-    $('#modal-body').innerHTML = bodyHtml;
-    $('#modal-ok').textContent = okLabel || '실행';
-    $('#modal-cancel').textContent = cancelLabel || '취소';
+    $('#modal-title').textContent = o.title;
+    $('#modal-body').innerHTML = o.body;
+    $('#modal-ok').textContent = o.ok || '확인';
+    $('#modal-cancel').textContent = o.cancel || '취소';
     $('#modal').classList.remove('hidden');
 
     const done = (v) => {
@@ -77,56 +83,43 @@ function confirmModal(title, bodyHtml, okLabel, cancelLabel) {
       document.removeEventListener('keydown', onKey);
       resolve(v);
     };
-    const onOk = () => done(true);
-    const onNo = () => done(false);
+    const onOk = () => done(o.value ? o.value() : true);
+    const onNo = () => done(o.no === undefined ? false : o.no);
     const onKey = (e) => {
-      if (e.key === 'Escape') done(false);
-      if (e.key === 'Enter') done(true);
+      if (e.key === 'Escape') onNo();
+      if (e.key === 'Enter') { e.preventDefault(); onOk(); }
     };
     $('#modal-ok').addEventListener('click', onOk);
     $('#modal-cancel').addEventListener('click', onNo);
     document.addEventListener('keydown', onKey);
-    $('#modal-ok').focus();
+
+    const input = $('#modal-input');
+    if (!input) { $('#modal-ok').focus(); return; }
+    input.focus();
+    if (input.tagName === 'INPUT') input.select();
   });
 }
+
+/** 모달 확인. Promise<boolean> */
+function confirmModal(title, bodyHtml, okLabel, cancelLabel) {
+  return openModal({ title, body: bodyHtml, ok: okLabel || '실행', cancel: cancelLabel });
+}
+
+const hintHtml = (hint) => (hint ? '<p class="hint">' + esc(hint) + '</p>' : '');
 
 /**
  * 숫자 입력 모달. Electron은 window.prompt()를 지원하지 않으므로 직접 만든다.
  * Promise<number|null>
  */
 function promptNumber(title, label, defaultValue, hint) {
-  return new Promise((resolve) => {
-    $('#modal-title').textContent = title;
-    $('#modal-body').innerHTML =
-      '<p>' + esc(label) + '</p>' +
-      '<input id="modal-input" type="number" min="1" step="1" value="' + esc(defaultValue) + '" class="w-full">' +
-      (hint ? '<p class="hint">' + esc(hint) + '</p>' : '');
-    $('#modal-ok').textContent = '확인';
-    $('#modal').classList.remove('hidden');
-
-    const input = $('#modal-input');
-    input.focus();
-    input.select();
-
-    const done = (v) => {
-      $('#modal').classList.add('hidden');
-      $('#modal-ok').removeEventListener('click', onOk);
-      $('#modal-cancel').removeEventListener('click', onNo);
-      document.removeEventListener('keydown', onKey);
-      resolve(v);
-    };
-    const onOk = () => {
-      const n = parseInt(input.value, 10);
-      done(Number.isFinite(n) && n > 0 ? n : null);
-    };
-    const onNo = () => done(null);
-    const onKey = (e) => {
-      if (e.key === 'Escape') done(null);
-      if (e.key === 'Enter') { e.preventDefault(); onOk(); }
-    };
-    $('#modal-ok').addEventListener('click', onOk);
-    $('#modal-cancel').addEventListener('click', onNo);
-    document.addEventListener('keydown', onKey);
+  return openModal({
+    title, no: null,
+    body: '<p>' + esc(label) + '</p>' +
+      '<input id="modal-input" type="number" min="1" step="1" value="' + esc(defaultValue) + '" class="w-full">' + hintHtml(hint),
+    value: () => {
+      const n = parseInt($('#modal-input').value, 10);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    },
   });
 }
 
@@ -136,65 +129,22 @@ function promptNumber(title, label, defaultValue, hint) {
  * @param {Array<{value:*, label:string}>} options
  */
 function promptSelect(title, label, options, current, hint) {
-  return new Promise((resolve) => {
-    $('#modal-title').textContent = title;
-    $('#modal-body').innerHTML =
-      '<p>' + esc(label) + '</p>' +
+  return openModal({
+    title, no: null,
+    body: '<p>' + esc(label) + '</p>' +
       '<select id="modal-input" class="w-full">' + selectOptions(options.map((o) => [o.value, o.label]), current) + '</select>' +
-      (hint ? '<p class="hint">' + esc(hint) + '</p>' : '');
-    $('#modal-ok').textContent = '확인';
-    $('#modal').classList.remove('hidden');
-
-    const input = $('#modal-input');
-    input.focus();
-
-    const done = (v) => {
-      $('#modal').classList.add('hidden');
-      $('#modal-ok').removeEventListener('click', onOk);
-      $('#modal-cancel').removeEventListener('click', onNo);
-      document.removeEventListener('keydown', onKey);
-      resolve(v);
-    };
-    const onOk = () => done(input.value);
-    const onNo = () => done(null);
-    const onKey = (e) => {
-      if (e.key === 'Escape') done(null);
-      if (e.key === 'Enter') { e.preventDefault(); onOk(); }
-    };
-    $('#modal-ok').addEventListener('click', onOk);
-    $('#modal-cancel').addEventListener('click', onNo);
-    document.addEventListener('keydown', onKey);
+      hintHtml(hint),
+    value: () => $('#modal-input').value,
   });
 }
 
 /** 문자열 입력 모달. promptNumber의 텍스트판. */
 function promptText(title, label, defaultValue, hint) {
-  return new Promise((resolve) => {
-    $('#modal-title').textContent = title;
-    $('#modal-body').innerHTML =
-      '<p>' + esc(label) + '</p>' +
-      '<input id="modal-input" type="text" maxlength="40" value="' + esc(defaultValue || '') + '" class="w-full">' +
-      (hint ? '<p class="hint">' + esc(hint) + '</p>' : '');
-    $('#modal-ok').textContent = '확인';
-    $('#modal').classList.remove('hidden');
-    const input = $('#modal-input');
-    input.focus(); input.select();
-    const done = (v) => {
-      $('#modal').classList.add('hidden');
-      $('#modal-ok').removeEventListener('click', onOk);
-      $('#modal-cancel').removeEventListener('click', onNo);
-      document.removeEventListener('keydown', onKey);
-      resolve(v);
-    };
-    const onOk = () => done(input.value.trim() || null);
-    const onNo = () => done(null);
-    const onKey = (e) => {
-      if (e.key === 'Escape') done(null);
-      if (e.key === 'Enter') { e.preventDefault(); onOk(); }
-    };
-    $('#modal-ok').addEventListener('click', onOk);
-    $('#modal-cancel').addEventListener('click', onNo);
-    document.addEventListener('keydown', onKey);
+  return openModal({
+    title, no: null,
+    body: '<p>' + esc(label) + '</p>' +
+      '<input id="modal-input" type="text" maxlength="40" value="' + esc(defaultValue || '') + '" class="w-full">' + hintHtml(hint),
+    value: () => $('#modal-input').value.trim() || null,
   });
 }
 
