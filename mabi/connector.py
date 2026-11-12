@@ -38,8 +38,10 @@ ACTION_COMMANDS = {"write_chat", "play_music_score", "change_instrument", "stop_
                    "execute_gathering", "execute_altering", "complete_altering_work", "execute_crafting"}
 
 # 명령(CLI 프로세스)을 끊어도 게임 안에서 계속되는 행동 — 끊을 때 stop_action 을 같이 보낸다
-# (2026-11-12 채집 카드를 일시정지했는데 캐릭터는 계속 캤다)
+# (2026-11-12 채집 카드를 일시정지했는데 캐릭터는 계속 캤다). 채집은 '캐기 → 성공 모션 → 다음 캐기' 를 게임이 이어 하고,
+# 성공 모션 동안은 멈출 행동이 없다고 거절한다 → 다음 캐기가 시작될 때까지 STOP_TRY 초 동안 1초마다 다시 보낸다
 KEEPS_GOING = {"execute_gathering"}
+STOP_TRY = 15
 
 REG_KEYS = [(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Nexon\MabinogiM"),
             (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Nexon\MabinogiM"),
@@ -270,10 +272,24 @@ class Connector:
         p, cmd = self._proc, self._proc_cmd
         if p and p.poll() is None:
             p.kill()
-            if cmd in KEEPS_GOING:
-                r = self._run("stop_action", None, 15, track=False)
-                if self.log:
-                    self.log.info(f"{cmd} 를 끊음 → 행동 정지 {'보냄' if r.ok else '실패: ' + (r.message or r.error or '')}")
+            if cmd in KEEPS_GOING:  # 부른 쪽(F12 등)을 붙잡지 않게 따로
+                threading.Thread(target=self._stop_action, args=(cmd,), daemon=True, name="stop-action").start()
+
+    def _stop_action(self, cmd: str) -> None:
+        """끊은 명령의 행동을 게임 안에서도 멈춘다 — 멈출 행동이 없다고 하면 STOP_TRY 초 동안 다시 (KEEPS_GOING)."""
+        end = time.monotonic() + STOP_TRY
+        tries = 0
+        while True:
+            tries += 1
+            r = self._run("stop_action", None, 15, track=False)
+            if r.ok or time.monotonic() >= end:
+                break
+            time.sleep(1)
+            if self._proc is not None:  # 그사이 새 행동 명령이 시작됐다 (이어 하기) — 그것까지 멈추지 않는다
+                break
+        if self.log:
+            self.log.info(f"{cmd} 를 끊음 → 행동 정지 " + (f"보냄 ({tries}번째)" if r.ok else
+                                                       f"못 함 ({STOP_TRY}초, {r.message or r.error or ''})"))
 
     def busy(self) -> bool:
         return self._action_lock.locked()

@@ -11,16 +11,41 @@ class CancelTest(unittest.TestCase):
         c = connector.Connector()
         c._proc = mock.Mock(**{"poll.return_value": None})
         c._proc_cmd = cmd
-        with mock.patch.object(c, "_run", return_value=connector.Result(True, 0)) as run:
+        with mock.patch.object(connector.threading, "Thread") as th:
             c.cancel()
         c._proc.kill.assert_called_once()
-        return run
+        return th
 
     def test_gathering_also_stops_action(self):
-        self.cancel("execute_gathering").assert_called_once_with("stop_action", None, 15, track=False)
+        th = self.cancel("execute_gathering")
+        th.assert_called_once()
+        self.assertEqual(th.call_args.kwargs["args"], ("execute_gathering",))
 
     def test_other_commands_only_kill(self):
         self.cancel("execute_crafting").assert_not_called()
+
+    def stop(self, results, new_proc_after=None):
+        c = connector.Connector()
+        seq = iter(results)
+
+        def run(*a, **k):
+            r = next(seq)
+            if new_proc_after is not None and run.calls == new_proc_after:
+                c._proc = object()
+            run.calls += 1
+            return r
+        run.calls = 0
+        with mock.patch.object(c, "_run", side_effect=run), mock.patch.object(connector.time, "sleep"):
+            c._stop_action("execute_gathering")
+        return run.calls
+
+    def test_retries_through_success_motion(self):
+        no = connector.Result(False, 1, error="no_action")
+        self.assertEqual(self.stop([no, no, connector.Result(True, 0)]), 3)  # 성공 모션 동안 거절 → 다음 캐기에 멈춤
+
+    def test_stops_retrying_when_new_action_starts(self):
+        no = connector.Result(False, 1, error="no_action")
+        self.assertEqual(self.stop([no, no, no], new_proc_after=0), 1)  # 이어 하기로 새 채집이 시작되면 그만
 
 
 class PinSavedTest(unittest.TestCase):
