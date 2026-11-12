@@ -249,6 +249,11 @@ async function runAction(command, body, opts) {
   return r;
 }
 
+/** 큐가 행동을 마친 뒤 다시 읽을 탭 (아래 mm.onExecDone) */
+const ACT_REFRESH = {
+  craft: () => loadCraft(true), alter: () => loadAlter(true), collect: () => loadAlter(true), collectAll: () => loadAlter(true),
+};
+
 /* 작업 큐(파이썬)가 부른 명령: 시작·끝을 화면에서 runAction 과 똑같이 알린다 (origin 이 있는 것만 — 화면이 부른 것은 runAction 이 알린다) */
 mm.onExecStart((m) => {
   if (m && m.origin) setBusy(true, (m.origin.label || m.command) + ' 실행 중…');
@@ -269,7 +274,7 @@ mm.onExecDone((m) => {
     logCall(m.command, m);
   }
   refreshTopbar();
-  const re = typeof ACT_REFRESH !== 'undefined' && ACT_REFRESH[m.origin.act];
+  const re = ACT_REFRESH[m.origin.act];
   if (re) re();
 });
 
@@ -389,7 +394,7 @@ async function updateNameNow(st, me) {
   const before = topName;
   if (!st || !st.connected || !me || me.error) topName = '';
   else { try { const n = await mm.chars.nameNow(); topName = n ? n.name || '' : topName; } catch (_) {} }
-  if (topName !== before && typeof paintChars === 'function' && ch.data) paintChars();
+  if (topName !== before && ch.data) paintChars();  // 시작이 끝난 뒤에만 불린다 (main.js · 자동 갱신)
 }
 
 /* ── 대시보드 ───────────────────────────────────── */

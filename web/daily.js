@@ -69,7 +69,7 @@ function setCell(slot, task, status, tip) {
 }
 
 /* 버튼 세 상태: 쉬는 중(시작) · 실행 중(일시정지) · 일시정지(이어 하기). 그만두려면 작업 큐에서 카드를 뺀다.
- * 일시정지는 큐의 숙제 카드가 일시정지(pause)인 것으로 안다 — 큐 그림이 바뀔 때마다 다시 칠한다 (app.js paintQueue → dlRefresh) */
+ * 일시정지는 큐의 숙제 카드가 일시정지(pause)인 것으로 안다 — 큐 그림이 바뀔 때마다 다시 칠한다 (queue.js paintQueue → qOnPaint) */
 function dlPausedCard() {
   return qItems.find((x) => x.kind === 'daily' && x.status === 'pause');
 }
@@ -86,9 +86,7 @@ function paintDailyRunning(on) {
   p.classList.toggle('hidden', !on && !paused);
 }
 
-function dlRefresh() {
-  paintDailyRunning(!!dl.running);
-}
+qOnPaint(() => paintDailyRunning(!!dl.running));
 
 mm.daily.onEvent((e) => {
   if (!e) return;
@@ -216,7 +214,7 @@ function startEnhance() {
   qStartNow({ kind: 'enhance', label: '각인 강화 반복' }, false);
 }
 
-Q_KINDS.enhance = { amount: () => '성공할 때까지' };
+qRegisterKind('enhance', { amount: () => '성공할 때까지' });
 
 /* 주간 숙제 — 뱅가드 브리치. 이번 주에 했는지는 들어가기 전에 게임(성장 가이드)으로 보므로 늘 force */
 function vanguardSpec() {
@@ -264,8 +262,8 @@ function dailyAmount(x) {
   return (x.chars || []).length + '명 · ' + (x.only ? '숙제 ' + x.only.length + '개' : '전체') + (x.force ? ' · 다시' : '');
 }
 
-/* 작업 큐 카드 종류 (queue.js Q_KINDS) — 화면 쪽 표시만. 실행·멈춤·화면 설정은 파이썬 (gui_app/queue_api.py) */
-Q_KINDS.daily = { amount: dailyAmount };
+/* 작업 큐 카드 종류 (queue.js qRegisterKind) — 화면 쪽 표시만. 실행·멈춤·화면 설정은 파이썬 (gui_app/queue_api.py) */
+qRegisterKind('daily', { amount: dailyAmount });
 
 /* ── 설정 ── */
 
@@ -511,10 +509,10 @@ function abyssAmount(x) {
 }
 
 
-Q_KINDS.abyss = {
+qRegisterKind('abyss', {
   amount: (x) => abyssAmount(x),
   doneToast: (x) => ['어비스 반복 끝', x.label + ' · ' + abyssAmount(x)],
-};
+});
 
 /** 어비스·레이드 반복 진행 이벤트 (mm:abyss · mm:raid — 같은 틀 mabi/tasks/repeat.Repeat) → 탭의 진행 줄·버튼 */
 const REPEAT_STAGES = { entry: '입장', match: '매칭 중', sail: '출항', play: '진행 중', clear: '클리어', repair: '장비 수리' };
@@ -574,10 +572,10 @@ function raidAmount(x) {
   return abyssAmount({ ...x, dungeon: x.raid });
 }
 
-Q_KINDS.raid = {
+qRegisterKind('raid', {
   amount: (x) => raidAmount(x),
   doneToast: (x) => ['레이드 반복 끝', x.label + ' · ' + raidAmount(x)],
-};
+});
 
 mm.daily.onRaid(onRepeatEvent('raid', '#rd', '레이드'));
 

@@ -41,7 +41,7 @@ function todayOf(c) {
 
 /** 지금 게임에 접속 중인 캐릭터인가 (상단바가 읽어 둔 이름 — 띄어쓰기 무시) */
 function isNow(c) {
-  const now = typeof topName === 'string' ? topName.replace(/\s/g, '') : '';
+  const now = (topName || '').replace(/\s/g, '');
   return !!now && (c.name || '').replace(/\s/g, '') === now;
 }
 

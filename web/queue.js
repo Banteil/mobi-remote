@@ -18,7 +18,7 @@ let qItems = [];      // 파이썬이 준 카드 목록 (보기용 — 고치려
 let qRunning = false;
 
 /**
- * 카드 종류의 화면 쪽 표시 (daily·abyss 는 daily.js 가 더한다). 실행은 모두 파이썬.
+ * 카드 종류의 화면 쪽 표시 (daily·abyss 등은 daily.js 가 qRegisterKind 로 더한다). 실행은 모두 파이썬.
  *   amount(x)    → 수량·내용 한 줄 (카드)
  *   card(x)      → 카드의 수량 칸 HTML (없으면 amount 한 줄)
  *   editable     → ✎ (목표 수량 바꾸기)
@@ -53,6 +53,13 @@ const Q_KINDS = {
 };
 
 function qKind(x) { return Q_KINDS[x.kind || 'goal'] || Q_KINDS.goal; }
+
+/** 카드 종류의 화면 쪽 표시를 더한다 (daily.js — 숙제·어비스·레이드·각인 강화) */
+function qRegisterKind(name, def) { Q_KINDS[name] = def; }
+
+/* 큐 그림이 바뀔 때마다 부를 것 (daily.js — 숙제 탭의 이어 하기 버튼). 뒤에 읽히는 파일이 qOnPaint 로 건다 */
+const qPaintHooks = [];
+function qOnPaint(fn) { qPaintHooks.push(fn); }
 
 const Q_TIP = {
   wait: '대기 — 큐가 돌면 위에서부터 차례로 진행합니다',
@@ -171,11 +178,6 @@ async function actGoal(spec) {
   const it = await actSpec(spec);
   if (it) await qEnqueue(it);
 }
-
-/** 큐가 행동을 마친 뒤 다시 읽을 탭 (app.js 의 mm.onExecDone 이 부른다) */
-const ACT_REFRESH = {
-  craft: () => loadCraft(true), alter: () => loadAlter(true), collect: () => loadAlter(true), collectAll: () => loadAlter(true),
-};
 
 /** 이 항목부터 돌린다 (끝난 것이면 다시 걸기). */
 function qPlayOne(id) { mm.queue.playOne(id); }
@@ -431,7 +433,7 @@ function paintQueue() {
   $('#q-halt').disabled = !qRunning;
   $('#q-tidy').disabled = !qItems.some((x) => x.status === 'done' || x.status === 'fail');
   $('#q-clear').disabled = !qItems.length;
-  if (typeof dlRefresh === 'function') dlRefresh();  // 일일 숙제 탭 버튼 (일시정지 카드)
+  qPaintHooks.forEach((fn) => fn());
 
   if (!qItems.length) {
     list.innerHTML = '<p class="q-empty">비어 있음</p>';
