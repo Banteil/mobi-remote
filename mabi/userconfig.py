@@ -6,6 +6,7 @@
   - 고칠 때: doc() 가 같은 방식으로 합친 tomlkit 문서를 주고, save() 가 기본값과 다른 키만 골라 쓴다
 설정 화면 코드(daily_api·chars_api)는 전체 문서를 고치듯 쓰면 된다.
 """
+import threading
 import tomllib
 
 import tomlkit
@@ -40,6 +41,11 @@ def _overlay(base, over) -> None:
             _overlay(base[k], v)
         else:
             base[k] = v
+
+
+# config.toml 을 읽고 고치고 쓰는 동안 잡는다 — 화면(탭 설정 저장)과 작업 큐 스레드(카드 시작 때 값 저장)가 함께 고친다.
+# 읽기만 하는 곳(load_config)은 잡지 않는다. 저장은 부르는 쪽이 save 로 (검사에 걸리면 저장하지 않고 나가도록)
+LOCK = threading.RLock()
 
 
 def doc(paths: Paths):

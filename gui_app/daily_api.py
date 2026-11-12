@@ -289,19 +289,20 @@ class DailyApi:
     def daily_saveBoss(self, v: dict) -> dict:  # noqa: N802
         """보스전 기본값 저장. 새 기본값과 같아진 캐릭터별 설정은 지운다 (그 캐릭터는 기본값을 따름)."""
         from mabi.tasks import boss_skills
-        doc = self._doc()
-        if "boss_skills" not in doc:
-            doc["boss_skills"] = tomlkit.table()
-        b = doc["boss_skills"]
-        for kind in boss_skills.KINDS:
-            if kind not in v:
-                continue
-            on = bool(v[kind])
-            b[kind] = on
-            same = kind + ("_slots" if on else "_off_slots")
-            if same in b:
-                b[same] = tomlkit.array()
-        userconfig.save(self.paths, doc)
+        with userconfig.LOCK:  # 화면·작업 큐가 함께 고친다
+            doc = self._doc()
+            if "boss_skills" not in doc:
+                doc["boss_skills"] = tomlkit.table()
+            b = doc["boss_skills"]
+            for kind in boss_skills.KINDS:
+                if kind not in v:
+                    continue
+                on = bool(v[kind])
+                b[kind] = on
+                same = kind + ("_slots" if on else "_off_slots")
+                if same in b:
+                    b[same] = tomlkit.array()
+            userconfig.save(self.paths, doc)
         return {"ok": True}
 
     def daily_raidSettings(self) -> dict:  # noqa: N802
@@ -336,16 +337,17 @@ class DailyApi:
             if e.get("type") in ("done", "failed"):
                 setattr(self, f"_{kind}_result", e)
         setattr(self, f"_{kind}_result", {"type": "failed", "message": "시작하지 못함"})
-        doc = self._doc()
-        if kind not in doc:
-            doc[kind] = tomlkit.table()
-        a = doc[kind]
-        save(a)
-        a["slot"] = max(0, int(v.get("slot") or 0))
-        a["runs"] = max(0, int(v.get("runs") or 0))
-        a["minutes"] = max(0, int(v.get("minutes") or 0))
-        a["revive"] = v.get("revive") is not False
-        userconfig.save(self.paths, doc)
+        with userconfig.LOCK:  # 화면·작업 큐가 함께 고친다
+            doc = self._doc()
+            if kind not in doc:
+                doc[kind] = tomlkit.table()
+            a = doc[kind]
+            save(a)
+            a["slot"] = max(0, int(v.get("slot") or 0))
+            a["runs"] = max(0, int(v.get("runs") or 0))
+            a["minutes"] = max(0, int(v.get("minutes") or 0))
+            a["revive"] = v.get("revive") is not False
+            userconfig.save(self.paths, doc)
         event({"type": "start"})
 
         def work():
@@ -446,45 +448,46 @@ class DailyApi:
 
     def daily_saveSettings(self, v: dict) -> dict:  # noqa: N802 (화면 이름 그대로)
         """숙제 공통 설정. 캐릭터별 설정은 캐릭터 탭이 chars_save 로 저장한다."""
-        doc = self._doc()
-        s = doc["silver"]
-        sv = v.get("silver") or {}
-        for k in ("field_runs", "floor"):
-            if k in sv:
-                s[k] = int(sv[k])
-        if sv.get("dungeon"):
-            s["dungeon"] = sv["dungeon"]
-        if v.get("field"):
-            s["field"] = v["field"]
-        if v.get("sunday") in SUNDAY_CHOICES:
-            doc["weekday_dungeon"]["sunday"] = v["sunday"]
-        if v.get("stop_key"):
-            k = str(v["stop_key"]).lower()
-            if k not in [f"f{i}" for i in range(1, 13)]:  # 게임이 쓰는 글자·Home/End 키와 겹치지 않게 F 키만
-                return {"error": f"일시정지 키는 F1~F12 중에서: {k}"}
-            doc["game"]["stop_key"] = k
-        if v.get("dye_key"):
-            k = str(v["dye_key"]).lower()
-            if k not in [f"f{i}" for i in range(1, 13)]:
-                return {"error": f"염색 도우미 키는 F1~F12 중에서: {k}"}
-            if k == str(doc["game"].get("stop_key", "f12")).lower():
-                return {"error": "염색 도우미 키가 일시정지 키와 같습니다"}
-            doc["game"]["dye_key"] = k
-        gk = v.get("game_keys") or {}
-        mine = {str(doc["game"].get("stop_key", "f12")).lower(), str(doc["game"].get("dye_key", "f11")).lower()}
-        for n, k in gk.items():
-            k = str(k or "").strip().lower()
-            if err := gkeys.check(n, k):
-                return {"error": err}
-            if k in mine:
-                return {"error": f"{k.upper()} 는 리모콘의 일시정지·염색 도우미 키입니다"}
-        for n, k in gk.items():
-            doc["game"][f"{n}_key"] = str(k or "").strip().lower()
-        if "fit_display" in v:
-            doc["run"]["fit_display"] = bool(v["fit_display"])
-        if "restart_auto" in v:
-            doc["restart"]["auto"] = bool(v["restart_auto"])
-        userconfig.save(self.paths, doc)
+        with userconfig.LOCK:  # 화면·작업 큐가 함께 고친다
+            doc = self._doc()
+            s = doc["silver"]
+            sv = v.get("silver") or {}
+            for k in ("field_runs", "floor"):
+                if k in sv:
+                    s[k] = int(sv[k])
+            if sv.get("dungeon"):
+                s["dungeon"] = sv["dungeon"]
+            if v.get("field"):
+                s["field"] = v["field"]
+            if v.get("sunday") in SUNDAY_CHOICES:
+                doc["weekday_dungeon"]["sunday"] = v["sunday"]
+            if v.get("stop_key"):
+                k = str(v["stop_key"]).lower()
+                if k not in [f"f{i}" for i in range(1, 13)]:  # 게임이 쓰는 글자·Home/End 키와 겹치지 않게 F 키만
+                    return {"error": f"일시정지 키는 F1~F12 중에서: {k}"}
+                doc["game"]["stop_key"] = k
+            if v.get("dye_key"):
+                k = str(v["dye_key"]).lower()
+                if k not in [f"f{i}" for i in range(1, 13)]:
+                    return {"error": f"염색 도우미 키는 F1~F12 중에서: {k}"}
+                if k == str(doc["game"].get("stop_key", "f12")).lower():
+                    return {"error": "염색 도우미 키가 일시정지 키와 같습니다"}
+                doc["game"]["dye_key"] = k
+            gk = v.get("game_keys") or {}
+            mine = {str(doc["game"].get("stop_key", "f12")).lower(), str(doc["game"].get("dye_key", "f11")).lower()}
+            for n, k in gk.items():
+                k = str(k or "").strip().lower()
+                if err := gkeys.check(n, k):
+                    return {"error": err}
+                if k in mine:
+                    return {"error": f"{k.upper()} 는 리모콘의 일시정지·염색 도우미 키입니다"}
+            for n, k in gk.items():
+                doc["game"][f"{n}_key"] = str(k or "").strip().lower()
+            if "fit_display" in v:
+                doc["run"]["fit_display"] = bool(v["fit_display"])
+            if "restart_auto" in v:
+                doc["restart"]["auto"] = bool(v["restart_auto"])
+            userconfig.save(self.paths, doc)
         p = v.get("paths")
         if p is not None:
             mpaths.save_overrides(**{k: (p.get(k) or "").strip() for k in ("data", "logs", "shots")})

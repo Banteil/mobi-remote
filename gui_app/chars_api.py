@@ -172,37 +172,38 @@ class CharsApi:
         prof.save_profile(self.paths.profile, {"slots": sorted(slots),
                                                "names": {str(c["slot"]): (c.get("name") or "").strip() or f"슬롯 {c['slot']}"
                                                          for c in chars}})
-        doc = self._doc()
-        s = doc["silver"]
-        base = {"field": str(s["field"]), "field_runs": int(s["field_runs"]), "dungeon": str(s["dungeon"]),
-                "floor": int(s["floor"])}
-        overs, skips = {}, {}
-        for c in chars:
-            o = {k: (int(c[k]) if k in ("field_runs", "floor") else str(c[k]))
-                 for k in base if k in c and c[k] is not None and (int(c[k]) if k in ("field_runs", "floor") else str(c[k])) != base[k]}
-            if c.get("black_hole") is False:
-                o["black_hole_in_field"] = False
-                skips[str(c["slot"])] = ["black_hole"]
-            overs[str(c["slot"])] = o
-        self._write_by_slot(s, overs)
-        self._write_skips(doc["run"], skips)
-        self._write_sundays(doc["weekday_dungeon"], {str(c["slot"]): str(c["sunday"]) for c in chars
-                                                     if c.get("sunday") in SUNDAY_CHOICES
-                                                     and c["sunday"] != self._sunday(doc)})
-        if "arbeit" in doc:  # 아르바이트는 켠 캐릭터 목록으로 둔다 (기본 꺼짐)
-            arr = tomlkit.array()
-            arr.extend(sorted(int(c["slot"]) for c in chars if c.get("arbeit")))
-            doc["arbeit"]["slots"] = arr
-        if "boss_skills" in doc:  # 궁극기·팔라딘 변신은 기본값과 다른 캐릭터만 켠·끈 목록에
-            b = doc["boss_skills"]
-            for kind in boss_skills.KINDS:
-                base = bool(b.get(kind, False))
-                for suffix, want in (("_slots", True), ("_off_slots", False)):
-                    arr = tomlkit.array()
-                    if want != base:
-                        arr.extend(sorted(int(c["slot"]) for c in chars if bool(c.get(kind)) == want))
-                    b[kind + suffix] = arr
-        userconfig.save(self.paths, doc)
+        with userconfig.LOCK:  # 화면·작업 큐가 함께 고친다
+            doc = self._doc()
+            s = doc["silver"]
+            base = {"field": str(s["field"]), "field_runs": int(s["field_runs"]), "dungeon": str(s["dungeon"]),
+                    "floor": int(s["floor"])}
+            overs, skips = {}, {}
+            for c in chars:
+                o = {k: (int(c[k]) if k in ("field_runs", "floor") else str(c[k]))
+                     for k in base if k in c and c[k] is not None and (int(c[k]) if k in ("field_runs", "floor") else str(c[k])) != base[k]}
+                if c.get("black_hole") is False:
+                    o["black_hole_in_field"] = False
+                    skips[str(c["slot"])] = ["black_hole"]
+                overs[str(c["slot"])] = o
+            self._write_by_slot(s, overs)
+            self._write_skips(doc["run"], skips)
+            self._write_sundays(doc["weekday_dungeon"], {str(c["slot"]): str(c["sunday"]) for c in chars
+                                                         if c.get("sunday") in SUNDAY_CHOICES
+                                                         and c["sunday"] != self._sunday(doc)})
+            if "arbeit" in doc:  # 아르바이트는 켠 캐릭터 목록으로 둔다 (기본 꺼짐)
+                arr = tomlkit.array()
+                arr.extend(sorted(int(c["slot"]) for c in chars if c.get("arbeit")))
+                doc["arbeit"]["slots"] = arr
+            if "boss_skills" in doc:  # 궁극기·팔라딘 변신은 기본값과 다른 캐릭터만 켠·끈 목록에
+                b = doc["boss_skills"]
+                for kind in boss_skills.KINDS:
+                    base = bool(b.get(kind, False))
+                    for suffix, want in (("_slots", True), ("_off_slots", False)):
+                        arr = tomlkit.array()
+                        if want != base:
+                            arr.extend(sorted(int(c["slot"]) for c in chars if bool(c.get(kind)) == want))
+                        b[kind + suffix] = arr
+            userconfig.save(self.paths, doc)
         return {"ok": True}
 
     @staticmethod
