@@ -800,10 +800,35 @@ class QueueApi:
     def _q_exec(self, q: WorkQueue, command: str, body: dict, origin: dict, wait_label: str) -> dict:
         """큐 카드의 게임 명령 하나. 게임 쪽 확인 창에 막혔으면(blocked) 닫히길 기다렸다가 한 번 더 —
         한 번만 (가공은 막혀도 날개가 이미 나간다, 실측). wait_label: 기다릴 때 알림에 쓰는 이름."""
+        from mabi.connector import is_agent_limit
         r = self.exec(command, body, origin=origin)
-        if not r.get("ok") and r.get("error") == "blocked" and self._q_wait_dialog_closed(q, wait_label):
+        if r.get("ok") or r.get("error") != "blocked":
+            return r
+        if is_agent_limit(r.get("error"), r.get("data")):
+            retry = self._q_clear_agent_limit(q)
+        else:
+            retry = self._q_wait_dialog_closed(q, wait_label)
+        if retry:
             r = self.exec(command, body, origin={**origin, "label": origin["label"] + " (재시도)"})
         return r
+
+    def _q_clear_agent_limit(self, q: WorkQueue) -> bool:
+        """AI 에이전트 연속 사용 제한 — 게임 안 확인 창을 눌러 푼다. 화면 정리(situation.to_main)가 확인 창을 누른다
+        (2026-11-13 04:46 다음 카드의 화면 정리가 '확인' 을 누른 뒤 어비스가 계속 돌았다). 눌러 봤으면 True."""
+        from mabi import situation
+        if q.stop or self._busy_reason():
+            return False
+        log.warning("CLI 연속 사용 제한 → 게임 안 확인 창을 눌러 보고 한 번 더 함")
+        bot = None
+        try:
+            with self._game_bot("char") as bot:  # 큐가 서면 _q_char_stop 이 이 Bot 을 멈춘다
+                if not bot.window.find():
+                    return False
+                situation.to_main(bot, timeout=30)
+                return not q.stop
+        except Exception as e:  # noqa: BLE001 — 멈춤은 일시정지, 나머지는 실패로 (가르는 규칙은 outcome)
+            self._q_failed(q, bot, e, "login", "확인 창 닫기")
+            return False
 
     def _q_collect_all(self, q: WorkQueue, it: dict) -> bool:
         """가공 완료분 전체 수령 — 완료분이 있는 시설마다 complete_altering_work 한 번.

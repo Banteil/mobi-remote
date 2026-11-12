@@ -78,6 +78,25 @@ class ActionKindTest(unittest.TestCase):
         self.assertEqual(len(api.calls), 2)
         self.assertRaises(StopIteration, next, seen)  # 끝날 때까지 물었다
 
+    def test_agent_limit_presses_confirm_then_retries(self):
+        # 연속 사용 제한(2026-11-13 04:45) — 대화 창 기다리기가 아니라 확인 창을 누르고 한 번만 더
+        limit = {"ok": False, "error": "blocked", "data": {"error": "blocked", "kind": "continuous_run_limit"}}
+        api = FakeApi([limit, {"ok": True}])
+        pressed = []
+        api._q_clear_agent_limit = lambda q: pressed.append(1) or True
+        api.query = lambda *a, **k: self.fail("대화 창을 기다리면 안 된다")
+        r = api._q_exec(FakeQ(), "complete_altering_work", {"displayName": "쌀"}, {"label": "수령"}, "시설")
+        self.assertTrue(r["ok"])
+        self.assertEqual((len(pressed), len(api.calls)), (1, 2))
+
+    def test_agent_limit_not_cleared_gives_up(self):
+        limit = {"ok": False, "error": "blocked", "data": {"kind": "continuous_run_limit"}}
+        api = FakeApi([limit, {"ok": True}])
+        api._q_clear_agent_limit = lambda q: False
+        r = api._q_exec(FakeQ(), "complete_altering_work", {"displayName": "쌀"}, {"label": "수령"}, "시설")
+        self.assertFalse(r["ok"])
+        self.assertEqual(len(api.calls), 1)
+
     def test_collect_all_nothing(self):
         api, q = FakeApi([]), FakeQ()
         self.assertTrue(ActionKind(api).run(q, {"id": 1, "act": "collectAll"}))

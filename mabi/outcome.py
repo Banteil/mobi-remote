@@ -85,6 +85,6 @@ def escalate(bot: Bot, status: str, summary: str) -> tuple[str, str]:
         log.warning("실패 — 화면에 연속 실행 제한 창이 떠 있음 (멈추지 않고 실패만 남김)")
         return status, f"{summary} · 화면에 연속 실행 제한 창이 떠 있음"
     if bot.cli.run_limited:
-        log.warning("실패 — CLI 연속 실행 제한이 걸려 있음 (멈추지 않고 실패만 남김, 게임 재시작 권장)")
-        return status, f"{summary} · CLI 연속 실행 제한 걸림"
+        log.warning("실패 — CLI 연속 사용 제한이 걸려 있음 (멈추지 않고 실패만 남김, 게임 안 확인 창을 누르면 풀림)")
+        return status, f"{summary} · CLI 연속 사용 제한 걸림"
     return status, summary

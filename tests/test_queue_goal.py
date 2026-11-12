@@ -350,6 +350,22 @@ class StepRulesTest(unittest.TestCase):
         self.assertEqual(ex.step_failure("gather", {"error": "insufficient_living_skill_level"}), ex.STEP_STOP_SKILL)
         self.assertEqual(ex.step_failure("alter", {"error": "insufficient_transfer_cost"}), ex.STEP_STOP_TRANSFER)
         self.assertIsNone(ex.step_failure("alter", {"error": "no_completed_work"}))
+        # 연속 사용 제한은 기다려도 안 풀린다 — 수령도 '나중에 다시' 가 아니다 (2026-11-13 '5회 반복' 으로 섰다)
+        limit = {"error": "blocked", "data": {"kind": "continuous_run_limit"}}
+        self.assertIsNone(ex.step_failure("collect", limit))
+        self.assertIsNone(ex.step_failure("alter", limit))
+        self.assertEqual(ex.step_failure("collect", {"error": "blocked", "data": {"kind": "unknown_modal"}}),
+                         ex.STEP_RETRY_LATER)
+
+    def test_agent_limit_words(self):
+        from mabi import errors
+        from mabi.connector import is_agent_limit
+        self.assertTrue(is_agent_limit("blocked", {"kind": "continuous_run_limit"}))
+        self.assertTrue(is_agent_limit("continuous_run_limit", None))
+        self.assertFalse(is_agent_limit("blocked", {"kind": "unknown_modal"}))
+        d = errors.describe("complete_altering_work", "blocked", "", {"kind": "continuous_run_limit"})
+        self.assertIn("연속 사용 제한", d["text"])
+        self.assertIn("확인", d["hint"])
 
 
 if __name__ == "__main__":

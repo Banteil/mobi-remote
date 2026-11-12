@@ -99,6 +99,9 @@ async function updateNameNow(st, me) {
  * 조회는 로컬 클라이언트 메모리에서 나오므로 게임 서버에는 부담이 없다.
  * 대신 다음을 지켜 불필요한 호출과 화면 튐을 막는다.
  *   - 창이 숨겨져 있으면(최소화·트레이) 건너뛴다
+ *   - 창에 포커스가 없고 마지막 조작에서 IDLE_MS 가 지났으면 건너뛴다 (보는 사람이 없다)
+ *     게임은 AI 에이전트를 오래 쉬지 않고 쓰면 행동 명령을 막는다 — 2026-11-13 밤새 10초마다 조회가 이어진 뒤
+ *     04:45 가공 수령이 막혔다 (blocked · continuous_run_limit)
  *   - 대시보드 탭이 아닐 때는 상단바만 갱신한다
  *   - 명령 실행 중에는 건너뛴다 (CLI가 동시 호출을 거부한다)
  *   - 값이 그대로면 DOM을 건드리지 않는다 (paint 참고)
@@ -106,6 +109,14 @@ async function updateNameNow(st, me) {
  */
 let autoTimer = null;
 let autoRunning = false;
+
+/** 창을 안 보고 있다고 볼 때까지의 시간. 포커스가 없어도 이 시간 안에 조작했으면 계속 갱신한다 (옆 모니터에 띄워 둔 경우). */
+const IDLE_MS = 5 * 60 * 1000;
+let lastSeen = Date.now();
+
+function watching() {
+  return document.hasFocus() || Date.now() - lastSeen < IDLE_MS;
+}
 
 function autoIntervalMs() {
   const v = parseInt($('#auto-interval').value, 10);
@@ -135,6 +146,10 @@ async function tickAuto() {
 
   if (document.hidden) {
     autoStatus('창이 가려져 멈춤');
+    return scheduleAuto();
+  }
+  if (!watching()) {
+    autoStatus('보고 있지 않아 멈춤 — 창을 누르면 다시');
     return scheduleAuto();
   }
   if (busy) {
@@ -178,12 +193,23 @@ function initAuto() {
     autoStatus(autoIntervalMs() ? '' : '꺼짐');
     scheduleAuto();
   });
-  // 창이 다시 보이면 기다리지 않고 바로 한 번 갱신한다
+  // 창이 다시 보이거나 다시 잡으면 기다리지 않고 바로 한 번 갱신한다
+  const back = () => {
+    const idle = !watching();
+    lastSeen = Date.now();
+    if (idle && !document.hidden && autoIntervalMs()) {
+      clearTimeout(autoTimer);
+      tickAuto();
+    }
+  };
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && autoIntervalMs()) {
+      lastSeen = Date.now();
       clearTimeout(autoTimer);
       tickAuto();
     }
   });
+  window.addEventListener('focus', back);
+  for (const ev of ['pointerdown', 'keydown', 'wheel']) document.addEventListener(ev, back, { passive: true });
   scheduleAuto();
 }

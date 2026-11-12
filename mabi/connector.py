@@ -63,6 +63,15 @@ def is_run_limit(error, message) -> bool:
     return "continuous" in t or "run limit" in t or any(w.replace(" ", "") in flat for w in gd.words("run_limit"))
 
 
+def is_agent_limit(error, data) -> bool:
+    """AI 에이전트 연속 사용 제한으로 거절됐나 — 'blocked' + kind 'continuous_run_limit' (2026-11-13 04:45 실측).
+    문구('has been running for the allowed limit')에는 continuous 가 없어 is_run_limit 으로는 못 잡는다.
+    게임 안에 확인 창이 뜨고, 확인을 누르면 다시 할 수 있다고 커넥터가 말한다. 조회 명령은 막히지 않는다.
+    게임 시트 CliForAiConstant.ContinuousRunLimitSeconds = 3600 이지만 1시간마다 걸리지는 않았다 (세는 기준 모름)."""
+    kind = data.get("kind") if isinstance(data, dict) else None
+    return error == "continuous_run_limit" or (error == "blocked" and kind == "continuous_run_limit")
+
+
 @dataclass
 class Result:
     ok: bool
@@ -250,12 +259,15 @@ class Connector:
                    message=(data.get("message") if isinstance(data, dict) else None)
                    or err.decode("utf-8", "replace").strip() or EXIT_REASON.get(code),
                    ms=int((time.monotonic() - t0) * 1000))
-        if not r.ok and is_run_limit(r.error, r.message):
+        if not r.ok and (is_agent_limit(r.error, data) or is_run_limit(r.error, r.message)):
             if not self.run_limited:
-                self.log.warning(f"CLI 연속 실행 제한 ({command}: {r.error} · {r.message}) — 멈추지 않고 계속 (게임 재시작 권장)")
+                self.log.warning(f"CLI 연속 사용 제한 ({command}: {r.error} · {r.message}) — 게임 안 확인 창을 누르면 풀림")
             self.run_limited = True
         elif r.error == "disconnected":
             self.run_limited = False  # 게임이 꺼졌다 — 다시 켜면 제한이 풀려 있다
+        elif r.ok and self.run_limited and not command.startswith("get_") and command != "status":
+            self.run_limited = False  # 조회는 제한 중에도 된다 — 행동 명령이 됐으면 풀린 것
+            self.log.info(f"CLI 연속 사용 제한 풀림 ({command} 성공)")
         self._notify(command, body, r)
         return r
 

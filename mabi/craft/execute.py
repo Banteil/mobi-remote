@@ -14,7 +14,7 @@ from typing import Callable
 
 from .. import errors
 from ..cache import QueryCache
-from ..connector import Connector
+from ..connector import Connector, is_agent_limit
 
 FULL_ERRORS = ("blocked", "queue_full")
 
@@ -56,6 +56,8 @@ def step_command(st: dict) -> tuple[str, dict, str]:
 def step_failure(kind: str, r: dict) -> str | None:
     """거절된 목표 걸음을 어떻게 할까 (STEP_*). None 이면 이어갈 수 없다. r: 명령 결과 {ok, error, …}."""
     err = r.get("error")
+    if is_agent_limit(err, r.get("data")):
+        return None  # 연속 사용 제한 — 기다려도 안 풀린다 (확인 창은 부르는 쪽이 눌러 보고 한 번 더 한다)
     if kind == "collect":
         # 2026-10-30 20:56:54 — 수령이 '완료된 게 없다' 였다가 12초 뒤엔 받았다.
         # 화면을 막는 것(blocked — 어비스 결과 연출 등, 2026-11-12 21:32)도 기다리면 풀린다. 수령은 비용이 없어 다시 해도 된다
@@ -202,7 +204,9 @@ def execute(cd, cli: Connector, qc: QueryCache, command: str, body=None, timeout
 
     # 칸이 꽉 차서 막힌 것인가: 큐가 늘지 않았고, 지금까지 본 최대 큐보다 작지 않을 때만 (knowledge 가 한 번 더 거른다)
     level_change = None
-    if alter_facility and (used_before or 0) > 0 and data.get("error") in FULL_ERRORS:
+    # 연속 사용 제한(blocked + kind continuous_run_limit)은 칸과 상관없다 — 칸 수로 배우면 시설 레벨이 틀어진다
+    if alter_facility and (used_before or 0) > 0 and data.get("error") in FULL_ERRORS \
+            and not is_agent_limit(data.get("error"), data):
         try:
             used_after = facility_used(cli, alter_facility)
             if used_after == used_before:

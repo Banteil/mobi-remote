@@ -37,6 +37,7 @@ const ctx = {
   getComputedStyle: any(), ResizeObserver: function () { return any(); }, MutationObserver: function () { return any(); },
   HTMLElement: function () {}, ClipboardItem: function () {}, AudioContext: function () { return any(); },
   Image: function () { return any(); }, fetch: any(), alert: any(), performance: { now: () => Date.now() }, mm: mmAny(),
+  addEventListener: () => {}, removeEventListener: () => {},
 };
 ctx.window = ctx; ctx.globalThis = ctx;
 vm.createContext(ctx);

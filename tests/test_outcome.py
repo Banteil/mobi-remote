@@ -30,10 +30,10 @@ class OutcomeTest(unittest.TestCase):
     def test_escalate(self):
         self.assertEqual(outcome.escalate(self.bot(), "FAIL", "x"), ("FAIL", "x"))
         self.assertEqual(outcome.escalate(self.bot(window=False), "FAIL", "x")[0], "STOP")
-        # 연속 실행 제한(CLI 오류)이 걸려 있어도 멈추지 않고 메모만 (2026-11-10 사용자)
+        # CLI 연속 사용 제한이 걸려 있어도 멈추지 않고 메모만 (2026-11-10 사용자)
         status, summary = outcome.escalate(self.bot(limited=True), "ERROR", "x")
         self.assertEqual(status, "ERROR")
-        self.assertIn("연속 실행 제한", summary)
+        self.assertIn("연속 사용 제한", summary)
         self.assertEqual(outcome.escalate(self.bot(window=False), "HEAVY", "x"), ("HEAVY", "x"))
         # 화면에 제한 창만 떠 있으면 (CLI 는 안 막힘) 멈추지 않고 실패에 메모만 붙인다
         status, summary = outcome.escalate(self.bot(popup=True), "FAIL", "x")
