@@ -1,10 +1,11 @@
 """'/' 콘텐츠 가이드 — 열기, 일일·주간 달성(체크·글자 색), CLI 성장 가이드, 카드의 '바로 가기'."""
 from typing import NamedTuple
 
-from .. import keys
+from .. import gamedata as gd, keys
 from ..bot import Bot
 from ..exceptions import CannotProceed, StepTimeout
 from ..vision import green, green_ratio
+from . import ui_text
 from .steps import list_views
 
 
@@ -70,8 +71,6 @@ def daily_achieved(bot: Bot, label: str) -> bool:
 def guide_tab(bot: Bot, weekly: bool = False) -> None:
     """(가이드가 열린 채로) '일일 콘텐츠' · '주간 콘텐츠' 탭을 누른다. 가이드는 마지막에 본 탭으로 열리는데, 주간 콘텐츠 탭에도
     같은 제목의 카드(검은 구멍)가 있어 일일 것을 다 한 날에도 주간 카드의 바로 가기를 눌렀다 (2026-11-02)."""
-    from .. import gamedata as gd
-    from . import ui_text
     name = "주간 콘텐츠" if weekly else "일일 콘텐츠"
     hit = ui_text.find(bot, gd.text("guide_weekly_tab" if weekly else "guide_daily_tab"), gd.region("guide_tabs"), exact=False)
     if not hit:
@@ -92,8 +91,6 @@ def open_guide_card(bot: Bot, card: str, opened: bool = False, weekly: bool = Fa
     끝낸 콘텐츠는 카드가 사라지므로 카드가 없으면 False (= 이미 완료). opened: 가이드가 이미 열려 있다.
     카드는 아직 안 끝낸 것만 2열로 놓여, 남은 게 많으면 뒤쪽 카드(뱅가드 브리치 등)는 아래로 내려야 보인다 — 글자로 찾을 때는
     목록을 내려가며 찾는다 (2026-11-09: 주간 콘텐츠가 다 남은 캐릭터는 뱅가드 브리치가 6번째 카드라 첫 화면에 없었다)."""
-    from .. import gamedata as gd
-    from . import ui_text
     ui = bot.ui
     if not opened:
         open_guide(bot)
@@ -139,7 +136,6 @@ class Goal(NamedTuple):
 def guide_goal(bot: Bot, name: str, weekly: bool = False) -> Goal | None:
     """(가이드가 열린 채로) 위쪽 일일(weekly 면 주간) 달성 칸에서 name 글자를 찾는다. 없으면 None."""
     import numpy as np
-    from . import ui_text
     g = bot.cfg["guide"]
     hit = ui_text.find(bot, name, g["weekly_panel" if weekly else "daily_panel"], exact=False)
     if not hit:
