@@ -6,7 +6,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from mabi import packet_monitor
+from mabi import packet_diag, packet_monitor
+from mabi.packet_monitor import monitor
 
 
 class FakeCap:
@@ -31,8 +32,8 @@ class RetryTest(unittest.TestCase):
     def test_start_again_after_no_npcap(self):
         FakeCap.made = 0
         table, diag = mock.Mock(), mock.Mock()
-        with mock.patch.object(packet_monitor, "_Capture", FakeCap), \
-                mock.patch.object(packet_monitor.packet_diag, "open_table", return_value=(table, diag)):
+        with mock.patch.object(monitor, "_Capture", FakeCap), \
+                mock.patch.object(packet_diag, "open_table", return_value=(table, diag)):
             pm = packet_monitor.PacketMonitor(Path(tempfile.mkdtemp()))
             pm.start()
             pm._thread.join(timeout=2)

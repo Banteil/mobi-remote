@@ -6,7 +6,9 @@ import time
 import unittest
 
 from mabi.bot import Bot
-from mabi.packet_monitor import PacketMonitor, Stream, appearing_is_mine, appearing_name, parse_tcp
+from mabi.packet_monitor import PacketMonitor
+from mabi.packet_monitor.appearing import appearing_is_mine, appearing_name
+from mabi.packet_monitor.stream import Stream, parse_tcp
 from mabi.tasks.content import wait_dungeon
 
 KNOWN = frozenset({0x4f6e, 0x5026, 0x272fa, 0x30d4b})
@@ -129,7 +131,7 @@ class WaitTest(unittest.TestCase):
 
     def test_reconcile_drops_stale_moment_states(self):
         """시작 점검: CLI 가 모르는 순간 상태(매칭·연출)는 시작 전에 오래된 것이면 지운다 (2026-11-07 레이드 매칭이 남음)."""
-        from mabi import packet_monitor as pm
+        from mabi.packet_monitor import cli_sync as pm
         act = {"Dungeon": {"State": "NotInDungeon"}, "Battlefield": {"IsInBattleField": False}, "IsDead": False}
         self.m.apply("channel.entering", {"channel": 1, "channel_type": "Field", "channel_name": "마을"})
         s = self.m.state
