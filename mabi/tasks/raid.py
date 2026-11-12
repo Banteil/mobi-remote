@@ -33,7 +33,6 @@ DIFFICULTIES = {"적월의 스카스": ["매우 어려움"], "카브락": ["입�
 LOBBY_MAP = "InstanceRaidLobby"  # 출항선 (레이드마다 같은 맵)
 RAID_MAP = "InstanceRaid"
 _boarded: tuple[str, str] | None = None  # 이 리모콘이 마지막으로 태운 출항선 (레이드, 난이도) — 배는 어느 레이드 것인지 모른다
-RESULT_OK = (960, 1010)  # 결과 화면 아래 가운데 '확인' (Space)
 
 _find_text = ui_text.find
 
@@ -368,8 +367,10 @@ def finish_result(bot: Bot) -> None:
             if presses <= 2:
                 bot.key("space")
             else:  # Space 가 두 번 안 들었다 — 게임이 키를 놓치는 때가 있다 (2026-10-28 2분 동안 그대로) → '확인' 을 누른다
-                bot.log.info("결과 화면 Space 가 안 들음 → 확인 버튼을 누름")
-                bot.click(RESULT_OK)
+                at = confirm_text(bot.frame())  # 고정 좌표 대신 찾은 자리를 누른다 (그 사이 닫혔으면 넘어감)
+                if at:
+                    bot.log.info("결과 화면 Space 가 안 들음 → 확인 버튼을 누름")
+                    bot.click(at)
             bot.sleep(1.5, 2)
             if not result_ok(bot):
                 bot.log.info("결과 화면 확인")
