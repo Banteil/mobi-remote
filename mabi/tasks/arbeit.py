@@ -29,7 +29,7 @@ def accepted(bot: Bot, raw: bool = False) -> list[dict]:
     """수락해 둔 아르바이트 [{title, objectives}]. 아르바이트는 수락하면 '사이드' 로 고정(pinned_sub)된다.
     사람이 고정해 둔 사이드 퀘스트('[긴급 의뢰] 뱅가드 브리치' 등)도 pinned_sub 라 CLI 로는 못 가른다
     (2026-10-26: 그걸 아르바이트로 알고 진행하다 아르바이트 탭 맨 위 '요일' 카드를 눌러 알비 던전으로 감)
-    → 아르바이트 탭에서 본 카드 제목(_arb_titles)에 있는 것만. 탭을 아직 안 봤거나 raw 면 걸러지지 않은 목록."""
+    → 아르바이트 탭에서 본 카드 제목(bot.marks.arb_titles)에 있는 것만. 탭을 아직 안 봤거나 raw 면 걸러지지 않은 목록."""
     qs = bot.state.query("get_quests") or []
     out = [{"title": q["QuestTitle"], "objectives": q.get("Objectives") or []}
            for q in qs if isinstance(q, dict) and q.get("Source") == "pinned_sub"]
