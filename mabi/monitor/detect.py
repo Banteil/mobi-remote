@@ -122,8 +122,8 @@ def look(bot, frame=None, skip=(), ocr: bool = False) -> Seen:
     # 메인 HUD 가 보이면 창이 하나도 안 열린 것 — 창 템플릿(대부분 화면 전체를 뒤져 하나에 0.2초)을 건너뛴다.
     # HUD 가 보인 채로 뜨는 것(퀘스트 클리어 '확인'·화면 터치·연출)만 본다. 한 번 보는 데 2초 걸리던 것 (2026-10-26)
     if ui.get("main_hud") not in skip and bot.at_main(frame):
-        from ..tasks.dialogue import _packet
-        if (p := _packet(bot)) is not None and p.in_dialogue:
+        from ..tasks.dialogue import packet_state
+        if (p := packet_state(bot)) is not None and p.in_dialogue:
             return Seen(DIALOG, src="packet", frame=frame)  # 대화가 막 열리는 중 (HUD 가 아직 남음)
         if (m := f(ui.get("confirm_green"))):
             return Seen(CONFIRM, m, frame=frame)
@@ -163,9 +163,9 @@ def look(bot, frame=None, skip=(), ocr: bool = False) -> Seen:
                        (CRAFT_GO, a["craft_go"]), (CRAFT_GO, a["craft_make"]), (CRAFT, a["craft_list"])):
         if (m := f(name)):
             return Seen(what, m, frame=frame)
-    from ..tasks.dialogue import _packet, in_dialog
+    from ..tasks.dialogue import packet_state, in_dialog
     if in_dialog(bot, frame):
-        return Seen(DIALOG, src="packet" if _packet(bot) is not None else "screen", frame=frame)
+        return Seen(DIALOG, src="packet" if packet_state(bot) is not None else "screen", frame=frame)
     if bot.packets.ok and f(a["dialog_log"]):
         return Seen(FAREWELL, src="packet+screen", frame=frame)  # 패킷은 대화가 끝났다는데 '대화 기록' 이 남음
     if (hit := bot.skip_button(frame, skip)) and hit[0] == "scene":
@@ -177,9 +177,8 @@ def look(bot, frame=None, skip=(), ocr: bool = False) -> Seen:
     if f(ui.get("dungeon_touch")):
         return Seen(TOUCH, frame=frame)
     if ocr and "dungeon_touch" not in skip:
-        from .. import gamedata as gd
-        from ..tasks.content import _touch_texts, has_word
-        if has_word(gd.text("clear_touch"), *_touch_texts(bot, frame)):
+        from ..tasks.content import touch_prompt_visible
+        if touch_prompt_visible(bot, frame):
             return Seen(TOUCH, src="ocr", frame=frame)
     if bot.at_main():
         return Seen(MAIN, frame=frame, idle=idle(bot))

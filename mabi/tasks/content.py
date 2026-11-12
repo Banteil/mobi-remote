@@ -894,8 +894,12 @@ def cleared_now(bot: Bot, what: str) -> None:
         bot.on_clear()
 
 
-def touch_prompt_visible(bot: Bot) -> bool:
-    return has_word(gd.text("clear_touch"), *_touch_texts(bot, bot.frame()))
+def touch_prompt_visible(bot: Bot, frame=None) -> bool:
+    """'화면을 터치해 주세요' 글자가 보이나 (OCR, 느리다). frame 이 없으면 지금 화면을 찍는다. 점검자(detect.look)도 쓴다."""
+    from ..ocr import read_ko, read_text
+    frame = bot.frame() if frame is None else frame
+    r = bot.cfg["dungeon"]["touch_text_region"]
+    return has_word(gd.text("clear_touch"), read_ko(frame, r), read_text(frame, r, white=220))
 
 
 def clear_blockers(bot: Bot, skip=(), ocr: bool = False) -> str | None:
@@ -916,12 +920,6 @@ def confirm_text(frame) -> tuple[int, int] | None:
     from .ui_text import match
     hit = match(find_texts(frame, gd.region("confirm_button")), gd.text("confirm"))
     return hit[1:] if hit else None
-
-
-def _touch_texts(bot: Bot, frame) -> tuple[str, str]:
-    from ..ocr import read_ko, read_text
-    r = bot.cfg["dungeon"]["touch_text_region"]
-    return read_ko(frame, r), read_text(frame, r, white=220)
 
 
 # 클리어 뒤 연출 — 콘텐츠마다 '아직 그 안인가' 를 패킷으로 안다. 클리어 패킷은 보스를 잡거나 목표를 채운 즉시 오고,

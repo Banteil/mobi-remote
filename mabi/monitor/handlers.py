@@ -164,10 +164,10 @@ def _dialog_blocker(bot, seen):
     왔고 메뉴는 없다고 할 때 대사를 넘긴다. 주간 목표('모험가 길드의 정기 의뢰')를 그 주에 처음 채우면 조작이 돌아오는 순간
     에반이 찾아와 보상 이야기를 한다 — 나가기 뒤뿐 아니라 던전·사냥터 '다시 하기' 뒤 다음 판 안에서도 (사용자 2026-10-27).
     뒤에서 도는 중이면 클릭이 게임을 앞으로 가져오므로 스스로 넘어가길 기다리고, 30초 넘게 그대로일 때만 누른다."""
-    from ..tasks.dialogue import _packet, menu_open
+    from ..tasks.dialogue import packet_state, menu_open
 
     hit = bot.skip_button(seen.frame)
-    s = _packet(bot)
+    s = packet_state(bot)
     # HUD 가 보이면 대화 창이 아직 안 열렸다 — 그때 '대화 넘기기' 자리를 누르면 HUD 버튼(어비스 나가기 근처)이 눌릴 수 있다
     talk = (s is not None and s.in_dialogue and menu_open(bot) is False
             and not (seen.frame is not None and bot.at_main(seen.frame)))
