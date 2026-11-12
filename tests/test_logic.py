@@ -7,6 +7,7 @@ from unittest import mock
 
 from mabi import progress
 from mabi.bot import Bot, Marks
+from mabi.session import GameSession
 from mabi.monitor import handlers
 from mabi.profile import game_date
 from mabi.tasks import abyss, arbeit, clear, questwin
@@ -94,8 +95,9 @@ class SceneSkipTest(unittest.TestCase):
         b.map_loading.return_value = None
         b.packets.at_charselect.return_value = False
         b.at_main.return_value = False
-        for name in ("skip_button", "may_skip_scene", "behind", "cutscene_playing"):  # 판단은 진짜 Bot 의 것
+        for name in ("skip_button", "may_skip_scene", "behind"):  # 판단은 진짜 Bot 의 것
             setattr(b, name, getattr(Bot, name).__get__(b))
+        b.cutscene_playing = GameSession.cutscene_playing.__get__(b)  # 패킷 읽기는 게임 연결 쪽
         b.window.is_foreground.return_value = foreground
         b.vision.has.return_value = True
         b.vision.find.side_effect = lambda f, n: Match(n, 0, 0, 10, 10, shown[n]) if n in shown else None

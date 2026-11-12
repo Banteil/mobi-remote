@@ -3,14 +3,14 @@ import time
 import unittest
 from types import SimpleNamespace
 
-from mabi.bot import Bot
+from mabi.session import GameSession
 from mabi.packet_monitor import PacketMonitor
 from mabi.tasks import raid
 
 
 class FakeBot:
     """패킷만 진짜 (PacketMonitor). 화면·CLI 는 없다고 본다."""
-    map_loading = Bot.map_loading
+    map_loading = GameSession.map_loading
 
     def __init__(self, quests=None):
         self.packets = PacketMonitor(None)

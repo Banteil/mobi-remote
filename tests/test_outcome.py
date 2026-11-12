@@ -47,10 +47,10 @@ class OutcomeTest(unittest.TestCase):
     def test_overweight(self):
         b = mock.MagicMock()
         b.packets.ok, b.packets.state.weight, b.packets.state.max_weight = True, 300, 300
-        from mabi.bot import Bot
-        self.assertEqual(Bot.overweight(b), "가방 무게 300/300")
+        from mabi.session import GameSession
+        self.assertEqual(GameSession.overweight(b), "가방 무게 300/300")
         b.packets.state.weight = 100
-        self.assertIsNone(Bot.overweight(b))
+        self.assertIsNone(GameSession.overweight(b))
 
 
 class StopReasonTest(unittest.TestCase):

@@ -7,10 +7,10 @@ from mabi.bot import Bot
 
 
 def bot(ok=True, loading=False, ago=None):
-    b = Bot.__new__(Bot)
-    b.cfg = {"timing": {"after_map": 15}}
     entered = time.monotonic() - ago if ago is not None else 0.0
-    b.packets = SimpleNamespace(ok=ok, state=SimpleNamespace(loading=loading, entered_at=entered))
+    b = SimpleNamespace(cfg={"timing": {"after_map": 15}},
+                        packets=SimpleNamespace(ok=ok, state=SimpleNamespace(loading=loading, entered_at=entered)))
+    b.just_arrived = lambda: Bot.just_arrived(b)
     return b
 
 

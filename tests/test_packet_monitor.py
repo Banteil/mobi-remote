@@ -6,6 +6,7 @@ import time
 import unittest
 
 from mabi.bot import Bot
+from mabi.session import GameSession
 from mabi.packet_monitor import PacketMonitor
 from mabi.packet_monitor.appearing import appearing_is_mine, appearing_name
 from mabi.packet_monitor.stream import Stream, parse_tcp
@@ -262,11 +263,11 @@ class FakeCli:
 
 class FakeBot:
     wait_packet = Bot.wait_packet
-    map_loading = Bot.map_loading
-    is_loading = Bot.is_loading
+    map_loading = GameSession.map_loading
+    is_loading = GameSession.is_loading
     wait_loaded = Bot.wait_loaded
-    activity = Bot.activity
-    _act_cache, _cli_checked = None, 0.0
+    activity = GameSession.activity
+    _act_cache, cli_checked = None, 0.0
 
     def __init__(self, packets, cli=()):
         self.packets, self.state = packets, FakeCli(cli)

@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 
 from ..bot import Bot, Marks
+from ..session import GameSession
 from ..vision import Vision
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -47,9 +48,10 @@ def screen_bot(frame: np.ndarray, cfg: dict | None = None):
     b.background, b.scene_skip = False, True
     b.input.dry_run = True
     b.attendance_date = None
-    for name in ("skip_button", "cutscene_playing", "at_main", "exists", "find", "_act_state", "auto_traveling",
-                 "dialogue_playing", "in_combat", "behind", "may_skip_scene"):
+    for name in ("skip_button", "at_main", "exists", "find", "behind", "may_skip_scene"):
         setattr(b, name, getattr(Bot, name).__get__(b))
+    for name in ("cutscene_playing", "_act_state", "auto_traveling", "dialogue_playing", "in_combat"):  # 게임 연결 쪽 읽기
+        setattr(b, name, getattr(GameSession, name).__get__(b))
     b._require_template = lambda name: None
     b.marks = Marks()
     return b

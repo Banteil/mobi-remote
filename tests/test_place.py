@@ -4,13 +4,13 @@ import unittest
 from types import SimpleNamespace
 
 from mabi import gamedata as gd
-from mabi.bot import Bot
+from mabi.session import GameSession
 from mabi.packet_monitor import PacketMonitor
 from mabi.place import ABYSS, DUNGEON, FIELD, RAID_LOBBY, place
 
 
 class FakeBot:
-    map_loading = Bot.map_loading
+    map_loading = GameSession.map_loading
 
     def __init__(self, act=None, name=""):
         self.packets = PacketMonitor(None)
