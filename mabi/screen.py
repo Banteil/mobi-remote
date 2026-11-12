@@ -1,5 +1,6 @@
 """게임 클라이언트 영역 캡처."""
 import ctypes
+import threading
 import winreg
 from ctypes import wintypes
 
@@ -95,7 +96,16 @@ class Screen:
 
     def __init__(self, window: GameWindow):
         self.window = window
-        self._sct = mss.mss()
+        # mss 는 만든 스레드에서만 찍힌다 (다른 스레드에서 쓰면 BitBlt 실패). GameSession 을 카드끼리 이어 쓰면
+        # 카드마다 작업 스레드가 바뀌므로 스레드마다 따로 만든다
+        self._local = threading.local()
+
+    @property
+    def _sct(self):
+        sct = getattr(self._local, "sct", None)
+        if sct is None:
+            sct = self._local.sct = mss.mss()
+        return sct
 
     def grab(self) -> np.ndarray:
         """클라이언트 영역을 1920x1080 BGR ndarray 로 반환. 좌표는 클라이언트(1920x1080 기준)."""
