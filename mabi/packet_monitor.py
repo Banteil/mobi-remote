@@ -761,6 +761,12 @@ class PacketMonitor:
         self.forget(f"패킷 흐름 끊김 ({why})")
 
     def forget(self, why: str) -> None:
+        """상태를 고치는 일은 모두 잠금 안에서 — 패킷 받는 스레드(apply)와 작업 스레드(merge_cli·reconcile·forget)가
+        같은 상태를 고친다. 자세한 것은 _forget."""
+        with self._cond:
+            self._forget(why)
+
+    def _forget(self, why: str) -> None:
         """이벤트로만 바뀌는 상태를 모름(None)으로. 다음 패킷이 오거나, 그 전엔 CLI·화면으로 판단한다.
         맵도 모름으로 둔다 — fresh 가 거짓이 되어 대화·컷신의 '없음' 도 믿지 않게 된다."""
         s = self.state
@@ -773,6 +779,12 @@ class PacketMonitor:
             self._cond.notify_all()
 
     def merge_cli(self, act: dict, asked_at: float) -> list[str]:
+        """상태를 고치는 일은 모두 잠금 안에서 — 패킷 받는 스레드(apply)와 작업 스레드(merge_cli·reconcile·forget)가
+        같은 상태를 고친다. 자세한 것은 _merge_cli."""
+        with self._cond:
+            return self._merge_cli(act, asked_at)
+
+    def _merge_cli(self, act: dict, asked_at: float) -> list[str]:
         """CLI get_activity 답이 올 때마다 오래 남는 상태(CLI_FACTS: 던전·사냥터 안팎·쓰러짐)를 그 답으로 맞춘다 — 가장
         믿을 정보는 CLI 이고, 패킷은 바뀌는 순간을 빨리 알리는 데 쓴다. 다만 패킷이 asked_at(물은 때) 이후나 CLI_LAG
         안에 바꾼 값은 패킷이 더 새로우니 둔다. 대화·이동·전투 같은 순간 상태는 패킷이 빠르고 CLI 와 뜻이 조금 달라
@@ -810,6 +822,12 @@ class PacketMonitor:
         return out
 
     def reconcile(self, act: dict | None) -> list[str]:
+        """상태를 고치는 일은 모두 잠금 안에서 — 패킷 받는 스레드(apply)와 작업 스레드(merge_cli·reconcile·forget)가
+        같은 상태를 고친다. 자세한 것은 _reconcile."""
+        with self._cond:
+            return self._reconcile(act)
+
+    def _reconcile(self, act: dict | None) -> list[str]:
         """새 작업을 시작할 때 (처음이든 이어 하기든 — 그 사이 사람이 무엇을 했을지 모른다): 지난 일에서 남은 상태를
         그대로 믿지 않고 지금 게임에 맞춘다. 상태가 바뀌는 패킷을 놓치면 (스트림 공백 등) 지난밤 상태가 아침까지 남는다
         (2026-10-30 06:44: 던전 Cleared 로 6명 모두 접속 실패).
@@ -863,6 +881,12 @@ class PacketMonitor:
         return [f"{k} {before[k]} → {after[k]}" for k in before if before[k] != after[k]]
 
     def apply(self, key: str, vals: dict) -> None:
+        """상태를 고치는 일은 모두 잠금 안에서 — 패킷 받는 스레드(apply)와 작업 스레드(merge_cli·reconcile·forget)가
+        같은 상태를 고친다. 자세한 것은 _apply."""
+        with self._cond:
+            self._apply(key, vals)
+
+    def _apply(self, key: str, vals: dict) -> None:
         """이벤트 하나를 상태에 반영하고 기다리는 쪽을 깨운다 (시험에서 직접 부르기도 한다)."""
         s = self.state
         old = {f: getattr(s, f) for f in CLI_FACTS}
@@ -1067,8 +1091,15 @@ class PacketMonitor:
         with self._cond:
             self._seq += 1
             self.recent.append(Seen(self._seq, time.monotonic(), key, vals))
-            self.history.append((self._seq, copy.copy(s)))
+            self.history.append((self._seq, _snapshot(s)))
             self._cond.notify_all()
+
+
+def _snapshot(s: "PacketState") -> "PacketState":
+    """history 에 쌓을 상태 사본. copy.copy 만 하면 changed_at·extra 가 모든 사본과 같은 dict 라 지난 순간 값이 바뀐다."""
+    snap = copy.copy(s)
+    snap.changed_at, snap.extra = dict(s.changed_at), dict(s.extra)
+    return snap
 
 
 _shared: PacketMonitor | None = None
