@@ -85,10 +85,10 @@ def _thumb(frame):
 class Monitor:
     def __init__(self, bot):
         self.bot = bot
-        c = bot.cfg.get("monitor", {})
-        self.same_limit = c.get("same_limit", 6)
-        self.unknown_limit = c.get("unknown_limit", 60)
-        self.act_within = c.get("act_within", 15)
+        c = bot.cfg["monitor"]
+        self.same_limit = c["same_limit"]
+        self.unknown_limit = c["unknown_limit"]
+        self.act_within = c["act_within"]
         self._sit = None
         self._last = None  # (한 일, 화면 줄임) — 헛돌기 확인
         self._same = 0

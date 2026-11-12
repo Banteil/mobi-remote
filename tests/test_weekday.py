@@ -8,6 +8,9 @@ from mabi.monitor import detect as d
 from mabi.monitor.detect import Seen
 from mabi.tasks import weekday
 from mabi.tasks.content import CannotProceed
+import tomllib
+from pathlib import Path as _P
+MONITOR = tomllib.loads((_P(__file__).resolve().parent.parent / "config.default.toml").read_text(encoding="utf-8"))["monitor"]
 
 CHOICES = [("빛나는 동굴(골드)", 667, 996), ("눈부신 저택(보석)", 891, 997), ("찬란한 유적(연금술 재연소 촉매)", 1183, 996)]
 C = {"board_timeout": 5}
@@ -32,7 +35,7 @@ class SundayChoiceTest(unittest.TestCase):
 def board_bot(acts):
     """acts: 점검자가 볼 때마다 차례로 쓰는 get_activity. 다 쓰면 대화가 끝난 메인 화면."""
     b = mock.Mock()
-    b.cfg = {"arbeit": {"dialog_next_xy": [1800, 45]}, "monitor": {}}
+    b.cfg = {"arbeit": {"dialog_next_xy": [1800, 45]}, "monitor": MONITOR}
     b.shot_dir, b.packets.ok, b.character = None, False, None
     seq, now = list(acts), {"act": {}}
 

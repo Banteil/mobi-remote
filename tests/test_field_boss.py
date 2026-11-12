@@ -49,7 +49,7 @@ class WindowTest(unittest.TestCase):
 
     def test_choices_for_screen(self):
         # 화면 칸은 이 목록만 그린다 — 보스마다 고를 수 있는 난이도 수가 다르다
-        c = fb.choices()
+        c = fb.choices("드로흐에넴", "매우 어려움")
         self.assertEqual(c["bosses"][:2], ["페리", "크라브바흐"])
         self.assertEqual(c["difficulties"]["토르모그"], ["일반", "어려움"])
         self.assertEqual(c["difficulties"]["페리"], ["일반", "어려움", "매우 어려움"])

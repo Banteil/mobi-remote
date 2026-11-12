@@ -35,7 +35,7 @@ def inside(bot: Bot) -> bool:
 
 
 def _cfg(bot: Bot) -> dict:
-    return bot.cfg.get("vanguard", {})
+    return bot.cfg["vanguard"]
 
 
 def travel(bot: Bot) -> None:
@@ -43,7 +43,7 @@ def travel(bot: Bot) -> None:
     bot.step("vg_travel", "뱅가드 브리치 입구로 이동")
     bot.fast_travel(wait=6)
     wait_arrival(bot, lambda: bool(ui_text.find(bot, gd.text("vg_title"), gd.region("vg_title"), exact=False)),
-                 _cfg(bot).get("travel_timeout", 600), "vg_travel", "뱅가드 브리치 입구에 닿지 못함 (입장 창이 안 뜸)",
+                 _cfg(bot)["travel_timeout"], "vg_travel", "뱅가드 브리치 입구에 닿지 못함 (입장 창이 안 뜸)",
                  retry_fast=True, interval=(1.5, 2))
 
 
@@ -51,7 +51,7 @@ def enter(bot: Bot) -> None:
     """입장 창에서 입장하기(Space) → 우연한 만남 매칭 → 안에 들어올 때까지."""
     bot.step("vg_enter", "뱅가드 브리치 입장 (우연한 만남)")
     ui_text.click(bot, gd.text("abyss_enter"), gd.region("vg_button"), what="입장하기", shot="vg_enter", key="space")
-    end = time.monotonic() + _cfg(bot).get("match_timeout", 600)
+    end = time.monotonic() + _cfg(bot)["match_timeout"]
     while time.monotonic() < end:
         if bot.map_loading():
             bot.wait_loaded(end - time.monotonic())
@@ -60,7 +60,7 @@ def enter(bot: Bot) -> None:
             bot.log.info(f"뱅가드 브리치 입장: {game_space(bot)}")
             return
         bot.sleep(2, 2.5)
-    raise CannotProceed(f"뱅가드 브리치 매칭·입장이 {_cfg(bot).get('match_timeout', 600) // 60}분 안에 안 됨 "
+    raise CannotProceed(f"뱅가드 브리치 매칭·입장이 {_cfg(bot)['match_timeout'] // 60}분 안에 안 됨 "
                         f"→ {bot.snapshot('vg_match').name}")
 
 
@@ -71,7 +71,7 @@ def play(bot: Bot) -> None:
     from ..monitor import detect as d
     bot.step("vg_play", "뱅가드 브리치 진행 중")
     ctx = monitor.Ctx("vanguard", "뱅가드 브리치 진행", revive=True)
-    end = time.monotonic() + _cfg(bot).get("clear_timeout", 1500)
+    end = time.monotonic() + _cfg(bot)["clear_timeout"]
     asked = 0.0
     prev, bot.scene_skip = bot.scene_skip, False  # 던전처럼 도는 동안은 연출을 넘기지 않는다
     try:
@@ -102,7 +102,7 @@ def quest_clear(bot: Bot) -> None:
     from ..monitor import detect as d
     mon = monitor.of(bot)
     ctx = monitor.Ctx("vanguard", "뱅가드 퀘스트 클리어", menus=True)
-    end = time.monotonic() + _cfg(bot).get("quest_wait", 20)
+    end = time.monotonic() + _cfg(bot)["quest_wait"]
     seen_confirm = False
     while time.monotonic() < end:
         seen = mon.check(ctx, guard=False)
@@ -133,7 +133,7 @@ def run(bot: Bot, cfg: dict) -> str:
         bot.log.info("이미 뱅가드 브리치 안 → 클리어까지")
     # 들어간 뒤로는 게임을 뒤로 보내고 하던 창을 돌려준다 (사용자 — 드릴·어비스와 같다). 키는 창에 직접 가고,
     # 클릭(화면 터치 등)만 누를 때 잠깐 앞으로 가져왔다가 되돌린다
-    with bot.behind_while(_cfg(bot).get("background", True)):
+    with bot.behind_while(_cfg(bot)["background"]):
         play(bot)
         quest_clear(bot)
     if done(bot) is False:

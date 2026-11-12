@@ -53,7 +53,7 @@ class BossSkills:
 
     @classmethod
     def for_character(cls, bot: Bot, cfg: dict, slot: int | None, boss_fight) -> "BossSkills":
-        c = cfg.get("boss_skills", {})
+        c = cfg["boss_skills"]
         return cls(bot, on_for(c, "ultimate", slot), on_for(c, "paladin", slot), boss_fight)
 
     @classmethod

@@ -7,11 +7,14 @@ import numpy as np
 from mabi import monitor
 from mabi.monitor import core, detect as d, handlers
 from mabi.monitor.detect import Seen
+import tomllib
+from pathlib import Path as _P
+MONITOR = tomllib.loads((_P(__file__).resolve().parent.parent / "config.default.toml").read_text(encoding="utf-8"))["monitor"]
 
 
 def fake_bot():
     b = mock.Mock()
-    b.cfg = {"arbeit": {"dialog_next_xy": [1800, 45], "report": "report", "accept": "accept"}, "monitor": {}}
+    b.cfg = {"arbeit": {"dialog_next_xy": [1800, 45], "report": "report", "accept": "accept"}, "monitor": MONITOR}
     b.shot_dir = None
     b.snapshot.return_value.name = "shot.png"
     b.background = False

@@ -21,6 +21,21 @@
   종류마다 다른 것만 오버라이딩·주입으로.
 - 과하게 복잡하게 만들지 않는다. 고칠 때 한쪽만 땜질하지 말고 같은 일을 하는 다른 곳도 본다.
 
+## 값을 둘 자리
+
+코드에 숫자·글자를 박지 않는다 — 게임 패치·사용자 조절 때 코드를 고치지 않게. `tests/test_value_homes.py` 가 일부를 막는다.
+
+| 값 | 자리 | 읽기 |
+|---|---|---|
+| 화면에서 찾는 문구, 읽을 영역, 누르는 자리 (1920x1080) | `data/ui.json` text · regions · points | `gamedata.text/words/region/point` |
+| 한 기능의 화면 좌표가 이미 설정 구역에 모여 있으면 (지도 `[map]` 등) | 그 구역 | `bot.cfg[구역][키]` |
+| 게임 규칙 (재화 이름, 날개·추가 루팅 비용, 직업, 시설 칸 수) | `data/game-rules.json` | `gamedata.rules()` |
+| 게임 데이터에서 뽑은 목록·일정 (필드 보스·레이드·어비스) | `data/content.json` — 손으로 고치지 않고 다시 뽑는다 | `gamedata.raids/abysses/field_bosses` |
+| 사용자가 조절하는 값, 시간 상한 | `config.default.toml` (사용자 `config.toml` 이 덮음) | `cfg[구역][키]` — `cfg.get(구역, {})` 로 기본값을 또 들지 않는다 |
+| 화면이 비워 보낸 값의 기본값 | `config.default.toml` | `userconfig.default(paths, 구역, 키)` |
+| 웹 화면이 기억하는 값 | settings.json | `pref()`/`setPref()` + `api.CFG_KEYS` — `localStorage` 금지 |
+| 상태·출처 같은 표시 문구 | `data/labels.json` | `gamedata.labels()` |
+
 ## 작업 방식
 
 - 테스트: `.venv/Scripts/python.exe -m unittest discover -s tests` — 바꾼 동작에 테스트를 단다.

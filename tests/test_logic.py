@@ -10,6 +10,9 @@ from mabi.monitor import handlers
 from mabi.profile import game_date
 from mabi.tasks import abyss, arbeit, content
 from mabi.vision import Match
+import tomllib
+from pathlib import Path as _P
+MONITOR = tomllib.loads((_P(__file__).resolve().parent.parent / "config.default.toml").read_text(encoding="utf-8"))["monitor"]
 
 
 class Clock:
@@ -79,7 +82,7 @@ class SceneSkipTest(unittest.TestCase):
         b.state.available.return_value = False
         b.activity.return_value = None
         b.input.dry_run = False
-        b.cfg = {"login": {"attendance_skip": "attendance_skip", "first_dialog_xy": [960, 540]},
+        b.cfg = {"monitor": MONITOR, "login": {"attendance_skip": "attendance_skip", "first_dialog_xy": [960, 540]},
                  "arbeit": {k: k for k in ("howto_title", "item_missing", "deliver_title", "report", "accept", "alter_button",
                                            "craft_transfer", "craft_go", "craft_make", "craft_list", "dialog_log")},
                  "dungeon": {"touch_xy": [960, 900]}}
@@ -192,7 +195,7 @@ class ArbeitTest(unittest.TestCase):
     def test_apply_missing_is_not_ok(self):
         """'구인 마감' 도 '지원하기' 도 못 읽으면 지원할 일이 없다고 보지 않는다 (2026-10-29: 목록이 있는데 0개 완료 OK)."""
         bot = mock.MagicMock()
-        bot.cfg = {"arbeit": {"list_pages": 1, "list_scroll_at": [0, 0], "accept": "x", "travel_timeout": 1}}
+        bot.cfg = {"monitor": MONITOR, "arbeit": {"list_pages": 1, "list_scroll_at": [0, 0], "accept": "x", "travel_timeout": 1}}
         with mock.patch.object(arbeit, "open_arbeit_tab"), \
                 mock.patch.object(arbeit.ocr, "find_texts", return_value=[("구인 중", 1274, 167)]):
             self.assertEqual(arbeit._apply_top(bot), "missing")
@@ -201,7 +204,7 @@ class ArbeitTest(unittest.TestCase):
     def test_only_accepted_card_means_nothing_to_apply(self):
         """수락해 둔 일('진행하기')만 남은 목록은 지원할 일이 없는 것 (2026-10-30 '옷감이 필요해' 하나)."""
         bot = mock.MagicMock()
-        bot.cfg = {"arbeit": {"list_pages": 1, "list_scroll_at": [0, 0], "accept": "x", "travel_timeout": 1}}
+        bot.cfg = {"monitor": MONITOR, "arbeit": {"list_pages": 1, "list_scroll_at": [0, 0], "accept": "x", "travel_timeout": 1}}
         items = [("구인 중", 1274, 167), ("옷감이 필요해", 1400, 286), ("진행하기", 1756, 600)]
         with mock.patch.object(arbeit, "open_arbeit_tab"), mock.patch.object(arbeit.ocr, "find_texts", return_value=items):
             self.assertIs(arbeit._apply_top(bot), False)
@@ -286,7 +289,7 @@ class AttendanceTest(unittest.TestCase):
 
     def bot(self, date, shown=(), dialogue=True, at_main=False):
         b = mock.Mock()
-        b.cfg = {"login": {"attendance_skip": "attendance_skip", "first_dialog_xy": [960, 540]}}
+        b.cfg = {"monitor": MONITOR, "login": {"attendance_skip": "attendance_skip", "first_dialog_xy": [960, 540]}}
         b.attendance_date = date
         b._attendance_clicked = 0
         b.vision.has.return_value = True

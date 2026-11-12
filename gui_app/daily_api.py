@@ -342,7 +342,8 @@ class DailyApi:
     def daily_fieldBossSettings(self) -> dict:  # noqa: N802
         """필드 보스 칸의 보스·난이도 목록과 기본값 (mabi.tasks.field_boss). 고른 값은 화면이 fieldBoss 로 기억한다."""
         from mabi.tasks import field_boss
-        return field_boss.choices()
+        return field_boss.choices(userconfig.default(self.paths, "field_boss", "boss"),
+                                  userconfig.default(self.paths, "field_boss", "difficulty"))
 
     def _repeat_launch(self, kind: str, v: dict, on_event=None) -> threading.Thread:
         """어비스·레이드 반복 (kind: REPEATS): 고른 장소(던전·레이드)·난이도·횟수·시간을 config.toml [kind] 에 저장하고

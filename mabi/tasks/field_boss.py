@@ -30,14 +30,14 @@ GROWTH = "필드 보스"       # CLI 성장 가이드의 Target
 SKIP_WAIT = 1.0            # '장면 넘기기' 가 뜬 뒤 누르기까지 (사용자 — 0.5초는 안 먹었다)
 # 보스·난이도·출현 시각은 게임 데이터(data/content.json, gamedata.field_bosses·field_boss_hours).
 # 보스는 창 왼쪽 목록에 그 순서로 있다 — 누를 때는 순서로 (OCR 이 '드로흐에넴' 을 '…넬' 로 읽는다)
-DEFAULT_BOSS, DEFAULT_DIFFICULTY = "드로흐에넴", "매우 어려움"  # 화면에서 아직 고른 적이 없을 때
 
 
-def choices() -> dict:
-    """화면(필드 보스 칸)이 고를 수 있는 것 — 보스 목록, 보스마다 고를 수 있는 난이도, 기본값."""
+def choices(boss: str, difficulty: str) -> dict:
+    """화면(필드 보스 칸)이 고를 수 있는 것 — 보스 목록, 보스마다 고를 수 있는 난이도,
+    기본값(화면에서 아직 고른 적이 없을 때 — 부르는 쪽이 config.default.toml [field_boss] 에서 준다)."""
     bosses = gd.field_bosses()
     return {"bosses": list(bosses), "difficulties": bosses,
-            "boss": DEFAULT_BOSS, "difficulty": DEFAULT_DIFFICULTY}
+            "boss": boss, "difficulty": difficulty}
 
 
 # ---- 열리는 시간
@@ -219,8 +219,8 @@ def leave(bot: Bot) -> None:
 
 
 def run(bot: Bot, cfg: dict) -> str:
-    fb = cfg.get("field_boss", {})
-    boss, difficulty = fb.get("boss", DEFAULT_BOSS), fb.get("difficulty", DEFAULT_DIFFICULTY)
+    fb = cfg["field_boss"]
+    boss, difficulty = fb["boss"], fb["difficulty"]
     if done(bot):
         return "이번 주 이미 잡음"
     if inside(bot):

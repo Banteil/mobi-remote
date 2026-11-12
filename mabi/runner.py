@@ -105,7 +105,7 @@ def task_order(cfg, ch: dict | None, only: list[str] | None = None, by_slot: dic
         off = cfg["run"].get("skip_by_slot", {}).get(str(slot), [])
         order = [t for t in order if t not in off]
         # 아르바이트는 거꾸로 켠 캐릭터만 (새 기능이라 기본은 안 함)
-        if slot not in [int(s) for s in cfg.get("arbeit", {}).get("slots", [])]:
+        if slot not in [int(s) for s in cfg["arbeit"]["slots"]]:
             order = [t for t in order if t != "arbeit"]
     return order
 
