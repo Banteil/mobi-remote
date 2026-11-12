@@ -35,6 +35,11 @@ class Vision:
         self.roi_margin = roi_margin
         self._cache: dict[str, np.ndarray] = {}
         self._variants: dict[str, list[str]] = {}
+        self._exists: dict[str, bool] = {}
+        # 같은 화면(frame 객체)에 같은 판정을 거듭 묻는 것 — 점검자·at_main·assist 가 한 화면에 같은 그림을 여러 번 본다.
+        # (frame, {(이름, 자리, 문턱): 결과}) 한 묶음으로 바꿔 끼워, 다른 스레드가 다른 화면을 봐도 섞이지 않는다.
+        # 화면은 찍을 때마다 새 배열이고 그 위에 그리지 않으므로 같은 객체면 같은 화면이다
+        self._memo: tuple[object, dict] = (None, {})
         self._index = self._load_index()
 
     def _load_index(self) -> dict:
@@ -44,7 +49,10 @@ class Vision:
         return {}
 
     def has(self, name: str) -> bool:
-        return (self.dir / f"{name}.png").exists()
+        """템플릿 그림이 있나. 한 번 본 답은 기억한다 (실행 중에 템플릿 폴더가 바뀌지 않는다 — 그림을 더하면 다시 켠다)."""
+        if name not in self._exists:
+            self._exists[name] = (self.dir / f"{name}.png").exists()
+        return self._exists[name]
 
     def variants(self, name: str) -> list[str]:
         """name 과 같은 버튼의 다른 그림들 (name@2.png, name@3.png …) — 배경·밝기에 따라 한 장으로는 문턱을 못 넘는
@@ -109,6 +117,16 @@ class Vision:
         return top
 
     def find(self, frame: np.ndarray, name: str, region=None, threshold: float | None = None) -> Match | None:
+        """문턱(또는 assist)을 넘는 자리, 없으면 None. 같은 frame 객체에 같은 것을 다시 물으면 앞 답을 쓴다."""
+        memo = self._memo
+        if memo[0] is not frame:
+            memo = self._memo = (frame, {})
+        key = (name, None if region is None else tuple(region), threshold)
+        if key not in memo[1]:
+            memo[1][key] = self._find(frame, name, region, threshold)
+        return memo[1][key]
+
+    def _find(self, frame: np.ndarray, name: str, region, threshold: float | None) -> Match | None:
         m = self.best(frame, name, region)
         if m is None:
             return None

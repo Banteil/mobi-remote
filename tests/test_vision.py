@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import cv2
 import numpy as np
@@ -80,6 +81,42 @@ class AreaTest(unittest.TestCase):
             self.assertTrue(x >= 0 and y >= 0 and x + w <= 1920 and y + h <= 1080, name)
             th, tw = Vision(root).template(name).shape[:2]
             self.assertTrue(w >= tw and h >= th, name)
+
+
+class MemoTest(unittest.TestCase):
+    """Vision.find 의 같은 화면 기억 — 같은 frame 객체면 앞 답을 쓰고, 화면이 바뀌면 다시 찾는다."""
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        rng = np.random.default_rng(1)
+        self.tpl = rng.integers(0, 255, (20, 20, 3), dtype=np.uint8)
+        save(self.dir / "box.png", self.tpl)
+        self.v = Vision(self.dir, threshold=0.9)
+
+    def frame(self, at=None):
+        f = np.zeros((100, 100, 3), np.uint8)
+        if at:
+            f[at[1]:at[1] + 20, at[0]:at[0] + 20] = self.tpl
+        return f
+
+    def test_same_frame_matched_once(self):
+        f = self.frame((10, 30))
+        with mock.patch.object(self.v, "best", wraps=self.v.best) as best:
+            a, b = self.v.find(f, "box"), self.v.find(f, "box")
+        self.assertEqual((a.x, a.y), (10, 30))
+        self.assertIs(a, b)
+        self.assertEqual(best.call_count, 1)
+
+    def test_new_frame_looks_again(self):
+        self.assertIsNotNone(self.v.find(self.frame((10, 30)), "box"))
+        self.assertIsNone(self.v.find(self.frame(), "box"))       # 화면이 바뀜 → 다시 찾는다
+        f = self.frame((50, 50))
+        self.assertIsNone(self.v.find(f, "box", region=(0, 0, 40, 40)))  # 자리·문턱이 다르면 따로
+        self.assertIsNotNone(self.v.find(f, "box"))
+
+    def test_has(self):
+        self.assertTrue(self.v.has("box"))
+        self.assertFalse(self.v.has("nope"))
+
 
 if __name__ == "__main__":
     unittest.main()
