@@ -48,6 +48,26 @@ def _overlay(base, over) -> None:
 LOCK = threading.RLock()
 
 
+def silver_defaults(d) -> dict:
+    """은동전 숙제 공통값 (캐릭터별로 따로 정하지 않은 캐릭터가 따르는 값). d 는 doc() 또는 load_config 결과."""
+    s = d["silver"]
+    return {"field": str(s["field"]), "field_runs": int(s["field_runs"]), "dungeon": str(s["dungeon"]),
+            "floor": int(s["floor"])}
+
+
+def places(d, kind: str) -> list[str]:
+    """[places] 중 던전(index 0·1) 또는 사냥터(index 2) 이름들. kind: 'dungeon' | 'field'."""
+    keep = (lambda i: i == 2) if kind == "field" else (lambda i: i < 2)
+    return [n for n, p in d["places"].items() if keep(int(p["index"]))]
+
+
+FKEYS = tuple(f"f{i}" for i in range(1, 13))  # 리모콘 단축키(일시정지·염색 도우미)로 고를 수 있는 키
+
+
+def is_fkey(k: str) -> bool:
+    return str(k).lower() in FKEYS
+
+
 def doc(paths: Paths):
     """고칠 수 있는 설정 문서 = 기본값 + 사용자 값 (save 로 저장)."""
     d = _default_doc(paths)

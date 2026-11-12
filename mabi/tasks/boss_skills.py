@@ -129,5 +129,5 @@ def slot_of(bot: Bot, character: dict | None, name: str = "") -> int | None:
     if not name:
         return None
     from .login import match_character
-    ch = match_character(name, prof.characters(prof.load_profile(bot.paths.profile) or {"slots": []}))
+    ch = match_character(name, prof.chars(bot.paths))
     return ch["slot"] if ch else None

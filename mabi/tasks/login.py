@@ -221,7 +221,7 @@ def current_character(bot: Bot) -> dict | None:
         name = current_name(bot)
     except Exception:  # noqa: BLE001 — 이름을 못 읽으면 모르는 것으로
         name = ""
-    return match_character(name, prof.characters(prof.load_profile(bot.paths.profile) or {"slots": []}))
+    return match_character(name, prof.chars(bot.paths))
 
 
 def match_character(read: str, chars: list[dict]) -> dict | None:

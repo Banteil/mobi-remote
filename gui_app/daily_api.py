@@ -17,7 +17,7 @@ from mabi import paths as mpaths
 from mabi import profile as prof
 from mabi import userconfig
 from mabi import tasks
-from mabi.runner import RunOptions, Runner, load_config
+from mabi.runner import RunOptions, Runner, load_config, task_order, tasks_by_slot
 from mabi.tasks.weekday import SUNDAY_CHOICES
 
 from .chars_api import CharsApi
@@ -69,15 +69,14 @@ class DailyApi:
     def daily_state(self) -> dict:
         cfg = load_config(self.paths)
         reg = tasks.build(cfg)
-        profile = prof.load_profile(self.paths.profile) or {"slots": [], "names": {}}
         st = prof.DailyState(self.paths.state)
-        chars = prof.characters(profile)
-        by_slot = {int(k): v for k, v in cfg["run"].get("tasks_by_slot", {}).items()}
+        chars = prof.chars(self.paths)
+        by_slot = tasks_by_slot(cfg)
         return {"chars": chars, "order": cfg["run"]["order"], "labels": {"login": "접속", **{t: l for t, (l, _) in reg.items()}},
                 "today": {str(c["slot"]): st.data.get(str(c["slot"]), {}) for c in chars}, "date": st.date,
                 "skip": {k: list(v) for k, v in cfg["run"].get("skip_by_slot", {}).items()},
                 # 캐릭터마다 실제로 도는 숙제 (끈 숙제·아르바이트 안 켠 캐릭터는 빠짐) — '결과 보기' 가 쓴다
-                "orders": {str(c["slot"]): Runner._order(cfg, RunOptions(), by_slot, c) for c in chars},
+                "orders": {str(c["slot"]): task_order(cfg, c, by_slot=by_slot) for c in chars},
                 "running": bool(self._daily_thread and self._daily_thread.is_alive())}
 
     # ---- 실행 ----
@@ -248,9 +247,8 @@ class DailyApi:
     def daily_abyssSettings(self) -> dict:  # noqa: N802
         a = load_config(self.paths)["abyss"]
         from mabi.tasks import abyss
-        profile = prof.load_profile(self.paths.profile) or {"slots": [], "names": {}}
         return {"dungeon": a["dungeon"], "difficulty": a.get("difficulty") or "매우 어려움2", "runs": int(a.get("runs", 0)),
-                "slot": int(a.get("slot", 0)), "chars": [{"slot": c["slot"], "name": c["name"]} for c in prof.characters(profile)],
+                "slot": int(a.get("slot", 0)), "chars": [{"slot": c["slot"], "name": c["name"]} for c in prof.chars(self.paths)],
                 "minutes": float(a.get("minutes", 0)), "dungeons": abyss.DUNGEONS, "frontOnly": list(abyss.FRONT_ONLY),
                 "revive": bool(a.get("revive", True)), "mode": a.get("mode") or "party",
                 "difficulties": abyss.DIFFICULTIES,
@@ -277,8 +275,7 @@ class DailyApi:
     def daily_bossSettings(self) -> dict:  # noqa: N802
         from mabi.tasks import boss_skills
         b = self._doc().get("boss_skills", {})
-        profile = prof.load_profile(self.paths.profile) or {"slots": [], "names": {}}
-        chars = prof.characters(profile)
+        chars = prof.chars(self.paths)
 
         def follow(kind) -> int:  # 이 기본값을 따르는 캐릭터 수
             own = {int(x) for s in ("_slots", "_off_slots") for x in b.get(kind + s, [])}
@@ -371,8 +368,7 @@ class DailyApi:
                 if not bot.window.find():
                     raise ValueError("게임이 꺼져 있습니다")
                 a = cfg[kind]  # 게임은 입장할 때만 앞으로 가져온다 (abyss.repeat)
-                profile = prof.load_profile(self.paths.profile) or {"slots": [], "names": {}}
-                ch = next((c for c in prof.characters(profile) if c["slot"] == int(a.get("slot", 0))), None)
+                ch = next((c for c in prof.chars(self.paths) if c["slot"] == int(a.get("slot", 0))), None)
                 from mabi.tasks import display
                 # 화면 설정 맞추기 — 인터페이스 PC·80% (큐에서 이번 처음일 때만, 되돌리기는 큐 끝). 일일 숙제와 같은 InterfaceFit
                 fit = display.InterfaceFit(prof.DailyState(self.paths.state), enabled=bool(v.get("interface")),
@@ -418,7 +414,6 @@ class DailyApi:
     def daily_settings(self) -> dict:
         doc = self._doc()
         s = doc["silver"]
-        profile = prof.load_profile(self.paths.profile) or {"slots": [], "names": {}}
         over = {}
         f = mpaths.default_data_dir() / "paths.json"
         try:
@@ -426,7 +421,7 @@ class DailyApi:
         except ValueError:
             pass
         by = s.get("by_slot", {})
-        chars = prof.characters(profile)
+        chars = prof.chars(self.paths)
 
         def follow(*keys) -> int:  # 이 기본값을 따르는 캐릭터 수 (그 항목을 캐릭터별로 따로 정하지 않음)
             return sum(not any(k in by.get(str(c["slot"]), {}) for k in keys) for c in chars)
@@ -437,9 +432,8 @@ class DailyApi:
             "follow": {"field": follow("field", "field_runs"), "dungeon": follow("dungeon", "floor"),
                        "sunday": sum(str(c["slot"]) not in sun_by for c in chars), "total": len(chars)},
             "sunday": CharsApi._sunday(doc), "sundays": list(SUNDAY_CHOICES),
-            "silver": {"field_runs": int(s["field_runs"]), "dungeon": str(s["dungeon"]), "floor": int(s["floor"])},
-            "dungeons": [n for n, p in doc["places"].items() if int(p["index"]) < 2],
-            "fields": [n for n, p in doc["places"].items() if int(p["index"]) == 2],
+            "silver": {k: v for k, v in userconfig.silver_defaults(doc).items() if k != "field"},
+            "dungeons": userconfig.places(doc, "dungeon"), "fields": userconfig.places(doc, "field"),
             "field": str(s["field"]),
             "stop_key": str(doc["game"].get("stop_key", "f12")),
             "dye_key": str(doc["game"].get("dye_key", "f11")),
@@ -468,12 +462,12 @@ class DailyApi:
                 doc["weekday_dungeon"]["sunday"] = v["sunday"]
             if v.get("stop_key"):
                 k = str(v["stop_key"]).lower()
-                if k not in [f"f{i}" for i in range(1, 13)]:  # 게임이 쓰는 글자·Home/End 키와 겹치지 않게 F 키만
+                if not userconfig.is_fkey(k):  # 게임이 쓰는 글자·Home/End 키와 겹치지 않게 F 키만
                     return {"error": f"일시정지 키는 F1~F12 중에서: {k}"}
                 doc["game"]["stop_key"] = k
             if v.get("dye_key"):
                 k = str(v["dye_key"]).lower()
-                if k not in [f"f{i}" for i in range(1, 13)]:
+                if not userconfig.is_fkey(k):
                     return {"error": f"염색 도우미 키는 F1~F12 중에서: {k}"}
                 if k == str(doc["game"].get("stop_key", "f12")).lower():
                     return {"error": "염색 도우미 키가 일시정지 키와 같습니다"}

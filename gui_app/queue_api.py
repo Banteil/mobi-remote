@@ -689,7 +689,7 @@ class QueueApi:
         from mabi import profile as prof
         from mabi.bot import Bot
         from mabi.tasks import login
-        chars = prof.characters(prof.load_profile(self.paths.profile) or {"slots": []})
+        chars = prof.chars(self.paths)
         what, want = card_character(it, chars)
         if what == "any":
             return True
@@ -901,8 +901,7 @@ class QueueApi:
     def queue_chars(self) -> list:
         """제작·채집·가공 카드의 캐릭터 고르기 목록 [{slot, name}] (카드의 캐릭터 버튼)."""
         from mabi import profile as prof
-        return [{"slot": c["slot"], "name": c["name"]}
-                for c in prof.characters(prof.load_profile(self.paths.profile) or {"slots": []})]
+        return [{"slot": c["slot"], "name": c["name"]} for c in prof.chars(self.paths)]
 
     def queue_patch(self, item_id, fields) -> dict:
         self.queue.patch(item_id, fields if isinstance(fields, dict) else {})

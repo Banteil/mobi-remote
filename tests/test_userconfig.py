@@ -72,5 +72,19 @@ class UserConfigTest(unittest.TestCase):
         self.assertNotIn("tribute", tomllib.loads(self.paths.config.read_text(encoding="utf-8")))
 
 
+class HelpersTest(unittest.TestCase):
+    """설정 화면·캐릭터 탭이 같이 쓰는 작은 도우미 (예전엔 화면마다 같은 줄을 따로 썼다)."""
+
+    def test_silver_places_fkey(self):
+        d = {"silver": {"field": "평원", "field_runs": "3", "dungeon": "던전", "floor": 2},
+             "places": {"가": {"index": 0}, "나": {"index": 1}, "다": {"index": 2}}}
+        self.assertEqual(userconfig.silver_defaults(d), {"field": "평원", "field_runs": 3, "dungeon": "던전", "floor": 2})
+        self.assertEqual(userconfig.places(d, "dungeon"), ["가", "나"])
+        self.assertEqual(userconfig.places(d, "field"), ["다"])
+        self.assertTrue(userconfig.is_fkey("F12"))
+        self.assertFalse(userconfig.is_fkey("f13"))
+        self.assertFalse(userconfig.is_fkey("a"))
+
+
 if __name__ == "__main__":
     unittest.main()

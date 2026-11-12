@@ -19,7 +19,7 @@ from pathlib import Path
 import tomlkit
 
 from mabi import gamedata as gd, profile as prof, userconfig
-from mabi.runner import load_config
+from mabi.runner import load_config, task_order, tasks_by_slot
 from mabi.tasks import boss_skills
 from mabi.tasks.weekday import SUNDAY_CHOICES
 from mabi.whoami import Characters
@@ -106,8 +106,7 @@ class CharsApi:
                             self._name_now["at"] = _t.time()
                         else:
                             # OCR 이 한두 글자 틀려도 (받침 'ㅇ' → 'ㅁ' 등) 등록된 캐릭터 이름으로 맞춘다
-                            names = [c["name"] for c in
-                                     prof.characters(prof.load_profile(self.paths.profile) or {"slots": []})]
+                            names = [c["name"] for c in prof.chars(self.paths)]
                             n = snap_name(name_in_frame(frame), names)
                             n = next((c for c in names if "".join(c.split()) == n), n)
                             if n:
@@ -124,26 +123,23 @@ class CharsApi:
     def chars_list(self) -> dict:
         doc = self._doc()
         s = doc["silver"]
-        defaults = {"field": str(s["field"]), "field_runs": int(s["field_runs"]), "dungeon": str(s["dungeon"]),
-                    "floor": int(s["floor"]), "black_hole": True, "sunday": self._sunday(doc)}
+        defaults = {**userconfig.silver_defaults(doc), "black_hole": True, "sunday": self._sunday(doc)}
         by = s.get("by_slot", {})
         sun_by = doc["weekday_dungeon"].get("sunday_by_slot", {})
         skip = doc["run"].get("skip_by_slot", {})
-        profile = prof.load_profile(self.paths.profile) or {"slots": [], "names": {}}
         known = Characters(self.paths.data).load()["slots"]
         today = prof.DailyState(self.paths.state)
-        by_tasks = doc["run"].get("tasks_by_slot", {})
+        by_tasks = tasks_by_slot(doc)
         arb_slots = [int(x) for x in doc.get("arbeit", {}).get("slots", [])]
         boss = doc.get("boss_skills", {})
         out = []
-        for c in prof.characters(profile):
+        for c in prof.chars(self.paths):
             k = str(c["slot"])
             o = dict(by.get(k, {}))
             e = known.get(k) or {}
             fp, card = e.get("fp") or {}, e.get("card") or {}
             # 오늘 숙제 진행 (캐릭터 탭 카드의 '오늘 클리어' 표시). 끈 숙제는 세지 않는다
-            order = [t for t in (by_tasks.get(k) or doc["run"]["order"]) if t not in skip.get(k, [])
-                     and (t != "arbeit" or c["slot"] in arb_slots)]  # 아르바이트는 켠 캐릭터만
+            order = task_order(doc, c, by_slot=by_tasks)
             done = sum(today.is_done(c["slot"], t) for t in order)
             out.append({
                 "today": {"done": done, "total": len(order)},
@@ -159,8 +155,7 @@ class CharsApi:
                 "portrait": self._data_url(self._portrait(c["slot"])),
             })
         return {"chars": out, "defaults": defaults,
-                "fields": [n for n, p in doc["places"].items() if int(p["index"]) == 2],
-                "dungeons": [n for n, p in doc["places"].items() if int(p["index"]) < 2],
+                "fields": userconfig.places(doc, "field"), "dungeons": userconfig.places(doc, "dungeon"),
                 "floors": FLOORS, "sundays": list(SUNDAY_CHOICES), "scanning": bool(self._scan_thread and self._scan_thread.is_alive())}
 
     # ---- 저장 ----
@@ -175,8 +170,7 @@ class CharsApi:
         with userconfig.LOCK:  # 화면·작업 큐가 함께 고친다
             doc = self._doc()
             s = doc["silver"]
-            base = {"field": str(s["field"]), "field_runs": int(s["field_runs"]), "dungeon": str(s["dungeon"]),
-                    "floor": int(s["floor"])}
+            base = userconfig.silver_defaults(doc)
             overs, skips = {}, {}
             for c in chars:
                 o = {k: (int(c[k]) if k in ("field_runs", "floor") else str(c[k]))
