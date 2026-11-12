@@ -309,7 +309,7 @@ def _press_progress(bot: Bot, title: str) -> bool:
         b = btns[0] if alone else _find_card_button(bot, title, PROGRESS)
         if not b:
             bot.log.warning(f"아르바이트 '{title}': 퀘스트 창에서 이 일의 '진행하기' 를 못 찾음 "
-                            f"(읽은 글자 {getattr(bot, '_arb_read', None)}) → {bot.snapshot('arbeit_card').name}")
+                            f"(읽은 글자 {bot.marks.arb_read}) → {bot.snapshot('arbeit_card').name}")
             bot.to_main()
             return False
         bot.click(b)

@@ -170,9 +170,9 @@ def _auth_fail_visible(bot: Bot) -> bool:
 def _clear_auth_fail(bot: Bot, cfg: dict) -> None:
     """접속 오류 창들을 확인(Space)으로 모두 닫고 타이틀이 나오면 auth_cooldown 초 쉰다.
     한 실행(bot)에서 두 번째면 더 시도하지 않고 AuthBlocked (계속 두드리면 더 꼬일 수 있다)."""
-    bot.auth_fails = getattr(bot, "auth_fails", 0) + 1
+    bot.marks.auth_fails += 1
     shot = bot.snapshot("auth_fail").name
-    if bot.auth_fails >= 2:
+    if bot.marks.auth_fails >= 2:
         raise AuthBlocked(f"접속 오류(계정 인증 실패)가 다시 남 → 실행을 멈춥니다. 게임에서 확인 후 직접 로그인해 주세요 → {shot}")
     bot.log.warning(f"접속 오류 창 → 확인 누르고 {cfg['login']['auth_cooldown']}초 쉰 뒤 다시 접속 → {shot}")
     names, title = _auth_names(bot), bot.ui["title_start"]
