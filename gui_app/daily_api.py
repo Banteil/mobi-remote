@@ -111,14 +111,26 @@ class DailyApi:
         """지금 게임을 조작하는 Bot {주인: Bot} — _game_bot 이 넣고 뺀다. 멈추기(_bot_stop)·_busy_reason 이 여기 하나만 본다."""
         return self.__dict__.setdefault("_bot_owners", {})
 
+    def _game_session(self, cfg: dict):
+        """게임 연결(GameSession) 하나를 작업들이 같이 쓴다 — 큐 카드·숙제·반복마다 창·캡처·그림·CLI 를 새로 만들지 않는다.
+        설정에서 연결 쪽 값(창 제목·CLI 경로·그림 문턱 …)을 바꿨으면 새로 만든다 (GameSession.fits)."""
+        from mabi.session import GameSession
+        with self.__dict__.setdefault("_session_lock", threading.Lock()):
+            s = self.__dict__.get("_session")
+            if s is None or not s.fits(cfg, self.paths):
+                s = self.__dict__["_session"] = GameSession(cfg, self.paths)
+            return s
+
     @contextmanager
     def _game_bot(self, owner: str | None, cfg: dict | None = None):
         """게임 조작용 Bot 하나의 수명: 만들기 → 주인 이름으로 등록 → 끝나면 빼고 닫기 (키 감시 정리).
+        게임 연결은 _game_session 으로 같이 쓴다 (Bot 은 작업 문맥만 새로).
         owner=None 은 등록하지 않는다 (잠깐 화면만 보는 확인 — 다른 일을 막지 않게). 만들다 실패하면 예외가 그대로 나간다
         (부르는 쪽이 `bot = None` … `with … as bot` 이면 except 에서 bot 이 None 인지로 '시작 실패' 를 가른다)."""
         from mabi.bot import Bot
         self._daily_hook_log()
-        bot = Bot(cfg if cfg is not None else load_config(self.paths), self.paths, force_exit=False)
+        cfg = cfg if cfg is not None else load_config(self.paths)
+        bot = Bot(cfg, self.paths, force_exit=False, session=self._game_session(cfg))
         if owner:
             self._bots[owner] = bot
         try:
@@ -168,7 +180,7 @@ class DailyApi:
         def event(e):
             self._emit("mm:daily", e)
             on_event(e)
-        runner = Runner(self.paths, on_event=event, force_exit=False)
+        runner = Runner(self.paths, on_event=event, force_exit=False, session=self._game_session)
         self._daily_runner = runner
         self._daily_end = False
 

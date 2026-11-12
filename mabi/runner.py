@@ -22,6 +22,7 @@ from typing import Callable
 from . import profile as prof
 from . import queue_report, tasks
 from .bot import Bot
+from .session import GameSession
 from .exceptions import CannotProceed, MissingTemplate, StepTimeout, StopRequested
 from .paths import Paths
 from .report import RunReport
@@ -152,8 +153,11 @@ class FailStreak:
 
 class Runner:
 
-    def __init__(self, paths: Paths, on_event: Callable[[dict], None] | None = None, force_exit: bool = True):
+    def __init__(self, paths: Paths, on_event: Callable[[dict], None] | None = None, force_exit: bool = True,
+                 session: Callable[[dict], GameSession] | None = None):
+        """session: 설정 → 게임 연결 (gui 가 작업들과 같이 쓰는 것, DailyApi._game_session). 없으면 Bot 이 새로 만든다."""
         self.paths = paths
+        self.session = session
         self.on_event = on_event or (lambda e: None)
         self.force_exit = force_exit
         self.bot: Bot | None = None
@@ -203,7 +207,8 @@ class Runner:
         if not ctypes.windll.shell32.IsUserAnAdmin():
             log.warning("관리자 권한이 아닙니다. 게임이 관리자 권한으로 실행 중이면 입력이 무시됩니다.")
 
-        bot = self.bot = Bot(cfg, paths, dry_run=opts.dry_run, force_exit=self.force_exit)
+        session = self.session(cfg) if self.session and not opts.dry_run else None  # 연습(dry_run)은 따로
+        bot = self.bot = Bot(cfg, paths, dry_run=opts.dry_run, force_exit=self.force_exit, session=session)
         bot.auto_clear = True  # 기다리는 화면이 오래 안 나오면 대화·퀘스트 클리어 창 등을 넘겨 본다
         if self._stop_requested:
             bot.stopper.request(self._stop_why)

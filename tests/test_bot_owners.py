@@ -9,8 +9,9 @@ from gui_app.daily_api import DailyApi
 
 
 class FakeBot:
-    def __init__(self, cfg, paths, force_exit=True):
+    def __init__(self, cfg, paths, force_exit=True, session=None):
         self.stopper = mock.Mock()
+        self.session = session
 
 
 class Api(DailyApi):
@@ -19,6 +20,9 @@ class Api(DailyApi):
 
     def _daily_hook_log(self):
         pass
+
+    def _game_session(self, cfg):  # 진짜 게임 연결(창·캡처·패킷 감시)은 만들지 않는다
+        return None
 
 
 class GameBotTest(unittest.TestCase):
@@ -61,6 +65,26 @@ class GameBotTest(unittest.TestCase):
         api._display_thread.join()
         self.assertIsNone(api._busy_reason())
 
+    def test_session_shared_until_settings_change(self):
+        """게임 연결은 Bot 들이 같이 쓰고, 연결 쪽 설정이 바뀌면 새로 만든다."""
+        made = []
+
+        class Session:
+            def __init__(self, cfg, paths):
+                self.cfg = cfg
+                made.append(self)
+
+            def fits(self, cfg, paths):
+                return cfg == self.cfg
+        api = DailyApi.__new__(DailyApi)
+        api.paths = mock.Mock()
+        with mock.patch("mabi.session.GameSession", Session):
+            a = DailyApi._game_session(api, {"x": 1})
+            self.assertIs(DailyApi._game_session(api, {"x": 1}), a)
+            b = DailyApi._game_session(api, {"x": 2})
+        self.assertIsNot(a, b)
+        self.assertEqual(len(made), 2)
+
     def test_repeat_state_per_kind(self):
         api = Api()
         self.assertIsNot(api._rep("abyss"), api._rep("raid"))
@@ -91,6 +115,9 @@ class RepeatLaunchTest(unittest.TestCase):
 
             def _daily_hook_log(self):
                 pass
+
+            def _game_session(self, cfg):
+                return None
         self.api = A()
         self.api.paths = self.paths
 
