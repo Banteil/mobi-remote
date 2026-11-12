@@ -266,9 +266,10 @@ def open_entry(bot: Bot, dungeon: str, difficulty: str = "", _moved: bool = Fals
     entry.set_tab(bot, solo, "abyss")
     if difficulty:
         ui_text.click(bot, difficulty, gd.region("abyss_difficulty"), what=f"난이도 '{difficulty}'", shot="abyss")
-    # '입장하기' 가 보일 때까지 ('이동하기' 면 입구로 가서 다시)
+    # '입장하기' 가 보일 때까지 ('이동하기' 면 입구로 가서 다시). 한 번 읽은 입장 창으로 우연한 만남까지 본다
     for _ in range(5):
-        button = entry.button(bot)
+        e = entry.read(bot)
+        button = e.button if e else ""
         if button == "enter":
             break
         if button == "move" and not _moved:
@@ -278,7 +279,7 @@ def open_entry(bot: Bot, dungeon: str, difficulty: str = "", _moved: bool = Fals
     else:
         raise CannotProceed(f"'{dungeon}' {'혼자하기' if solo else '함께하기'}에 '입장하기' 가 없음 → {bot.snapshot('abyss').name}")
     if not solo:  # 혼자하기는 매칭(우연한 만남)이 없다
-        entry.ensure_chance(bot, "abyss")
+        entry.ensure_chance(bot, "abyss", e)
 
 
 def entered_since(bot: Bot, since: float) -> bool | None:
@@ -333,7 +334,7 @@ class AbyssExit(Exit):
         return DungeonExit.dialog(self, bot, timeout)
 
     def finished_before(self, bot):
-        return after_clear(bot)
+        return at_reward(bot)
 
 
 def leave(bot: Bot) -> bool:
@@ -445,7 +446,7 @@ def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: No
         seen = watch(bot, ctx, act, ocr=not here)
         if seen.finish and seen.finish.result == "dead":
             # 부활을 기다리는 사이 파티가 보스를 잡았으면 쓰러진 채로 클리어 — 나가면 안 된다
-            return "clear" if cleared() or after_clear(bot) else "dead"
+            return "clear" if cleared() or at_reward(bot) else "dead"
         if ctx.take("revived"):
             on_revive()
             continue
@@ -460,7 +461,7 @@ def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: No
             return "timeout"
 
 
-def after_clear(bot: Bot) -> bool:
+def at_reward(bot: Bot) -> bool:
     """클리어 화면('화면을 터치해 주세요')이나 보상 화면(다시 하기 / 나가기)인가 (phase)."""
     return phase(bot) == "reward"
 
@@ -506,7 +507,7 @@ def exit_reward(bot: Bot) -> None:
     # 필드로 나오는 로딩이 끝나 메인 화면이 보일 때까지 — 3~4초만 보고 끝내면 다음 카드(다른 캐릭터)가
     # 로딩 화면에서 ESC 메뉴를 찾다 실패했다 (2026-10-24 21:24)
     if not wait_settled(bot, bot.cfg["timing"]["loading"]):
-        if after_clear(bot):  # 나가기 키가 안 들었다
+        if at_reward(bot):  # 나가기 키가 안 들었다
             bot.key("esc")
             if not wait_settled(bot, bot.cfg["timing"]["loading"]):
                 # 여기서 그냥 넘어가면 다음 일(수리 등)이 '메인 화면으로 돌아오지 못함' 으로만 끝난다

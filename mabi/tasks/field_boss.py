@@ -144,16 +144,17 @@ def fight(bot: Bot) -> bool:
     end = time.monotonic() + bot.cfg.get("field_boss", {}).get("fight_timeout", 900)
     asked = time.monotonic()
     while time.monotonic() < end:
+        result = confirm_text(bot.frame())  # 결과 창 '처치 완료' (아래 가운데 '확인') — 한 바퀴에 한 번 읽는다
         # 결과 창을 놓쳤어도(점검자가 먼저 닫음 등) 잡았으면 끝 — 성장 가이드로 가끔 본다
         if time.monotonic() - asked > 15:
             asked = time.monotonic()
             if done(bot):
                 bot.log.info("필드 보스 처치 완료 (성장 가이드)")
-                if confirm_text(bot.frame()):
+                if result:
                     bot.key("space")  # 결과 창이 떠 있으면 닫고 나간다
                     bot.sleep(1.2, 1.6)
                 return True
-        if confirm_text(bot.frame()):  # 결과 창 '처치 완료' (아래 가운데 '확인')
+        if result:
             bot.sleep(1.0, 1.5)  # 보상이 그려지는 동안
             got = gd.text("fb_noreward") not in _texts(bot, "fb_noreward")
             if got and done(bot) is False:  # '확인' 은 있는데 아직 안 잡음 — 퀘스트 완료 같은 다른 창 → 넘기고 계속

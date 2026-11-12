@@ -88,9 +88,10 @@ def wait_button(bot: Bot, read=None, tries: int = 5) -> str:
     return ""
 
 
-def ensure_chance(bot: Bot, shot: str) -> None:
-    """함께하기 탭 '우연한 만남' 스위치를 켠다 (어비스·레이드 입장 창이 같은 자리·모양). 못 찾거나 안 켜지면 CannotProceed."""
-    on = chance(bot)
+def ensure_chance(bot: Bot, shot: str, now: Entry | None = None) -> None:
+    """함께하기 탭 '우연한 만남' 스위치를 켠다 (어비스·레이드 입장 창이 같은 자리·모양). 못 찾거나 안 켜지면 CannotProceed.
+    now: 방금 읽은 입장 창 (버튼까지 그려진 것 — 스위치도 같이 그려져 있다). 있으면 화면을 다시 읽지 않는다."""
+    on = now.chance if now else chance(bot)
     if on is None:
         raise CannotProceed(f"'우연한 만남' 을 찾지 못함 → {bot.snapshot(shot).name}")
     if not on[0]:

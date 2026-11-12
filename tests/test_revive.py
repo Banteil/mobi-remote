@@ -65,7 +65,7 @@ class DeadThenClearTest(unittest.TestCase):
 
     def test_leave_after_result_does_not_leave(self):
         bot = mock.Mock()
-        with mock.patch.object(abyss, "after_clear", return_value=True),                 mock.patch.object(abyss, "inside", return_value=False):
+        with mock.patch.object(abyss, "at_reward", return_value=True),                 mock.patch.object(abyss, "inside", return_value=False):
             self.assertFalse(abyss.leave(bot))
         bot.key.assert_not_called()
         bot.click.assert_not_called()
@@ -79,7 +79,7 @@ class DeadThenClearTest(unittest.TestCase):
         bot.wait_packet.return_value = False
         bot.state.activity.return_value = {}
         seen = d.Seen(d.DEAD, src="packet", finish=Finish("dead"))
-        with mock.patch.object(abyss, "watch", return_value=seen),                 mock.patch.object(abyss, "inside", return_value=False),                 mock.patch.object(abyss, "after_clear", return_value=True):
+        with mock.patch.object(abyss, "watch", return_value=seen),                 mock.patch.object(abyss, "inside", return_value=False),                 mock.patch.object(abyss, "at_reward", return_value=True):
             self.assertEqual(abyss.play(bot, 60), "clear")
 
 

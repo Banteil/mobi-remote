@@ -23,7 +23,7 @@ class InsideTest(unittest.TestCase):
     def test_result_without_map_is_not_inside(self):
         bot = bot_with(PacketState(abyss_result=3))  # 어비스 안에서 켜 맵은 모르지만 결과는 옴
         self.assertFalse(abyss.inside(bot))
-        self.assertTrue(abyss.after_clear(bot))
+        self.assertTrue(abyss.at_reward(bot))
 
     def test_matching_without_map_is_not_inside(self):
         self.assertFalse(abyss.inside(bot_with(PacketState(abyss_matching=2))))
