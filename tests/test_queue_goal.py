@@ -6,9 +6,13 @@ from mabi import cutpoint
 
 
 class FakeQ:
-    def __init__(self):
+    def __init__(self, other=None):
         self.stop = None
         self.notes = []
+        self.other = other  # 가공을 기다리는 동안 비켜 줄 아래 카드 (WorkQueue.yield_to)
+
+    def yield_to(self, it):
+        return self.other
 
     def note(self, it, text):
         it["note"] = text
@@ -204,6 +208,39 @@ class GoalKindTest(unittest.TestCase):
             self.assertFalse(GoalKind(FakeApi([]))._wait(q, card(), {"seconds": 300}))
         finally:
             cutpoint.set_hook(None)
+
+    def test_long_wait_yields_to_next_card(self):
+        # 가공이 오래 남았고 아래에 돌 카드가 있으면 비켜 주고, 끝날 시각을 적어 둔다 (그때 큐가 데려온다)
+        import time
+        q = FakeQ(other={"label": "숙제"})
+        q.item = card()
+        g = GoalKind(FakeApi([]))
+        self.assertFalse(g._wait(q, q.item, {"seconds": 1200}))
+        self.assertEqual(q.stop["reason"], "yield")
+        at = q.item["resumeAt"]
+        self.assertAlmostEqual(at / 1000, time.time() + 1200, delta=5)
+        self.assertTrue(g.timed(q.item))
+        self.assertIn("가공 완료 대기", g.ready(q.item))
+        q.item["resumeAt"] = int(time.time() * 1000) - 1
+        self.assertEqual(g.ready(q.item), "")  # 끝날 때가 됐다 — 다시 돌 수 있다
+
+    def test_short_wait_or_nothing_below_keeps_waiting(self):
+        g = GoalKind(FakeApi([]))
+        for q, secs in ((FakeQ(other={"label": "숙제"}), 60), (FakeQ(), 1200)):
+            q.item = card()
+            cutpoint.set_hook(lambda: q.set_stop("preempt") or "x")  # 기다리기 시작하면 바로 끊어 끝낸다
+            try:
+                g._wait(q, q.item, {"seconds": secs})
+            finally:
+                cutpoint.set_hook(None)
+            self.assertEqual(q.stop["reason"], "preempt")
+            self.assertNotIn("resumeAt", q.item)
+
+    def test_returning_card_clears_resume_time(self):
+        api = FakeApi([(8, {"kind": "done"})])
+        ok, q = self.run_goal(api, card(base=0, target=5, resumeAt=1))
+        self.assertTrue(ok)
+        self.assertIsNone(q.item["resumeAt"])
 
     def test_collect_not_ready_waits_and_retries(self):
         # 조회는 완료인데 수령은 아직 없다고 할 때가 있다 — 실패로 끝내지 않고 기다렸다 다시

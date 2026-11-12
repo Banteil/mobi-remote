@@ -16,6 +16,8 @@ FIELDS = ["id", "via", "name", "label", "recipe", "target", "status", "note",
           # 제작·채집·가공 카드가 처음 집을 때 기억한 캐릭터 (queue_api.card_character). 빠지면 다시 켰을 때 잊어
           # 다른 캐릭터로 이어 할 수 있다
           "pin",
+          # 가공 완료를 기다리는 동안 다른 카드에 비켜 준 카드가 돌아올 때 (epoch ms — queue_api.GoalKind.ready)
+          "resumeAt",
           "doneRuns", "doneSecs", "fit"]  # 어비스 카드가 멈췄다 다시 돌 때 이미 한 판·초
 
 # 작업 기록 (끝난 항목 한 줄씩, queue-history.jsonl). 화면의 '기록' 창이 읽는다

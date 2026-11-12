@@ -297,9 +297,23 @@ class GoalKind(Kind):
     MAX_STEPS = 300  # 실행한 걸음 수 상한. 가공을 기다리는 것은 세지 않는다 (5분짜리 가공 100번이면 기다림만 100번)
     STUCK_LIMIT = 4  # 같은 걸음이 이만큼 연달아 나오면 헛도는 것으로 본다
     COLLECT_RETRY = 10  # 수령이 '완료된 게 없다' 로 거절되면 이만큼 기다렸다 다시 판단 (초)
+    # 가공 완료까지 이만큼 넘게 남았고 아래에 돌 카드가 있으면 그 카드에 비켜 주고, 끝날 때쯤 돌아온다 (초).
+    # 캐릭터가 다르면 오가며 두 번 다시 접속하므로(한 번 40초쯤) 너무 짧으면 손해다 (2026-11-12 사용자)
+    YIELD_MIN = 300
 
     def __init__(self, api):
         self.api = api
+
+    def ready(self, it) -> str:
+        """비켜 준 카드는 가공이 끝날 때(resumeAt)까지 비켜 둔다 — 큐가 아래 카드를 돌린다."""
+        at = it.get("resumeAt")
+        if not at or time.time() * 1000 >= at:
+            return ""
+        return f"가공 완료 대기 — {time.strftime('%H:%M', time.localtime(at / 1000))}쯤 이어서 (그동안 다른 카드)"
+
+    def timed(self, it) -> bool:
+        """비켜 준 카드는 돌아올 때가 되면 돌던 카드를 끊어도 되는 자리에서 끊고 먼저 한다 (필드 보스와 같은 길)."""
+        return bool(it.get("resumeAt"))
 
     @staticmethod
     def detail(x) -> str:
@@ -314,6 +328,8 @@ class GoalKind(Kind):
 
     def run(self, q, it):
         api, name = self.api, it.get("name")
+        if it.get("resumeAt"):
+            q.patch(it["id"], {"resumeAt": None}, quiet=True)  # 돌아왔다
         if not api._q_char(q, it):  # 보유량(base)은 그 캐릭터 것이어야 한다 — 먼저 맞춘다
             return False
         if it.get("base") is None:
@@ -379,8 +395,18 @@ class GoalKind(Kind):
         self.api._q_char_stop(reason)
 
     def _wait(self, q, it, st) -> bool:
-        """가공이 끝나기를 기다린다. 남은 시간을 카드에 적고, 큐가 서거나 먼저 할 카드가 열리면 그만 (가공은 시설에서 계속된다)."""
-        until = time.monotonic() + max(5, float(st.get("seconds") or 0))
+        """가공이 끝나기를 기다린다. 남은 시간을 카드에 적고, 큐가 서거나 먼저 할 카드가 열리면 그만 (가공은 시설에서 계속된다).
+        오래 남았고 아래에 돌 카드가 있으면 그 카드에 비켜 준다 — 끝날 시각을 적어 두면(resumeAt) 그때 큐가 돌던 카드를
+        끊어도 되는 자리에서 끊고 이 카드로 돌아온다 (ready·timed)."""
+        secs = max(5, float(st.get("seconds") or 0))
+        if secs >= self.YIELD_MIN and (nxt := q.yield_to(it)):
+            at = int((time.time() + secs) * 1000)
+            q.patch(it["id"], {"resumeAt": at}, quiet=True)
+            when = time.strftime("%H:%M", time.localtime(at / 1000))
+            log.info(f"작업 큐: '{it.get('label')}' 가공 완료까지 {int(secs) // 60}분 — 그동안 '{nxt.get('label')}' 먼저, {when}쯤 이어서")
+            q.set_stop("yield", {"note": f"가공 완료 대기 — {when}쯤 이어서 (그동안 다른 카드)"})
+            return False
+        until = time.monotonic() + secs
         while time.monotonic() < until:
             if q.stop or cutpoint.cut("가공 완료 대기"):
                 return False

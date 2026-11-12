@@ -55,6 +55,52 @@ class FakeQuick(Kind):
         return True
 
 
+class FakeAlter(Kind):
+    """가공 목표 흉내: 처음엔 아래 카드에 비켜 주고(resumeAt), 돌아오면 끝난다 (GoalKind 의 ready·timed 와 같은 규칙)."""
+
+    def __init__(self):
+        self.runs = 0
+
+    def ready(self, it):
+        at = it.get("resumeAt")
+        return "가공 완료 대기" if at and time.time() * 1000 < at else ""
+
+    def timed(self, it):
+        return bool(it.get("resumeAt"))
+
+    def run(self, q, it):
+        self.runs += 1
+        it["resumeAt"] = None
+        if self.runs == 1 and q.yield_to(it):
+            q.patch(it["id"], {"resumeAt": int(time.time() * 1000) + 300})
+            q.set_stop("yield", {"note": "비켜 줌"})
+            return False
+        return True
+
+
+class FakeBorrower(Kind):
+    """비켜 받은 긴 카드: 끊어도 되는 자리마다 cut_for_timed 를 부르고, 밀리면 멈춘다. 두 번째 돌 때 끝난다."""
+
+    def __init__(self):
+        self.started = []
+        self.stops = []
+
+    def run(self, q, it):
+        self.started.append(it["label"])
+        if len(self.started) > 1:
+            return True
+        end = time.monotonic() + 3
+        while time.monotonic() < end:
+            if q.stop or q.cut_for_timed():
+                q.set_stop("stopped")
+                return False
+            time.sleep(0.02)
+        return True
+
+    def stop(self, reason):
+        self.stops.append(reason)
+
+
 def wait_for(cond, timeout=3):
     end = time.monotonic() + timeout
     while time.monotonic() < end:
@@ -201,6 +247,41 @@ class WorkQueueTest(unittest.TestCase):
         self.assertEqual(q2.items[0]["status"], "wait")
         self.assertEqual(q2.items[0]["doneRuns"], 2)
         self.assertIsNone(q2.top_paused())
+
+
+class YieldTest(unittest.TestCase):
+    """가공 완료를 기다리는 카드가 아래 카드에 비켜 주고, 끝날 때가 되면 그 카드를 끊고 돌아온다."""
+
+    def setUp(self):
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        self.alter, self.other = FakeAlter(), FakeBorrower()
+        self.q = WorkQueue(Path(d.name) / "queue.json", Path(d.name) / "history.jsonl", lambda ch, v: None,
+                           {"goal": self.alter, "daily": self.other})
+
+    def test_yield_and_come_back(self):
+        self.q.add({"kind": "goal", "label": "가공"})
+        self.q.add({"kind": "daily", "label": "숙제"})
+        self.q.tick()
+        self.assertTrue(wait_for(lambda: not self.q.running and not self.q.items, timeout=5))
+        self.assertEqual(self.alter.runs, 2)            # 비켜 줬다가 돌아와 끝냄
+        self.assertEqual(self.other.started, ["숙제", "숙제"])  # 숙제는 끊겼다가 이어서
+        self.assertEqual(self.other.stops, ["preempt"])
+
+    def test_paused_card_below_blocks_yield(self):
+        self.q.add({"kind": "goal", "label": "가공"})
+        self.q.add({"kind": "daily", "label": "숙제"})
+        self.q.items[1]["status"] = "pause"
+        self.q.tick()
+        self.assertTrue(wait_for(lambda: not self.q.running))
+        self.assertEqual(self.alter.runs, 1)  # 비켜 줄 카드가 없어 그 자리에서 끝까지
+        self.assertEqual(self.other.started, [])
+
+    def test_play_one_clears_resume_time(self):
+        self.q.add({"kind": "goal", "label": "가공"})
+        self.q.items[0].update(status="pause", resumeAt=int(time.time() * 1000) + 60_000)
+        self.q.play_one(self.q.items[0]["id"])
+        self.assertTrue(wait_for(lambda: not self.q.running and not self.q.items))
 
 
 class SaveTest(unittest.TestCase):

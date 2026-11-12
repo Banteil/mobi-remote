@@ -15,6 +15,7 @@
   remove  : 돌던 카드를 뺐거나 큐를 비움 (전체 중단 Ctrl+F12 도 큐를 비운다)
   skip    : 지금 카드만 중단 (Shift+F12) → 카드를 빼고 다음 카드로 이어 간다
   skill   : 생활 스킬 레벨 부족 {what, level} → 실패 (기다려도 안 풀린다)
+  yield   : 가공 완료를 기다리는 동안 아래 카드에 비켜 줌 {note} → 대기 (ready 가 다시 열리면 그 카드를 끊고 돌아온다)
 둘이 겹치면 센 쪽 (뒤로 갈수록 셈). 예: 밀리던 숙제가 STOP 으로 끝나도 '밀림' 그대로.
 
 상태: wait(대기) · run(진행 중) · pause(일시정지) · done(완료 — 바로 빠진다) · fail(실패)
@@ -37,7 +38,7 @@ from .queue_report import QueueReport, loot
 
 log = logging.getLogger("mabi")
 
-STOP_RANK = {"stopped": 0, "later": 0, "preempt": 1, "pause": 2, "skip": 3, "remove": 3, "skill": 4, "transfer": 4}
+STOP_RANK = {"stopped": 0, "later": 0, "yield": 0, "preempt": 1, "pause": 2, "skip": 3, "remove": 3, "skill": 4, "transfer": 4}
 LIVE = ("wait", "run", "pause")  # 아직 할 일이 남은 카드
 # 사람이 멈춘 게 아닌 까닭 — 돌던 일의 로그에 '사용자 중단' 대신 쓴다 (Kind.stop 이 봇의 멈춤 요청에 싣는다)
 STOP_WHY = {"preempt": "먼저 할 카드에 밀림 (끝나면 이어서)"}
@@ -317,6 +318,7 @@ class WorkQueue:
                 for k in ("base", "made", "doneRuns", "doneSecs", "prog"):
                     it.pop(k, None)
                 it.update(spent=0, steps=0, note="")
+            it.pop("resumeAt", None)  # 사람이 고른 카드는 기다리던 중이어도 지금 돈다
             it["status"] = "wait"
             self.items.remove(it)
             at = next((n for n, x in enumerate(self.items) if x.get("status") == "run"), -1)
@@ -444,6 +446,31 @@ class WorkQueue:
         self._changed()
         self._thread.start()
 
+    def _pick(self, skip: dict | None = None) -> tuple[dict | None, list]:
+        """(lock 안에서) 다음에 돌 카드와 비켜 둔 카드 [(카드, 까닭)]. 돌 카드가 없으면 None.
+        위에서부터: 일시정지 카드를 만나면 거기서 선다 (건너뛰고 아래 카드를 돌리지 않는다 — 그 카드를 돌려준다).
+        정해진 시간에만 하는 카드(필드 보스)·가공을 기다리는 카드가 지금 돌 때가 아니면 비켜 두고 아래 카드를 (ready).
+        skip: 이 카드는 없는 것으로 본다 (돌던 카드가 비켜 줄지 정할 때 — yield_to)."""
+        later = []
+        for x in self.items:
+            if x is skip or x.get("status") not in ("wait", "pause"):
+                continue
+            ready = getattr(self.kind_of(x), "ready", None)  # 없는 종류는 늘 준비됨
+            why = x.get("status") == "wait" and ready and ready(x)
+            if why:
+                later.append((x, why))
+                continue
+            return x, later
+        return None, later
+
+    def yield_to(self, it: dict) -> dict | None:
+        """돌던 카드 it 이 한동안 할 일이 없을 때 (가공 완료 대기) 그사이 돌릴 카드. 없거나 일시정지 카드에 막히면 None."""
+        with self.lock:
+            if self.stop:
+                return None
+            nxt, _ = self._pick(skip=it)
+            return nxt if nxt and nxt.get("status") == "wait" else None
+
     def _loop(self) -> None:
         drained = restart = False
         try:
@@ -451,19 +478,7 @@ class WorkQueue:
                 with self.lock:
                     if self.stop:
                         break
-                    # 위에서부터: 일시정지 카드를 만나면 거기서 선다 (건너뛰고 아래 카드를 돌리지 않는다).
-                    # 정해진 시간에만 하는 카드(필드 보스)가 지금 그 시간이 아니면 비켜 두고 아래 카드를 (ready)
-                    it, later = None, []
-                    for x in self.items:
-                        if x.get("status") not in ("wait", "pause"):
-                            continue
-                        ready = getattr(self.kind_of(x), "ready", None)  # 없는 종류는 늘 준비됨
-                        why = x.get("status") == "wait" and ready and ready(x)
-                        if why:
-                            later.append((x, why))
-                            continue
-                        it = x
-                        break
+                    it, later = self._pick()
                     for x, why in later:
                         if x.get("note") != why:
                             x["note"] = why
@@ -521,6 +536,14 @@ class WorkQueue:
                     self._changed()
                     continue
                 why = self.stop and self.stop["reason"]
+                if why == "yield":  # 기다리는 동안 아래 카드에 비켜 줌 — 끝난 게 아니라 기록하지 않는다 (ready 가 다시 열어 준다)
+                    it["status"] = "wait"
+                    it["note"] = self.stop.get("note") or "기다리는 동안 다른 카드 먼저"
+                    report("preempt")
+                    with self.lock:
+                        self.stop = None
+                    self._changed()
+                    continue
                 if why == "later":  # 정해진 시간이 지났다 — 남은 몫은 다음 열림 때 (실패 아님)
                     it["status"] = "wait"
                     it["note"] = self.stop.get("note") or "다음에 이어서"
