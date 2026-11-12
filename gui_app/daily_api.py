@@ -291,10 +291,10 @@ class DailyApi:
         a = load_config(self.paths)["abyss"]
         from mabi.tasks import abyss
         return {"dungeon": a["dungeon"], "difficulty": a.get("difficulty") or self._rep_default("abyss", "difficulty"),
-                "runs": int(a.get("runs", 0)),
-                "slot": int(a.get("slot", 0)), "chars": [{"slot": c["slot"], "name": c["name"]} for c in prof.chars(self.paths)],
-                "minutes": float(a.get("minutes", 0)), "dungeons": abyss.dungeons(), "frontOnly": list(abyss.FRONT_ONLY),
-                "revive": bool(a.get("revive", True)), "mode": a.get("mode") or self._rep_default("abyss", "mode"),
+                "runs": int(a["runs"]),
+                "slot": int(a["slot"]), "chars": [{"slot": c["slot"], "name": c["name"]} for c in prof.chars(self.paths)],
+                "minutes": float(a["minutes"]), "dungeons": abyss.dungeons(), "frontOnly": list(abyss.FRONT_ONLY),
+                "revive": bool(a["revive"]), "mode": a.get("mode") or self._rep_default("abyss", "mode"),
                 "difficulties": abyss.difficulties(),
                 "running": self._alive_now(self._rep("abyss").thread)}
 
@@ -334,8 +334,8 @@ class DailyApi:
         r = load_config(self.paths)["raid"]
         raids = raid.raids()
         return {"raid": r["raid"], "difficulty": r.get("difficulty") or self._rep_default("raid", "difficulty"),
-                "slot": int(r.get("slot", 0)),
-                "runs": int(r.get("runs", 0)), "minutes": float(r.get("minutes", 0)), "revive": bool(r.get("revive", True)),
+                "slot": int(r["slot"]),
+                "runs": int(r["runs"]), "minutes": float(r["minutes"]), "revive": bool(r["revive"]),
                 "mode": r.get("mode") or self._rep_default("raid", "mode"), "raids": list(raids),
                 "difficulties": raids, "running": self._alive_now(self._rep("raid").thread)}
 
@@ -401,7 +401,7 @@ class DailyApi:
             if not bot.window.find():
                 raise ValueError("게임이 꺼져 있습니다")
             a = cfg[kind]  # 게임은 입장할 때만 앞으로 가져온다 (abyss.repeat)
-            ch = next((c for c in prof.chars(self.paths) if c["slot"] == int(a.get("slot", 0))), None)
+            ch = next((c for c in prof.chars(self.paths) if c["slot"] == int(a["slot"])), None)
             from mabi.tasks import display
             # 화면 설정 맞추기 — 인터페이스 PC·80% (큐에서 이번 처음일 때만, 되돌리기는 큐 끝). 일일 숙제와 같은 InterfaceFit
             fit = display.InterfaceFit(prof.DailyState(self.paths.state), enabled=bool(v.get("interface")),

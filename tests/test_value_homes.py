@@ -35,6 +35,30 @@ class ValueHomesTest(unittest.TestCase):
                for f, i, line in _lines(files) for m in pat.finditer(line) if m[1] in sections]
         self.assertEqual(bad, [], "config.default.toml 에 있는 구역은 cfg[구역][키] 로 읽는다 (기본값은 설정 파일 하나)")
 
+    def test_no_double_defaults_for_config_keys(self):
+        # 설정에서 바로 꺼낸 구역 dict 로 config.default.toml 에 있는 키를 .get("키", 값) 으로 읽지 않는다:
+        # cfg["구역"].get("키", 값) · 같은 파일에서 x = cfg["구역"] 로 받아 둔 x.get("키", 값).
+        # 구역별 by_slot 같은 선택 칸은 config 에 없으니 걸리지 않는다
+        conf = tomllib.loads((ROOT / "config.default.toml").read_text(encoding="utf-8"))
+        has = lambda sec, key: isinstance(conf.get(sec), dict) and key in conf[sec]  # noqa: E731
+        direct = re.compile(r"\[[\"'](\w+)[\"']\]\.get\(\s*[\"'](\w+)[\"']\s*,")
+        alias = re.compile(r"((?:self\.)?\w+)\s*=\s*(?:self\.)?(?:bot\.)?(?:cfg|load_config\([^)]*\))\[[\"'](\w+)[\"']\]\s*(?:#.*)?$")
+        files = sorted((ROOT / "mabi").rglob("*.py")) + sorted((ROOT / "gui_app").rglob("*.py"))
+        bad = []
+        for f in files:
+            lines = list(_lines([f]))
+            names = {}
+            for _, _, line in lines:
+                if (m := alias.search(line)) and isinstance(conf.get(m[2]), dict):
+                    names.setdefault(m[1], set()).add(m[2])
+            got = [re.compile(re.escape(n) + r"\.get\(\s*[\"'](\w+)[\"']\s*,") for n in names]
+            for _, i, line in lines:
+                hit = any(has(m[1], m[2]) for m in direct.finditer(line))
+                hit = hit or any(has(s, m[1]) for p, secs in zip(got, names.values()) for m in p.finditer(line) for s in secs)
+                if hit:
+                    bad.append(f"{f.relative_to(ROOT)}:{i}: {line.strip()}")
+        self.assertEqual(bad, [], "config.default.toml 에 있는 키는 cfg[구역][키] 로 읽는다 (기본값은 설정 파일 하나)")
+
     def test_web_has_no_local_storage(self):
         bad = [f"{f.relative_to(ROOT)}:{i}" for f, i, line in _lines(sorted((ROOT / "web").rglob("*.js")))
                if "localStorage" in line and not line.lstrip().startswith(("//", "*", "/*"))]
