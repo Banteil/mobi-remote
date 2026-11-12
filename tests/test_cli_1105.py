@@ -5,7 +5,7 @@ from unittest import mock
 
 from mabi import cache
 from mabi.craft import execute, needs
-from mabi.tasks import content
+from mabi.tasks import guide
 
 GUIDE = {"Contents": [
     {"Target": "검은 구멍", "DayType": "Daily", "IsUnlocked": True, "IsCompleted": True, "RemainingCount": 2},
@@ -21,18 +21,18 @@ def fake_bot(data, ok=True):
 class GrowthTest(unittest.TestCase):
     def test_daily_done_from_cli(self):
         bot = fake_bot(GUIDE)
-        self.assertTrue(content.growth_done(bot, "검은 구멍"))  # 이월된 횟수가 남아도 끝남은 IsCompleted
-        self.assertFalse(content.growth_done(bot, "요일 던전"))
-        self.assertFalse(content.growth_done(bot, "검은 구멍", "Weekly"))
+        self.assertTrue(guide.growth_done(bot, "검은 구멍"))  # 이월된 횟수가 남아도 끝남은 IsCompleted
+        self.assertFalse(guide.growth_done(bot, "요일 던전"))
+        self.assertFalse(guide.growth_done(bot, "검은 구멍", "Weekly"))
 
     def test_unknown_falls_back(self):
-        self.assertIsNone(content.growth_done(fake_bot(GUIDE), "필드 보스"))
-        self.assertIsNone(content.growth_done(fake_bot(None), "요일 던전"))
-        self.assertIsNone(content.growth_done(fake_bot(GUIDE, ok=False), "요일 던전"))
+        self.assertIsNone(guide.growth_done(fake_bot(GUIDE), "필드 보스"))
+        self.assertIsNone(guide.growth_done(fake_bot(None), "요일 던전"))
+        self.assertIsNone(guide.growth_done(fake_bot(GUIDE, ok=False), "요일 던전"))
 
     def test_daily_achieved_skips_guide_window(self):
-        with mock.patch.object(content, "open_guide") as og:
-            self.assertFalse(content.daily_achieved(fake_bot(GUIDE), "guide_daily_weekday"))
+        with mock.patch.object(guide, "open_guide") as og:
+            self.assertFalse(guide.daily_achieved(fake_bot(GUIDE), "guide_daily_weekday"))
         og.assert_not_called()
 
 

@@ -1,11 +1,11 @@
-"""클리어 뒤 연출 (mabi.tasks.content._clear_show) — 보상 메뉴가 늦게 떠도 빈 곳을 계속 누르지 않는다."""
+"""클리어 뒤 연출 (mabi.tasks.clear._clear_show) — 보상 메뉴가 늦게 떠도 빈 곳을 계속 누르지 않는다."""
 import logging
 import unittest
 from types import SimpleNamespace
 from unittest import mock
 
 from mabi.monitor import detect as d
-from mabi.tasks import content
+from mabi.tasks import clear
 
 
 class Clock:
@@ -50,12 +50,12 @@ class ClearShowTest(unittest.TestCase):
         clock = Clock()
         bot = FakeBot(clock)
         touches = []
-        with mock.patch.object(content, "clear_kind", return_value="dungeon"), \
-                mock.patch.dict(content.CLEAR_KINDS, {"dungeon": (lambda st: True, lambda st: True)}), \
-                mock.patch.object(content.time, "monotonic", clock), \
-                mock.patch.object(content, "touch_prompt_visible", return_value=prompt_visible), \
-                mock.patch.object(content, "handlers_touch", lambda *a: touches.append(clock.t)):
-            content._clear_show(bot, FakeMon(clock, menu_at=40, scene_at=scene_at), d, end=1000)
+        with mock.patch.object(clear, "clear_kind", return_value="dungeon"), \
+                mock.patch.dict(clear.CLEAR_KINDS, {"dungeon": (lambda st: True, lambda st: True)}), \
+                mock.patch.object(clear.time, "monotonic", clock), \
+                mock.patch.object(clear, "touch_prompt_visible", return_value=prompt_visible), \
+                mock.patch.object(clear, "handlers_touch", lambda *a: touches.append(clock.t)):
+            clear._clear_show(bot, FakeMon(clock, menu_at=40, scene_at=scene_at), d, end=1000)
         return touches
 
     def test_blind_touches_slow_down(self):

@@ -15,7 +15,16 @@ mabi/
   workqueue.py                작업 큐: 카드를 위에서부터 Kind.run 으로 돌린다
   queue_report.py             큐 결과(한 일·얻은 것). 얻은 것은 LootMeter 하나로 잰다
   monitor/                    점검자: 화면·패킷을 보고 처리기를 고른다 (Ctx 로 일마다 다른 것만 넘긴다)
-  tasks/                      숙제·콘텐츠 하나씩. 공통 부품은 아래 표
+  tasks/                      숙제·콘텐츠 하나씩. 공통 부품은 아래 표. 던전·사냥터 공용(예전 content.py)은 맡은 일별로:
+    dungeon.py                던전·사냥터 한 판 (단계 고르기·입장·더블 루팅 확인 → 진행 → 클리어 뒤)
+    clear.py                  클리어 순간·연출·보상 메뉴(추가 루팅·다시 하기·나가기)·막는 화면 넘기기·'확인'·'화면 터치'
+    fight.py                  안에서 지켜보기 (watch·자동 전투·Fight 뼈대)
+    space.py                  지금 장소·던전 상태·사냥터 퀘스트 읽기
+    arrival.py                이동 시작 뒤 도착·정착 기다리기 (travel·wait_arrival·wait_settled·go_talk)
+    worldmap.py               지도(M)·월드맵에서 장소 골라 가기 (go_to_place)
+    guide.py                  '/' 콘텐츠 가이드 (달성 체크·CLI 성장 가이드·카드 바로 가기)
+    questwin.py               퀘스트 창(J) 버튼·아르바이트 탭
+    steps.py                  막히면 다시 하기·조건까지 기다리기·스크롤 목록 (글자 도우미 has_word·read_button 은 ui_text)
 ```
 
 ## 공통 부품 — 같은 일을 또 만들지 말고 이것을 쓴다
@@ -25,10 +34,10 @@ mabi/
 | 캐릭터로 접속 (타이틀·선택 화면·다른 캐릭터에서) | `tasks/login.run` · 이름 비교 `login.current_name` / `name_matches` | runner, Repeat |
 | 반복 콘텐츠의 틀 (판 수·시간, 진행 알림, 캐릭터 확인, 판 사이 수리, 뒤로 보내기, 가방 무게 감시) | `tasks/repeat.Repeat` | `abyss.AbyssRepeat`, `raid.RaidRepeat` |
 | 콘텐츠 안에서 나가기 (나가기 → 확인 창 → 확인 → 밖 메인) | `tasks/exits.Exit` (확인 창 띄우기만 다르면 `open_dialog`) · 자리에 맞게 고르기 `exits.leave_instance` | `DungeonExit`, `abyss.AbyssExit`, `raid.RaidExit`/`ShipExit`, `drill.DrillExit`, `field_boss.FieldBossExit`, 실패 뒤 정리, 접속 |
-| 콘텐츠 안에서 끝날 때까지 지켜보기 (패킷으로 깨며 기다림 → 끝났나 → 쓰러짐·끼어든 창 → 부활 → 먹기·궁극기 → 시간 상한) | `tasks/content.Fight` 를 상속해 `wake`·`packet_end`·`dead_end`·`screen_end` … 만 덮어씀 | `abyss.AbyssPlay`, `raid.RaidPlay`, `drill.ZoneFight` |
+| 콘텐츠 안에서 끝날 때까지 지켜보기 (패킷으로 깨며 기다림 → 끝났나 → 쓰러짐·끼어든 창 → 부활 → 먹기·궁극기 → 시간 상한) | `tasks/fight.Fight` 를 상속해 `wake`·`packet_end`·`dead_end`·`screen_end` … 만 덮어씀 | `abyss.AbyssPlay`, `raid.RaidPlay`, `drill.ZoneFight` |
 | 메뉴(ESC)에서 콘텐츠 열기 (ESC 를 먹은 창은 넘기고 다시) | `ui_text.open_menu(bot, 글자 키, …)` | 어비스·레이드·나이트메어 드릴·필드 보스 |
-| '이동하기'·'바로 가기' 뒤 도착 화면(입장 창·NPC 대화)이 뜰 때까지 (로딩 동안 안 봄, 멈춤 n번 = 창 없이 멈춤, 늦은 빠른 이동) | `content.wait_arrival` (시간 상한은 각자 설정 키) | 어비스·레이드 입구, 드릴, 뱅가드, 필드 보스, `content.go_talk` |
-| 로딩이면 끝날 때까지 '어디인가' · 메인 화면까지 기다리기 | `content.where_settled(bot, where)` · `content.wait_settled` | 어비스·레이드 |
+| '이동하기'·'바로 가기' 뒤 도착 화면(입장 창·NPC 대화)이 뜰 때까지 (로딩 동안 안 봄, 멈춤 n번 = 창 없이 멈춤, 늦은 빠른 이동) | `arrival.wait_arrival` (시간 상한은 각자 설정 키) | 어비스·레이드 입구, 드릴, 뱅가드, 필드 보스, `arrival.go_talk` |
+| 로딩이면 끝날 때까지 '어디인가' · 메인 화면까지 기다리기 | `arrival.where_settled(bot, where)` · `arrival.wait_settled` | 어비스·레이드 |
 | 게임을 뒤로 보내고 하던 창 돌려주기 | `Bot.to_back` · 구간만이면 `with bot.behind_while(설정)` | `Repeat.to_back`, 드릴, 뱅가드 |
 | 초록 체크·켜진 스위치 (화면 조각의 초록 비율) | `vision.green` · `green_ratio` (기준값은 자리마다 인자로) | 콘텐츠 가이드 달성 체크, 우연한 만남 스위치 |
 | 작업이 예외로 끝났을 때 결과 가르기·정리 (게임 꺼짐 → 멈춤, 연속 실행 제한 창 → 게임 다시 켜기 뒤 이어 함, 가방 무게 → HEAVY) | `outcome.classify` · `outcome.escalate` · `outcome.recover` | runner, `daily_api._repeat_launch` |
@@ -48,13 +57,13 @@ mabi/
 | 작업 시작 점검 (지난 패킷 상태를 믿지 않고 CLI 로 맞춤) | `bot.check_in()` | 모든 작업 시작·이어 하기 |
 | NPC 대화·메뉴·확인 창 처리 | `monitor` + `Ctx` (대사 내용이 아니라 메뉴·단계·버튼 글자로 판단) | 아르바이트·숙제 |
 | 점검자 처리 결과로 갈래 나누기 (기다림인가·수락했나) — 글자로 비교하지 않는다 | `monitor.Did` (StrEnum, 로그엔 글자 그대로) · 기다림 모음 `monitor.WAITS` | Bot.to_main, 접속, 어비스 정산, 아르바이트, 수리 |
-| 대화 상태를 믿을 수 있는 패킷 상태 · '화면을 터치해 주세요' 글자 | `dialogue.packet_state` · `content.touch_prompt_visible(bot, frame)` | 점검자, 대화, 클리어 뒤 |
+| 대화 상태를 믿을 수 있는 패킷 상태 · '화면을 터치해 주세요' 글자 | `dialogue.packet_state` · `clear.touch_prompt_visible(bot, frame)` | 점검자, 대화, 클리어 뒤 |
 | 다른 모듈이 Bot 하나에 걸쳐 기억할 값 — bot 에 밑줄 속성을 붙이지 않는다 | `Bot.marks` (`bot.Marks` 에 칸을 더한다) · 점검자 `Bot.monitor` | 점검자, 출석, 아르바이트 |
 | 끼어들기 막는 구간 · F12 와 같은 일시정지 — stopper·_interrupting 을 직접 만지지 않는다 | `bot.no_interrupt()` · `bot.pause_as_key()` (`pause` 는 조작 사이 기본 대기) | 점검자 check, 네트워크 불안정 |
 | 화면 글자 찾기·누르기 (한 번 읽은 글자들에서 찾기는 `ui_text.match`) · 띄어쓰기 빼기 · 태그 지우기 | `tasks/ui_text` · `ocr.nospace` · `richtext.strip` | 곳곳 |
 | 화면 판단에 쓰면 안 되는 자리 (게임이 위에 띄우는 창 — 연속 실행 제한 창) | `data/ui.json` covers · `gamedata.covering` · 예외 covered_ok · 시험 `tests/test_covers.py` | 모든 글자 영역·그림 ROI·설정 영역 |
 | 어비스·레이드 입장 창 (입장 창인가·버튼·지금 탭·우연한 만남, 탭 바꾸기) | `tasks/entry` (`parse`·`read`·`set_tab`·`ensure_chance`·`wait_button`) | 어비스, 레이드 (버튼 기다리기는 드릴도) |
-| 아래 가운데 '확인' (퀘스트 완료·레이드·필드 보스 결과 창) | `content.confirm_text` | 점검자, 레이드·필드 보스 결과 |
+| 아래 가운데 '확인' (퀘스트 완료·레이드·필드 보스 결과 창) | `clear.confirm_text` | 점검자, 레이드·필드 보스 결과 |
 | 게임 단축키 (Z 카메라·X 보관함·J 퀘스트 … 옵션에서 바꿈) — 글자를 직접 쓰지 않는다 | `keys.of(bot, "camera")` · 목록 `keys.GAME_KEYS` | 곳곳. 이동 WASD·버튼 확인 키(Space·Esc·R)는 고정 |
 | 여러 신호(패킷·CLI·화면)로 우선순위 판단 | `judge.decide` | 어비스 단계, 쓰러짐, 로딩 |
 | 게임 화면(실제 픽셀) 위에 Qt 창 겹치기 — 게임이 있는 모니터·배율 | `queue_overlay.to_logical` | 작업 큐 오버레이, 염색 표시 |
@@ -110,14 +119,14 @@ mabi/
 
 (2026-11-12, tasks/ 정리)
 - 메뉴(ESC)에서 항목 열기: 네 벌 → `ui_text.open_menu`
-- '이동하기' 뒤 도착 기다리기: 여섯 벌(go_talk 포함) → `content.wait_arrival`
-- 우연한 만남 켜기·버튼 기다리기·where_settled·_wait_settled(레이드가 어비스 private 을 씀) → `entry.ensure_chance`·`entry.wait_button`·`content.where_settled`·`content.wait_settled`
-- 콘텐츠 안 전투 대기: 어비스·레이드·드릴 세 벌 → `content.Fight` · BossSkills 만들기 세 벌 → `BossSkills.for_current`
+- '이동하기' 뒤 도착 기다리기: 여섯 벌(go_talk 포함) → `arrival.wait_arrival`
+- 우연한 만남 켜기·버튼 기다리기·where_settled·_wait_settled(레이드가 어비스 private 을 씀) → `entry.ensure_chance`·`entry.wait_button`·`arrival.where_settled`·`arrival.wait_settled`
+- 콘텐츠 안 전투 대기: 어비스·레이드·드릴 세 벌 → `fight.Fight` · BossSkills 만들기 세 벌 → `BossSkills.for_current`
 - 드릴·필드 보스 나가기: Exit 를 다시 구현 → `DrillExit` · `FieldBossExit`
 - 게임 뒤로 보내기: 세 벌 → `Bot.to_back` · `behind_while`
 - 초록 판정: 세 벌 → `vision.green` · `green_ratio`
 - 글자 처리(띄어쓰기·찾기·태그): display·arbeit·login·raid → `ocr.nospace` · `ui_text.match` · `richtext.strip`
-- 이름 충돌: `abyss.after_clear`(보상 화면인가) → `abyss.at_reward` (`content.after_clear` 는 클리어 뒤 정리 동작)
+- 이름 충돌: `abyss.after_clear`(보상 화면인가) → `abyss.at_reward` (`clear.after_clear` 는 클리어 뒤 정리 동작)
 
 (2026-11-12, gui_app·craft 정리)
 - 가공 작업 현황: 화면용 복사본(legacy_shapes) → `lists.altering_works` + 키 이름만 바꿈
@@ -151,6 +160,6 @@ mabi/
 - 화면의 '지금 하는 행동'(gui_app/legacy_shapes `q_activity`)은 get_activity 를 따로 읽는다 — 연주·선택지 기다림까지 '바쁨' 으로 보는
   화면용 뜻이라 `Activity.busy` 와 다르다. 합치려면 `Activity` 에 연주·앉음 칸을 더하고 화면용 busy 를 따로 둔다.
 
-- 필드 보스 전투(`field_boss.fight`)·뱅가드 진행(`vanguard.play`)은 `content.Fight` 를 안 쓴다 — 패킷 기다림 없이 화면을 짧게
+- 필드 보스 전투(`field_boss.fight`)·뱅가드 진행(`vanguard.play`)은 `fight.Fight` 를 안 쓴다 — 패킷 기다림 없이 화면을 짧게
   보고(결과 창 '확인'·성장 가이드 15초마다·화면 터치), 필드 보스는 먹지 않고 뱅가드는 CLI 활동·궁극기가 없다. 옮기려면 Fight 에
   '패킷 대신 짧게 쉬기'·'싸우는 중이 아니어도 쉬기' 같은 갈래가 더 필요하다.

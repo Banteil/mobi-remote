@@ -311,7 +311,7 @@ def busy(bot: Bot) -> str:
     """콘텐츠 안이거나 NPC 대화 중이면 그 이유. 환경 설정은 ESC 로 메뉴를 여는데, 이때 ESC 는 보상 화면 '나가기'·
     매칭 취소·대화 닫기가 된다 → 인터페이스 맞추기는 미룬다 (2026-10-27 감사: 다시 켠 뒤 첫 카드가 콘텐츠 안에서 ESC 부터).
     패킷 → CLI 순서로 보고, 모르면 ''."""
-    from .content import game_space
+    from .space import game_space
     p, st = bot.packets, bot.packets.state
     if p.ok:
         if st.dungeon_state in ("Entering", "InProgress", "Cleared"):

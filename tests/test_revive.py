@@ -4,7 +4,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from mabi.tasks import abyss, content
+from mabi.tasks import abyss, fight
 
 
 class FakePackets:
@@ -79,7 +79,7 @@ class DeadThenClearTest(unittest.TestCase):
         bot.wait_packet.return_value = False
         bot.state.activity.return_value = {}
         seen = d.Seen(d.DEAD, src="packet", finish=Finish("dead"))
-        with mock.patch.object(content, "watch", return_value=seen),                 mock.patch.object(abyss, "inside", return_value=False),                 mock.patch.object(abyss, "at_reward", return_value=True):
+        with mock.patch.object(fight, "watch", return_value=seen),                 mock.patch.object(abyss, "inside", return_value=False),                 mock.patch.object(abyss, "at_reward", return_value=True):
             self.assertEqual(abyss.play(bot, 60), "clear")
 
 

@@ -1,6 +1,6 @@
 """리모콘이 쓰는 예외를 한곳에 모은다.
 
-어디서 나든 실행기(runner)·결과 가르기(outcome)·큐가 같은 이름으로 받는다. 예전 자리(bot, tasks.content,
+어디서 나든 실행기(runner)·결과 가르기(outcome)·큐가 같은 이름으로 받는다. 예전 자리(bot,
 monitor.core, tasks.display, tasks.login, tasks.abyss)에서도 같은 클래스를 가져다 쓰므로 그 이름으로 import 해도 같다.
 """
 

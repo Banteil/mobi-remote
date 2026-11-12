@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from mabi.packet_monitor import PacketState
-from mabi.tasks import abyss, content, display
+from mabi.tasks import abyss, display, space
 
 
 def bot_with(state: PacketState, ok=True, act=None, space=""):
@@ -43,13 +43,13 @@ class WaitDungeonTest(unittest.TestCase):
     def test_cli_failure_is_not_an_answer(self):
         bot = bot_with(PacketState(), act={})  # CLI 가 던전 상태를 못 줌
         with mock.patch("time.monotonic", side_effect=[0, 0, 1, 1, 5, 5, 9, 9]):
-            self.assertEqual(content.wait_dungeon(bot, lambda s: s != "InProgress", 4), "")
+            self.assertEqual(space.wait_dungeon(bot, lambda s: s != "InProgress", 4), "")
 
 
 class SpaceTest(unittest.TestCase):
     def test_unknown_space_counts_as_inside(self):
-        self.assertTrue(content.inside_space(bot_with(PacketState(), act={}), "검은 구멍"))
-        self.assertFalse(content.inside_space(bot_with(PacketState(), act={}, space="던바튼"), "검은 구멍"))
+        self.assertTrue(space.inside_space(bot_with(PacketState(), act={}), "검은 구멍"))
+        self.assertFalse(space.inside_space(bot_with(PacketState(), act={}, space="던바튼"), "검은 구멍"))
 
 
 class BusyTest(unittest.TestCase):

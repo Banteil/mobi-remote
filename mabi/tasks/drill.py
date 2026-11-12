@@ -26,7 +26,8 @@ from ..ocr import find_texts, nospace, read_text
 from ..place import DRILL
 from . import entry, ui_text
 from .boss_skills import BossSkills
-from .content import Fight, wait_arrival
+from .arrival import wait_arrival
+from .fight import Fight
 from .exits import Exit
 
 # 목표 구역·구역 제한 시간 등은 설정 [drill] (bot.cfg["drill"])
@@ -145,7 +146,7 @@ def skip_cutscene(bot: Bot) -> None:
 def wait_zone(bot: Bot, skills: BossSkills | None = None) -> int:
     """한 구역이 끝날 때까지 — 결과 창이 뜨면 깬 구역 번호, 못 깨고 끝났으면 0.
     패킷이 있으면 결과 패킷을 기다리고 결과 창 글자는 결과가 왔거나 제한 시간이 지났을 때만 본다 (못 깬 결과는 패킷을 모른다).
-    뼈대는 content.Fight (구역 제한 + 90초를 넘기면 StepTimeout)."""
+    뼈대는 fight.Fight (구역 제한 + 90초를 넘기면 StepTimeout)."""
     return ZoneFight(bot, skills).run()
 
 

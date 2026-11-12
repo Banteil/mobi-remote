@@ -199,7 +199,7 @@ class DialogTest(unittest.TestCase):
 class DeadTest(unittest.TestCase):
     def dead(self, revive, ok):
         b = fake_bot()
-        with mock.patch.object(d, "look", return_value=Seen(d.DEAD, src="packet")),                 mock.patch("mabi.tasks.abyss.revive_here", return_value=ok),                 mock.patch("mabi.tasks.content.ensure_auto"):
+        with mock.patch.object(d, "look", return_value=Seen(d.DEAD, src="packet")),                 mock.patch("mabi.tasks.abyss.revive_here", return_value=ok),                 mock.patch("mabi.tasks.fight.ensure_auto"):
             return monitor.Monitor(b).check(monitor.Ctx("t", revive=revive), guard=False)
 
     def test_revives_here(self):

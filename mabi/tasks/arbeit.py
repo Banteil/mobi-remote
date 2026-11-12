@@ -19,7 +19,7 @@ from ..bot import Bot
 from ..monitor import Ctx, detect as d
 from ..exceptions import CannotProceed, Stuck
 from ..progress import Progress
-from .content import open_arbeit_tab, questwin_text_ok
+from .questwin import open_arbeit_tab, questwin_text_ok
 
 PROGRESS, APPLY = gd.text("arbeit_progress"), gd.text("arbeit_apply")  # 카드 버튼 '진행하기' · '지원하기'
 HAVE = gd.text("arbeit_have_item")  # CLI 조건 '… 보유 3/10'

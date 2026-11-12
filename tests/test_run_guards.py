@@ -146,7 +146,7 @@ class FieldAtLoginTest(unittest.TestCase):
         b.daily.progress.return_value = {"task": task, "slot": 1}
         b.exists.return_value = False
         here = SimpleNamespace(kind=None, in_field=True)
-        with mock.patch("mabi.place.place", return_value=here),                 mock.patch("mabi.tasks.content.game_space", return_value="센마이 평원"),                 mock.patch("mabi.tasks.content.hunt_quest", return_value=hunt),                 mock.patch("mabi.tasks.content.dungeon_state", return_value="NotInDungeon"),                 mock.patch("mabi.tasks.content.wait_field") as wf:
+        with mock.patch("mabi.place.place", return_value=here),                 mock.patch("mabi.tasks.space.game_space", return_value="센마이 평원"),                 mock.patch("mabi.tasks.space.hunt_quest", return_value=hunt),                 mock.patch("mabi.tasks.space.dungeon_state", return_value="NotInDungeon"),                 mock.patch("mabi.tasks.dungeon.wait_field") as wf:
             login._leave_dungeon(b)
         return wf.called
 

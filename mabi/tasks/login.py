@@ -261,7 +261,10 @@ def name_in_frame(frame) -> str:
 
 def _leave_dungeon(bot: Bot) -> bool:
     """던전 안이거나 클리어/보상 화면에 남아 있으면 (중단·충돌 뒤 다시 시작한 경우) 마무리하고 나온다."""
-    from .content import after_clear, dungeon_state, game_space, hunt_quest, inside_space, play_dungeon, wait_field, wait_until
+    from .clear import after_clear
+    from .dungeon import play_dungeon, wait_field
+    from .space import dungeon_state, game_space, hunt_quest, inside_space
+    from .steps import wait_until
     from .exits import leave_instance
     from ..place import ABYSS, HOUSINGS, RAID, RAID_LOBBY, place
     ui = bot.ui
@@ -310,7 +313,7 @@ def _in_field(bot: Bot) -> bool:
     """사냥터 안인가. 자리(place — 패킷 사냥터 상태, 패킷이 맵을 모르면 CLI 의 사냥터 안 여부)로, 그것도 모르면
     진행 중인 사냥터 퀘스트(CLI)가 있는 것으로."""
     from ..place import place
-    from .content import hunt_quest
+    from .space import hunt_quest
     if (inside := place(bot).in_field) is not None:
         return inside
     return bool(hunt_quest(bot))

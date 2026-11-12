@@ -12,7 +12,10 @@ import numpy as np
 from .. import gamedata as gd, keys, situation
 from ..bot import Bot
 from ..exceptions import CannotProceed, StepTimeout
-from .content import QUESTWIN_TAB_BAR_Y, enter_from_dungeon_window, questwin_buttons, travel, with_retries
+from .arrival import travel
+from .dungeon import enter_from_dungeon_window
+from .questwin import questwin_buttons, QUESTWIN_TAB_BAR_Y
+from .steps import with_retries
 
 QUEST_TITLE = gd.text("tribute_quest")
 CARD_H = 450  # 퀘스트 카드 하나의 높이 (1920 기준, 제목 → '진행하기' 약 400px)
@@ -108,7 +111,7 @@ def run(bot: Bot, cfg: dict) -> str:
         def go():
             open_quest(bot, c)
             bot.step("travel", "심층 던전 입구로 이동")
-            # 엉뚱한 버튼을 눌러 이동이 시작되지 않으면 travel 이 바로 알린다 (content.started)
+            # 엉뚱한 버튼을 눌러 이동이 시작되지 않으면 travel 이 바로 알린다 (arrival.started)
             travel(bot, arrive=[c["dungeon_tab"]], timeout=c["travel_timeout"])
 
         with_retries(bot, "심층 던전 입구로 가기", go)

@@ -14,7 +14,9 @@ import time
 from ..bot import Bot
 from ..exceptions import StepTimeout
 from ..profile import game_day_start
-from .content import GROWTH, achieved_mark, daily_achieved, growth_done, game_space, inside_space, open_guide, open_guide_card, watch
+from .fight import watch
+from .guide import achieved_mark, daily_achieved, GROWTH, growth_done, open_guide, open_guide_card
+from .space import game_space, inside_space
 
 
 def cleared_today(bot: Bot) -> bool:
@@ -37,7 +39,7 @@ def enter(bot: Bot, c: dict) -> None:
     이동 상태가 아닌 '장소 이름'으로 도착을 판단한다.
     가는 길에 선공 몬스터에게 맞아 전투가 시작되면 자동 이동이 끊긴다 → 전투가 끝나면 '바로 가기'를 다시 누른다.
     전투 없이 이동이 멈춰 버린 경우(stall 초 동안 이동도 전투도 아님)도 다시 누른다.
-    가는 길에 끼어든 창(대화·퀘스트 완료 등)과 쓰러짐은 점검자가 (content.watch)."""
+    가는 길에 끼어든 창(대화·퀘스트 완료 등)과 쓰러짐은 점검자가 (fight.watch)."""
     from .. import monitor
     ctx = monitor.Ctx("black_hole", "검은 구멍으로 이동", revive=True)
     end = time.monotonic() + c["travel_timeout"]
