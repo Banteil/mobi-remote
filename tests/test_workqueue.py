@@ -4,7 +4,9 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
+from mabi.craft import queue as store
 from mabi.workqueue import Kind, WorkQueue
 
 
@@ -199,6 +201,24 @@ class WorkQueueTest(unittest.TestCase):
         self.assertEqual(q2.items[0]["status"], "wait")
         self.assertEqual(q2.items[0]["doneRuns"], 2)
         self.assertIsNone(q2.top_paused())
+
+
+class SaveTest(unittest.TestCase):
+    """queue.json 은 파일에 남는 칸이 바뀔 때만 쓴다 — 진행 줄(prog) 같은 화면용 값으로는 다시 쓰지 않는다."""
+    def test_writes_only_kept_changes(self):
+        d = Path(tempfile.mkdtemp())
+        q = WorkQueue(d / "queue.json", d / "history.jsonl", lambda ch, v: None, {"goal": FakeQuick()})
+        with q.lock:
+            q.items.append({"id": 1, "kind": "goal", "label": "a", "status": "pause"})
+        writes = []
+        real = store.write
+        with mock.patch.object(store, "write", side_effect=lambda f, s: writes.append(s) or real(f, s)):
+            q.patch(1, {"note": "x"})
+            q.patch(1, {"prog": {"n": 1}})   # 화면용 — 파일 내용은 그대로
+            q.patch(1, {"prog": {"n": 2}})
+            q.patch(1, {"note": "y"})
+        self.assertEqual(len(writes), 2)
+        self.assertEqual(store.load(d / "queue.json")["items"][0]["note"], "y")
 
 
 if __name__ == "__main__":

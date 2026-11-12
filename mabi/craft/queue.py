@@ -57,12 +57,28 @@ def load(file: Path) -> dict:
         return {"items": []}
 
 
-def save(file: Path, state: dict) -> dict:
+def _kept(state: dict) -> dict:
     items = [{k: x[k] for k in FIELDS if k in x}
              for x in (state.get("items") if isinstance(state, dict) and isinstance(state.get("items"), list) else [])]
+    return {"items": items}
+
+
+def encode(state: dict) -> str:
+    """파일에 쓸 글자 (FIELDS 만 거른 것). 같은 글자면 쓸 필요가 없다 — WorkQueue 가 바뀐 것만 쓴다."""
+    return json.dumps(_kept(state), ensure_ascii=False, indent=2)
+
+
+def write(file: Path, text: str) -> bool:
+    """encode 한 글자를 쓴다. 실패하면 False (진행 중인 큐는 계속 돌아야 한다)."""
     try:
         file.parent.mkdir(parents=True, exist_ok=True)
-        file.write_text(json.dumps({"items": items}, ensure_ascii=False, indent=2), encoding="utf-8")
+        file.write_text(text, encoding="utf-8")
+        return True
     except OSError:
-        pass  # 저장에 실패해도 진행 중인 큐는 계속 돌아야 한다
-    return {"items": items}
+        return False
+
+
+def save(file: Path, state: dict) -> dict:
+    kept = _kept(state)
+    write(file, json.dumps(kept, ensure_ascii=False, indent=2))
+    return kept
