@@ -54,7 +54,8 @@ class WindowTest(unittest.TestCase):
         self.assertEqual(c["difficulties"]["토르모그"], ["일반", "어려움"])
         self.assertEqual(c["difficulties"]["페리"], ["일반", "어려움", "매우 어려움"])
         self.assertIn(c["boss"], c["bosses"])
-        self.assertLessEqual(len(c["bosses"]), len(fb.ROW_Y))  # 목록 칸 자리가 모자라면 누를 수 없다
+        from mabi import gamedata as gd
+        self.assertLessEqual(len(c["bosses"]), len(gd.point("field_boss_rows")))  # 목록 칸 자리가 모자라면 누를 수 없다
         self.assertIn(c["difficulty"], c["difficulties"][c["boss"]])
 
 

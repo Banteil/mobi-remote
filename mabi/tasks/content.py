@@ -583,8 +583,7 @@ def read_button(frame, region) -> tuple[int | None, str, str]:
     return (int(nums[-1]) if nums else None), win, ko
 
 
-# 임무 화면 왼쪽 '더블 루팅' 칸 (1920 기준) — 꺼져 있으면 '도전' 버튼, 켜면 '선택됨'. 사냥터·던전 임무 화면이 같다
-DOUBLE_LOOT_AREA = (40, 420, 660, 300)
+# 임무 화면 왼쪽 '더블 루팅' 칸 (ui.json double_loot) — 꺼져 있으면 '도전' 버튼, 켜면 '선택됨'. 사냥터·던전 임무 화면이 같다
 
 
 def mission_button(bot: Bot, expect_cost: int) -> tuple[int | None, str, str]:
@@ -597,7 +596,7 @@ def mission_button(bot: Bot, expect_cost: int) -> tuple[int | None, str, str]:
     if price is None or price >= expect_cost:
         return price, win, ko
     on = nospace(gd.text("double_loot_on"))
-    hit = next(((x, y) for t, x, y in find_texts(bot.frame(), DOUBLE_LOOT_AREA) if nospace(t) == on), None)
+    hit = next(((x, y) for t, x, y in find_texts(bot.frame(), gd.region("double_loot")) if nospace(t) == on), None)
     if hit is None:
         return price, win, ko
     bot.log.info(f"입장 비용 {price} — 더블 루팅 꺼짐 → '도전' 눌러 켬")
@@ -655,13 +654,14 @@ def find_town(bot: Bot, town: str) -> tuple[int, int]:
                 named.append((x, y, best))
         bot.log.debug(f"월드맵 지역: {[(n, x, y) for x, y, n in named]}")
         if not named:  # 아무 이름도 못 읽음 → 남쪽으로 조금 이동해 다시 본다
-            bot.drag(900, 700, 900, 300, steps=30)
+            (fx, fy), (tx, ty) = mc["nudge_drag"]
+            bot.drag(fx, fy, tx, ty, steps=30)
             bot.sleep(1.2, 1.5)
             continue
         ax, ay, anchor = _best_anchor(named, towns, town)
         tx = ax + towns[town][0] - towns[anchor][0]
         ty = ay + towns[town][1] - towns[anchor][1]
-        if x0 <= tx <= x1 and y0 <= ty <= y1 and not (tx > 1190 and ty > 860):
+        if x0 <= tx <= x1 and y0 <= ty <= y1 and not (tx > mc["panel_from"][0] and ty > mc["panel_from"][1]):
             # OCR 만 믿지 않고, 계산한 자리에 실제 성 아이콘(템플릿)이 있을 때만 누른다
             near = [(x, y) for x, y, _ in castles if abs(x - tx) < 60 and abs(y - ty) < 60]
             if near:
@@ -669,10 +669,11 @@ def find_town(bot: Bot, town: str) -> tuple[int, int]:
             bot.log.debug(f"'{town}' 계산 위치 ({tx}, {ty}) 에 성 아이콘이 없음 → 다시 읽기")
             bot.sleep(1, 1.5)
             continue
-        # 목표가 화면 가운데로 오도록 끌기 (한 번에 최대 600px)
-        dx = max(-600, min(600, 900 - tx))
-        dy = max(-600, min(600, 480 - ty))
-        bot.drag(900, 480, 900 + dx, 480 + dy, steps=30)
+        # 목표가 지도 가운데로 오도록 끌기 (한 번에 최대 max_drag px)
+        (cx, cy), lim = mc["center"], mc["max_drag"]
+        dx = max(-lim, min(lim, cx - tx))
+        dy = max(-lim, min(lim, cy - ty))
+        bot.drag(cx, cy, cx + dx, cy + dy, steps=30)
         bot.sleep(1.2, 1.5)
     raise CannotProceed(f"월드맵에서 '{town}' 을 찾지 못함 → {bot.snapshot('map').name}")
 
@@ -1043,7 +1044,7 @@ def after_clear(bot: Bot, extra_loot: int = 0, again: str | None = None, timeout
 
 def do_extra_loot(bot: Bot, n: int) -> int:
     """요일 던전 보상 화면에서 추가 루팅(Space)을 n 회 연달아 누른다 (0.5초 간격).
-    비용은 골드 6천 / 1만2천 / 1만8천이라, 끝난 뒤 줄어든 골드로 실제 횟수를 확인한다."""
+    회차별 골드 비용(game-rules.json extraLootGold)으로, 끝난 뒤 줄어든 골드를 보고 실제 횟수를 확인한다."""
     gold = bot.state.currency(gd.currency("gold")) if bot.state.available() else None
     for _ in range(n):
         bot.key("space")
@@ -1054,7 +1055,10 @@ def do_extra_loot(bot: Bot, n: int) -> int:
         now = bot.state.currency(gd.currency("gold"))
         if now is not None:
             spent = gold - now
-            done = sum(1 for cost in (6000, 18000, 36000)[:n] if spent >= cost)
+            costs, total, done = gd.rules()["extraLootGold"]["costs"][:n], 0, 0
+            for cost in costs:  # 회차 비용을 누적해 줄어든 골드가 그만큼 되면 그 회차까지 한 것
+                total += cost
+                done += spent >= total
     bot.log.info(f"추가 루팅 {done}회" + ("" if done == n else f" (요청 {n}회)"))
     return done
 

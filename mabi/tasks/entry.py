@@ -17,7 +17,12 @@ from . import ui_text
 from .content import CannotProceed
 
 BUTTONS = (("abyss_enter", "enter"), ("raid_sail", "sail"), ("abyss_move", "move"))  # ui.json 문구 → 버튼
-SWITCH_DX = 95  # '우연한 만남' 글자 가운데 → 스위치 가운데 (1920 기준)
+
+
+def _switch_xy(label) -> tuple[int, int]:
+    """'우연한 만남' 글자 가운데 → 스위치 가운데 (ui.json chance_switch_dx)."""
+    dx, dy = gd.point("chance_switch_dx")
+    return label[0] + dx, label[1] + dy
 
 
 @dataclass
@@ -39,12 +44,12 @@ def parse(frame) -> Entry | None:
     if not button and nospace(gd.text("entry_loot")) not in texts:
         return None
     label = next(((x, y) for t, x, y in hits if t == nospace(gd.text("abyss_chance"))), None)
-    return Entry(button, (_switch_on(frame, label), (label[0] + SWITCH_DX, label[1])) if label else None)
+    return Entry(button, (_switch_on(frame, label), _switch_xy(label)) if label else None)
 
 
 def _switch_on(frame, label: tuple[int, int]) -> bool:
     """스위치가 켜져 있나 (켜지면 초록)."""
-    x, y = label[0] + SWITCH_DX, label[1]
+    x, y = _switch_xy(label)
     return green_ratio(frame[y - 6:y + 6, x - 20:x + 20], g_min=150, b_max=150) > 0.2  # 스위치 자리에서 잰 기준
 
 

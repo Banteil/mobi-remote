@@ -47,6 +47,12 @@ def region(key: str) -> tuple[int, int, int, int]:
     return tuple(_load("ui.json")["regions"][key])
 
 
+def point(key: str) -> tuple:
+    """ui.json points 의 자리 [x, y] (목록이면 [x, y] 들의 튜플)."""
+    v = _load("ui.json")["points"][key]
+    return tuple(tuple(p) for p in v) if v and isinstance(v[0], list) else tuple(v)
+
+
 def covers() -> dict[str, tuple[int, int, int, int]]:
     """게임이 다른 화면 위에 띄워 가리는 창들의 자리 (ui.json covers → regions). 이 자리는 판단에 쓰지 않는다."""
     ui = _load("ui.json")

@@ -27,11 +27,8 @@ from .boss_skills import BossSkills
 from .content import CannotProceed, Fight, wait_arrival
 from .exits import Exit
 
-GOAL = 20
 MAP = "InstanceBreakthroughDungeon"
-ZONE_LIMIT = 120     # 구역 제한 시간 (초) — 넘기면 결과가 안 와도 끝난 것으로 보고 화면을 본다
-ENTER_WAIT = 25      # 입장하기 뒤 드릴에 들어가기 시작할 때까지
-SCENE_PRESS = 2.5    # 컷신 넘기기: 화면을 누르고 있는 시간 (초)
+# 목표 구역·구역 제한 시간 등은 설정 [drill] (bot.cfg["drill"])
 _ZONE = re.compile(r"(\d+)\s*구역")
 
 
@@ -90,7 +87,7 @@ def _button(bot: Bot) -> str:
 def _travel(bot: Bot) -> bool:
     """'이동하기' 로 입구까지 가는 동안. 도착해 드릴 창이 다시 뜨면 True, 창 없이 멈췄으면 False (raid._travel_to_dock 과 같음)."""
     if wait_arrival(bot, lambda: bool(ui_text.find(bot, gd.text("drill_title"), gd.region("drill_title"))),
-                    bot.cfg.get("drill", {}).get("travel_timeout", 600), "drill_travel", "나이트메어 드릴 입구로 가지 못함",
+                    bot.cfg["drill"]["travel_timeout"], "drill_travel", "나이트메어 드릴 입구로 가지 못함",
                     still=3):
         bot.log.info("드릴 입구 도착 → 드릴 창")
         return True
@@ -114,7 +111,7 @@ def enter(bot: Bot) -> None:
         bot.step("drill_enter", "나이트메어 드릴 입장")
         mark = bot.input_mark
         # 입장하면 구역 입장 패킷 → (첫 입장이면 컷신) → 맵 이동. 패킷이 없으면 드릴 창이 닫혔나로
-        got = bot.wait_packet(lambda s: s.loading or s.cutscene or s.channel_type == MAP, ENTER_WAIT, since=mark)
+        got = bot.wait_packet(lambda s: s.loading or s.cutscene or s.channel_type == MAP, bot.cfg["drill"]["enter_wait"], since=mark)
         if got or bot.packets.find("drill.enter", mark):
             return
         if got is None and not ui_text.find(bot, gd.text("drill_title"), gd.region("drill_title")):
@@ -133,7 +130,7 @@ def skip_cutscene(bot: Bot) -> None:
             continue
         if bot.cutscene_playing() and pressed < 3:
             bot.log.info("드릴 입장 컷신 → 길게 눌러 넘김")
-            bot.long_press(960, 540, SCENE_PRESS)
+            bot.long_press(*gd.point("screen_center"), bot.cfg["drill"]["scene_press"])
             pressed += 1
             bot.sleep(1.0, 1.5)
             continue
@@ -156,7 +153,8 @@ class ZoneFight(Fight):
     IDLE = 2.0
 
     def __init__(self, bot: Bot, skills: BossSkills | None):
-        super().__init__(bot, ZONE_LIMIT + 90, revive=True)
+        self.limit = bot.cfg["drill"]["zone_limit"]
+        super().__init__(bot, self.limit + 90, revive=True)
         self.skills = skills
 
     def wake(self, s):
@@ -165,7 +163,7 @@ class ZoneFight(Fight):
     def packet_end(self):
         bot = self.bot
         zone = bot.packets.state.drill_result if bot.packets.ok else 0
-        look = zone or not bot.packets.ok or time.monotonic() - self.start > ZONE_LIMIT
+        look = zone or not bot.packets.ok or time.monotonic() - self.start > self.limit
         buttons = result_buttons(bot) if look else set()
         if buttons:
             if nospace(gd.text("drill_next")) in buttons or zone:
@@ -180,7 +178,7 @@ class ZoneFight(Fight):
         self.bot.log.warning(f"드릴에서 쓰러짐 → {self.bot.snapshot('drill_dead').name}")
 
     def timed_out(self):
-        raise StepTimeout(f"드릴 구역이 {ZONE_LIMIT + 90}초 안에 끝나지 않음 → {self.bot.snapshot('drill_zone').name}")
+        raise StepTimeout(f"드릴 구역이 {self.limit + 90}초 안에 끝나지 않음 → {self.bot.snapshot('drill_zone').name}")
 
 
 class DrillExit(Exit):
@@ -232,7 +230,7 @@ def play(bot: Bot) -> str:
         cleared.append(zone)
         bot.log.info(f"드릴 {zone}구역 클리어")
         bot.sleep(1.0, 1.5)
-        if zone >= GOAL:
+        if zone >= bot.cfg["drill"]["goal"]:
             bot.step("drill_leave", f"{zone}구역까지 깸 → 나가기")
             leave(bot)
             return f"{zone}구역까지 클리어" + (f" (이번에 {len(cleared)}구역)" if len(cleared) > 1 else "")
@@ -247,7 +245,8 @@ def run(bot: Bot, cfg: dict) -> str:
         return _play_behind(bot)
     # 드릴은 끝·초기화 시기가 정해져 있지 않다 → 저장해 둔 기록이 아니라 매번 지금 기록으로 본다 (사용자)
     best = packet_best(bot)
-    if best is not None and best >= GOAL:
+    goal = bot.cfg["drill"]["goal"]
+    if best is not None and best >= goal:
         return f"이미 {best}구역까지 깸 — 입장하지 않음"
     zone = open_window(bot)
     if zone is None and best is None:
@@ -255,7 +254,7 @@ def run(bot: Bot, cfg: dict) -> str:
         raise CannotProceed(f"드릴 창에서 다음 구역을 읽지 못함 → {bot.snapshot('drill').name}")
     if zone is not None:
         bot.log.info(f"드릴 창: 다음 도전 {zone}구역" + (f" (패킷 최고 기록 {best}구역)" if best is not None else ""))
-        if zone > GOAL:
+        if zone > goal:
             bot.to_main()
             return f"이미 {zone - 1}구역까지 깸 — 입장하지 않음"
     enter(bot)
@@ -265,15 +264,16 @@ def run(bot: Bot, cfg: dict) -> str:
 
 def _play_behind(bot: Bot) -> str:
     # 들어온 뒤로는 게임을 뒤로 보내고 하던 창을 돌려준다 (사용자 — 어비스 반복과 같다). 키는 창에 직접 간다
-    with bot.behind_while(bot.cfg.get("drill", {}).get("background", True)):
+    with bot.behind_while(bot.cfg["drill"]["background"]):
         return play(bot)
 
 
 def verify(bot: Bot, cfg: dict) -> bool:
-    """목표(20구역)까지 깼나 — 패킷 최고 기록, 모르면 드릴 창의 다음 도전 구역."""
+    """목표(설정 drill.goal 구역)까지 깼나 — 패킷 최고 기록, 모르면 드릴 창의 다음 도전 구역."""
+    goal = cfg["drill"]["goal"]
     best = packet_best(bot)
     if best is not None:
-        return best >= GOAL
+        return best >= goal
     zone = open_window(bot)
     bot.to_main()
-    return zone is not None and zone > GOAL
+    return zone is not None and zone > goal

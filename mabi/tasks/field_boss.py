@@ -30,7 +30,6 @@ GROWTH = "필드 보스"       # CLI 성장 가이드의 Target
 SKIP_WAIT = 1.0            # '장면 넘기기' 가 뜬 뒤 누르기까지 (사용자 — 0.5초는 안 먹었다)
 # 보스·난이도·출현 시각은 게임 데이터(data/content.json, gamedata.field_bosses·field_boss_hours).
 # 보스는 창 왼쪽 목록에 그 순서로 있다 — 누를 때는 순서로 (OCR 이 '드로흐에넴' 을 '…넬' 로 읽는다)
-ROW_Y = (130, 230, 330, 440, 540, 640)  # 목록 카드 가운데 y (1920 기준, x 130)
 DEFAULT_BOSS, DEFAULT_DIFFICULTY = "드로흐에넴", "매우 어려움"  # 화면에서 아직 고른 적이 없을 때
 
 
@@ -96,9 +95,10 @@ def open_window(bot: Bot, boss: str, difficulty: str) -> None:
     bosses = list(gd.field_bosses())
     if boss not in bosses:
         raise CannotProceed(f"모르는 필드 보스 '{boss}' (고를 수 있는 것: {', '.join(bosses)})")
-    if bosses.index(boss) >= len(ROW_Y):
-        raise CannotProceed(f"필드 보스 목록 칸 자리(ROW_Y)가 {len(ROW_Y)}개뿐 — '{boss}' 는 {bosses.index(boss) + 1}번째")
-    bot.click_xy(130, ROW_Y[bosses.index(boss)])
+    rows = gd.point("field_boss_rows")  # 목록 카드 가운데
+    if bosses.index(boss) >= len(rows):
+        raise CannotProceed(f"필드 보스 목록 칸 자리(ui.json field_boss_rows)가 {len(rows)}개뿐 — '{boss}' 는 {bosses.index(boss) + 1}번째")
+    bot.click_xy(*rows[bosses.index(boss)])
     bot.sleep(1.0, 1.4)
     if difficulty:
         ui_text.click(bot, difficulty, gd.region("fb_difficulty"), what=f"난이도 '{difficulty}'", shot="field_boss")
@@ -113,7 +113,7 @@ def travel(bot: Bot, boss: str) -> None:
         bot.key("space")  # '이동하시겠습니까' 이동하기
     bot.fast_travel(wait=6)
     wait_arrival(bot, lambda: bool(ui_text.find(bot, gd.text("fb_enter"), gd.region("fb_dialog"), exact=False)),
-                 bot.cfg.get("field_boss", {}).get("travel_timeout", 300), "fb_travel",
+                 bot.cfg["field_boss"]["travel_timeout"], "fb_travel",
                  f"'{boss}' 지역에 닿지 못함 (입장 창이 안 뜸)", retry_fast=True, interval=(1.0, 1.4))
 
 
@@ -149,7 +149,7 @@ def fight(bot: Bot) -> bool:
     bot.step("fb_fight", "보스와 전투 중")
     skills = BossSkills.for_current(bot, bot.character, lambda s: s.channel_type == MAP)
     ctx = monitor.Ctx("field_boss", "필드 보스 전투", revive=True)
-    end = time.monotonic() + bot.cfg.get("field_boss", {}).get("fight_timeout", 900)
+    end = time.monotonic() + bot.cfg["field_boss"]["fight_timeout"]
     asked = time.monotonic()
     while time.monotonic() < end:
         result = confirm_text(bot.frame())  # 결과 창 '처치 완료' (아래 가운데 '확인') — 한 바퀴에 한 번 읽는다

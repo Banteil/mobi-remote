@@ -351,7 +351,7 @@ class RaidExit(Exit):
                 return hit
             if ui_text.find(bot, gd.text("raid_leave_town"), gd.region("raid_leave_buttons"), exact=False):
                 self.party = True
-                return ui_text.find(bot, gd.text("raid_leave_ok"), gd.region("raid_leave_party_buttons")) or (1095, 964)
+                return ui_text.find(bot, gd.text("raid_leave_ok"), gd.region("raid_leave_party_buttons")) or gd.point("raid_leave_ok")
             if time.monotonic() >= end:
                 return None
             bot.sleep(0.8, 1.2)
