@@ -225,11 +225,6 @@ async function performance() {
   return out;
 }
 
-/** 초를 m:ss 로. 한 시간 넘는 악보는 없으니 분까지면 충분하다. */
-function mmss(sec) {
-  const n = Math.max(0, Math.round(Number(sec) || 0));
-  return Math.floor(n / 60) + ':' + String(n % 60).padStart(2, '0');
-}
 
 /* ── 연주 진행 상황 ────────────────────────────── */
 
@@ -288,11 +283,11 @@ function paintNowPlaying() {
     (p.instrument ? ' <span class="muted">' + esc(p.instrument) + '</span>' : '') +
     (p.loop ? ' <span class="muted">게임 반복 켜짐</span>' : '') +
     '<span class="spacer"></span>' +
-    '<span class="now-time">' + mmss(elapsed) +
-    (total ? ' / ' + mmss(total) : '') + '</span></div>' +
+    '<span class="now-time">' + fmtClock(elapsed) +
+    (total ? ' / ' + fmtClock(total) : '') + '</span></div>' +
     (total
       ? '<div class="bar bar-wide"><i class="' + widthClass(pct) + '"></i></div>' +
-        '<div class="now-foot muted">남은 시간 ' + mmss(left) +
+        '<div class="now-foot muted">남은 시간 ' + fmtClock(left) +
         (pass ? ' · ' + (pass + 1) + '바퀴째' : '') +
         (p.channels ? ' · ' + p.channels + '화음' : '') + '</div>'
       : '');
@@ -364,7 +359,7 @@ async function playPlaylist() {
         }
 
         plStatus('(' + (player.index + 1) + '/' + queue.length + ') ' + scoreLabel(title) +
-          (p.total ? ' — ' + mmss(p.elapsed) + ' / ' + mmss(p.total) : ''));
+          (p.total ? ' — ' + fmtClock(p.elapsed) + ' / ' + fmtClock(p.total) : ''));
         await sleep(3000);
       }
       if (player.stopping) break;

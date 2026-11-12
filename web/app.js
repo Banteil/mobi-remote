@@ -37,15 +37,30 @@ function charCheck(c, on, attr, cls) {
     (on ? ' checked' : '') + '>' + esc(charLabel(c)) + '</label>';
 }
 
-/** 남은 초를 사람이 읽는 형태로 */
-function dur(sec) {
-  if (!sec || sec <= 0) return '완료';
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  if (h > 0) return h + '시간 ' + m + '분';
-  if (m > 0) return m + '분';
-  return sec + '초';
+/* ── 시간 글자 (화면 어디서나 이것으로) ── */
+
+/** 걸린·걸릴 시간 — 1분 안이면 '40초', 그 위는 분으로 반올림해 '12분' · '1시간 5분' · '2시간' */
+function fmtDur(sec) {
+  const s = Math.max(0, Number(sec) || 0);
+  if (s < 60) return Math.round(s) + '초';
+  const m = Math.round(s / 60);
+  return m >= 60 ? Math.floor(m / 60) + '시간' + (m % 60 ? ' ' + (m % 60) + '분' : '') : m + '분';
 }
+
+/** 남은 시간 — 다 됐으면 '완료' */
+function dur(sec) { return sec > 0 ? fmtDur(sec) : '완료'; }
+
+const pad2 = (n) => String(n).padStart(2, '0');
+
+/** 흐르는 시간을 시계 모양으로 — 'm:ss', 한 시간이 넘으면 'h:mm:ss' (초 아래는 버림) */
+function fmtClock(sec) {
+  const s = Math.max(0, Math.floor(Number(sec) || 0));
+  const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
+  return (h ? h + ':' + pad2(m) : m) + ':' + pad2(s % 60);
+}
+
+/** 시각(ms) → 'HH:MM' */
+function fmtHM(t) { const d = new Date(t); return pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
 
 /* ── 토스트 / 모달 / 상태바 ─────────────────────── */
 

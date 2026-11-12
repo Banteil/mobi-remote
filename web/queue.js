@@ -268,21 +268,18 @@ function qHalt() {
 /* ── 큐 결과 창 ──
  * 큐를 시작한 뒤 남은 카드가 없어지면(다 끝남 · 전체 중단 Ctrl+F12 · 마지막 카드 뺌) 파이썬이 보고서를 보낸다
  * (mabi/queue_report.py). 요약 탭 = 카드별 결과 + 모두 합친 얻은 것·쓴 것·재화, 카드 탭 = 그 카드의 세부 (숙제는 캐릭터별). */
-const QR_RESULT = {
-  done: ['완료', 'pill-ok'], fail: ['실패', 'pill-bad'], pause: ['일시정지', 'pill-warn'],
-  stop: ['중단', 'pill-muted'], preempt: ['밀림', 'pill-muted'], run: ['진행 중', 'pill-muted'],
-};
+/* 카드 결과 [글자, 색] — 결과 창과 작업 기록이 같이 쓴다. 큐 상태와 같은 것은 그 이름표(Q_STATE ← mm.labels.queue_state) */
+const Q_RESULT = Object.assign(
+  Object.fromEntries([['done', 'pill-ok'], ['fail', 'pill-bad'], ['pause', 'pill-warn'], ['run', 'pill-muted']]
+    .map(([k, cls]) => [k, [Q_STATE[k].label, cls]])),
+  { stop: ['중단', 'pill-muted'], preempt: ['밀림', 'pill-muted'], removed: ['뺌', 'pill-muted'] });
 let qrData = null;
 let qrTab = 'sum';
 
-function qrPill(r) {
-  const [t, k] = QR_RESULT[r] || [r, 'pill-muted'];
-  return '<span class="pill ' + k + '">' + t + '</span>';
-}
-
-function qrTook(secs) {
-  const m = Math.round((secs || 0) / 60);
-  return m >= 60 ? Math.floor(m / 60) + '시간 ' + (m % 60) + '분' : m ? m + '분' : (secs || 0) + '초';
+/** 결과 알약 — n 이 있으면 개수도 */
+function qrPill(r, n) {
+  const [t, k] = Q_RESULT[r] || [r, 'pill-muted'];
+  return '<span class="pill ' + k + '">' + esc(t) + (n !== undefined ? ' ' + n : '') + '</span>';
 }
 
 /** 얻은 것 · 쓴 것 · 재화 (x: {gained, used, cur}). compact: 캐릭터 칸 안에 작게 */
@@ -301,9 +298,8 @@ function showQueueReport(rep) {
   if (!rep || !(rep.cards || []).length) return;
   qrData = rep;
   qrTab = 'sum';
-  const hm = (t) => { const d = new Date(t); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
   $('#qr-title').textContent = rep.why === 'done' ? '작업 큐 결과 — 모두 완료' : '작업 큐 결과 — 중단됨';
-  $('#qr-time').textContent = rep.start && rep.end ? hm(rep.start) + ' ~ ' + hm(rep.end) + ' (' + qrTook((rep.end - rep.start) / 1000) + ')' : '';
+  $('#qr-time').textContent = rep.start && rep.end ? fmtHM(rep.start) + ' ~ ' + fmtHM(rep.end) + ' (' + fmtDur((rep.end - rep.start) / 1000) + ')' : '';
   paintQueueReport();
   $('#q-report').classList.remove('hidden');
 }
@@ -319,15 +315,12 @@ function paintQueueReport() {
   if (qrTab === 'sum') {
     const n = {};
     rep.cards.forEach((c) => { n[c.result] = (n[c.result] || 0) + 1; });
-    $('#qr-sum').innerHTML = Object.entries(n).map(([r, c]) => {
-      const [t, k] = QR_RESULT[r] || [r, 'pill-muted'];
-      return '<span class="pill ' + k + '">' + t + ' ' + c + '</span>';
-    }).join('');
+    $('#qr-sum').innerHTML = Object.entries(n).map(([r, c]) => qrPill(r, c)).join('');
     $('#qr-body').innerHTML =
       '<div class="dl-rp-char"><h4>한 일</h4>' + rep.cards.map((c) =>
         '<div class="qr-card" data-qr-tab="' + c.id + '">' + qrPill(c.result) + '<b>' + esc(c.label) + '</b>' +
         '<span class="qr-goal">' + esc((c.view && c.view.goal) || c.detail || '') + '</span>' +
-        '<span class="muted">' + qrTook(c.secs) + '</span></div>').join('') + '</div>' +
+        '<span class="muted">' + fmtDur(c.secs) + '</span></div>').join('') + '</div>' +
       '<div class="dl-rp-char"><h4>모두 합친 결과</h4>' + lootHtml(rep.total || {}) + '</div>';
     return;
   }
@@ -338,7 +331,7 @@ function paintQueueReport() {
   const head = '<div class="dl-rp-char"><h4>' + esc(c.label) + ' ' + qrPill(c.result) + '</h4>' +
     '<div class="qr-kv">' +
     [['내용', (v.goal || c.detail || '')], ['진행', [v.now, bar, v.stat].filter(Boolean).join(' · ')],
-      ['걸린 시간', qrTook(c.secs) + (c.runs > 1 ? ' · ' + c.runs + '번에 나눠 함' : '')], ['메모', c.note]]
+      ['걸린 시간', fmtDur(c.secs) + (c.runs > 1 ? ' · ' + c.runs + '번에 나눠 함' : '')], ['메모', c.note]]
       .filter((r) => r[1]).map(([k, t]) => '<span>' + k + '</span><span>' + esc(t) + '</span>').join('') + '</div></div>';
   if (c.kind === 'daily') {
     const d = dailyReportHtml(c.tasks, c.loot);
@@ -369,29 +362,17 @@ async function showLastQueueReport() {
 }
 
 /* ── 작업 기록 ── 끝난 항목(완료·실패·일시정지·뺌)을 파이썬이 한 줄씩 파일에 남기고, '기록' 창에서 본다 */
-const QH_RESULT = {
-  done: ['완료', 'pill-ok'], fail: ['실패', 'pill-bad'], pause: ['일시정지', 'pill-warn'],
-  stop: ['멈춤', 'pill-muted'], removed: ['뺌', 'pill-muted'],
-};
-
 async function showQueueHistory() {
   const rows = await mm.queue.history(300).catch(() => []);
-  const pad = (n) => String(n).padStart(2, '0');
-  const hm = (t) => { const d = new Date(t); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
-  const day = (t) => { const d = new Date(t); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
-  const took = (r) => {
-    const m = Math.round((r.end - r.start) / 60000);
-    return m >= 60 ? Math.floor(m / 60) + '시간 ' + (m % 60) + '분' : m + '분';
-  };
+  const day = (t) => { const d = new Date(t); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); };
   let last = '';
   const html = (rows || []).map((r) => {
-    const [txt, cls] = QH_RESULT[r.result] || [r.result, 'pill-muted'];
     const d = day(r.end);
     const head = d !== last ? '<div class="qh-day">' + d + '</div>' : '';
     last = d;
     return head + '<div class="qh-row">' +
-      '<span class="qh-time" title="걸린 시간 ' + took(r) + '">' + hm(r.start) + ' ~ ' + hm(r.end) + '</span>' +
-      '<span class="pill ' + cls + '">' + txt + '</span>' +
+      '<span class="qh-time" title="걸린 시간 ' + fmtDur((r.end - r.start) / 1000) + '">' + fmtHM(r.start) + ' ~ ' + fmtHM(r.end) + '</span>' +
+      qrPill(r.result) +
       '<span class="qh-label">' + esc(r.label || '') + '</span>' +
       '<span class="qh-detail">' + esc(r.detail || '') + (r.note ? '<span class="qh-note">' + esc(r.note) + '</span>' : '') + '</span>' +
       '</div>';
@@ -425,12 +406,7 @@ function qProgress(x) {
     '</div>';
 }
 
-function qElapsed(since) {
-  const s = Math.max(0, Math.floor((Date.now() - since) / 1000));
-  const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, ss = s % 60;
-  const p = (n) => String(n).padStart(2, '0');
-  return (h ? h + ':' + p(m) : m) + ':' + p(ss);
-}
+function qElapsed(since) { return fmtClock((Date.now() - since) / 1000); }
 
 // 진행 중 카드의 걸린 시간 (카드를 다시 그리지 않고 글자만)
 setInterval(() => {

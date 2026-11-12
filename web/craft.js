@@ -216,9 +216,7 @@ async function doCraft(name, per) {
  * 그래서 담기 전에 "그래서 뭘 얼마나 캐야 하나"를 미리 보여 줄 수 있다.
  */
 function needsHtml(p) {
-  const dur = (s) => s == null ? '?' :
-    s >= 3600 ? Math.floor(s / 3600) + '시간' + (s % 3600 ? ' ' + Math.round((s % 3600) / 60) + '분' : '') :
-    s >= 60 ? Math.round(s / 60) + '분' : s + '초';
+  const dur = (s) => (s == null ? '?' : fmtDur(s));
   const fac = (f) => esc(String(f || '').replace(' 가공 시설', '').replace(' 제작대', ''));
   const out = [];
   const c = p.calls || {};
