@@ -24,7 +24,13 @@ mabi/
 |---|---|---|
 | 캐릭터로 접속 (타이틀·선택 화면·다른 캐릭터에서) | `tasks/login.run` · 이름 비교 `login.current_name` / `name_matches` | runner, Repeat |
 | 반복 콘텐츠의 틀 (판 수·시간, 진행 알림, 캐릭터 확인, 판 사이 수리, 뒤로 보내기, 가방 무게 감시) | `tasks/repeat.Repeat` | `abyss.AbyssRepeat`, `raid.RaidRepeat` |
-| 콘텐츠 안에서 나가기 (나가기 → 확인 창 → 확인 → 밖 메인) | `tasks/exits.Exit` · 자리에 맞게 고르기 `exits.leave_instance` | `DungeonExit`, `abyss.AbyssExit`, `raid.RaidExit`/`ShipExit`, 실패 뒤 정리, 접속 |
+| 콘텐츠 안에서 나가기 (나가기 → 확인 창 → 확인 → 밖 메인) | `tasks/exits.Exit` (확인 창 띄우기만 다르면 `open_dialog`) · 자리에 맞게 고르기 `exits.leave_instance` | `DungeonExit`, `abyss.AbyssExit`, `raid.RaidExit`/`ShipExit`, `drill.DrillExit`, `field_boss.FieldBossExit`, 실패 뒤 정리, 접속 |
+| 콘텐츠 안에서 끝날 때까지 지켜보기 (패킷으로 깨며 기다림 → 끝났나 → 쓰러짐·끼어든 창 → 부활 → 먹기·궁극기 → 시간 상한) | `tasks/content.Fight` 를 상속해 `wake`·`packet_end`·`dead_end`·`screen_end` … 만 덮어씀 | `abyss.AbyssPlay`, `raid.RaidPlay`, `drill.ZoneFight` |
+| 메뉴(ESC)에서 콘텐츠 열기 (ESC 를 먹은 창은 넘기고 다시) | `ui_text.open_menu(bot, 글자 키, …)` | 어비스·레이드·나이트메어 드릴·필드 보스 |
+| '이동하기'·'바로 가기' 뒤 도착 화면(입장 창·NPC 대화)이 뜰 때까지 (로딩 동안 안 봄, 멈춤 n번 = 창 없이 멈춤, 늦은 빠른 이동) | `content.wait_arrival` (시간 상한은 각자 설정 키) | 어비스·레이드 입구, 드릴, 뱅가드, 필드 보스, `content.go_talk` |
+| 로딩이면 끝날 때까지 '어디인가' · 메인 화면까지 기다리기 | `content.where_settled(bot, where)` · `content.wait_settled` | 어비스·레이드 |
+| 게임을 뒤로 보내고 하던 창 돌려주기 | `Bot.to_back` · 구간만이면 `with bot.behind_while(설정)` | `Repeat.to_back`, 드릴, 뱅가드 |
+| 초록 체크·켜진 스위치 (화면 조각의 초록 비율) | `vision.green` · `green_ratio` (기준값은 자리마다 인자로) | 콘텐츠 가이드 달성 체크, 우연한 만남 스위치 |
 | 작업이 예외로 끝났을 때 결과 가르기·정리 (게임 꺼짐 → 멈춤, 연속 실행 제한 창 → 게임 다시 켜기 뒤 이어 함, 가방 무게 → HEAVY) | `outcome.classify` · `outcome.escalate` · `outcome.recover` | runner, `daily_api._repeat_launch` |
 | 돌던 카드를 끊어도 되는 자리에서 끊고 먼저 할 카드(시간 정해진 카드·게임 다시 켜기)를 하기 | `cutpoint.check`·`cut`·`due` → 큐 `cut_for_timed` (먼저 할 카드는 `Kind.timed`) | `Bot.step`, `Repeat.yield_between`, CLI 걸음 카드 |
 | 연속 실행 제한 창 → 게임 다시 켜기 (창 감지 `run_limit_shown`, 창 닫기 신호 → 넥슨 플러그 바로실행 → 같은 캐릭터로 접속) | `restart.watch`·`now`·`run` · 큐 카드 `queue_api.RestartKind` · 맨 위에 올리기 `WorkQueue.put_first` | cutpoint, `outcome.escalate` |
@@ -32,15 +38,15 @@ mabi/
 | 인터페이스 PC·80% 맞추기 (한 번, 게임 안·콘텐츠 밖일 때) | `tasks/display.InterfaceFit` → `'interface'` 이벤트 | runner, Repeat |
 | 빠른 이동(T) — 이동 시작을 기다린 뒤 | `Bot.fast_travel(wait)` | 숙제 이동, 아르바이트(점검자), 어비스·레이드 입구, 수리 |
 | 가방이 꽉 찼나 | `Bot.overweight()` (패킷, 모르면 CLI) | runner 접속 뒤, `Bot.check_weight` |
-| 보스전 궁극기·팔라딘 변신 (캐릭터마다 따로, 판 진행 확인마다 tick) | `tasks/boss_skills.BossSkills` · 보스전인가 `Repeat.boss_fight` | Repeat(어비스·레이드만) |
+| 보스전 궁극기·팔라딘 변신 (캐릭터마다 따로, 판 진행 확인마다 tick) | `tasks/boss_skills.BossSkills` · 지금 캐릭터 설정으로 `BossSkills.for_current` · 보스전인가 `Repeat.boss_fight` | Repeat(어비스·레이드), 드릴, 필드 보스 |
 | 판 사이 수리할지 / 수리했는데 그대로인지 | `tasks/repair.due` · `repair.run` | Repeat |
 | 얻은 것 재기 (캐릭터 접속 뒤 open, 그 캐릭터 끝에 close) | `queue_report.LootMeter` → `'loot'` 이벤트 | runner, Repeat(부르는 쪽 `daily_api._repeat_launch`), 큐 Kind 들이 같은 이벤트로 받음 |
 | 지금 어디인가 | `place.place(bot)` | 복구·나가기·시작 점검 |
 | 작업 시작 점검 (지난 패킷 상태를 믿지 않고 CLI 로 맞춤) | `bot.check_in()` | 모든 작업 시작·이어 하기 |
 | NPC 대화·메뉴·확인 창 처리 | `monitor` + `Ctx` (대사 내용이 아니라 메뉴·단계·버튼 글자로 판단) | 아르바이트·숙제 |
-| 화면 글자 찾기·누르기 | `tasks/ui_text` | 곳곳 |
+| 화면 글자 찾기·누르기 (한 번 읽은 글자들에서 찾기는 `ui_text.match`) · 띄어쓰기 빼기 · 태그 지우기 | `tasks/ui_text` · `ocr.nospace` · `richtext.strip` | 곳곳 |
 | 화면 판단에 쓰면 안 되는 자리 (게임이 위에 띄우는 창 — 연속 실행 제한 창) | `data/ui.json` covers · `gamedata.covering` · 예외 covered_ok · 시험 `tests/test_covers.py` | 모든 글자 영역·그림 ROI·설정 영역 |
-| 어비스·레이드 입장 창 (입장 창인가·버튼·지금 탭·우연한 만남, 탭 바꾸기) | `tasks/entry` (`parse`·`read`·`set_tab`) | 어비스, 레이드 |
+| 어비스·레이드 입장 창 (입장 창인가·버튼·지금 탭·우연한 만남, 탭 바꾸기) | `tasks/entry` (`parse`·`read`·`set_tab`·`ensure_chance`·`wait_button`) | 어비스, 레이드 (버튼 기다리기는 드릴도) |
 | 아래 가운데 '확인' (퀘스트 완료·레이드·필드 보스 결과 창) | `content.confirm_text` | 점검자, 레이드·필드 보스 결과 |
 | 게임 단축키 (Z 카메라·X 보관함·J 퀘스트 … 옵션에서 바꿈) — 글자를 직접 쓰지 않는다 | `keys.of(bot, "camera")` · 목록 `keys.GAME_KEYS` | 곳곳. 이동 WASD·버튼 확인 키(Space·Esc·R)는 고정 |
 | 여러 신호(패킷·CLI·화면)로 우선순위 판단 | `judge.decide` | 어비스 단계, 쓰러짐, 로딩 |
@@ -75,4 +81,21 @@ mabi/
 - 빠른 이동: 네 벌 → `Bot.fast_travel`
 - 화면(web/daily.js): 어비스·레이드 탭 진행·시작·담기 → `onRepeatEvent` · `startRepeat` · `queueRepeat` · `repeatSpec`
 
-새로 비슷한 것을 발견하면 여기 '아직 모으지 못한 것' 절을 다시 만들어 적고, 모으면 위 기록으로 옮긴다.
+(2026-11-12, tasks/ 정리)
+- 메뉴(ESC)에서 항목 열기: 네 벌 → `ui_text.open_menu`
+- '이동하기' 뒤 도착 기다리기: 여섯 벌(go_talk 포함) → `content.wait_arrival`
+- 우연한 만남 켜기·버튼 기다리기·where_settled·_wait_settled(레이드가 어비스 private 을 씀) → `entry.ensure_chance`·`entry.wait_button`·`content.where_settled`·`content.wait_settled`
+- 콘텐츠 안 전투 대기: 어비스·레이드·드릴 세 벌 → `content.Fight` · BossSkills 만들기 세 벌 → `BossSkills.for_current`
+- 드릴·필드 보스 나가기: Exit 를 다시 구현 → `DrillExit` · `FieldBossExit`
+- 게임 뒤로 보내기: 세 벌 → `Bot.to_back` · `behind_while`
+- 초록 판정: 세 벌 → `vision.green` · `green_ratio`
+- 글자 처리(띄어쓰기·찾기·태그): display·arbeit·login·raid → `ocr.nospace` · `ui_text.match` · `richtext.strip`
+- 이름 충돌: `abyss.after_clear`(보상 화면인가) → `abyss.at_reward` (`content.after_clear` 는 클리어 뒤 정리 동작)
+
+새로 비슷한 것을 발견하면 아래 '아직 모으지 못한 것' 절에 적고, 모으면 위 기록으로 옮긴다.
+
+## 아직 모으지 못한 것
+
+- 필드 보스 전투(`field_boss.fight`)·뱅가드 진행(`vanguard.play`)은 `content.Fight` 를 안 쓴다 — 패킷 기다림 없이 화면을 짧게
+  보고(결과 창 '확인'·성장 가이드 15초마다·화면 터치), 필드 보스는 먹지 않고 뱅가드는 CLI 활동·궁극기가 없다. 옮기려면 Fight 에
+  '패킷 대신 짧게 쉬기'·'싸우는 중이 아니어도 쉬기' 같은 갈래가 더 필요하다.
