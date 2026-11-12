@@ -148,5 +148,29 @@ class FightTest(unittest.TestCase):
         self.assertEqual(self.run_fight(f, c, seen), "dead")
 
 
+class BehindTest(unittest.TestCase):
+    """게임을 뒤로 보내기 (Bot.to_back · behind_while)."""
+
+    def fake(self):
+        from mabi.bot import Bot
+        b = mock.Mock(background=False, user_window=7)
+        b.to_back = lambda window=None: Bot.to_back(b, window)
+        return b, Bot
+
+    def test_behind_while_resets_on_error(self):
+        b, Bot = self.fake()
+        with self.assertRaises(ValueError), Bot.behind_while(b, True):
+            self.assertTrue(b.background)
+            raise ValueError
+        self.assertFalse(b.background)
+        b.window.give_back.assert_called_once_with(7)
+
+    def test_off_keeps_front(self):
+        b, Bot = self.fake()
+        with Bot.behind_while(b, False):
+            self.assertFalse(b.background)
+        b.window.give_back.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

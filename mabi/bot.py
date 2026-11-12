@@ -465,6 +465,23 @@ class Bot:
         """뒤에서 도는 중인가 (게임이 앞에 없음) — 클릭하면 게임이 앞으로 튀어나온다."""
         return bool(self.background) and not self.window.is_foreground() and not self.input.dry_run
 
+    def to_back(self, window: int | None = None) -> None:
+        """게임을 뒤로 보내고 하던 창(window, 기본 user_window)을 돌려준다 — 이 뒤로 background (키는 창에 직접 보내고,
+        클릭할 때만 잠깐 앞으로 가져왔다 되돌린다). 어비스·레이드 반복(Repeat.to_back)·나이트메어 드릴·뱅가드가 같이 쓴다."""
+        self.background = True
+        self.window.give_back(self.user_window if window is None else window)
+
+    @contextmanager
+    def behind_while(self, on: bool = True):
+        """이 구간은 게임을 뒤에 두고 한다 (on 일 때 to_back). 끝나면(예외로 끝나도) background 를 끈다 —
+        들어간 뒤로만 뒤에서 도는 숙제(나이트메어 드릴·뱅가드 브리치)."""
+        try:
+            if on:
+                self.to_back()
+            yield
+        finally:
+            self.background = False
+
     def may_skip_scene(self) -> bool:
         """연출의 '장면 넘기기' 를 눌러도 되나 — 어비스·던전 중(scene_skip 꺼짐)이나 뒤에서 도는 중이면 기다린다."""
         return self.scene_skip and not self.behind()

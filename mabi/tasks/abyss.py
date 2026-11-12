@@ -472,11 +472,6 @@ def at_reward(bot: Bot) -> bool:
     return phase(bot) == "reward"
 
 
-def _behind(bot: Bot) -> bool:
-    """뒤에서 도는 중인가 (사람이 다른 일을 하는 중) — 그러면 클릭(게임을 앞으로 가져옴) 대신 키·기다림으로.
-    어비스는 뒤에서 도는 작업이라 화면을 잡지 않는 게 우선이다 (2026-10-24 사용자)."""
-    return bool(bot.background) and not bot.window.is_foreground()
-
 
 def to_reward(bot: Bot) -> str:
     """클리어 화면을 넘겨 보상 화면(나가기 / 다시 하기)까지. 뒤에서는 클릭하지 않는다 (장면 넘기기는 기다리고,
@@ -638,7 +633,7 @@ class AbyssRepeat(Repeat):
                 break
             if not bot.exists(bot.ui["dungeon_retry"]):
                 break
-            if _behind(bot):
+            if bot.behind():  # 뒤에서 도는 중이면 클릭(게임을 앞으로 가져옴) 대신 키 (2026-10-24 사용자)
                 bot.key("space")
             else:
                 bot.click(bot.ui["dungeon_retry"])

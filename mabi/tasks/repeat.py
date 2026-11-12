@@ -68,8 +68,7 @@ class Repeat:
     def to_back(self) -> None:
         """뒤에서 도는 설정이면 게임을 뒤로 보내고 하던 창을 돌려준다."""
         if self.behind:
-            self.bot.background = True
-            self.bot.window.give_back(self.user_window)
+            self.bot.to_back(self.user_window)
 
     def play_round(self, play, step: str) -> str:
         """판 하나 (종류별 play). 부활하면 같은 판으로 센다."""

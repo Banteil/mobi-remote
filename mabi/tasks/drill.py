@@ -216,10 +216,6 @@ def leave(bot: Bot) -> None:
 
 def play(bot: Bot) -> str:
     """드릴 안에서 20구역까지 — 구역마다 결과 창의 다음으로(Space), 20구역(또는 그 위)이면 나가기."""
-    if bot.cfg.get("drill", {}).get("background", True):
-        # 들어온 뒤로는 게임을 뒤로 보내고 하던 창을 돌려준다 (사용자 — 어비스 반복과 같다). 키는 창에 직접 간다
-        bot.background = True
-        bot.window.give_back(bot.user_window)
     cleared = []
     # 드릴 안 전체를 보스전으로 친다
     skills = BossSkills.for_current(bot, bot.character, lambda s: s.channel_type == MAP)
@@ -268,10 +264,9 @@ def run(bot: Bot, cfg: dict) -> str:
 
 
 def _play_behind(bot: Bot) -> str:
-    try:
+    # 들어온 뒤로는 게임을 뒤로 보내고 하던 창을 돌려준다 (사용자 — 어비스 반복과 같다). 키는 창에 직접 간다
+    with bot.behind_while(bot.cfg.get("drill", {}).get("background", True)):
         return play(bot)
-    finally:
-        bot.background = False
 
 
 def verify(bot: Bot, cfg: dict) -> bool:
