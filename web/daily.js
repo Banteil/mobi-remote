@@ -47,8 +47,7 @@ function paintDailyTable() {
   $('#dl-table tbody').innerHTML = st.chars.map((c) => {
     const today = st.today[String(c.slot)] || {};
     const on = dl.pickedChars.has(c.slot);
-    return '<tr class="' + (on ? '' : 'off') + '"><td class="dl-name"><label class="chk dl-pick">' +
-      box('data-dl-char="' + c.slot + '"', on) + c.slot + '. ' + esc(c.name) + '</label></td>' + cols.map((t) => {
+    return '<tr class="' + (on ? '' : 'off') + '"><td class="dl-name">' + charCheck(c, on, 'data-dl-char', 'dl-pick') + '</td>' + cols.map((t) => {
         if ((st.skip[String(c.slot)] || []).includes(t)) {
           return '<td class="dl-cell st-SKIP" title="캐릭터 탭에서 끔">안 함</td>';
         }
@@ -179,8 +178,7 @@ function paintPick(pre, key) {
   $('#' + pre + '-all').checked = allOn;
   $('#' + pre + '-all').disabled = !chars.length;
   $('#' + pre + '-chars').innerHTML = chars.length
-    ? chars.map((c) => '<label class="chk"><input type="checkbox" data-pick-char="' + c.slot + '"' +
-        (dl[key].has(c.slot) ? ' checked' : '') + '>' + c.slot + '. ' + esc(c.name) + '</label>').join('')
+    ? chars.map((c) => charCheck(c, dl[key].has(c.slot), 'data-pick-char')).join('')
     : '<span class="muted">캐릭터 탭에서 캐릭터를 추가하세요</span>';
   $('#' + pre + '-pick-note').textContent = dl[key].size + '명';
 }
@@ -448,8 +446,7 @@ async function loadAbyss() {
   if (!a) return;
   $('#ab-dungeon').innerHTML = selectOptions(a.dungeons, a.dungeon);
   $('#ab-difficulty').innerHTML = selectOptions(a.difficulties, a.difficulty);
-  $('#ab-char').innerHTML = '<option value="0">지금 접속한 캐릭터</option>' + a.chars.map((c) =>
-    '<option value="' + c.slot + '"' + (c.slot === a.slot ? ' selected' : '') + '>' + c.slot + '. ' + esc(c.name) + '</option>').join('');
+  $('#ab-char').innerHTML = charOptions(a.chars, a.slot, '지금 접속한 캐릭터');
   $('#ab-runs').value = a.runs;
   $('#ab-minutes').value = a.minutes;
   $('#ab-revive').checked = a.revive !== false;
@@ -581,8 +578,7 @@ async function loadRaid(chars) {
   raidDiffs = r.difficulties;
   $('#rd-raid').innerHTML = selectOptions(r.raids, r.raid);
   paintRaidDiffs(r.difficulty);
-  $('#rd-char').innerHTML = '<option value="0">지금 접속한 캐릭터</option>' + chars.map((c) =>
-    '<option value="' + c.slot + '"' + (c.slot === r.slot ? ' selected' : '') + '>' + c.slot + '. ' + esc(c.name) + '</option>').join('');
+  $('#rd-char').innerHTML = charOptions(chars, r.slot, '지금 접속한 캐릭터');
   $('#rd-runs').value = r.runs;
   $('#rd-minutes').value = r.minutes;
   $('#rd-revive').checked = r.revive !== false;

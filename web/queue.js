@@ -191,7 +191,7 @@ function qWhoText(x) {
   const slot = +(x.slot || 0);
   if (slot) {
     const c = qChars.find((y) => +y.slot === slot);
-    return slot + '. ' + (c ? c.name : '슬롯 ' + slot);
+    return charLabel(c || { slot, name: '슬롯 ' + slot });
   }
   return '접속 캐릭터' + (x.pin && x.pin.name ? ' (' + x.pin.name + ')' : '');
 }
@@ -211,9 +211,7 @@ async function qWho(id) {
   if (!it) return;
   try { qChars = await mm.queue.chars(); } catch (_) { /* 못 읽으면 지난 목록 */ }
   const cur = +(it.slot || 0);
-  const opts = '<option value="0"' + (cur ? '' : ' selected') + '>접속 캐릭터 (처음 시작할 때 접속해 있던 캐릭터)</option>' +
-    qChars.map((c) => '<option value="' + c.slot + '"' + (+c.slot === cur ? ' selected' : '') + '>' +
-      c.slot + '. ' + esc(c.name) + '</option>').join('');
+  const opts = charOptions(qChars, cur, '접속 캐릭터 (처음 시작할 때 접속해 있던 캐릭터)');
   const ok = await confirmModal('할 캐릭터',
     '<p>"' + esc(it.label) + '" 을(를) 어느 캐릭터로 할까요?</p>' +
     '<select id="q-who-pick" class="q-who-pick">' + opts + '</select>' +

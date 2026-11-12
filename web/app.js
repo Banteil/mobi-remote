@@ -18,6 +18,20 @@ function selectOptions(items, cur) {
   }).join('');
 }
 
+/* 캐릭터 고르기 (숙제·어비스·레이드 탭, 큐 카드의 '할 캐릭터') — c: {slot, name}. 글자는 '슬롯. 이름' */
+function charLabel(c) { return c.slot + '. ' + c.name; }
+
+/** 캐릭터 <option> 줄. 맨 앞은 0 = zeroLabel (지금 접속한 캐릭터) */
+function charOptions(chars, cur, zeroLabel) {
+  return selectOptions([[0, zeroLabel]].concat(chars.map((c) => [c.slot, charLabel(c)])), cur);
+}
+
+/** 캐릭터 체크박스 하나. attr: input 에 붙일 속성 이름 (값은 슬롯), cls: label 에 더할 클래스 */
+function charCheck(c, on, attr, cls) {
+  return '<label class="chk' + (cls ? ' ' + cls : '') + '"><input type="checkbox" ' + attr + '="' + c.slot + '"' +
+    (on ? ' checked' : '') + '>' + esc(charLabel(c)) + '</label>';
+}
+
 /** 남은 초를 사람이 읽는 형태로 */
 function dur(sec) {
   if (!sec || sec <= 0) return '완료';
