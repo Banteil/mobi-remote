@@ -530,9 +530,7 @@ async function checkLevelMismatch(w) {
   const bad = (w.room || []).filter((r) => r.levelSet && r.used > r.slots);
   if (!bad.length) return;
 
-  let cfg = null;
-  try { cfg = await mm.cfg.get(); } catch (_) { return; }
-  if (cfg && cfg.askFacilityLevelMismatch === false) return;
+  if (pref('askFacilityLevelMismatch') === false) return;
 
   let rules = null;
   try { rules = await mm.knowledge.rules(); } catch (_) { return; }
@@ -572,7 +570,7 @@ async function checkLevelMismatch(w) {
   mismatchAsking = false;
 
   if (dontAsk) {
-    try { await mm.cfg.set('askFacilityLevelMismatch', false); } catch (_) {}
+    setPref('askFacilityLevelMismatch', false);
     toast('다시 묻지 않습니다', '나중에 옵션에서 되돌릴 수 있습니다.', 'ok');
   }
   if (!ok) return;

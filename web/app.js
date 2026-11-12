@@ -388,12 +388,13 @@ async function updateNameNow(st, me) {
  */
 /* 화면에서 고른 것 기억 (다시 켜도 그대로) — 파이썬 settings 파일에 둔다 (mm.cfg.set, 허용 키는 api.CFG_KEYS).
  * 웹 화면 저장소(localStorage)는 화면 프로필이 기록을 남기지 않아(off-the-record) 켤 때마다 비므로 쓰지 않는다.
- * uiPrefs 는 시작할 때(main.js) 한 번 읽는다. */
+ * uiPrefs 는 시작할 때(main.js) 한 번 읽는다. 저장은 반드시 setPref 로 — 그래야 uiPrefs 가 늘 지금 값이다.
+ * setPref 는 저장이 끝나면 풀리는 Promise 를 돌려준다 (실패해도 던지지 않는다). */
 let uiPrefs = {};
 function pref(key, fallback) { return uiPrefs[key] !== undefined && uiPrefs[key] !== null ? uiPrefs[key] : fallback; }
 function setPref(key, value) {
   uiPrefs[key] = value;
-  mm.cfg.set(key, value).catch(() => { /* 저장 실패가 화면을 막지 않는다 */ });
+  return mm.cfg.set(key, value).catch(() => { /* 저장 실패가 화면을 막지 않는다 */ });
 }
 let autoTimer = null;
 let autoRunning = false;
@@ -729,9 +730,7 @@ function paintSortMenu(key) {
 
 /** 저장해 둔 정렬 기준을 읽어 온다. 앱을 다시 켜도 고른 대로 보이게. */
 async function loadSortPrefs() {
-  let cfg = null;
-  try { cfg = await mm.cfg.get(); } catch (_) { /* 설정을 못 읽어도 기본값으로 돈다 */ }
-  const saved = (cfg && cfg.sort) || {};
+  const saved = pref('sort', {});  // 시작할 때 읽어 둔 설정 (main.js)
   for (const key of Object.keys(SORT_MENU)) {
     // 저장된 값이 그 표에서 고를 수 없는 것이면 무시한다 (메뉴가 바뀌었을 수 있다)
     if (SORT_MENU[key].indexOf(saved[key]) !== -1) sortState[key] = saved[key];
@@ -749,6 +748,7 @@ function wireSort() {
       resetPage(key);
       const fn = PAGE_RENDER[key];
       if (fn) fn();
+      uiPrefs.sort = Object.assign({}, uiPrefs.sort, { [key]: sel.value });
       try { await mm.cfg.sort(key, sel.value); } catch (_) { /* 저장 실패가 화면을 막지 않는다 */ }
     });
   }
@@ -1224,7 +1224,7 @@ async function wireNpcap() {
   const hide = () => $('#npcap-banner').classList.add('hidden');
   $('#npcap-later').addEventListener('click', hide);
   $('#npcap-noask').addEventListener('click', async () => {
-    await mm.cfg.set('npcapNoAsk', true);
+    setPref('npcapNoAsk', true);
     hide();
     toast('다시 묻지 않습니다', '옵션 창 버전 칸의 패킷 감시 줄에서 언제든 받을 수 있습니다.', 'ok');
   });
@@ -1245,8 +1245,8 @@ async function wireNpcap() {
     if (!$('#options').classList.contains('hidden')) loadCompat(false);
   });
   setTimeout(async () => {
-    const [cfg, info] = await Promise.all([mm.cfg.get(), mm.version.info()]).catch(() => [null, null]);
-    if (cfg && !cfg.npcapNoAsk && info && info.packet === 'no_npcap') $('#npcap-banner').classList.remove('hidden');
+    const info = await mm.version.info().catch(() => null);
+    if (!pref('npcapNoAsk', false) && info && info.packet === 'no_npcap') $('#npcap-banner').classList.remove('hidden');
   }, 5000);
 }
 
@@ -1496,7 +1496,7 @@ function wire() {
   $('#alter-works-fold').addEventListener('click', async () => {
     worksFolded = !worksFolded;
     applyWorksFold();
-    try { await mm.cfg.set('alterWorksFolded', worksFolded); } catch (_) {}
+    setPref('alterWorksFolded', worksFolded);
   });
 
   const toggleQueue = async () => {
@@ -1514,7 +1514,7 @@ function wire() {
     } finally {
       unpinContent();
     }
-    try { await mm.cfg.set('queueFolded', queueFolded); } catch (_) {}
+    setPref('queueFolded', queueFolded);
   };
   $('#q-fold').addEventListener('click', toggleQueue);
   $('#q-tag').addEventListener('click', toggleQueue);
@@ -1573,11 +1573,11 @@ function wire() {
    */
   $('#dye-nudge').addEventListener('change', async (e) => {
     const on = e.target.checked;
-    await mm.cfg.set('dyeNudge', on);
+    await setPref('dyeNudge', on);
     const r = await mm.cursorNudge(on).catch(() => null);
     if (on && (!r || !r.ok)) {
       e.target.checked = false;
-      await mm.cfg.set('dyeNudge', false);
+      await setPref('dyeNudge', false);
       $('#dye-nudge-msg').textContent = (r && r.error) || '켜지 못했습니다';
       return;
     }
@@ -1586,8 +1586,7 @@ function wire() {
 
   // 켜 둔 채로 떴으면 바로 걸어 둔다.
   (async () => {
-    const c = await mm.cfg.get().catch(() => null);
-    if (!c || c.dyeNudge !== true) return;
+    if (pref('dyeNudge') !== true) return;
     $('#dye-nudge').checked = true;
     const r = await mm.cursorNudge(true).catch(() => null);
     if (!r || !r.ok) $('#dye-nudge-msg').textContent = (r && r.error) || '켜지 못했습니다';
@@ -1688,12 +1687,12 @@ function wire() {
     if (!$('#options').classList.contains('hidden')) closeOptions();
   });
   $('#opt-ask-mismatch').addEventListener('change', async (e) => {
-    await mm.cfg.set('askFacilityLevelMismatch', e.target.checked);
+    setPref('askFacilityLevelMismatch', e.target.checked);
     toast('저장했습니다', e.target.checked ? '어긋나면 물어봅니다.' : '묻지 않습니다.', 'ok');
   });
 
   $('#opt-close-to-tray').addEventListener('change', async (e) => {
-    await mm.cfg.set('closeToTray', e.target.checked);
+    setPref('closeToTray', e.target.checked);
     toast('저장했습니다', e.target.checked
       ? '창을 닫으면 트레이에 남습니다.'
       : '창을 닫으면 프로그램도 함께 끝납니다.', 'ok');

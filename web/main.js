@@ -12,8 +12,8 @@
   // 나중에 읽으면 기본 순서로 한 번 그렸다가 튄다.
   await loadSortPrefs();
   await loadFavorites();
-  worksFolded = uiPrefs.alterWorksFolded === true;  // 못 읽었으면 펼친 채로
-  queueFolded = uiPrefs.queueFolded === true;
+  worksFolded = pref('alterWorksFolded') === true;  // 못 읽었으면 펼친 채로
+  queueFolded = pref('queueFolded') === true;
   applyQueueFold();
   // 접힌 채로 뜬다면 창도 그만큼 좁혀 둔다. 창 크기는 저장하지 않으므로 기본 폭으로 뜬다.
   if (queueFolded) {
