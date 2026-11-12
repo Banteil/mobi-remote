@@ -71,6 +71,31 @@ class UserConfigTest(unittest.TestCase):
         userconfig.save(self.paths, d)
         self.assertNotIn("tribute", tomllib.loads(self.paths.config.read_text(encoding="utf-8")))
 
+    def test_load_config_cache(self):
+        a = load_config(self.paths)
+        a["arbeit"]["max_jobs"] = 99  # 받은 쪽이 고쳐도 다음 사람에게 새지 않는다
+        self.assertEqual(load_config(self.paths)["arbeit"]["max_jobs"], 20)
+        d = userconfig.doc(self.paths)
+        d["arbeit"]["max_jobs"] = 7
+        userconfig.save(self.paths, d)  # 저장하면 바로 새 값
+        self.assertEqual(load_config(self.paths)["arbeit"]["max_jobs"], 7)
+        self.paths.config.write_text("[arbeit]\nmax_jobs = 12345\n", encoding="utf-8")  # 손으로 고친 파일도 (크기·시각)
+        self.assertEqual(load_config(self.paths)["arbeit"]["max_jobs"], 12345)
+
+
+class HelpersTest(unittest.TestCase):
+    """설정 화면·캐릭터 탭이 같이 쓰는 작은 도우미 (예전엔 화면마다 같은 줄을 따로 썼다)."""
+
+    def test_silver_places_fkey(self):
+        d = {"silver": {"field": "평원", "field_runs": "3", "dungeon": "던전", "floor": 2},
+             "places": {"가": {"index": 0}, "나": {"index": 1}, "다": {"index": 2}}}
+        self.assertEqual(userconfig.silver_defaults(d), {"field": "평원", "field_runs": 3, "dungeon": "던전", "floor": 2})
+        self.assertEqual(userconfig.places(d, "dungeon"), ["가", "나"])
+        self.assertEqual(userconfig.places(d, "field"), ["다"])
+        self.assertTrue(userconfig.is_fkey("F12"))
+        self.assertFalse(userconfig.is_fkey("f13"))
+        self.assertFalse(userconfig.is_fkey("a"))
+
 
 if __name__ == "__main__":
     unittest.main()

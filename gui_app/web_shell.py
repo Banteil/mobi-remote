@@ -20,8 +20,9 @@ from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineScript, QWebEngine
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import QMainWindow
 
+from .api import APP_NAME  # 앱 이름은 판 번호 옆 한 곳 (api.py)
+
 log = logging.getLogger("mabi")
-APP_NAME = "모비 커넥터 리모콘"
 WEB = Path(__file__).resolve().parent.parent / "web"
 
 

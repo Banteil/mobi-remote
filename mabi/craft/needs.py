@@ -14,10 +14,10 @@
 """
 import math
 
+from .knowledge import CRAFT_LIMIT  # 제작 한 번에 묶을 수 있는 횟수 (knowledge 가 배운 값이 있으면 그쪽)
 from .recipes import RecipeTable, bare
 
 GATHER_PER_CALL = 100  # 채집 한 번에 최대 100개
-CRAFT_LIMIT = 10       # 제작 한 번에 묶을 수 있는 횟수 (knowledge 가 배운 값이 있으면 그쪽)
 WINGS_PER_CALL = 5     # 채집·제작·가공 호출마다 정령의 날개 5 (수령은 무료)
 MAX_COMBOS = 64
 

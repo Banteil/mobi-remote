@@ -155,5 +155,17 @@ class PlanStepTest(unittest.TestCase):
         self.assertEqual((st["kind"], st["reason"]), ("blocked", "not_obtainable"))
 
 
+class ItemTotalsTest(unittest.TestCase):
+    """보유량 합치기는 knowledge.item_totals 하나 — 목표·계획·화면은 bare(태그 벗긴 이름도), 전후 비교는 원문만."""
+
+    def test_bare_option(self):
+        from mabi.craft.knowledge import item_totals
+        rows = [{"DisplayName": "<color=#ffcc00>철괴</color>", "Count": 3}, {"DisplayName": "철괴", "Count": 2},
+                {"DisplayName": "", "Count": 9}]
+        self.assertEqual(item_totals(rows), {"<color=#ffcc00>철괴</color>": 3, "철괴": 2})
+        self.assertEqual(item_totals({"items": rows}, bare=True), {"<color=#ffcc00>철괴</color>": 3, "철괴": 5})
+        self.assertEqual(item_totals(None, bare=True), {})
+
+
 if __name__ == "__main__":
     unittest.main()

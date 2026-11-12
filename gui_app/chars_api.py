@@ -19,7 +19,7 @@ from pathlib import Path
 import tomlkit
 
 from mabi import gamedata as gd, profile as prof, userconfig
-from mabi.runner import load_config
+from mabi.runner import load_config, task_order, tasks_by_slot
 from mabi.tasks import boss_skills
 from mabi.tasks.weekday import SUNDAY_CHOICES
 from mabi.whoami import Characters
@@ -31,10 +31,10 @@ FLOORS = {int(k): v for k, v in gd.labels()["floors"].items()}
 
 
 class CharsApi:
-    """self.paths, self.qc(QueryCache), self._emit, self._on_gui, self.win, self._doc() 가 있는 클래스에 섞는다."""
+    """self.paths, self.qc(QueryCache), self._emit, self._on_gui, self.win, self._doc(), DailyApi 의 _game_bot·_bot_stop·
+    _busy_reason 이 있는 클래스에 섞는다."""
 
     _scan_thread: threading.Thread | None = None
-    _scan_bot = None
 
     # ---- 경로 ----
     def _portrait(self, slot: int, scan: bool = False) -> Path:
@@ -51,6 +51,7 @@ class CharsApi:
     _name_now: dict = {"name": "", "at": 0.0}
     _name_checked = 0.0  # 마지막으로 화면을 읽어 본 때 (겹쳐 부를 때 한 번만)
     _name_crop = None    # 마지막으로 OCR 한 이름 칸 그림 — 그대로면 다시 읽지 않는다
+    _name_vision = None  # 이름 칸 화면 확인에 쓰는 Vision (한 번 만들어 둔다)
 
     def chars_nameNow(self) -> dict:  # noqa: N802
         """지금 접속한 캐릭터 이름 {name, fresh}. CLI 에는 이름이 없어 메인 화면 왼쪽 위 이름을 OCR 로 읽는다.
@@ -66,12 +67,17 @@ class CharsApi:
             self._name_now = {"name": bot.character.get("name", ""), "at": _t.time()}
             return {"name": self._name_now["name"], "fresh": True}
         try:
+            cfg = load_config(self.paths)
+        except Exception as e:  # 이름 표시는 덤이다
+            log.debug(f"지금 캐릭터 이름: 설정 읽기 실패: {e}")
+            return {"name": self._name_now["name"], "fresh": _t.time() - self._name_now["at"] < 120}
+        try:
             from mabi import packet_monitor
-            if load_config(self.paths)["game"].get("packet_watch", True):
+            if cfg["game"].get("packet_watch", True):
                 pm = packet_monitor.shared(self.paths.logs)
                 if pm.at_charselect():  # 로그아웃 뒤 = 접속한 캐릭터 없음 (게임이 꺼졌는지는 아래 창 확인이 본다)
                     from mabi.window import GameWindow
-                    if GameWindow(load_config(self.paths)["game"]["window_title"]).find():
+                    if GameWindow(cfg["game"]["window_title"]).find():
                         self._name_now, self._name_crop = {"name": "", "at": 0.0}, None
                         return {"name": "", "fresh": False}
                 if pm.ok and pm.state.my_name and not pm.state.loading:
@@ -87,14 +93,13 @@ class CharsApi:
             from mabi.vision import Vision
             from mabi.window import GameWindow
             try:
-                cfg = load_config(self.paths)
                 w = GameWindow(cfg["game"]["window_title"])
                 if not w.find():
                     self._name_now = {"name": "", "at": 0.0}  # 게임이 꺼짐
                 else:
                     # 게임 창을 앞으로 가져오지 않고 그 창만 찍는다 → 리모콘을 보고 있어도 읽힌다 (예전엔 게임이 맨 앞일 때만)
                     frame = grab_window(w.hwnd)
-                    v = Vision(self.paths.templates)
+                    v = self._name_vision = self._name_vision or Vision(self.paths.templates)  # 템플릿을 매번 다시 읽지 않게
                     if frame is None:
                         pass
                     elif v.find(frame, cfg["ui"]["main_hud"]):
@@ -106,8 +111,7 @@ class CharsApi:
                             self._name_now["at"] = _t.time()
                         else:
                             # OCR 이 한두 글자 틀려도 (받침 'ㅇ' → 'ㅁ' 등) 등록된 캐릭터 이름으로 맞춘다
-                            names = [c["name"] for c in
-                                     prof.characters(prof.load_profile(self.paths.profile) or {"slots": []})]
+                            names = [c["name"] for c in prof.chars(self.paths)]
                             n = snap_name(name_in_frame(frame), names)
                             n = next((c for c in names if "".join(c.split()) == n), n)
                             if n:
@@ -124,26 +128,23 @@ class CharsApi:
     def chars_list(self) -> dict:
         doc = self._doc()
         s = doc["silver"]
-        defaults = {"field": str(s["field"]), "field_runs": int(s["field_runs"]), "dungeon": str(s["dungeon"]),
-                    "floor": int(s["floor"]), "black_hole": True, "sunday": self._sunday(doc)}
+        defaults = {**userconfig.silver_defaults(doc), "black_hole": True, "sunday": self._sunday(doc)}
         by = s.get("by_slot", {})
         sun_by = doc["weekday_dungeon"].get("sunday_by_slot", {})
         skip = doc["run"].get("skip_by_slot", {})
-        profile = prof.load_profile(self.paths.profile) or {"slots": [], "names": {}}
         known = Characters(self.paths.data).load()["slots"]
         today = prof.DailyState(self.paths.state)
-        by_tasks = doc["run"].get("tasks_by_slot", {})
+        by_tasks = tasks_by_slot(doc)
         arb_slots = [int(x) for x in doc.get("arbeit", {}).get("slots", [])]
         boss = doc.get("boss_skills", {})
         out = []
-        for c in prof.characters(profile):
+        for c in prof.chars(self.paths):
             k = str(c["slot"])
             o = dict(by.get(k, {}))
             e = known.get(k) or {}
             fp, card = e.get("fp") or {}, e.get("card") or {}
             # 오늘 숙제 진행 (캐릭터 탭 카드의 '오늘 클리어' 표시). 끈 숙제는 세지 않는다
-            order = [t for t in (by_tasks.get(k) or doc["run"]["order"]) if t not in skip.get(k, [])
-                     and (t != "arbeit" or c["slot"] in arb_slots)]  # 아르바이트는 켠 캐릭터만
+            order = task_order(doc, c, by_slot=by_tasks)
             done = sum(today.is_done(c["slot"], t) for t in order)
             out.append({
                 "today": {"done": done, "total": len(order)},
@@ -159,8 +160,7 @@ class CharsApi:
                 "portrait": self._data_url(self._portrait(c["slot"])),
             })
         return {"chars": out, "defaults": defaults,
-                "fields": [n for n, p in doc["places"].items() if int(p["index"]) == 2],
-                "dungeons": [n for n, p in doc["places"].items() if int(p["index"]) < 2],
+                "fields": userconfig.places(doc, "field"), "dungeons": userconfig.places(doc, "dungeon"),
                 "floors": FLOORS, "sundays": list(SUNDAY_CHOICES), "scanning": bool(self._scan_thread and self._scan_thread.is_alive())}
 
     # ---- 저장 ----
@@ -175,8 +175,7 @@ class CharsApi:
         with userconfig.LOCK:  # 화면·작업 큐가 함께 고친다
             doc = self._doc()
             s = doc["silver"]
-            base = {"field": str(s["field"]), "field_runs": int(s["field_runs"]), "dungeon": str(s["dungeon"]),
-                    "floor": int(s["floor"])}
+            base = userconfig.silver_defaults(doc)
             overs, skips = {}, {}
             for c in chars:
                 o = {k: (int(c[k]) if k in ("field_runs", "floor") else str(c[k]))
@@ -294,17 +293,16 @@ class CharsApi:
             return {"error": "작업 큐가 도는 중입니다"}
 
         def work():
-            from mabi.bot import Bot
             from mabi.tasks import charscan
             try:
                 cfg = load_config(self.paths)
-                bot = self._scan_bot = Bot(cfg, self.paths, force_exit=False)
-                if not bot.window.find():
-                    raise RuntimeError("게임이 꺼져 있습니다. 게임을 켠 뒤 다시 눌러 주세요")
-                bot.window.focus()
-                bot.sleep(0.5)
-                self._emit("mm:chars-scan", {"stage": "캐릭터 선택 화면으로 나가는 중"})
-                r = charscan.scan(bot, cfg)  # 캐릭터 선택 화면에 머문다 (다시 접속하지 않음)
+                with self._game_bot("scan", cfg) as bot:
+                    if not bot.window.find():
+                        raise RuntimeError("게임이 꺼져 있습니다. 게임을 켠 뒤 다시 눌러 주세요")
+                    bot.window.focus()
+                    bot.sleep(0.5)
+                    self._emit("mm:chars-scan", {"stage": "캐릭터 선택 화면으로 나가는 중"})
+                    r = charscan.scan(bot, cfg)  # 캐릭터 선택 화면에 머문다 (다시 접속하지 않음)
                 shutil.rmtree(self.paths.data / "portraits" / "scan", ignore_errors=True)
                 for c in r["cards"]:
                     charscan.save_portrait(c["portrait"], self._portrait(c["slot"], scan=True))
@@ -316,20 +314,12 @@ class CharsApi:
             except Exception as e:
                 log.exception("캐릭터 자동 설정 실패")
                 self._emit("mm:chars-scan", {"error": str(e) if isinstance(e, RuntimeError) else f"{type(e).__name__}: {e}"})
-            finally:
-                try:
-                    self._scan_bot.stopper.close()
-                except Exception:
-                    pass
-                self._scan_bot = None
         self._scan_thread = threading.Thread(target=work, name="chars-scan", daemon=True)
         self._scan_thread.start()
         return {"ok": True}
 
     def chars_scanStop(self) -> dict:  # noqa: N802
-        if self._scan_bot:
-            self._scan_bot.stopper.request()
-        return {"ok": True}
+        return self._bot_stop("scan")
 
     def chars_applyScan(self, items: list) -> dict:  # noqa: N802
         """확인 창에서 고른 것만 반영한다. items: [{slot, name, portrait: bool, level, job}]."""

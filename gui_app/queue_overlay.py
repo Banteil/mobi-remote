@@ -15,6 +15,8 @@ from PySide6.QtCore import QObject, QPointF, QRectF, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QColor, QFont, QFontMetricsF, QGuiApplication, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QWidget
 
+from mabi import gamedata as gd
+
 from .dye_tab import exclude_from_capture
 
 DEFAULTS = {"on": True, "when": "active", "bg": "panel", "alpha": 55, "size": "m", "corner": "bl",
@@ -22,7 +24,7 @@ DEFAULTS = {"on": True, "when": "active", "bg": "panel", "alpha": 55, "size": "m
 CHOICES = {"when": ("active", "always"), "bg": ("panel", "none"), "size": ("s", "m", "l"), "corner": ("bl", "br", "tl", "tr")}
 RANGES = {"alpha": (0, 100), "dx": (0, 2000), "dy": (0, 2000), "next": (0, 5)}
 PX = {"s": 12, "m": 14, "l": 17}
-STATE = {"run": "진행 중", "pause": "일시정지", "wait": "대기", "fail": "실패"}
+STATE = gd.labels()["queue_state"]  # 큐 상태 이름표 — 웹 화면(mm.labels.queue_state)과 같은 data/labels.json
 ACCENT = {"run": QColor(90, 167, 255), "pause": QColor(240, 180, 70), "wait": QColor(170, 176, 188), "fail": QColor(240, 100, 100)}
 
 

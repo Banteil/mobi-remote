@@ -13,6 +13,7 @@ import time
 
 from mabi import errors, gamedata as gd, richtext
 from mabi.craft import lists as craft_lists
+from mabi.craft.knowledge import item_totals
 
 
 class _Undef:
@@ -175,24 +176,21 @@ class Shapes:
         return clean(fn(opts if isinstance(opts, dict) else {}))
 
     # ---- 캐시 ----
-    def _get(self, command: str, o: dict) -> dict:
+    @staticmethod
+    def _kw(o: dict) -> dict:
+        """레거시 opts → QueryCache.get 인자."""
         ma = g(o, "maxAgeMs")
         # 레거시는 maxAgeMs 가 undefined 일 때만 기본 TTL 을 쓴다 (null 이면 캐시를 안 본다)
         max_age = None if ma is U else (0 if ma is None else _num(ma) / 1000)
-        res = self.qc.get(command, refresh=_truthy(g(o, "refresh")), max_age=max_age, offline=_truthy(g(o, "offline")))
+        return {"refresh": _truthy(g(o, "refresh")), "max_age": max_age, "offline": _truthy(g(o, "offline"))}
+
+    def _get(self, command: str, o: dict) -> dict:
+        res = self.qc.get(command, **self._kw(o))
         return {**res, "ageMs": (res.get("age") or 0) * 1000}
 
     def _owned_totals(self, o) -> dict:
-        """이름 → 가방+보관함 총량. MissingIngredients 의 Owned 는 가방만 센다."""
-        res = self._get("get_items", o)
-        m: dict = {}
-        for it in _arr(res.get("data")):
-            dn, n = g(it, "DisplayName"), g(it, "Count")
-            m[dn] = _num(_or(m.get(dn, U), 0)) + _num(n)
-            bare = richtext.strip(dn)
-            if bare != dn:
-                m[bare] = _num(_or(m.get(bare, U), 0)) + _num(n)
-        return m
+        """이름 → 가방+보관함 총량 (태그를 벗긴 이름으로도). MissingIngredients 의 Owned 는 가방만 센다."""
+        return item_totals(self._get("get_items", o).get("data"), bare=True)
 
     @staticmethod
     def _split(lst, totals) -> dict:
@@ -320,32 +318,12 @@ class Shapes:
                           for r in (rows[:int(_num(lim))] if _truthy(lim) else rows)]}
 
     def q_alteringWorks(self, o):  # noqa: N802
-        """완료분은 시설별로 묶어야 complete_altering_work 를 시설당 1회만 부른다.
-        아이템↔시설 매핑과 시설별 칸 수는 여기서만 알 수 있어 볼 때마다 쌓는다."""
-        kn = self.cd.knowledge
-        res = self._get("get_altering_works", o)
-        if not _truthy(res.get("data")):
-            return _fail(res)
-        d = res["data"]
-        works = _arr(_or(g(d, "works"), []))
-        try:
-            kn.learn_from_altering_works(d)
-        except Exception:
-            pass  # 학습 실패는 조회를 막지 않는다
-        by: dict = {}
-        for w in works:
-            key = _or(g(w, "FacilityName"), "(시설 미상)")
-            e = by.setdefault(key, {"facility": key, "completed": [], "inProgress": []})
-            row = {"name": g(w, "DisplayName"), "state": g(w, "State"), "remainingSec": g(w, "RemainingSeconds")}
-            (e["completed"] if _truthy(g(w, "IsCompleted")) else e["inProgress"]).append(row)
-        return {"completedCount": _or(g(d, "completedCount"), sum(1 for w in works if _truthy(g(w, "IsCompleted")))),
-                "inProgressCount": sum(1 for w in works if not _truthy(g(w, "IsCompleted"))), "total": len(works),
-                **_meta(res),
-                "facilities": sorted(by.values(), key=lambda f: -len(f["completed"])),
-                "room": kn.room_report(d),
-                "works": [{"name": g(w, "DisplayName"), "facility": g(w, "FacilityName"), "state": g(w, "State"),
-                           "done": _truthy(g(w, "IsCompleted")), "remainingSec": g(w, "RemainingSeconds")}
-                          for w in works]}
+        """가공 작업 현황 — 묶기·학습은 mabi.craft.lists.altering_works 하나가 하고, 여기는 화면이 쓰는 키 이름만 바꾼다."""
+        w = craft_lists.altering_works(self.cd, self.qc, **self._kw(o))
+        if "facilities" not in w:
+            return w  # 실패 {error, message}
+        w["completedCount"], w["inProgressCount"] = w.pop("completed_count"), w.pop("in_progress_count")
+        return w
 
     # ---------------------------------------------------------------- 소지품·재화
     LOCATION_LABEL = gd.labels()["location"]

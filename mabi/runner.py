@@ -58,19 +58,56 @@ def _merged(base: dict, over: dict) -> dict:
     return out
 
 
+def _stamp(p) -> tuple | None:
+    try:
+        st = p.stat()
+    except OSError:
+        return None
+    return st.st_mtime_ns, st.st_size
+
+
 def load_config(paths: Paths) -> dict:
     """사용자 설정(config.toml — 기본값과 다른 값만, mabi.userconfig) 아래에 배포 기본값(config.default.toml)을 깐다.
-    옛 판처럼 통째로 복사해 둔 config.toml 이면 처음 한 번 '다른 값만' 으로 옮긴다."""
+    옛 판처럼 통째로 복사해 둔 config.toml 이면 처음 한 번 '다른 값만' 으로 옮긴다.
+    상단바·단축키 감시가 몇 초마다 부르므로 두 파일이 그대로면(수정 시각·크기) 지난번 읽은 것을 쓴다.
+    부르는 쪽이 고쳐도 다음 사람에게 새지 않게 늘 사본을 준다."""
+    import copy
     from . import userconfig
+    default = paths.resources / "config.default.toml"
+    key = (str(paths.config), _stamp(paths.config), _stamp(default))
+    hit = userconfig.loaded.get(key[0])
+    if hit and hit[0] == key:
+        return copy.deepcopy(hit[1])
     try:
         userconfig.migrate(paths, log)
     except Exception as e:  # noqa: BLE001 — 옮기지 못해도 읽기는 된다
         log.warning(f"설정 파일을 옮기지 못함 — 그대로 씀: {e}")
+    key = (key[0], _stamp(paths.config), key[2])  # 옮겼으면 파일이 바뀌었다
     user = tomllib.loads(paths.config.read_text(encoding="utf-8"))
-    default = paths.resources / "config.default.toml"
-    if not default.exists():
-        return user
-    return _merged(tomllib.loads(default.read_text(encoding="utf-8")), user)
+    cfg = _merged(tomllib.loads(default.read_text(encoding="utf-8")), user) if default.exists() else user
+    userconfig.loaded[key[0]] = (key, cfg)
+    return copy.deepcopy(cfg)
+
+
+def tasks_by_slot(cfg) -> dict[int, list[str]]:
+    """캐릭터마다 따로 정한 숙제 순서 {슬롯: [숙제 id]} ([run] tasks_by_slot)."""
+    return {int(k): v for k, v in cfg["run"].get("tasks_by_slot", {}).items()}
+
+
+def task_order(cfg, ch: dict | None, only: list[str] | None = None, by_slot: dict | None = None) -> list[str]:
+    """이 캐릭터가 할 숙제 순서 — 숙제 실행기와 화면(캐릭터 탭 '오늘 클리어', 결과 보기)이 같이 쓴다.
+    캐릭터 탭에서 끈 숙제는 빼고, 아르바이트는 켠 캐릭터만. only: 일부 숙제만 (카드가 고른 것).
+    by_slot: tasks_by_slot(cfg) — 여러 번 부를 때 미리 만들어 넘긴다. cfg 는 load_config 결과나 userconfig.doc()."""
+    by_slot = tasks_by_slot(cfg) if by_slot is None else by_slot
+    slot = ch["slot"] if ch else None
+    order = only or (by_slot.get(slot) if ch else None) or cfg["run"]["order"]
+    if ch:  # 캐릭터 탭에서 끈 숙제 (검은 구멍 등)
+        off = cfg["run"].get("skip_by_slot", {}).get(str(slot), [])
+        order = [t for t in order if t not in off]
+        # 아르바이트는 거꾸로 켠 캐릭터만 (새 기능이라 기본은 안 함)
+        if slot not in [int(s) for s in cfg.get("arbeit", {}).get("slots", [])]:
+            order = [t for t in order if t != "arbeit"]
+    return order
 
 
 @dataclass
@@ -155,7 +192,7 @@ class Runner:
         for k, v in opts.cfg.items():
             cfg[k] = {**cfg.get(k, {}), **v}
         registry = tasks.build(cfg)
-        by_slot = {int(k): v for k, v in cfg["run"].get("tasks_by_slot", {}).items()}
+        by_slot = tasks_by_slot(cfg)
         referenced = (opts.only or []) + cfg["run"]["order"] + [t for v in by_slot.values() for t in v]
         unknown = sorted({t for t in referenced if t not in registry})
         if unknown:
@@ -240,12 +277,12 @@ class Runner:
         """오늘 할 숙제가 남은 캐릭터가 있나. 강제·현재 캐릭터면 늘 있다."""
         if opts.force or opts.current:
             return True
-        return any(not state.is_done(ch["slot"], t) for ch in characters for t in cls._order(cfg, opts, by_slot, ch))
+        return any(not state.is_done(ch["slot"], t) for ch in characters for t in task_order(cfg, ch, opts.only, by_slot))
 
     def has_work(self, opts: RunOptions) -> bool:
         """숙제 시작 전 화면 확인이 쓴다 — 다 끝난 날엔 화면 설정을 보지도 맞추지도 않는다."""
         cfg = load_config(self.paths)
-        by_slot = {int(k): v for k, v in cfg["run"].get("tasks_by_slot", {}).items()}
+        by_slot = tasks_by_slot(cfg)
         return self._has_work(cfg, opts, by_slot, self.characters(cfg, opts), prof.DailyState(self.paths.state))
 
     def _recheck_daily(self, bot, cfg, state, slot, results, ended) -> None:
@@ -267,19 +304,6 @@ class Runner:
         log.info(f"  {label}: 남은 선물을 받아 완료로 고침")
         self._emit("task_end", slot=slot, task="daily_mission", label=label, status="OK", summary=summary, seconds=0)
 
-    @staticmethod
-    def _order(cfg, opts, by_slot, ch) -> list[str]:
-        """이 캐릭터가 할 숙제 순서 (캐릭터 탭에서 끈 숙제는 뺀다)."""
-        slot = ch["slot"] if ch else None
-        order = opts.only or (by_slot.get(slot) if ch else None) or cfg["run"]["order"]
-        if ch:  # 캐릭터 탭에서 끈 숙제 (검은 구멍 등)
-            off = cfg["run"].get("skip_by_slot", {}).get(str(slot), [])
-            order = [t for t in order if t not in off]
-            # 아르바이트는 거꾸로 켠 캐릭터만 (새 기능이라 기본은 안 함)
-            if slot not in [int(s) for s in cfg.get("arbeit", {}).get("slots", [])]:
-                order = [t for t in order if t != "arbeit"]
-        return order
-
     def _arrange(self, cfg, opts, by_slot, characters, state) -> list:
         """다시 시작할 때의 캐릭터 순서.
         - 지난번에 멈춘 캐릭터(진행 기록)부터 이어 한다 — 앞 캐릭터로 돌아가 접속 전환을 낭비하지 않게.
@@ -290,13 +314,13 @@ class Runner:
 
         def fresh(ch) -> bool:  # 아직 안 해 본 숙제가 있다
             return any(not state.is_done(ch["slot"], t) and not state.failed(ch["slot"], t)
-                       for t in self._order(cfg, opts, by_slot, ch))
+                       for t in task_order(cfg, ch, opts.only, by_slot))
 
         def retry(ch) -> bool:
-            return not fresh(ch) and any(state.failed(ch["slot"], t) for t in self._order(cfg, opts, by_slot, ch))
+            return not fresh(ch) and any(state.failed(ch["slot"], t) for t in task_order(cfg, ch, opts.only, by_slot))
 
         def todo(ch) -> bool:
-            return any(not state.is_done(ch["slot"], t) for t in self._order(cfg, opts, by_slot, ch))
+            return any(not state.is_done(ch["slot"], t) for t in task_order(cfg, ch, opts.only, by_slot))
 
         if not any(todo(ch) for ch in chars):  # 다 끝났다 — 지금 캐릭터 이름을 읽으러 화면을 볼 것도 없다
             return chars
@@ -402,7 +426,7 @@ class Runner:
         for n, ch in enumerate(characters):
             who = ch["name"] if ch else "현재 캐릭터"
             slot = ch["slot"] if ch else None
-            order = self._order(cfg, opts, by_slot, ch)
+            order = task_order(cfg, ch, opts.only, by_slot)
             # 정해진 시간에만 하는 숙제(필드 보스)만 남았는데 지금은 그 시간이 아니면 남은 캐릭터는 다음에 (작업 큐가 그때 다시)
             if (why := tasks.not_ready(order)):
                 log.info(f"{why} → 남은 캐릭터 {len(characters) - n}명은 다음에")

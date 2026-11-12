@@ -13,20 +13,10 @@ import math
 from .. import gamedata as gd, richtext
 from ..cache import QueryCache
 from . import goal, needs
+from .needs import GATHER_PER_CALL
+from .knowledge import item_totals
 
 SOURCE = gd.labels()["source"]
-GATHER_PER_CALL = 100
-
-
-def sum_by_name(rows, name_key: str, count_key: str) -> dict:
-    m: dict = {}
-    for r in rows or []:
-        n = r.get(name_key)
-        m[n] = m.get(n, 0) + (r.get(count_key) or 0)
-        bare = richtext.strip(n)
-        if bare != n:
-            m[bare] = m.get(bare, 0) + (r.get(count_key) or 0)
-    return m
 
 
 def _items(res) -> list:
@@ -69,7 +59,7 @@ def make_plan(cd, qc: QueryCache, display_name: str, target: int, **kw) -> dict:
     product = (row and row.get("product")) or (kn.product_of(recipe["DisplayName"]) if is_alter else recipe["DisplayName"])
 
     gatherable = {x.get("DisplayName") for x in _items(gather)}
-    owned = sum_by_name(items.get("data") if isinstance(items.get("data"), list) else [], "DisplayName", "Count")
+    owned = item_totals(items.get("data"), bare=True)
 
     def classify(name):
         if name in gatherable:
@@ -153,7 +143,7 @@ def make_plan(cd, qc: QueryCache, display_name: str, target: int, **kw) -> dict:
 def gather_plan(row: dict, target: int, items: dict, cached) -> dict:
     """채집 목표. 재료도 시설도 없고 "몇 번 부르면 되나"뿐이다. 한 호출 최대 100개는 상한이지 보장이 아니라
     횟수는 최소치 — 자동 진행이 매번 남은 수량을 다시 세어 모자라면 더 부른다."""
-    owned = sum_by_name(items.get("data") if isinstance(items.get("data"), list) else [], "DisplayName", "Count")
+    owned = item_totals(items.get("data"), bare=True)
     name = row["DisplayName"]
     have = owned.get(name) or owned.get(richtext.strip(name)) or 0
     short = max(0, target)

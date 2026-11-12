@@ -74,9 +74,9 @@ class StopReasonTest(unittest.TestCase):
         from mabi.workqueue import STOP_WHY
         api = mock.MagicMock()
         AbyssKind(api).stop("preempt")
-        api.daily_abyssStop.assert_called_once_with(STOP_WHY["preempt"])
+        api._repeat_stop.assert_called_with("abyss", STOP_WHY["preempt"])
         RaidKind(api).stop("pause")  # 사람이 멈춤 → 까닭 없음
-        api.daily_raidStop.assert_called_once_with("")
+        api._repeat_stop.assert_called_with("raid", "")
         DailyKind(api).stop("preempt")
         api.daily_stop.assert_called_once_with(False, STOP_WHY["preempt"])
 

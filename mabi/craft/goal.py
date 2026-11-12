@@ -23,6 +23,7 @@ import math
 from .. import errors, gamedata as gd, richtext
 from ..cache import QueryCache
 from . import lists, needs
+from .knowledge import item_totals
 
 VIA = gd.labels()["source"]
 MAX_DEPTH = 4  # 예전 방식의 재귀 깊이 상한
@@ -42,21 +43,6 @@ def _list_of(data) -> list:
     if isinstance(data, list):
         return data
     return (data or {}).get("items") or (data or {}).get("Items") or [] if isinstance(data, dict) else []
-
-
-def owned_map(data) -> dict:
-    """이름 → 총 개수. 가방·보관함을 합친다 (MissingIngredients 의 Owned 는 가방만이라 쓰지 않는다)."""
-    m: dict = {}
-    for x in _list_of(data):
-        n = x.get("DisplayName")
-        if not n:
-            continue
-        c = x.get("Count") or 0
-        m[n] = m.get(n, 0) + c
-        bare = richtext.strip(n)
-        if bare != n:
-            m[bare] = m.get(bare, 0) + c
-    return m
 
 
 def recipe_map(data, ok_key: str, per_key: str) -> dict:
@@ -120,7 +106,7 @@ def snapshot(cd, qc: QueryCache, refresh: bool = True, offline: bool = False) ->
         return {"error": works["error"], "message": works.get("message")}
 
     kn = cd.knowledge.load()
-    snap = {"cd": cd, "owned": owned_map(items["data"]),
+    snap = {"cd": cd, "owned": item_totals(items["data"], bare=True),
             "craft": recipe_map(craft["data"], "Craftable", "ProducedPerCraft"),
             "alter": recipe_map(alter["data"], "Alterable", "ProducedPerWork"),
             "gather": gather_map(gather["data"]), "works": works, "recipes": kn.get("recipes") or {}, "kn": kn,

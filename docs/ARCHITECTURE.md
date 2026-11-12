@@ -53,6 +53,13 @@ mabi/
 | 게임 화면(실제 픽셀) 위에 Qt 창 겹치기 — 게임이 있는 모니터·배율 | `queue_overlay.to_logical` | 작업 큐 오버레이, 염색 표시 |
 | 염색 팔레트가 떠 있나·색 찾을 범위 (자리는 게임 화면 비율로 정해 둠, 테두리로 확인) | `dye.detect.palette_at` · `frame_skip` | `dye.tracker.DyeTracker` |
 | 큐 카드 한 종류 | `workqueue.Kind` 를 상속 (`own_loot`, `run`, `view`, `where` …) | `queue_api` |
+| GUI 에서 게임 조작용 Bot 하나 (만들기 → 주인 이름으로 등록 → 닫기) · 멈추기 · '다른 일이 도는 중인가' | `DailyApi._game_bot(주인)` · `_bot_stop(주인)` · `_busy_reason` (스레드 + 등록된 Bot 모두) · 큐 카드 예외 가르기 `QueueApi._q_failed` | 큐 카드(캐릭터 맞추기·각인 강화·게임 다시 켜기), 어비스·레이드 반복, 캐릭터 자동 설정, 화면 설정 |
+| 어비스·레이드 반복 시작·결과·멈춤 (종류별 상태 `RepeatRun`, 장소 칸 `REPEATS`) | `DailyApi._repeat_launch(kind, …)` · `_rep(kind).result` · `_repeat_stop(kind)` | `AbyssKind`·`RaidKind`, 화면 `daily_abyssStop`·`raidStop` |
+| 큐 카드의 게임 명령 (막힘 → 확인 창이 닫히길 기다림 → 한 번 더) | `QueueApi._q_exec` | 목표 카드, 전체 수령 |
+| 목표 걸음 → CLI 명령·본문, 거절 → 할 일 (게임 규칙) | `craft.execute.step_command` · `step_failure` (`STEP_*`) | `GoalKind._execute` |
+| 보유량 (이름 → 가방+보관함 총 개수, 태그 벗긴 이름도 세려면 `bare=True`) | `craft.knowledge.item_totals` | 목표·계획·화면(bare), 학습·얻은 것(원문만) |
+| 캐릭터 목록 · 캐릭터별 오늘 할 숙제 순서 | `profile.chars(paths)` · `runner.task_order` (`tasks_by_slot`) | 실행기, 일일·캐릭터 탭, 큐 카드, 접속·보스전 |
+| 설정 읽기 (두 파일이 그대로면 캐시, 늘 사본) · 배포 기본값 하나 · 작은 도우미 | `runner.load_config` · `userconfig.default` · `silver_defaults` · `places` · `is_fkey` | 곳곳 (기본값 글자를 코드에 다시 적지 않는다) |
 | 화면: 카드 종류의 표시 · 큐 그림이 바뀔 때 부를 것 | `qRegisterKind(name, def)` · `qOnPaint(fn)` (web/queue.js) | daily.js |
 | 화면: '시작'(지금 바로, 돌던 카드는 뒤로) · '목표'(큐 맨 아래에 담기) | `qStart(spec, opts)` · `qEnqueue(spec)` (web/queue.js) · 버튼 짝 `bindStartQueue` (daily.js) | 숙제·어비스·레이드 탭, 제작·가공·채집·연주 |
 | 화면: 모달 창 (확인·숫자·목록·글자 입력 모두) | `openModal({title, body, ok, cancel, value, no})` (web/app.js) | `confirmModal` · `prompt*` · 큐 질문 창 |
@@ -101,6 +108,16 @@ mabi/
 - 초록 판정: 세 벌 → `vision.green` · `green_ratio`
 - 글자 처리(띄어쓰기·찾기·태그): display·arbeit·login·raid → `ocr.nospace` · `ui_text.match` · `richtext.strip`
 - 이름 충돌: `abyss.after_clear`(보상 화면인가) → `abyss.at_reward` (`content.after_clear` 는 클리어 뒤 정리 동작)
+
+(2026-11-12, gui_app·craft 정리)
+- 가공 작업 현황: 화면용 복사본(legacy_shapes) → `lists.altering_works` + 키 이름만 바꿈
+- 보유량 합치기 네 벌(goal·knowledge·plan·legacy_shapes) → `knowledge.item_totals(bare=)`
+- Bot 수명 관리 여덟 벌 → `_game_bot` · `_bot_stop` · `_q_failed`. `_busy_reason` 이 큐 카드 Bot·화면 설정 되돌리기도 본다
+- 어비스·레이드의 문자열 계약(`_{kind}_launch/_result/_bot/_thread`, `daily_{kind}Stop`) → `RepeatRun` · `_repeat_launch` · `_repeat_stop`,
+  비운 값의 기본값은 config.default.toml 에서 (`userconfig.default`)
+- 캐릭터 탭의 숙제 순서 재계산 → `runner.task_order`, 캐릭터 목록 상용구 → `profile.chars`
+- 막힘 재시도 두 벌 → `_q_exec`, 목표 걸음의 게임 규칙 → `craft.execute.step_command`·`step_failure`
+- 설정 읽기: 부를 때마다 TOML 두 개 → `load_config` 캐시. 상수: APP_NAME·큐 상태 이름표·채집 100·제작 10 을 한 곳에
 
 새로 비슷한 것을 발견하면 아래 '아직 모으지 못한 것' 절에 적고, 모으면 위 기록으로 옮긴다.
 

@@ -34,6 +34,12 @@ def _default_doc(paths: Paths):
     return tomlkit.parse(_read(paths.resources / "config.default.toml"))
 
 
+def default(paths: Paths, section: str, key: str, fallback=None):
+    """배포 기본값(config.default.toml) 하나 — 화면·카드가 값을 비워 보냈을 때 쓰는 값 (코드에 같은 글자를 또 적지 않게)."""
+    v = _default_doc(paths).get(section, {}).get(key)
+    return fallback if v is None else (v.unwrap() if hasattr(v, "unwrap") else v)
+
+
 def _overlay(base, over) -> None:
     """tomlkit 표 base 위에 over 를 덮는다 (주석은 사용자 쪽이 있으면 그쪽)."""
     for k, v in over.items():
@@ -46,6 +52,30 @@ def _overlay(base, over) -> None:
 # config.toml 을 읽고 고치고 쓰는 동안 잡는다 — 화면(탭 설정 저장)과 작업 큐 스레드(카드 시작 때 값 저장)가 함께 고친다.
 # 읽기만 하는 곳(load_config)은 잡지 않는다. 저장은 부르는 쪽이 save 로 (검사에 걸리면 저장하지 않고 나가도록)
 LOCK = threading.RLock()
+
+# runner.load_config 가 읽어 둔 설정 {config.toml 경로: ((경로, 파일 표시들), 합친 dict)}. save 가 비운다
+# (파일 수정 시각이 같은 틱에 두 번 바뀌어도 옛 값을 주지 않게)
+loaded: dict = {}
+
+
+def silver_defaults(d) -> dict:
+    """은동전 숙제 공통값 (캐릭터별로 따로 정하지 않은 캐릭터가 따르는 값). d 는 doc() 또는 load_config 결과."""
+    s = d["silver"]
+    return {"field": str(s["field"]), "field_runs": int(s["field_runs"]), "dungeon": str(s["dungeon"]),
+            "floor": int(s["floor"])}
+
+
+def places(d, kind: str) -> list[str]:
+    """[places] 중 던전(index 0·1) 또는 사냥터(index 2) 이름들. kind: 'dungeon' | 'field'."""
+    keep = (lambda i: i == 2) if kind == "field" else (lambda i: i < 2)
+    return [n for n, p in d["places"].items() if keep(int(p["index"]))]
+
+
+FKEYS = tuple(f"f{i}" for i in range(1, 13))  # 리모콘 단축키(일시정지·염색 도우미)로 고를 수 있는 키
+
+
+def is_fkey(k: str) -> bool:
+    return str(k).lower() in FKEYS
 
 
 def doc(paths: Paths):
@@ -88,6 +118,7 @@ def save(paths: Paths, d) -> None:
     out.add(tomlkit.nl())
     _build(_diff(d, _default_doc(paths)), out)
     paths.config.write_text(tomlkit.dumps(out), encoding="utf-8")
+    loaded.clear()
 
 
 def migrate(paths: Paths, log=None) -> bool:

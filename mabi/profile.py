@@ -55,6 +55,11 @@ def characters(profile: dict) -> list[dict]:
     return [{"slot": s, "name": profile.get("names", {}).get(str(s), f"슬롯 {s}")} for s in profile["slots"]]
 
 
+def chars(paths) -> list[dict]:
+    """profile.json 의 캐릭터 목록 [{slot, name}]. 파일이 없으면 빈 목록 (없으면 멈춰야 하는 숙제 실행기는 직접 읽는다)."""
+    return characters(load_profile(paths.profile) or {"slots": []})
+
+
 def game_date(now: datetime | None = None) -> str:
     now = now or datetime.now()
     return (now - timedelta(hours=RESET_HOUR)).strftime("%Y-%m-%d")
