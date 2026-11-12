@@ -116,6 +116,7 @@ class Api(DailyApi, CharsApi, QueueApi):
     def __init__(self, paths):
         self.paths = paths
         self.win = None
+        self.emit_hooks: list = []  # 화면 이벤트를 같이 받을 곳 (_emit) — __init__ 중 큐를 읽을 때도 부르므로 맨 먼저
         self._gui: _GuiCall | None = None
         self._lock = threading.RLock()       # 설정·작은 저장소의 읽고-고치고-쓰기
         self._exec_lock = threading.Lock()   # 레거시 currentAction: exec 는 한 번에 하나
@@ -173,6 +174,8 @@ class Api(DailyApi, CharsApi, QueueApi):
         self.cli.cancel()
 
     def _emit(self, channel: str, payload=None) -> None:
+        for hook in getattr(self, "emit_hooks", ()):  # 제어 통로 알림 (gui_app/control.Events)
+            hook(channel, payload)
         if channel == "mm:queue" and getattr(self, "qov", None):  # __init__ 중(큐를 읽는 동안)엔 아직 없다
             self.qov.push(payload)  # 작업 큐 오버레이도 같은 상태로
         if self.win is not None:

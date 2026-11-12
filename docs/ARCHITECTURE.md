@@ -7,7 +7,9 @@
 ```
 gui.py ─ gui_app/            화면(PySide6 + web/ 의 HTML·JS). 화면이 부르는 파이썬 쪽은 *_api.py
           ├ daily_api.py      일일 숙제·어비스·레이드 시작/멈춤 (작업 스레드를 띄운다)
-          └ queue_api.py      작업 큐의 카드 종류(Kind) — 숙제·어비스·레이드·목표·동작
+          ├ queue_api.py      작업 큐의 카드 종류(Kind) — 숙제·어비스·레이드·목표·동작
+          └ control.py        다른 프로그램이 묻고 부리는 통로 — 파이프 MobiRemote-control 로 JSON 한 줄씩 (명령 목록은 'hello').
+                              gui.py --halt 같은 예전 명령도 같은 명령 표로 들어온다. 새 조작을 밖에 열 때는 여기 Commands 에 한 줄
 mabi/
   session.py                  GameSession — 게임 하나와의 연결 (창·캡처·입력·Vision·CLI·패킷·블랙박스). 기다리지 않는다:
                               한 번 찍기·누르기, 게임 상태 읽기(activity·map_loading·in_game·overweight …), snapshot·dump_box

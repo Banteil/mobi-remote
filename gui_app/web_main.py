@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 from mabi import paths as mpaths
 from mabi.runner import setup_logging
 
+from . import control
 from .api import APP_NAME, Api
 from .web_shell import WEB, WebWindow
 
@@ -41,61 +42,28 @@ def _command(argv: list[str]) -> bytes:
 
 
 def _on_message(win: "MainWindow", conn) -> None:
+    """예전 통로의 글자 한 줄 → 제어 통로와 같은 명령 (gui_app.control). 모르는 글자면 창을 앞으로."""
     msg = bytes(conn.readAll()).strip()
-    q = win.api.queue
-    if msg == b"resume":
-        log.info("명령 → 이어 하기")
-        q.resume_top()
-    elif msg == b"halt":
-        log.info("명령 → 작업 큐 일시정지")
-        win.api.queue_halt()
-    elif msg == b"enhance":  # 화면의 '시작' 버튼(web/daily.js startEnhance)과 같다
-        if q.running:
-            log.warning("명령 → 각인 강화 반복: 시작하지 않음 (다른 작업이 도는 중)")
-            return
-        log.info("명령 → 각인 강화 반복 시작")
-        win.api.queue_add({"kind": "enhance", "label": "각인 강화 반복"}, "now")
-    elif msg == b"restart":
-        log.info("명령 → 게임 다시 켜기")
-        win.api.queue_add({"kind": "restart", "label": "게임 다시 켜기", "why": "명령", "force": True}, "now")
-    elif msg.startswith(b"daily:"):
-        parts = msg.decode().split(":")[1:]
-        slots = [int(x) for x in (parts[0] if parts else "").split(",") if x.strip().isdigit()]
-        only = [x for x in (parts[1] if len(parts) > 1 else "").split(",") if x] or None
-        force = len(parts) > 2 and parts[2] == "force"
-        if not slots or q.running:
-            log.warning(f"명령 → 일일 숙제: 넣지 않음 ({'슬롯 없음' if not slots else '다른 작업이 도는 중'})")
-            return
-        log.info(f"명령 → 일일 숙제 시작 (슬롯 {slots}, 숙제 {only or '전체'}{', 완료 기록 무시' if force else ''})")
-        win.api.queue_add({"kind": "daily", "label": "일일 숙제", "chars": slots, "only": only, "force": force}, "end")
-        q.tick()
-    elif msg.startswith((b"abyss:", b"raid:")):
-        kind, *parts = msg.decode().split(":")
-        title, place, default = {"abyss": ("어비스", "dungeon", "매우 어려움2"), "raid": ("레이드", "raid", "어려움")}[kind]
-        if len(parts) < 2 or not parts[0].isdigit() or not parts[1]:
-            log.warning(f"명령 → {title}: 넣지 않음 (슬롯·장소 없음)")
-            return
-        slot, where = int(parts[0]), parts[1]
-        runs = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
-        difficulty = parts[3] if len(parts) > 3 and parts[3] else default
-        mode = parts[4] if len(parts) > 4 and parts[4] in ("solo", "party") else None
-        chars = win.api.daily_abyssSettings()["chars"]
-        name = next((c["name"] for c in chars if c["slot"] == slot), "") or "지금 캐릭터"
-        log.info(f"명령 → {title} 담기 (슬롯 {slot}, {where} {difficulty} {mode or ''}, {runs or '멈출 때까지'}{'판' if runs else ''})")
-        win.api.queue_add({"kind": kind, "label": f"{title} · {name}", "slot": slot, place: where,
-                           "difficulty": difficulty, "runs": runs, "minutes": 0, "revive": True,
-                           **({"mode": mode} if mode else {})}, "end")
-        if not q.running:
-            q.tick()
-    else:
+    cmd = control.legacy(msg)
+    if cmd is None:
         win.show_window()
+        return
+    name, args = cmd
+    if name == "show":
+        win.show_window()
+        return
+    r = win.commands.run(name, args)
+    if not r.get("ok"):
+        log.warning(f"명령 → {name}: 하지 않음 ({r.get('message')})")
 
 
 class MainWindow(WebWindow):
-    def __init__(self, api: Api):
+    def __init__(self, api: Api, commands: control.Commands):
         super().__init__(api, api.initial())
         self.api = api
+        self.commands = commands
         self._quitting = False
+        self.control: control.ControlServer | None = None
         self.tray = QSystemTrayIcon(QIcon(str(WEB / "tray.png")), self)
         self.tray.setToolTip(APP_NAME)
         menu = QMenu()
@@ -120,6 +88,8 @@ class MainWindow(WebWindow):
             e.ignore()
             self.hide()
             return
+        if self.control:
+            self.control.close()
         self.api.close()
         t = self.api._daily_thread
         if t and t.is_alive():
@@ -150,7 +120,14 @@ def main() -> int:
     QLocalServer.removeServer(SINGLE)
     server = QLocalServer()
     server.listen(SINGLE)
-    win = MainWindow(Api(paths))
+    ring = control.LogRing()
+    logging.getLogger("mabi").addHandler(ring)
+    api = Api(paths)
+    commands = control.Commands(api, log_ring=ring)
+    win = MainWindow(api, commands)
+    # 다른 프로그램이 묻고 부리는 통로 (gui_app/control.py) — 화면으로 가는 알림 중 일부도 그쪽에 흘린다
+    win.control = control.ControlServer(commands)
+    api.emit_hooks.append(win.control.events.on_emit)
 
     def on_connect():
         conn = server.nextPendingConnection()
