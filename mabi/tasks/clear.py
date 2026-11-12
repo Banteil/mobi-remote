@@ -85,7 +85,7 @@ def _clear_show(bot: Bot, mon, d, end: float) -> None:
     kind = clear_kind(bot)
     ctx = monitor.Ctx(bot.task_id or "dungeon", "클리어 뒤 연출", menus=True, finish_on={d.REWARD: "menu"})
     touched, quiet, closed, blind, scened = 0.0, 0, 0, 0, False
-    close_x = bot.cfg["dungeon"].get("window_close")
+    close_x = bot.cfg["dungeon"]["window_close"]
     bot.log.debug(f"클리어 뒤 연출 ({kind or '패킷 모름'})")
     while True:
         if time.monotonic() > end:

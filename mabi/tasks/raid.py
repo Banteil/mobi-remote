@@ -136,7 +136,7 @@ def open_entry(bot: Bot, raid: str, difficulty: str = "", at: str = "", solo: bo
 def _travel_to_dock(bot: Bot) -> bool:
     """'이동하기' 로 선착장까지 걸어가는 동안 기다린다. 도착해 입장 창이 다시 뜨면 True, 창 없이 메인 화면에
     멈췄으면 False. 메인 화면만 기다리면 도착 뒤 뜬 입장 창 앞에서 이동 상한(10분)까지 서 있었다 (2026-10-28 사용자)."""
-    if wait_arrival(bot, lambda: entry.visible(bot), bot.cfg["raid"].get("travel_timeout", 600), "raid_travel",
+    if wait_arrival(bot, lambda: entry.visible(bot), bot.cfg["raid"]["travel_timeout"], "raid_travel",
                     "선착장으로 가지 못함", still=3):
         bot.log.info("선착장 도착 → 입장 창")
         return True
@@ -231,7 +231,7 @@ def sail(bot: Bot) -> None:
         bot.sleep(2, 3)
     else:
         raise CannotProceed(f"출항하기를 진행하지 못함 → {bot.snapshot('raid_sail').name}")
-    end = time.monotonic() + bot.cfg["raid"].get("sail_timeout", 300)
+    end = time.monotonic() + bot.cfg["raid"]["sail_timeout"]
     while time.monotonic() < end:
         m = _map(bot)
         if m == RAID:
@@ -291,7 +291,7 @@ def finish_result(bot: Bot) -> None:
     """보스 처치 연출이 끝나고 뜨는 결과 화면('처치 완료', 확인 Space)을 넘긴다. 연출은 기다린다 (뒤에서면).
     결과 화면은 아래 가운데 '확인' 으로 본다 (result_ok). 퀘스트 완료 창이 먼저 뜨면 그것도 넘기고, 넘긴 뒤 잠깐 더 봐서
     이어 뜨는 결과 화면을 놓치지 않는다. 나가기 버튼(abyss_exit)이 보이면 결과 화면이 이미 지나갔다."""
-    end = time.monotonic() + bot.cfg["raid"].get("result_timeout", 300)
+    end = time.monotonic() + bot.cfg["raid"]["result_timeout"]
     presses, closed = 0, 0.0
     while time.monotonic() < end:
         if _map(bot) not in (RAID, None, "loading"):

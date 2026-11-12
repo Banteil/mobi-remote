@@ -458,7 +458,7 @@ def alter(bot, ctx, seen):
     if before is not None and not _alter_started(bot, names, before):
         _esc(bot)
         return Finish("alter_full", f"가공이 걸리지 않음 (가공 칸이 꽉 참) → {_shot(bot, 'arbeit_alter')}")
-    end = time.monotonic() + bot.cfg["arbeit"].get("alter_wait", 180)
+    end = time.monotonic() + bot.cfg["arbeit"]["alter_wait"]
     while True:
         bot.sleep(3, 3.5)
         data = bot.state.query("get_altering_works") or {}

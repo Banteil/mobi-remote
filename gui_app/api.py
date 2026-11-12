@@ -691,7 +691,7 @@ class Api(DailyApi, CharsApi, QueueApi):
         from mabi import packet_monitor
         from mabi.runner import load_config
         try:
-            if not load_config(self.paths)["game"].get("packet_watch", True):
+            if not load_config(self.paths)["game"]["packet_watch"]:
                 return "off"
             if not (packet_monitor.NPCAP_DIR / "wpcap.dll").exists():
                 return "no_npcap"

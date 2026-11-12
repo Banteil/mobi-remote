@@ -328,7 +328,7 @@ def run(bot: Bot, cfg: dict) -> str:
     bot.step("dm_milestones", "누적 보상 받기")
     milestones = claim_milestones(bot, c)
 
-    ignore = set(c.get("ignore", []))  # 다른 숙제를 하다 저절로 깨지는 미션은 미완료로 알리지 않는다
+    ignore = set(c["ignore"])  # 다른 숙제를 하다 저절로 깨지는 미션은 미완료로 알리지 않는다
     pending = [f"{m['Title']}({m['Description']} {m['CurrentCount']}/{m['GoalCount']})"
                for m in missions(bot) if not m.get("IsCompleted") and m["Title"] not in ignore]
     missed = [m["Title"] for m in unclaimed(bot)]

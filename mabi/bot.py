@@ -153,7 +153,7 @@ class Bot:
         self.cli = cli or Connector(lambda: cfg["game"].get("cli_path"), self.log)
         self.state = GameState(self.cli, self.log)
         # 게임 서버 패킷 (받기만) — 맵 이동·던전 상태를 화면·CLI 보다 먼저 안다. 꺼져 있으면 쓰지 않는다
-        self.packets = (packet_monitor.shared(paths.logs) if cfg["game"].get("packet_watch", True)
+        self.packets = (packet_monitor.shared(paths.logs) if cfg["game"]["packet_watch"]
                         else packet_monitor.PacketMonitor(paths.logs))
         self.input_mark: int | None = None  # 마지막으로 누르기 직전의 패킷 번호 (아직 누른 적 없으면 None — 지금 상태만 본다)
         self.shot_dir = paths.shots

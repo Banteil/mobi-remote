@@ -73,7 +73,7 @@ class CharsApi:
             return {"name": self._name_now["name"], "fresh": _t.time() - self._name_now["at"] < 120}
         try:
             from mabi import packet_monitor
-            if cfg["game"].get("packet_watch", True):
+            if cfg["game"]["packet_watch"]:
                 pm = packet_monitor.shared(self.paths.logs)
                 if pm.at_charselect():  # 로그아웃 뒤 = 접속한 캐릭터 없음 (게임이 꺼졌는지는 아래 창 확인이 본다)
                     from mabi.window import GameWindow
@@ -229,7 +229,7 @@ class CharsApi:
 
     @staticmethod
     def _sunday(doc) -> str:
-        v = str(doc["weekday_dungeon"].get("sunday", ""))
+        v = str(doc["weekday_dungeon"]["sunday"])
         return v if v in SUNDAY_CHOICES else SUNDAY_CHOICES[-1]
 
     @staticmethod

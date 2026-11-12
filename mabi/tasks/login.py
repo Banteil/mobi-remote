@@ -42,7 +42,7 @@ def _rows(menus: list[Match], tol: int = 20) -> list[list[Match]]:
 def _is_selected(frame: np.ndarray, menu: Match, cs: dict) -> bool:
     """카드 왼쪽 테두리에 노란 선택 테두리가 있는지."""
     dx0, dx1 = cs["border_dx"]
-    y = min(menu.y + cs["border_dy"], cs.get("border_max_y", 820))  # 화면 아래쪽은 어둡게 흐려져 테두리 색이 바랜다
+    y = min(menu.y + cs["border_dy"], cs["border_max_y"])  # 화면 아래쪽은 어둡게 흐려져 테두리 색이 바랜다
     strip = frame[y - 20:y + 20, max(0, menu.x + dx0):menu.x + dx1].reshape(-1, 3).astype(int)
     target = np.array(cs["border_bgr"])
     close = np.abs(strip - target).max(axis=1) <= 40
@@ -275,7 +275,7 @@ def _leave_dungeon(bot: Bot) -> bool:
     # 끊긴 숙제가 요일 던전이면 보상 화면에서 추가 루팅까지 (그냥 나가면 숙제 쪽은 일일 달성만 보고 끝내 추가 루팅이 빠진다)
     prog = bot.daily.progress() if bot.daily else None
     cut = prog.get("task") if prog and bot.character and prog.get("slot") == bot.character.get("slot") else None
-    extra_loot = int(bot.cfg["weekday_dungeon"].get("extra_loot", 0) or 0) if cut == "weekday_dungeon" else 0
+    extra_loot = int(bot.cfg["weekday_dungeon"]["extra_loot"] or 0) if cut == "weekday_dungeon" else 0
     # 검은 구멍·사냥터 안에서 끊겼으면 나가지 않고 끝날 때까지 본다 — 캐릭터를 다시 고르면 그 판(횟수·은동전)이 날아간다.
     # 끝난 뒤 그 숙제를 하면 숙제 쪽이 게임 상태(일일 달성·은동전 수)와 자기 단계 기록을 보고 나머지만 한다
     bh = bot.cfg["black_hole"]

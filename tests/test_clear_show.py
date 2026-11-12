@@ -20,7 +20,7 @@ class FakeBot:
     def __init__(self, clock):
         self.clock = clock
         self.task_id = "weekday_dungeon"
-        self.cfg = {"dungeon": {}}
+        self.cfg = {"dungeon": {"window_close": None}}  # 잘못 열린 창 닫기는 이 시험에서 보지 않는다
         self.packets = SimpleNamespace(ok=True, state=None)
         self.log = logging.getLogger("test")
 

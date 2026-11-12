@@ -263,7 +263,7 @@ def _leave(bot: Bot, ctx: Ctx | None = None) -> None:
 def quick_alter(bot: Bot, names) -> bool:
     """모두 짧은 가공인가 — 레시피 표의 가공 1회 시간(sec, 실제 걸린 시간)이 [arbeit] alter_max_sec 미만.
     사용자 규칙 (2026-10-30): 가공품인데 채집도 되면 채집, 가공이 2분 미만이면 가공, 그 밖엔 포기."""
-    limit = bot.cfg["arbeit"].get("alter_max_sec", 120)
+    limit = bot.cfg["arbeit"]["alter_max_sec"]
     try:
         table = craft.data().recipes
     except RuntimeError:
@@ -337,7 +337,7 @@ class _Job:
         self.a = a = bot.cfg["arbeit"]
         self.mon, self.ctx = monitor.of(bot), _job_ctx(bot, title, alter)
         # 일 전체: 채집 개수가 늘거나 채집을 마치면 시계를 되감는다 (job_timeout 동안 아무 진척이 없으면 막힘, job_max 가 상한)
-        self.work = Progress(stall=a["job_timeout"], cap=a.get("job_max", 1800))
+        self.work = Progress(stall=a["job_timeout"], cap=a["job_max"])
         self.gather = None  # 채집 중이면 Progress — 남은 개수가 gather_timeout 동안 그대로면 포기
         self.idle_since, self.pushes, self.last_sig, self.last_check = None, 0, None, 0.0
         self.busy_since, self.busy_told = None, False  # 메인 화면인데 '움직이는 중' 으로 보인 때부터
@@ -444,7 +444,7 @@ class _Job:
             # 패킷 상태가 끝 신호를 놓쳐 '이동 중' 등으로 남으면 멈춘 캐릭터 앞에서 8분을 기다렸다
             # ('행운의 편지' 첫 전달 뒤, 2026-10-28 07:06~07:14) → 오래가면 CLI 로 다시 보고 멈췄으면 멈춘 것으로
             self.busy_since = self.busy_since or time.monotonic()
-            if time.monotonic() - self.busy_since > self.a.get("busy_recheck", 40) and d.cli_idle(bot):
+            if time.monotonic() - self.busy_since > self.a["busy_recheck"] and d.cli_idle(bot):
                 if not self.busy_told:
                     bot.log.warning(f"아르바이트 '{self.title}': {time.monotonic() - self.busy_since:.0f}초째 '{d.busy_why(bot)}' 인데 "
                                     f"CLI 는 멈춤 → 멈춘 것으로 봄")
@@ -458,7 +458,7 @@ class _Job:
         bot, title, a, ctx = self.bot, self.title, self.a, self.ctx
         self.idle_since = self.idle_since or time.monotonic()
         # NPC 대화를 마친 뒤에는 짧게 — 'NPC 와 대화' 조건을 채워도 게임이 다음 걸음으로 가지 않는다 (2026-10-26 사용자)
-        if time.monotonic() - self.idle_since < (a.get("idle_wait_after_talk", 3) if ctx.talked else a["idle_wait"]):
+        if time.monotonic() - self.idle_since < (a["idle_wait_after_talk"] if ctx.talked else a["idle_wait"]):
             return _NEXT
         job = self.job()
         if job is None and not self.untracked:

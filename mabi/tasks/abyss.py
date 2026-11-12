@@ -117,7 +117,7 @@ def _travel_to_entry(bot: Bot) -> bool:
     bot.log.info("어비스 입구에서 멂 → 이동하기")
     ui_text.click(bot, gd.text("abyss_move"), gd.region("abyss_entry_right"), what="이동하기", shot="abyss")
     bot.fast_travel(wait=5)
-    if wait_arrival(bot, lambda: entry.visible(bot), bot.cfg["abyss"].get("travel_timeout", 300), "abyss_travel",
+    if wait_arrival(bot, lambda: entry.visible(bot), bot.cfg["abyss"]["travel_timeout"], "abyss_travel",
                     "어비스 입구로 가지 못함", still=3):
         bot.log.info("어비스 입구 도착 → 입장 화면")
         return True
@@ -398,7 +398,7 @@ def revive_here(bot: Bot) -> bool:
         bot.sleep(1.5, 2)
     mark = bot.packets.mark()
     bot.key("r")  # '여기서 부활' 단축키 (사용자 확인 2026-10-25) — 버튼 위치가 모드마다 달라도 된다
-    end = time.monotonic() + bot.cfg["abyss"].get("revive_timeout", 10)
+    end = time.monotonic() + bot.cfg["abyss"]["revive_timeout"]
     again = False
     while time.monotonic() < end:
         bot.sleep(1.0)

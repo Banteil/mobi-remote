@@ -587,7 +587,7 @@ class QueueApi:
             return None
 
     def _q_pause_note(self) -> str:
-        key = str(load_config(self.paths)["game"].get("stop_key", "f12")).upper()
+        key = str(load_config(self.paths)["game"]["stop_key"]).upper()
         return f"일시정지 · {key} 나 ▶ 로 재개"
 
     def _q_stop_key(self) -> None:
@@ -629,7 +629,7 @@ class QueueApi:
             try:
                 if time.monotonic() - checked > 3:  # 설정에서 키를 바꿀 수 있다
                     g = load_config(self.paths)["game"]
-                    keys = {vk_of(g.get("stop_key", "f12")): self._q_stop_key}
+                    keys = {vk_of(g["stop_key"]): self._q_stop_key}
                     dye = getattr(self, "_dye_key", None)
                     if dye and g.get("dye_key"):
                         keys.setdefault(vk_of(g["dye_key"]), dye)  # 같은 키면 일시정지가 먼저
@@ -707,7 +707,7 @@ class QueueApi:
     def _q_fit(self) -> bool:
         """옵션 창 '화면 설정 맞추기' ([run] fit_display) — 숙제·어비스·레이드 카드가 시작할 때 모두 이 값을 따른다
         (예전엔 탭마다 체크박스가 있어 카드에 담겼다 — 2026-10-28 사용자: 옵션 창으로 완전히 옮김)."""
-        return bool(load_config(self.paths)["run"].get("fit_display", True))
+        return bool(load_config(self.paths)["run"]["fit_display"])
 
     def _q_display(self, q: WorkQueue, it: dict) -> bool:
         """숙제·어비스·레이드를 시작하기 전 게임 화면 설정 확인. 기준과 다르면 묻지 않고 맞춘다 (큐가 다 끝나면 되돌림).

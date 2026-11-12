@@ -462,12 +462,12 @@ class DailyApi:
             "silver": {k: v for k, v in userconfig.silver_defaults(doc).items() if k != "field"},
             "dungeons": userconfig.places(doc, "dungeon"), "fields": userconfig.places(doc, "field"),
             "field": str(s["field"]),
-            "stop_key": str(doc["game"].get("stop_key", "f12")),
-            "dye_key": str(doc["game"].get("dye_key", "f11")),
+            "stop_key": str(doc["game"]["stop_key"]),
+            "dye_key": str(doc["game"]["dye_key"]),
             "game_keys": [{"name": n, "label": label, "default": d, "key": gkeys.of(doc, n)}
                           for n, (d, label) in gkeys.GAME_KEYS.items()],
-            "fit_display": bool(doc["run"].get("fit_display", True)),
-            "restart_auto": bool(doc["restart"].get("auto", True)),
+            "fit_display": bool(doc["run"]["fit_display"]),
+            "restart_auto": bool(doc["restart"]["auto"]),
             "paths": {k: over.get(k, "") for k in ("data", "logs", "shots")},
             "current": {"data": str(self.paths.data), "logs": str(self.paths.logs), "shots": str(self.paths.shots)},
         }
@@ -496,11 +496,11 @@ class DailyApi:
                 k = str(v["dye_key"]).lower()
                 if not userconfig.is_fkey(k):
                     return {"error": f"염색 도우미 키는 F1~F12 중에서: {k}"}
-                if k == str(doc["game"].get("stop_key", "f12")).lower():
+                if k == str(doc["game"]["stop_key"]).lower():
                     return {"error": "염색 도우미 키가 일시정지 키와 같습니다"}
                 doc["game"]["dye_key"] = k
             gk = v.get("game_keys") or {}
-            mine = {str(doc["game"].get("stop_key", "f12")).lower(), str(doc["game"].get("dye_key", "f11")).lower()}
+            mine = {str(doc["game"]["stop_key"]).lower(), str(doc["game"]["dye_key"]).lower()}
             for n, k in gk.items():
                 k = str(k or "").strip().lower()
                 if err := gkeys.check(n, k):
