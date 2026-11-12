@@ -63,6 +63,21 @@ class ActionKindTest(unittest.TestCase):
         self.assertIn("재시도", api.calls[2][2]["label"])
         self.assertEqual(q.notes[-1], "완료 2곳")
 
+    def test_blocked_waits_for_abyss_result(self):
+        # 어비스 결과 연출도 화면을 막는다 — 끝날 때까지 기다렸다가 한 번 더
+        api = FakeApi([{"ok": False, "error": "blocked"}, {"ok": True}])
+        seen = iter([{"abyssResult": True}, {"abyssResult": True}, {"abyssResult": False}])
+        api.query = lambda name, opts=None: next(seen)
+        import gui_app.queue_api as qa
+        orig, qa.time.sleep = qa.time.sleep, lambda s: None
+        try:
+            r = api._q_exec(FakeQ(), "complete_altering_work", {"displayName": "진액"}, {"label": "수령"}, "약품")
+        finally:
+            qa.time.sleep = orig
+        self.assertTrue(r["ok"])
+        self.assertEqual(len(api.calls), 2)
+        self.assertRaises(StopIteration, next, seen)  # 끝날 때까지 물었다
+
     def test_collect_all_nothing(self):
         api, q = FakeApi([]), FakeQ()
         self.assertTrue(ActionKind(api).run(q, {"id": 1, "act": "collectAll"}))
@@ -84,6 +99,13 @@ class ActionKindTest(unittest.TestCase):
 
 class StopKeyTest(unittest.TestCase):
     """F12 하나로 작업 큐 전체 — 돌고 있으면 무엇이든 일시정지, 쉬고 있으면 맨 위 일시정지 카드 이어 하기."""
+
+    def setUp(self):
+        # 진짜 키보드 상태를 읽는다 — 시험 도중 사람이 Shift·Ctrl 을 누르고 있으면 다른 갈래로 간다 (2026-11-12 전체 시험)
+        from unittest import mock
+        p = mock.patch("mabi.inputs.key_pressed", return_value=False)
+        p.start()
+        self.addCleanup(p.stop)
 
     def api(self, running, paused):
         class Cli:
