@@ -23,7 +23,7 @@ class Events:
             self._apply(key, vals)
 
     def _apply(self, key: str, vals: dict) -> None:
-        """이벤트 하나를 상태에 반영하고 기다리는 쪽을 깨운다 (시험에서 직접 부르기도 한다)."""
+        """이벤트 하나를 상태에 반영하고 기다리는 쪽을 깨운다. 잠금(self._cond) 안에서 부른다 (apply)."""
         s = self.state
         old = {f: getattr(s, f) for f in CLI_FACTS}
         if key == "channel.leaving":
@@ -224,8 +224,7 @@ class Events:
         for f, v in old.items():
             if getattr(s, f) != v:
                 s.changed_at[f] = now
-        with self._cond:
-            self._seq += 1
-            self.recent.append(Seen(self._seq, time.monotonic(), key, vals))
-            self.history.append((self._seq, _snapshot(s)))
-            self._cond.notify_all()
+        self._seq += 1
+        self.recent.append(Seen(self._seq, time.monotonic(), key, vals))
+        self.history.append((self._seq, _snapshot(s)))
+        self._cond.notify_all()

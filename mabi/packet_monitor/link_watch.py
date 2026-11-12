@@ -3,6 +3,8 @@ PacketMonitor 가 상속한다 (self._silent · _opened · _closed · last_rx ·
 import logging
 import time
 
+from .stream import decompress
+
 log = logging.getLogger("mabi")
 
 SILENT_LOG = 30      # 게임 안인데 서버 패킷이 이만큼(초) 안 오면 로그 — 하트비트가 약 2초마다 와서 평소 최대 무수신 2.3초 (11월 캡처)
@@ -18,8 +20,7 @@ class LinkWatch:
         12번에 0번) 오면 본문 앞부분까지 남긴다."""
         if flag:
             try:
-                import brotli
-                body = brotli.decompress(body)
+                body = decompress(body)
             except Exception:  # noqa: BLE001 — 못 풀면 압축된 채로 남긴다
                 pass
         log.warning("패킷: 서버 알림 %s — 본문 %d바이트 %s", key, len(body), body[:48].hex(" "))

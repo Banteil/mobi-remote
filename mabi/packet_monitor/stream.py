@@ -3,11 +3,23 @@
 import socket
 import struct
 
+try:
+    import brotli
+except ImportError:  # 없으면 압축된 메시지를 풀 때마다 실패한다 (decompress) — 예전처럼 그 메시지만 못 읽는다
+    brotli = None
+
 HDR = 9
 HELLO = b"MMCG"             # 연결 첫머리 인사 블록 (메시지가 아니다)
 MAX_FRAME = 8 << 20         # 맵 진입 때 오는 것 중 큰 건 0.8MB 쯤
 MAX_PENDING = 512           # 순서가 뒤바뀐 조각을 이만큼까지 들고 기다린다
 SYNC_FRAMES = 3             # 중간부터 받기 시작했을 때 이만큼 연달아 말이 되면 맞춘 것으로 본다
+
+
+def decompress(body: bytes) -> bytes:
+    """압축된 메시지 본문을 푼다 (brotli). 없으면 ImportError, 못 풀면 brotli.error."""
+    if brotli is None:
+        raise ImportError("No module named 'brotli'")
+    return brotli.decompress(body)
 
 
 # ── 이더넷/IP/TCP ───────────────────────────────────────────────────

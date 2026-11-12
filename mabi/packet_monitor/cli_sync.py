@@ -41,8 +41,7 @@ class CliSync:
         s.abyss_matching, s.boss_battle, s.cutscene = 0, False, False
         s.dialogue_npc, s.dialogue_action, s.dialogue_menu = None, "", False
         log.info("패킷: %s → 맵·던전·이동 등 상태를 모름으로 (다음 패킷이나 CLI 로 다시 앎)", why)
-        with self._cond:
-            self._cond.notify_all()
+        self._cond.notify_all()
 
     def merge_cli(self, act: dict, asked_at: float) -> list[str]:
         """상태를 고치는 일은 모두 잠금 안에서 — 패킷 받는 스레드(apply)와 작업 스레드(merge_cli·reconcile·forget)가
@@ -82,8 +81,7 @@ class CliSync:
         if out:
             # 모르던 값(None)을 채운 것은 흔하다 (맵을 옮기면 쓰러짐을 모름으로 둔다 등) — 패킷 값이 틀렸던 것만 알린다
             (log.info if fixed else log.debug)("CLI 로 맞춤: %s", ", ".join(out))
-            with self._cond:
-                self._cond.notify_all()
+            self._cond.notify_all()
         return out
 
     def reconcile(self, act: dict | None) -> list[str]:

@@ -15,7 +15,7 @@ from .cli_sync import CliSync
 from .events import Events
 from .link_watch import LinkWatch
 from .state import PacketState, Seen
-from .stream import Stream, parse_tcp
+from .stream import Stream, decompress, parse_tcp
 
 log = logging.getLogger("mabi")
 
@@ -51,7 +51,8 @@ class PacketMonitor(LinkWatch, CliSync, Events):
         self._opened = 0.0           # 서버와 새 연결이 마지막으로 열린 때 (시각)
         self._silent = False         # 무수신 로그를 남겼다 (다시 받으면 한 줄 더 남기고 푼다)
         self._seq = 0
-        self._cond = threading.Condition()
+        self.started_at = 0.0        # 캡처를 시작한 때 (monotonic, 0 = 아직) — dye_open 이 본다
+        self._cond = threading.Condition()  # 잠금은 RLock — 잠금 안에서 부르는 _apply 등이 다시 잡아도 된다
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self.table = None
@@ -99,7 +100,7 @@ class PacketMonitor(LinkWatch, CliSync, Events):
         if self.status != "running" or self.table is None or self.table.by_key("dye.open") is None:
             return None
         t = self.state.dye_open_at
-        if t is None and not self.state.dye_known and time.monotonic() - getattr(self, "started_at", 0) < self.DYE_LIMIT:
+        if t is None and not self.state.dye_known and time.monotonic() - self.started_at < self.DYE_LIMIT:
             # 감시를 켜기 전에 이미 열려 있었을 수 있다 (미니게임 중에 리모콘을 켬) — 열림 알림을 못 봤으니 화면으로 본다
             return None
         return t is not None and time.monotonic() - t < self.DYE_LIMIT
@@ -239,9 +240,8 @@ class PacketMonitor(LinkWatch, CliSync, Events):
             return  # 흩어진 물길 밖 — 이동 메시지 등은 풀지도 않는다
         if flag and ev.fields:  # 읽을 필드가 없으면 풀 필요도 없다
             try:
-                import brotli
-                body = brotli.decompress(body)
-            except Exception as e:  # noqa: BLE001 — brotli.error 는 import 해야 보인다
+                body = decompress(body)
+            except Exception as e:  # noqa: BLE001 — brotli 가 없거나 못 풂
                 self.diag.record("decompress", ev.key, body, error=str(e))
                 return
         _, vals = self.table.decode(proto, body)
