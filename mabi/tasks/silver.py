@@ -135,6 +135,20 @@ def black_hole_first(bot: Bot) -> None:
 
 
 def run(bot: Bot, cfg: dict) -> str:
+    """계획한 만큼 돈 뒤 남은 은동전을 다시 본다. 도는 동안 은동전이 저절로 차서(몇 분에 1개) 한 판 더 할 만큼
+    남을 수 있다 — 59개로 사냥터 1·던전 1 을 계획했는데 12분 사이 1개가 차 20개가 남아 '아직 남음' 으로 끝났다
+    (2026-11-12). 그러면 남은 만큼 한 번 더 계획해 돈다 (사냥터는 오늘 한 횟수를 빼므로 던전만 더 간다)."""
+    note, left = _run_round(bot, cfg)
+    unit = cfg["silver"]["unit"]
+    if left is not None and left >= unit:
+        bot.log.info(f"도는 동안 은동전이 차서 {left}개 남음 → 한 번 더")
+        more, left = _run_round(bot, cfg)
+        note += f" · 더: {more}"
+    return note
+
+
+def _run_round(bot: Bot, cfg: dict) -> tuple[str, int | None]:
+    """지금 은동전으로 계획해 한 번 돈다 → (결과 글, 남은 은동전)."""
     c = settings(cfg, bot.character["slot"] if bot.character else None)
     bot.to_main()
     coins = bot.read_counter("silver")
@@ -159,7 +173,7 @@ def run(bot: Bot, cfg: dict) -> str:
     bot.log.info(f"은동전 {coins}개 → 사냥터 {field_runs}회, 던전 {dungeon_runs}회"
                  + (f" (오늘 사냥터 {fields_done}회 완료)" if fields_done else ""))
     if not field_runs and not dungeon_runs:
-        return f"은동전 {coins}개, 진행 없음"
+        return f"은동전 {coins}개, 진행 없음", coins
 
     notes = []
     for label, runs, once in (("사냥터", field_runs, field_once), ("던전", dungeon_runs, dungeon_once)):
@@ -213,4 +227,4 @@ def run(bot: Bot, cfg: dict) -> str:
 
     bot.to_main()
     left = bot.read_counter("silver")
-    return f"은동전 {coins} → {left}, " + ", ".join(notes)
+    return f"은동전 {coins} → {left}, " + ", ".join(notes), left
