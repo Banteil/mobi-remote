@@ -14,7 +14,7 @@ import difflib
 import re
 import time
 
-from .. import craft, gamedata as gd, monitor, ocr
+from .. import craft, gamedata as gd, monitor, ocr, richtext
 from ..bot import Bot
 from ..monitor import Ctx, Stuck, detect as d
 from ..progress import Progress
@@ -23,13 +23,6 @@ from .content import CannotProceed, open_arbeit_tab, questwin_text_ok
 PROGRESS, APPLY = gd.text("arbeit_progress"), gd.text("arbeit_apply")  # 카드 버튼 '진행하기' · '지원하기'
 HAVE = gd.text("arbeit_have_item")  # CLI 조건 '… 보유 3/10'
 
-
-def _norm(t: str) -> str:
-    return re.sub(r"\s+", "", t)
-
-
-def _plain(t: str) -> str:
-    return re.sub(r"<[^>]+>", "", t)
 
 
 def accepted(bot: Bot, raw: bool = False) -> list[dict]:
@@ -63,7 +56,7 @@ def _finished(bot: Bot, title: str) -> bool:
 
 def missing_items(job: dict) -> list[str]:
     """채우지 못한 '보유' 조건 (있으면 그 일은 지금 끝낼 수 없다)."""
-    return [_plain(o["Description"]) for o in job["objectives"]
+    return [richtext.strip(o["Description"]) for o in job["objectives"]
             if HAVE in o.get("Description", "") and not o.get("IsCompleted")]
 
 
@@ -110,7 +103,7 @@ def alter_missing(job: dict, can_gather=frozenset()) -> list[str]:
 def _is(t: str, word: str) -> bool:
     """버튼 글자 word 인가. OCR 이 한 글자쯤 틀리거나 덧붙여도 ('지원하기》') 같다고 본다.
     '지원하기' 와 '진행하기' 는 반만 같아 섞이지 않는다."""
-    n = _norm(t)
+    n = ocr.nospace(t)
     return n == word or (len(n) <= len(word) + 2 and difflib.SequenceMatcher(None, n, word).ratio() >= 0.75)
 
 
@@ -182,7 +175,7 @@ def _card_title(items, bx: int, by: int) -> str:
 
 def _same(a: str, b: str) -> bool:
     """같은 제목인가. 카드 제목은 OCR 이라 한 글자쯤 틀린다 ('빚은' → '빛은', 2026-10-22) → 비슷하면 같다고 본다."""
-    a, b = _norm(a), _norm(b)
+    a, b = ocr.nospace(a), ocr.nospace(b)
     if not (a and b):
         return False
     return a in b or b in a or difflib.SequenceMatcher(None, a, b).ratio() >= 0.85
@@ -206,7 +199,7 @@ def _panel_jobs(bot: Bot) -> list[tuple[str, tuple[int, int], int]]:
                 if out[-1][0]:
                     bot._arb_titles = {*(getattr(bot, "_arb_titles", None) or ()), out[-1][0]}
         # 구인 마감 ('새로운 아르바이트를 기다려주세요') — 남은 일도 지원할 일도 없다. 더 볼 것 없음
-        if any(w in _norm(t) for t, _, _ in items for w in gd.words("arbeit_closed")):
+        if any(w in ocr.nospace(t) for t, _, _ in items for w in gd.words("arbeit_closed")):
             bot._arb_closed = not out
             break
         # 수락한 일('진행하기')은 목록 맨 위에 모이고 그 아래가 구인 중('지원하기') → '지원하기' 가 보이면 더 내릴 필요 없다
@@ -311,7 +304,7 @@ def _press_progress(bot: Bot, title: str) -> bool:
         items = _buttons(bot)
         btns = sorted(((x, y) for t, x, y in items if _is(t, PROGRESS)), key=lambda b: b[1])
         # 아래에 '지원하기'(구인 중)나 구인 마감 글이 보이면 수락한 일 카드는 그 위가 전부다
-        end = any(_is(t, APPLY) or any(w in _norm(t) for w in gd.words("arbeit_closed")) for t, _, _ in items)
+        end = any(_is(t, APPLY) or any(w in ocr.nospace(t) for w in gd.words("arbeit_closed")) for t, _, _ in items)
         alone = len(btns) == 1 and end
         b = btns[0] if alone else _find_card_button(bot, title, PROGRESS)
         if not b:
@@ -459,7 +452,7 @@ def _apply_top(bot: Bot) -> bool | None:
             if b:
                 break
             read = getattr(bot, "_arb_read", [])
-            closed = any(w in _norm(t) for page in read for t in page for w in gd.words("arbeit_closed"))
+            closed = any(w in ocr.nospace(t) for page in read for t in page for w in gd.words("arbeit_closed"))
             # 수락해 둔 일('진행하기')만 보이고 구인 카드가 없으면 오늘 지원할 일이 없는 것 — 건너뛴 일(가공 필요 등)만
             # 남은 경우다 (2026-10-30 09:44 '옷감이 필요해' 카드 하나를 '못 읽음' 으로 봐 막힘 처리)
             accepted_only = any(_is(t, PROGRESS) for page in read for t in page)

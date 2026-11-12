@@ -27,6 +27,7 @@ from pathlib import Path
 import numpy as np
 
 from .. import gamedata as gd, ocr
+from . import ui_text
 from ..screen import BASE_H, BASE_W, REG_KEYS, exclusive_fullscreen, is_16_9, screen_mode
 from ..bot import Bot, MissingTemplate, StepTimeout
 
@@ -166,24 +167,13 @@ def game_running(window) -> bool:
 
 
 # ---------------------------------------------------------------- 게임 안에서 바꾸기
-def _norm(t: str) -> str:
-    return re.sub(r"\s+", "", t)
-
-
 def _texts(bot: Bot, region=None) -> list[tuple[str, int, int]]:
     return ocr.find_texts(bot.frame(), region)
 
 
-def _find(items, want: str, exact: bool = False, below: int = -1, above: int = 99999):
-    for t, x, y in items:
-        n = _norm(t)
-        if (n == want if exact else want in n) and below < y < above:
-            return t, x, y
-    return None
-
-
 def _click_text(bot: Bot, want: str, region=None, exact: bool = False, what: str = "", wait: float = 1.5):
-    hit = _find(_texts(bot, region), want, exact)
+    """화면 글자를 한 번 읽어(ui_text.match) 누르고 wait 초 쉰다. 못 찾으면 DisplayFixFailed — 화면 설정 맞추기 실패로 따로 다룬다."""
+    hit = ui_text.match(_texts(bot, region), want, exact)
     if not hit:
         raise DisplayFixFailed(f"'{what or want}' 를 화면에서 찾지 못함 → {bot.snapshot('display').name}")
     bot.click((hit[1], hit[2]))
@@ -195,16 +185,16 @@ def _scale_row(bot: Bot):
     """(스케일 값, '<' 위치, '>' 위치). 화살표를 못 읽으면 값 글자에서 배율에 비례한 거리로 계산한다
     (100% 일 때 값 가운데에서 약 171px)."""
     items = _texts(bot)
-    label = _find(items, gd.text("display_scale"))
+    label = ui_text.match(items, gd.text("display_scale"), exact=False)
     if not label:
         return None, None, None
     row = [(t, x, y) for t, x, y in items if abs(y - label[2]) < 30 and x > label[1]]
-    val = next(((t, x, y) for t, x, y in row if re.fullmatch(r"\d{2,3}%", _norm(t))), None)
+    val = next(((t, x, y) for t, x, y in row if re.fullmatch(r"\d{2,3}%", ocr.nospace(t))), None)
     if not val:
         return None, None, None
-    pct = int(_norm(val[0])[:-1])
-    left = next(((x, y) for t, x, y in row if _norm(t) == "<"), None) or (val[1] - int(1.71 * pct), val[2])
-    right = next(((x, y) for t, x, y in row if _norm(t) == ">"), None) or (val[1] + int(1.71 * pct), val[2])
+    pct = int(ocr.nospace(val[0])[:-1])
+    left = next(((x, y) for t, x, y in row if ocr.nospace(t) == "<"), None) or (val[1] - int(1.71 * pct), val[2])
+    right = next(((x, y) for t, x, y in row if ocr.nospace(t) == ">"), None) or (val[1] + int(1.71 * pct), val[2])
     return pct, left, right
 
 
@@ -216,9 +206,9 @@ def _open_graphics(bot: Bot) -> None:
     # 탭이 보일 때까지: 메뉴의 '환경 설정' 이 보이면 누르고, 아니면 ESC (다른 창이 열려 있으면 그 창부터 닫힌다).
     # 설정 창이 이미 열려 있으면 그대로 쓴다. 누른 뒤 창이 늦게 뜨기도 해서 (2026-10-23 창모드) 한 번에 끝내지 않는다
     for _ in range(6):
-        if _find(_texts(bot, top), gd.text("display_graphics_tab"), exact=True):
+        if ui_text.match(_texts(bot, top), gd.text("display_graphics_tab"), exact=True):
             break
-        hit = _find(_texts(bot, menu), gd.text("display_settings"))
+        hit = ui_text.match(_texts(bot, menu), gd.text("display_settings"), exact=False)
         if hit:
             bot.click((hit[1], hit[2]))
             bot.sleep(2.0, 2.4)
@@ -248,7 +238,7 @@ def _style_now(bot: Bot) -> tuple[str | None, dict[str, tuple[int, int]]]:
     items = ocr.find_texts(frame, (BASE_W // 2, 0, BASE_W // 2, BASE_H))
     pos = {}
     for k, (key, _) in STYLES.items():
-        hit = _find(items, gd.text(key), exact=True)
+        hit = ui_text.match(items, gd.text(key), exact=True)
         if hit:
             pos[k] = (hit[1], hit[2])
     lum = {k: float(np.median(frame[max(0, y - 14):y + 14, max(0, x - 40):x + 40])) for k, (x, y) in pos.items()}
@@ -410,8 +400,8 @@ def fix_ingame(bot: Bot, cfg: dict) -> list[str]:
     _open_graphics(bot)
 
     items = _texts(bot)
-    screen = _find(items, gd.text("display_borderless"))
-    res_label = _find(items, gd.text("display_resolution"), exact=True)
+    screen = ui_text.match(items, gd.text("display_borderless"), exact=False)
+    res_label = ui_text.match(items, gd.text("display_resolution"), exact=True)
     if not screen or not res_label:
         raise DisplayFixFailed(f"화면 설정 칸을 찾지 못함 → {bot.snapshot('display').name}")
     cur = next(((t, x, y) for t, x, y in items
@@ -445,7 +435,7 @@ def _apply(bot: Bot, blind: bool = False) -> None:
     _click_text(bot, gd.text("display_apply"), what="설정값 적용하기", wait=2.5)
     if blind:
         bot.key("space")
-    elif _find(_texts(bot), gd.text("display_keep")):
+    elif ui_text.match(_texts(bot), gd.text("display_keep"), exact=False):
         bot.key("space")
     else:
         return
@@ -460,7 +450,7 @@ def _pick_resolution(bot: Bot, w: int, h: int) -> bool:
     """(그래픽 탭) 해상도 목록에서 w×h 를 고른다. 이미 그 값이거나 목록에 없으면 (창모드 '자유' 등) 그대로. 골랐으면 True."""
     W, H = BASE_W, BASE_H
     items = _texts(bot)
-    label = _find(items, gd.text("display_resolution"), exact=True)
+    label = ui_text.match(items, gd.text("display_resolution"), exact=True)
     if not label:
         return False
     cur = next(((t, x, y) for t, x, y in items if abs(y - label[2]) < 30 and x > label[1] + 150), None)

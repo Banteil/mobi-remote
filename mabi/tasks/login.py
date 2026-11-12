@@ -18,6 +18,7 @@ import time
 import numpy as np
 
 from .. import gamedata as gd
+from ..ocr import nospace
 from .. import situation
 from ..bot import AuthBlocked, Bot, StepTimeout
 from ..vision import Match
@@ -198,9 +199,6 @@ def _clear_auth_fail(bot: Bot, cfg: dict) -> None:
 NAME_AREA = gd.region("main_name")  # 메인 화면 왼쪽 위 캐릭터 이름 줄 [x, y, w, h] (위 줄은 타이틀)
 
 
-def _norm_name(t: str) -> str:
-    return "".join(t.split())
-
 
 def current_name(bot: Bot) -> str:
     """접속한 캐릭터 이름. 패킷이 알면 그것 (화면과 상관없이 정확하다), 모르면 메인 화면 왼쪽 위를 OCR.
@@ -209,7 +207,7 @@ def current_name(bot: Bot) -> str:
     if p.at_charselect():
         return ""
     if p.ok and p.state.my_name and not p.state.loading:
-        return _norm_name(p.state.my_name)
+        return nospace(p.state.my_name)
     if not bot.at_main():
         return ""
     return name_in_frame(bot.frame())
@@ -232,18 +230,18 @@ def match_character(read: str, chars: list[dict]) -> dict | None:
     if not read:
         return None
     snapped = snap_name(read, [ch["name"] for ch in chars])
-    return next((ch for ch in chars if _norm_name(ch["name"]) == snapped), None)
+    return next((ch for ch in chars if nospace(ch["name"]) == snapped), None)
 
 
 def _name_score(a: str, b: str) -> float:
     import difflib
-    return difflib.SequenceMatcher(None, _norm_name(a), _norm_name(b)).ratio()
+    return difflib.SequenceMatcher(None, nospace(a), nospace(b)).ratio()
 
 
 def name_matches(read: str, name: str) -> bool:
     """OCR 로 읽은 이름이 이 캐릭터 이름인가. 한글 OCR 은 받침·자모를 한두 글자 틀린다
     (2026-10-23 첫 글자 '옥' → '목') → 글자 수가 같고 대부분 맞으면 같은 이름으로 본다."""
-    a, b = _norm_name(read), _norm_name(name)
+    a, b = nospace(read), nospace(name)
     if not (a and b):
         return False
     if a == b:
@@ -258,15 +256,15 @@ def snap_name(read: str, names) -> str:
     """읽은 이름을 등록된 캐릭터 이름 중 가장 가까운 것으로 맞춘다 (확실할 때만). 없으면 읽은 그대로."""
     hits = sorted(((_name_score(read, n), n) for n in names if name_matches(read, n)), reverse=True)
     if hits and (len(hits) == 1 or hits[0][0] - hits[1][0] >= 0.1):
-        return _norm_name(hits[0][1])
-    return _norm_name(read)
+        return nospace(hits[0][1])
+    return nospace(read)
 
 
 def name_in_frame(frame) -> str:
     """찍어 둔 메인 화면에서 왼쪽 위 캐릭터 이름 (메인 화면인지는 부르는 쪽이 본다). 못 읽으면 ''."""
     from .. import ocr
     texts = [t for t, _, _ in ocr.find_texts(frame, NAME_AREA)]
-    return _norm_name(texts[0]) if len(texts) == 1 else ""
+    return nospace(texts[0]) if len(texts) == 1 else ""
 
 
 def _leave_dungeon(bot: Bot) -> bool:

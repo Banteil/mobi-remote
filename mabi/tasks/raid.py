@@ -15,7 +15,7 @@
 """
 import time
 
-from .. import gamedata as gd, keys
+from .. import gamedata as gd, keys, richtext
 from ..bot import Bot, StepTimeout
 from ..place import RAID_LOBBY, place
 from . import entry, ui_text
@@ -60,11 +60,7 @@ def _quest_title(bot: Bot) -> str:
     qs = bot.state.query("get_quests") if bot.state.available() else None
     for q in qs or []:
         if q.get("Source") == "shortcut":
-            t = q.get("QuestTitle", "")
-            while "<" in t and ">" in t[t.index("<"):]:
-                i = t.index("<")
-                t = t[:i] + t[t.index(">", i) + 1:]
-            return t
+            return richtext.strip(q.get("QuestTitle", ""))
     return ""
 
 

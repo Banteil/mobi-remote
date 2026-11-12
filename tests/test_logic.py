@@ -255,13 +255,13 @@ class ShotTest(unittest.TestCase):
         bot = mock.Mock()
         bot.frame.return_value = self.frame("questwin_arbeit_closed.png")
         items = arbeit._buttons(bot)
-        self.assertTrue(any(w in arbeit._norm(t) for t, _, _ in items for w in gd.words("arbeit_closed")))
-        self.assertFalse([t for t, _, _ in items if arbeit._norm(t) in (arbeit.PROGRESS, arbeit.APPLY)])
+        self.assertTrue(any(w in arbeit.ocr.nospace(t) for t, _, _ in items for w in gd.words("arbeit_closed")))
+        self.assertFalse([t for t, _, _ in items if arbeit.ocr.nospace(t) in (arbeit.PROGRESS, arbeit.APPLY)])
 
     def test_arbeit_panel_button(self):  # 퀘스트 창 아르바이트 탭, 다 보이는 '진행하기' 하나 (아르바이트가 남은 날 찍을 것)
         bot = mock.Mock()
         bot.frame.return_value = self.frame("questwin_arbeit.png")
-        got = [(t, y) for t, _, y in arbeit._buttons(bot) if arbeit._norm(t) == arbeit.PROGRESS]
+        got = [(t, y) for t, _, y in arbeit._buttons(bot) if arbeit.ocr.nospace(t) == arbeit.PROGRESS]
         self.assertEqual(len(got), 1)
 
 

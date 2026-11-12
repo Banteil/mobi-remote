@@ -10,13 +10,13 @@ from ..ocr import find_texts, nospace as norm
 from .content import CannotProceed
 
 
-def match(items, want: str, exact: bool = True, below: int = -1, above: int = 99999):
+def match(items, want: str, exact: bool = True):
     """이미 읽은 글자들(find_texts 결과 [(글자, x, y)])에서 want 를 찾는다 → (글자, x, y), 없으면 None.
-    exact=False 면 want 가 들어 있기만 해도. below < y < above 인 것만 (한 번 읽은 화면에서 여러 번 찾을 때)."""
+    exact=False 면 want 가 들어 있기만 해도. 한 번 읽은 화면에서 여러 번 찾을 때 (화면 설정 display 등)."""
     w = norm(want)
     for t, x, y in items:
         n = norm(t)
-        if (n == w if exact else w in n) and below < y < above:
+        if n == w if exact else w in n:
             return t, x, y
     return None
 
