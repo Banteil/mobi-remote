@@ -34,7 +34,9 @@ class DrillPlayEndTest(unittest.TestCase):
         bot = mock.MagicMock()
         bot.cfg = {"drill": {"goal": goal}}
         seq = iter(results)
-        with mock.patch.object(drill, "BossSkills"), mock.patch.object(drill, "packet_best", return_value=None),                 mock.patch.object(drill, "wait_zone", side_effect=lambda b, s: next(seq)),                 mock.patch.object(drill, "leave") as leave:
+        with mock.patch.object(drill, "BossSkills"), mock.patch.object(drill, "packet_best", return_value=None), \
+                mock.patch.object(drill, "wait_zone", side_effect=lambda b, s: next(seq)), \
+                mock.patch.object(drill, "leave") as leave:
             try:
                 return drill.play(bot, start), leave
             except drill.CannotProceed as e:
@@ -63,7 +65,8 @@ class DrillDeadAtLoginTest(unittest.TestCase):
         from mabi.tasks import login
         b = mock.MagicMock()
         b.is_dead.return_value = True
-        with mock.patch("mabi.place.place", return_value=SimpleNamespace(kind=None)),                 mock.patch.object(drill, "inside", return_value=True), mock.patch.object(drill, "leave") as leave:
+        with mock.patch("mabi.place.place", return_value=SimpleNamespace(kind=None)), \
+                mock.patch.object(drill, "inside", return_value=True), mock.patch.object(drill, "leave") as leave:
             self.assertTrue(login._leave_dungeon(b))
         leave.assert_called_once_with(b)
 
