@@ -13,10 +13,10 @@ import math
 from .. import gamedata as gd, richtext
 from ..cache import QueryCache
 from . import goal, needs
+from .needs import GATHER_PER_CALL
 from .knowledge import item_totals
 
 SOURCE = gd.labels()["source"]
-GATHER_PER_CALL = 100
 
 
 def _items(res) -> list:

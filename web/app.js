@@ -1000,7 +1000,7 @@ function renderGather() {
 
 function doGather(name) {
   actNow({ act: 'gather', command: 'execute_gathering', body: { displayName: name },
-    label: name + ' 채집', detail: '1회 (최대 100개)', note: '1회 최대 100개' });
+    label: name + ' 채집', detail: '1회 (최대 ' + mm.limits.gatherPerCall + '개)', note: '1회 최대 ' + mm.limits.gatherPerCall + '개' });
 }
 
 /* ── 소지품 ─────────────────────────────────────── */

@@ -30,6 +30,7 @@ from mabi.connector import ACTION_COMMANDS, EXE_NAME, Connector
 from mabi.craft import goal, plan
 from mabi.craft import queue as craft_queue
 from mabi.craft.execute import execute
+from mabi.craft.needs import GATHER_PER_CALL
 from mabi.dye.presets import PresetStore
 from mabi.nudge import CursorNudge
 from mabi.store import Favorites, Playlists
@@ -152,7 +153,9 @@ class Api(DailyApi, CharsApi, QueueApi):
     def initial(self) -> dict:
         """첫 페인트 전에 페이지에 심을 값 (window.__MM_INIT__). 테마가 늦게 오면 화면이 번쩍인다."""
         return {"theme": "light" if self.settings.get("theme") == "light" else "dark",
-                "app": {"name": APP_NAME, "version": APP_VERSION}, "labels": gamedata.labels()}
+                "app": {"name": APP_NAME, "version": APP_VERSION}, "labels": gamedata.labels(),
+                # 게임 규칙 숫자 중 화면 문구에 쓰는 것 (파이썬과 같은 값 — 화면에 다시 적지 않는다)
+                "limits": {"gatherPerCall": GATHER_PER_CALL}}
 
     def close(self) -> None:
         """앱을 끝낼 때. 단축키 스레드와 진행 중인 게임 행동을 정리한다."""

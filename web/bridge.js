@@ -59,6 +59,8 @@
     appInfo: (window.__MM_INIT__ && window.__MM_INIT__.app) || {},
     // 표시 문구 표 (data/labels.json — 파이썬과 같은 파일)
     labels: (window.__MM_INIT__ && window.__MM_INIT__.labels) || {},
+    // 화면 문구에 쓰는 게임 규칙 숫자 {gatherPerCall} (파이썬 mabi.craft 와 같은 값)
+    limits: (window.__MM_INIT__ && window.__MM_INIT__.limits) || {},
 
     status: c('status'),
     query: c('query'),
