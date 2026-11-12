@@ -19,7 +19,7 @@ import time
 from .. import gamedata as gd, judge
 from ..bot import Bot
 from ..exceptions import CannotProceed, LootPending, StepTimeout
-from ..place import place
+from ..place import ABYSS, place
 from .. import monitor
 from ..monitor import detect as d, handlers
 from . import entry, ui_text
@@ -43,7 +43,6 @@ def difficulties(dungeon: str | None = None, mode: str = "solo") -> list[str]:
 FRONT_ONLY = ("흩어진 물길",)
 
 
-ABYSS_MAP = "InstanceAbyssDungeon"  # 패킷의 맵 종류
 
 
 def phase(bot: Bot):
@@ -67,7 +66,7 @@ def phase(bot: Bot):
     def packet_map():
         if not known or st.loading:
             return None
-        if st.channel_type != ABYSS_MAP:
+        if st.channel_type != ABYSS:
             return "out"
         return None if st.abyss_result or st.abyss_matching in (1, 2, 3) else "play"
 
@@ -75,7 +74,7 @@ def phase(bot: Bot):
         if known:
             return None
         pl = place(bot)
-        return None if not pl.name else "abyss" if pl.kind == ABYSS_MAP else "out"
+        return None if not pl.name else "abyss" if pl.kind == ABYSS else "out"
 
     def cli_result() -> bool:
         return bool((bot.activity() or {}).get("IsAbyssResultSequencePlaying"))
@@ -292,7 +291,7 @@ def entered_since(bot: Bot, since: float) -> bool | None:
     if bot.map_loading() is None:
         return None
     st = bot.packets.state
-    return not st.loading and st.channel_type == ABYSS_MAP and st.entered_at > since
+    return not st.loading and st.channel_type == ABYSS and st.entered_at > since
 
 
 def wait_entered(bot: Bot, timeout: float, since: float | None = None) -> bool:
@@ -310,7 +309,7 @@ def wait_entered(bot: Bot, timeout: float, since: float | None = None) -> bool:
         if loading:
             bot.wait_loaded(end - time.monotonic())
             continue
-        if loading is False and st.channel_type == ABYSS_MAP and st.entered_at > start:
+        if loading is False and st.channel_type == ABYSS and st.entered_at > start:
             if time.monotonic() - st.entered_at > 10:
                 bot.log.info("패킷: 어비스 맵에 들어옴 (나가기 버튼은 가려짐)")
                 return True

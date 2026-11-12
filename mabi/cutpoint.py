@@ -15,10 +15,10 @@
 import logging
 
 from . import restart
+from .place import OPEN_FIELD
 
 log = logging.getLogger("mabi")
 
-OPEN_FIELD = "Field"            # 마을·일반 필드의 맵 종류 (사냥터는 BattleField, 던전류는 Instance…, 필드 보스는 FieldBoss)
 NO_CUT_STEPS = ("abyss_match",)  # 입장을 누른 뒤에 기록하는 단계 — 아직 필드에 있어도 곧 들어간다
 
 _hook = None  # () -> str: 먼저 할 일이 있어 지금 카드를 밀어냈으면 까닭, 아니면 "" (작업 큐)

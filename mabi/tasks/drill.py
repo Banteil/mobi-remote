@@ -23,13 +23,13 @@ from .. import gamedata as gd
 from ..bot import Bot
 from ..exceptions import CannotProceed, StepTimeout
 from ..ocr import find_texts, nospace, read_text
+from ..place import DRILL
 from . import entry, ui_text
 from .boss_skills import BossSkills
 from .content import Fight, wait_arrival
 from .exits import Exit
 
 GOAL = 20
-MAP = "InstanceBreakthroughDungeon"
 ZONE_LIMIT = 120     # 구역 제한 시간 (초) — 넘기면 결과가 안 와도 끝난 것으로 보고 화면을 본다
 ENTER_WAIT = 25      # 입장하기 뒤 드릴에 들어가기 시작할 때까지
 SCENE_PRESS = 2.5    # 컷신 넘기기: 화면을 누르고 있는 시간 (초)
@@ -48,7 +48,7 @@ def packet_best(bot: Bot) -> int | None:
 
 def inside(bot: Bot) -> bool:
     p = bot.packets
-    return bool(p.ok and not p.state.loading and p.state.channel_type == MAP)
+    return bool(p.ok and not p.state.loading and p.state.channel_type == DRILL)
 
 
 def _texts(bot: Bot, key: str) -> list[str]:
@@ -115,7 +115,7 @@ def enter(bot: Bot) -> None:
         bot.step("drill_enter", "나이트메어 드릴 입장")
         mark = bot.input_mark
         # 입장하면 구역 입장 패킷 → (첫 입장이면 컷신) → 맵 이동. 패킷이 없으면 드릴 창이 닫혔나로
-        got = bot.wait_packet(lambda s: s.loading or s.cutscene or s.channel_type == MAP, ENTER_WAIT, since=mark)
+        got = bot.wait_packet(lambda s: s.loading or s.cutscene or s.channel_type == DRILL, ENTER_WAIT, since=mark)
         if got or bot.packets.find("drill.enter", mark):
             return
         if got is None and not ui_text.find(bot, gd.text("drill_title"), gd.region("drill_title")):
@@ -219,7 +219,7 @@ def play(bot: Bot) -> str:
     """드릴 안에서 20구역까지 — 구역마다 결과 창의 다음으로(Space), 20구역(또는 그 위)이면 나가기."""
     cleared = []
     # 드릴 안 전체를 보스전으로 친다
-    skills = BossSkills.for_current(bot, bot.character, lambda s: s.channel_type == MAP)
+    skills = BossSkills.for_current(bot, bot.character, lambda s: s.channel_type == DRILL)
     if skills.enabled:
         bot.log.info(f"드릴에서 쓸 것: {skills.describe()}")
     while True:

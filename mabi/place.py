@@ -14,17 +14,29 @@ from dataclasses import dataclass
 
 from . import gamedata as gd
 
+# 맵 종류 (패킷 channel_type 이름). 맵 종류 글자는 여기서만 적고 다른 모듈은 이 이름을 쓴다
 ABYSS = "InstanceAbyssDungeon"
 RAID = "InstanceRaid"
-RAID_LOBBY = "InstanceRaidLobby"
+RAID_LOBBY = "InstanceRaidLobby"       # 출항선 (레이드마다 같은 맵)
 DUNGEON = "InstanceDungeon"
-FIELD = "BattleField"
+DRILL = "InstanceBreakthroughDungeon"  # 나이트메어 드릴
+INSTANCE = "Instance"                  # 콘텐츠 맵(던전·어비스·레이드·드릴 …) 맵 종류의 머리 — is_instance
+FIELD = "BattleField"                  # 사냥터
+OPEN_FIELD = "Field"                   # 마을·일반 필드
+FIELD_BOSS = "FieldBoss"
+SCENARIO_FIELD = "ScenarioField"
 # 여관 안쪽 보관함 구역·마이 홈 — 메인 화면처럼 보이지만 오른쪽 위 나가기가 있는 따로 된 구역.
 # 여기서 접속을 끊은 캐릭터로 숙제를 시작하면 이동이 안 돼 헤맨다 → 먼저 나온다 (exits.HousingExit)
 HOUSING_INN = "HousingInn"
 HOUSING = "Housing"
 HOUSINGS = (HOUSING_INN, HOUSING)
+OPEN_MAPS = (OPEN_FIELD, FIELD, FIELD_BOSS, HOUSING_INN, SCENARIO_FIELD)  # 던전이 아닌 맵 종류
 INN_SUFFIX = "여관"   # CLI 장소 이름 '반호르 여관' — 여관 보관함 구역에선 CLI Housing.IsInHousing 이 false (2026-10-31 실측)
+
+
+def is_instance(kind: str | None) -> bool:
+    """콘텐츠 맵(Instance…)인가. 모르면(None·'') False."""
+    return (kind or "").startswith(INSTANCE)
 
 
 @dataclass

@@ -16,6 +16,7 @@ from typing import Callable, NamedTuple
 from .. import gamedata as gd, keys
 from ..bot import Bot
 from ..exceptions import CannotProceed, StepTimeout
+from ..place import FIELD, OPEN_FIELD
 from ..vision import green, green_ratio
 
 
@@ -707,7 +708,7 @@ def _pick_from_list(bot: Bot, place: dict, name: str) -> bool:
 def other_town(bot: Bot, town: str) -> bool:
     """패킷: 지금 다른 마을(Field 맵)에 있나. 모르거나 마을이 아닌 곳(사냥터·던전)이면 False."""
     st = bot.packets.state if bot.packets.ok else None
-    if not st or st.loading or st.channel_type != "Field" or not st.channel_name:
+    if not st or st.loading or st.channel_type != OPEN_FIELD or not st.channel_name:
         return False
     here = st.channel_name.replace(" ", "")
     if here != town.replace(" ", ""):
@@ -1086,7 +1087,7 @@ def play_field(bot: Bot, place: str, clear_timeout: float, on_enter=None, again:
     bot.step("field_enter", f"{place} 사냥터 입장", place=place)
     bot.key("space")
     # 패킷이 먼저 (사냥터 상태 InProgress + 사냥터 맵 로딩 끝 — 상태는 로딩 전에 먼저 온다), 못 쓰거나 안 오면 CLI 퀘스트 목록
-    entered = bot.wait_packet(lambda s: s.field_state == "InProgress" and s.channel_type == "BattleField" and not s.loading,
+    entered = bot.wait_packet(lambda s: s.field_state == "InProgress" and s.channel_type == FIELD and not s.loading,
                               bot.cfg["timing"]["loading"])
     if not entered:
         wait_until(bot, lambda: bool(hunt_quest(bot, place)), bot.cfg["timing"]["loading"] if entered is None else 10,

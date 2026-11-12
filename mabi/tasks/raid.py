@@ -18,7 +18,7 @@ import time
 from .. import gamedata as gd, keys, richtext
 from ..bot import Bot
 from ..exceptions import CannotProceed, StepTimeout
-from ..place import RAID_LOBBY, place
+from ..place import RAID, RAID_LOBBY, place
 from . import entry, ui_text
 from .content import Fight, confirm_text, wait_arrival, wait_settled, where_settled
 from .exits import Exit
@@ -33,8 +33,6 @@ def raids(now=None) -> dict[str, list[str]]:
     return gd.raids(now)
 
 
-LOBBY_MAP = "InstanceRaidLobby"  # 출항선 (레이드마다 같은 맵)
-RAID_MAP = "InstanceRaid"
 _boarded: tuple[str, str] | None = None  # 이 리모콘이 마지막으로 태운 출항선 (레이드, 난이도) — 배는 어느 레이드 것인지 모른다
 
 
@@ -56,7 +54,7 @@ def cleared(bot: Bot) -> bool:
     """이 레이드 판의 보스를 잡았나 (패킷 결과·상태 Cleared). 결과 화면이 떠 있는 동안 CLI 퀘스트는 빈 목록이다."""
     st = bot.packets.state
     # 맵을 모를 때(None — 레이드 안에서 리모콘을 켬)도 본다. 아니면 그 판은 클리어를 패킷으로 못 알아챈다
-    return bot.packets.ok and _map(bot) in (RAID_MAP, None) and (bool(st.raid_result) or st.raid_state == "Cleared")
+    return bot.packets.ok and _map(bot) in (RAID, None) and (bool(st.raid_result) or st.raid_state == "Cleared")
 
 
 def _quest_title(bot: Bot) -> str:
@@ -77,9 +75,9 @@ def where(bot: Bot, raid: str) -> str:
     m = _map(bot)
     if m == "loading":
         return "loading"
-    if m == RAID_MAP:
+    if m == RAID:
         return "cleared" if cleared(bot) else "play"
-    if m == LOBBY_MAP:
+    if m == RAID_LOBBY:
         return "ship"
     if m is None:  # 패킷이 맵을 모름 (맵에 들어간 뒤 리모콘을 켬) — 레이드 상태 패킷 → CLI 장소·퀘스트로
         # 레이드 상태는 맵과 따로 온다. 보스를 잡은 직후 다시 켜 연출 중이면 CLI 퀘스트가 비고 결과 화면도 아직이라
@@ -234,7 +232,7 @@ def sail(bot: Bot) -> None:
     end = time.monotonic() + bot.cfg["raid"].get("sail_timeout", 300)
     while time.monotonic() < end:
         m = _map(bot)
-        if m == RAID_MAP:
+        if m == RAID:
             bot.log.info("레이드 맵에 들어옴")
             return
         if m == "loading":
@@ -253,7 +251,7 @@ def wait_matched(bot: Bot, timeout: float) -> bool:
     end = time.monotonic() + timeout
     while time.monotonic() < end:
         m = _map(bot)
-        if m == RAID_MAP:
+        if m == RAID:
             bot.log.info("매칭 잡힘 → 레이드 맵에 들어옴")
             return True
         if m == "loading":
@@ -294,7 +292,7 @@ def finish_result(bot: Bot) -> None:
     end = time.monotonic() + bot.cfg["raid"].get("result_timeout", 300)
     presses, closed = 0, 0.0
     while time.monotonic() < end:
-        if _map(bot) not in (RAID_MAP, None, "loading"):
+        if _map(bot) not in (RAID, None, "loading"):
             return  # 이미 레이드 맵 밖 — 함께하기는 결과 뒤 저절로 콜헨 선착장(필드)으로 나온다 (2026-11-03 11초 뒤)
         if result_ok(bot):
             bot.sleep(1.0, 1.5)
@@ -334,13 +332,13 @@ class RaidExit(Exit):
             self.HOTKEY = None
 
     def inside(self, bot):
-        return _map(bot) in (RAID_MAP, None)
+        return _map(bot) in (RAID, None)
 
     def surely_inside(self, bot):
-        return _map(bot) == RAID_MAP
+        return _map(bot) == RAID
 
     def gone(self, bot):
-        return _map(bot) not in (RAID_MAP, "loading")
+        return _map(bot) not in (RAID, "loading")
 
     def dialog(self, bot, timeout):
         """혼자하기는 '출항선으로 이동 / 파티&던전 나가기', 함께하기는 '콜헨으로 돌아갑니다.' 아래 '취소 / 나가기(Space)'
@@ -371,13 +369,13 @@ class ShipExit(Exit):
     NAME, SNAP, HOTKEY = "출항선", "raid_ship_leave", None
 
     def inside(self, bot):
-        return _map(bot) in (LOBBY_MAP, None)
+        return _map(bot) in (RAID_LOBBY, None)
 
     def surely_inside(self, bot):
-        return _map(bot) == LOBBY_MAP
+        return _map(bot) == RAID_LOBBY
 
     def gone(self, bot):
-        return _map(bot) not in (LOBBY_MAP, "loading")
+        return _map(bot) not in (RAID_LOBBY, "loading")
 
     def dialog(self, bot, timeout):
         return ui_text.wait(bot, gd.text("raid_ship_leave"), gd.region("raid_ship_leave"), timeout=timeout, exact=False)
@@ -441,7 +439,7 @@ class RaidRepeat(Repeat):
         get_out(self.bot, at)
 
     def _next(self) -> str:
-        return "ship" if _map(self.bot) in (LOBBY_MAP, None) else "entry"
+        return "ship" if _map(self.bot) in (RAID_LOBBY, None) else "entry"
 
     def loop(self, at):
         bot, a = self.bot, self.a
@@ -507,14 +505,14 @@ class RaidRepeat(Repeat):
 
                 def go_out():
                     bot.background = False
-                    if _map(bot) in (RAID_MAP, None):
+                    if _map(bot) in (RAID, None):
                         leave(bot, to_field=True)
                     else:
                         wait_settled(bot, bot.cfg["timing"]["loading"])
                 if not self.solo:
                     # 함께하기는 출항선으로 돌아가 다시 출항하지 않고, 필드에서 입장 창부터 다시 (출항하기 → 배 → 매칭)
                     if self.repair_between(go_out) or not self.done():
-                        if _map(bot) in (RAID_MAP, None):
+                        if _map(bot) in (RAID, None):
                             go_out()
                         stage = "entry"
                         continue
