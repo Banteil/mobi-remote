@@ -398,7 +398,7 @@ function qProgress(x) {
   return '<div class="q-prog">' +
     (v.now || run
       ? '<div class="q-now"><span>' + esc(v.now || '') + '</span>' +
-        (run && x.startedAt ? '<span class="q-el" data-since="' + x.startedAt + '">' + qElapsed(x.startedAt) + '</span>' : '') + '</div>'
+        (run && x.startedAt ? '<span class="q-el" data-since="' + x.startedAt + '"></span>' : '') + '</div>'
       : '') +
     (v.step ? '<div class="q-step" title="' + esc(v.step) + '">' + esc(v.step) + '</div>' : '') +
     // 너비는 그린 뒤 paintQueue 가 넣는다 — 인라인 style 은 CSP(style-src 'self')에 막힌다
@@ -408,12 +408,13 @@ function qProgress(x) {
     '</div>';
 }
 
-function qElapsed(since) { return fmtClock((Date.now() - since) / 1000); }
+/* 진행 중 카드의 걸린 시간 — 카드를 다시 그리지 않고 글자만 (그릴 때 비워 두고 여기서 채운다. 그래야 같은 카드 목록이면 HTML 도 같다) */
+function qPaintElapsed() {
+  document.querySelectorAll('#q-list .q-el').forEach((el) => { el.textContent = fmtClock((Date.now() - Number(el.dataset.since)) / 1000); });
+}
+setInterval(qPaintElapsed, 1000);
 
-// 진행 중 카드의 걸린 시간 (카드를 다시 그리지 않고 글자만)
-setInterval(() => {
-  document.querySelectorAll('#q-list .q-el').forEach((el) => { el.textContent = qElapsed(Number(el.dataset.since)); });
-}, 1000);
+let qListHtml = null;  // 마지막으로 그린 카드 목록 — 큐 이벤트는 자주 오지만 대개 그대로라 같으면 다시 그리지 않는다
 
 function paintQueue() {
   const list = $('#q-list');
@@ -435,12 +436,7 @@ function paintQueue() {
   $('#q-clear').disabled = !qItems.length;
   qPaintHooks.forEach((fn) => fn());
 
-  if (!qItems.length) {
-    list.innerHTML = '<p class="q-empty">비어 있음</p>';
-    return;
-  }
-
-  list.innerHTML = qItems.map((x, i) => {
+  const html = !qItems.length ? '<p class="q-empty">비어 있음</p>' : qItems.map((x, i) => {
     const st = Q_STATE[x.status] || Q_STATE.wait;
     const run = x.status === 'run';
     const ended = x.status === 'done' || x.status === 'fail';
@@ -472,7 +468,11 @@ function paintQueue() {
           '</div>') +
       '</div>';
   }).join('');
+  if (html === qListHtml) return;
+  qListHtml = html;
+  list.innerHTML = html;
   list.querySelectorAll('.q-bar i[data-pct]').forEach((el) => { el.style.width = el.dataset.pct + '%'; });
+  qPaintElapsed();
 }
 /**
  * 자동으로 구할 수 없는 재료를 만났을 때.
