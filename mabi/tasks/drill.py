@@ -36,6 +36,10 @@ _ZONE = re.compile(r"(\d+)\s*구역")
 
 # ---- 상태
 
+# 구역 하나의 결과 (wait_zone): 깬 구역 번호, 또는 아래 값
+FAILED, CLEARED, DIED = 0, -1, -2  # 못 깸(시간) · 깼는데 번호를 못 읽음 · 쓰러짐 (드릴은 부활이 없다)
+
+
 def packet_best(bot: Bot) -> int | None:
     """패킷이 아는 지금 캐릭터의 최고 기록 구역. 직업별 기록이 여럿이면 어느 것이 지금 직업인지 몰라 None."""
     p = bot.packets
@@ -169,8 +173,8 @@ class ZoneFight(Fight):
         buttons = result_buttons(bot) if look else set()
         if buttons:
             if nospace(gd.text("drill_next")) in buttons or zone:
-                return zone or read_zone(bot, "drill_result_zone") or -1
-            return 0  # 다음으로가 없는 결과 — 못 깸
+                return zone or read_zone(bot, "drill_result_zone") or CLEARED
+            return FAILED  # 다음으로가 없는 결과 — 못 깸
 
     def before_watch(self, act):  # 드릴은 보스가 따로 없어 안 전체가 보스전 — 점검자보다 먼저, 처리한 게 있어도 쓴다
         if self.skills:
@@ -179,7 +183,7 @@ class ZoneFight(Fight):
     def dead_end(self, seen):
         # 드릴은 부활이 없고 못 깬 결과는 패킷이 안 온다 — 쓰러지면 그 구역은 못 깬 것 (기다려도 결과 창이 안 뜬다)
         self.bot.log.warning(f"드릴에서 쓰러짐 → {self.bot.snapshot('drill_dead').name}")
-        return 0
+        return DIED
 
     def timed_out(self):
         raise StepTimeout(f"드릴 구역이 {self.limit + 90}초 안에 끝나지 않음 → {self.bot.snapshot('drill_zone').name}")
@@ -226,21 +230,33 @@ def leave(bot: Bot) -> None:
     DrillExit().run(bot)
 
 
-def play(bot: Bot) -> str:
-    """드릴 안에서 20구역까지 — 구역마다 결과 창의 다음으로(Space), 20구역(또는 그 위)이면 나가기."""
+def play(bot: Bot, start: int | None = None) -> str:
+    """드릴 안에서 목표 구역까지 — 구역마다 결과 창의 다음으로(Space), 목표(또는 그 위)면 나가기.
+    start: 드릴 창에서 읽은 도전 구역 (안에서 이어 하면 모른다 → 패킷 최고 기록 + 1)."""
+    best = packet_best(bot)
+    now = start or (best + 1 if best else None)  # 지금 도전하는 구역 (모르면 None)
     cleared = []
     # 드릴 안 전체를 보스전으로 친다
     skills = BossSkills.for_current(bot, bot.character, lambda s: s.channel_type == DRILL)
     if skills.enabled:
         bot.log.info(f"드릴에서 쓸 것: {skills.describe()}")
     while True:
-        bot.step("drill_play", f"나이트메어 드릴 진행 중{f' ({cleared[-1] + 1}구역)' if cleared and cleared[-1] > 0 else ''}")
+        bot.step("drill_play", f"나이트메어 드릴 진행 중{f' ({now}구역)' if now else ''}")
         zone = wait_zone(bot, skills)
-        if zone <= 0:
+        if zone in (FAILED, DIED):
             bot.log.warning(f"드릴 구역을 못 깸 → 나감 ({bot.snapshot('drill_fail').name})")
             leave(bot)
-            best = cleared[-1] if cleared and cleared[-1] > 0 else (packet_best(bot) or 0)
-            raise CannotProceed(f"{best + 1 if best else '다음'}구역을 제한 시간 안에 못 깸 (최고 {best}구역)")
+            why = "쓰러짐" if zone == DIED else "제한 시간 안에 못 깸"
+            raise CannotProceed(f"{f'{now}구역' if now else '다음 구역'}에서 {why}"
+                                + (f" (최고 {now - 1}구역)" if now and now > 1 else ""))
+        if zone == CLEARED:  # 깼는데 결과 창 구역 번호를 못 읽음 → 도전하던 구역
+            zone = now
+        if zone is None:
+            bot.log.info("드릴 구역 클리어 (구역 번호 모름)")
+            bot.key("space")
+            bot.wait_packet(lambda s: not s.drill_result, 15, since=bot.input_mark)
+            continue
+        now = zone + 1
         cleared.append(zone)
         bot.log.info(f"드릴 {zone}구역 클리어")
         bot.sleep(1.0, 1.5)
@@ -273,13 +289,13 @@ def run(bot: Bot, cfg: dict) -> str:
             return f"이미 {zone - 1}구역까지 깸 — 입장하지 않음"
     enter(bot)
     skip_cutscene(bot)
-    return _play_behind(bot)
+    return _play_behind(bot, zone)
 
 
-def _play_behind(bot: Bot) -> str:
+def _play_behind(bot: Bot, start: int | None = None) -> str:
     # 들어온 뒤로는 게임을 뒤로 보내고 하던 창을 돌려준다 (사용자 — 어비스 반복과 같다). 키는 창에 직접 간다
     with bot.behind_while(bot.cfg["drill"]["background"]):
-        return play(bot)
+        return play(bot, start)
 
 
 def verify(bot: Bot, cfg: dict) -> bool:

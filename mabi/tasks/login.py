@@ -272,6 +272,14 @@ def _leave_dungeon(bot: Bot) -> bool:
     # 여관 보관함 구역·마이 홈에서 접속을 끊었으면 거기서는 숙제 이동이 안 된다 → 먼저 나온다
     if place(bot).kind in (ABYSS, RAID, RAID_LOBBY, *HOUSINGS):
         return leave_instance(bot)
+    # 드릴 안에서 쓰러진 채로 시작 — 드릴은 부활이 없어 그 구역은 끝났다 → 쓰러진 화면의 나가기로 나온다
+    # (메인 화면으로 가려다 못 하고, 어두운 화면에서 이름을 못 읽어 다시 접속하게 되던 것, 2026-11-12).
+    # 살아 있으면 두고 드릴 숙제가 그 구역부터 잇는다
+    from . import drill
+    if drill.inside(bot) and bot.is_dead():
+        bot.log.info("드릴 안에서 쓰러진 채로 시작 → 나가기")
+        drill.leave(bot)
+        return True
     # 끊긴 숙제가 요일 던전이면 보상 화면에서 추가 루팅까지 (그냥 나가면 숙제 쪽은 일일 달성만 보고 끝내 추가 루팅이 빠진다)
     prog = bot.daily.progress() if bot.daily else None
     cut = prog.get("task") if prog and bot.character and prog.get("slot") == bot.character.get("slot") else None
