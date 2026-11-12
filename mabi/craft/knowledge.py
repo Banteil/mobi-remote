@@ -13,7 +13,7 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .. import gamedata as gd
+from .. import gamedata as gd, richtext
 from .gamerules import GameRules, js_round
 from .recipes import RecipeTable
 
@@ -59,8 +59,11 @@ def _int_or_nan(v) -> float:
     return float(js_round(x)) if not math.isnan(x) and not math.isinf(x) else x
 
 
-def item_totals(items_data) -> dict[str, int]:
-    """get_items 응답 → {이름: 총 개수}. 가방·보관함을 합친다 — 어느 쪽이 줄었는지는 레시피와 무관하다."""
+def item_totals(items_data, bare: bool = False) -> dict[str, int]:
+    """get_items 응답 → {이름: 총 개수}. 가방·보관함을 합친다 — 어느 쪽이 줄었는지는 레시피와 무관하다
+    (MissingIngredients 의 Owned 는 가방만이라 보유량으로 쓰지 않는다).
+    bare: 태그가 붙은 이름은 벗긴 이름으로도 더해 둔다 — 재료 이름(태그 없음)으로 찾는 목표·계획·화면용.
+    전후 비교(학습·얻은 것)는 원문 이름만 센다 (같은 물건을 두 번 세지 않게)."""
     if isinstance(items_data, list):
         lst = items_data
     else:
@@ -71,7 +74,10 @@ def item_totals(items_data) -> dict[str, int]:
         n = x.get("DisplayName")
         if not n:
             continue
-        m[n] = m.get(n, 0) + (x.get("Count") or 0)
+        c = x.get("Count") or 0
+        m[n] = m.get(n, 0) + c
+        if bare and (b := richtext.strip(n)) != n:
+            m[b] = m.get(b, 0) + c
     return m
 
 
