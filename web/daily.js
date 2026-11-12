@@ -1,6 +1,6 @@
 'use strict';
 /**
- * 일일 숙제 · 숙제 기록 탭 (파이썬판에서 새로 생긴 화면). app.js 의 $, esc, num, toast, say, LOADERS 를 같이 쓴다.
+ * 일일 숙제 · 숙제 기록 탭 (파이썬판에서 새로 생긴 화면). app.js 의 $, esc, num, toast, say 와 wire.js 의 LOADERS 를 같이 쓴다.
  *
  * 숙제는 파이썬(mabi/runner)이 돌리고, 진행 이벤트를 mm.daily.onEvent 로 받는다:
  *   start · character · task_start · task_end{status, summary, seconds} · done · failed
