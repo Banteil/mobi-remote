@@ -115,7 +115,9 @@ class ContentExitTest(unittest.TestCase):
         b = make_bot()
         b.packets.ok = True
         seq = iter(inside_seq)
-        with mock.patch.object(mod, "inside", lambda bot: next(seq, False)),                 mock.patch.object(mod.ui_text, "wait", **patches):
+        with mock.patch.object(mod, "inside", lambda bot: next(seq, False)), \
+                mock.patch.object(mod.ui_text, "wait", **patches), \
+                mock.patch.object(mod.ui_text, "find", return_value=None):
             fn(b)
         return b
 
