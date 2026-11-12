@@ -356,6 +356,12 @@ class Bot:
                 return False
             self.packets.changed(min(left, 1.0))
 
+    def just_arrived(self) -> bool:
+        """패킷: 맵에 들어온 지 설정 timing.after_map 초가 안 됐다 (로딩 화면이 걷힌 직후 HUD·창이 아직 뜨는 중일 수 있다)."""
+        p = self.packets
+        return bool(p.ok and not p.state.loading and p.state.entered_at
+                    and time.monotonic() - p.state.entered_at < self.cfg["timing"]["after_map"])
+
     def map_loading(self) -> bool | None:
         """패킷으로 본 맵 로딩 중 여부 (맵을 떠났고 새 맵에 아직 안 들어감). 모르면 None —
         감시가 꺼졌거나 끊김, 또는 감시를 켠 뒤 아직 맵을 옮긴 적이 없음.
@@ -868,6 +874,11 @@ class Bot:
                 continue
             # 템플릿이 안 맞는 퀘스트 완료 창 — ESC 로는 안 닫혀 캐릭터 바꾸기 등이 멈췄다 (2026-10-24 사용자) → 글자로도
             if monitor.of(self).check(monitor.Ctx("to_main"), guard=False, ocr=True).done:
+                continue
+            if self.just_arrived():
+                # 맵에 막 들어와 HUD 가 아직 안 보일 수 있다 — 여기서 ESC 를 누르면 닫을 창이 없어 ESC 메뉴가 열린다
+                # (사냥터 입장 직후 검은 구멍으로 가려다 메뉴를 열고 닫느라 20초씩 썼다, 2026-11-12). 횟수는 센다
+                self.sleep(0.8, 1.2)
                 continue
             self.key("esc")
             self.sleep(0.8, 1.3)
