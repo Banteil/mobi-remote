@@ -66,6 +66,7 @@ DEFAULTS = {
     "askFacilityLevelMismatch": True,  # 정해 둔 시설 레벨이 실제와 어긋날 때 물어볼지
 }
 # 화면이 바꿀 수 있는 설정. 아무 키나 받으면 무엇이 어디서 바뀌는지 알 수 없게 된다
+EXEC_WAIT = 120  # 작업 큐 명령이 화면 명령을 기다리는 상한 (초) — 확인 창이 걸린 명령도 끝나기를 기다릴 만큼
 # 화면에서 고른 것도 여기에 둔다 (마지막에 본 탭·고른 보스 등 — web/app.js pref·setPref). 웹 화면 저장소(localStorage)는
 # 화면 프로필이 기록을 남기지 않아(off-the-record) 켤 때마다 비므로 쓰지 않는다 (2026-11-12 사용자 — 앞으로도 같은 방식)
 CFG_KEYS = {"askFacilityLevelMismatch": bool, "alterWorksFolded": bool, "queueFolded": bool,
@@ -271,7 +272,10 @@ class Api(DailyApi, CharsApi, QueueApi):
         origin: 작업 큐가 부를 때 {label, act} — 시작·끝 이벤트에 실어 화면이 결과를 알리게 한다
         (화면이 부른 명령은 화면이 직접 알리므로 origin 이 없다)."""
         origin = origin if isinstance(origin, dict) else None
-        if not self._exec_lock.acquire(blocking=False):
+        # 화면이 누른 명령은 겹치면 바로 거절한다 (사람이 다시 누른다). 작업 큐의 명령은 잠깐 기다린다 — 화면에서 명령이
+        # 도는 사이에 큐 카드가 걸음을 내면 busy 로 실패해 카드가 멈췄다
+        got = self._exec_lock.acquire(timeout=EXEC_WAIT) if origin else self._exec_lock.acquire(blocking=False)
+        if not got:
             return {"ok": False, "error": "busy", "message": "다른 명령이 실행 중입니다."}
         try:
             cost = self.cli.cost_of(command)
