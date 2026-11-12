@@ -315,8 +315,9 @@ class Bot:
         finally:
             self._interrupting = prev
 
-    def pause(self) -> None:
-        """멈춤 키(F12)를 누른 것과 같은 일시정지 — 사람이 F12 로 이어 한다. 뒤이어 대기·캡처 때 StopRequested."""
+    def pause_as_key(self) -> None:
+        """멈춤 키(F12)를 누른 것과 같은 일시정지 — 사람이 F12 로 이어 한다. 뒤이어 대기·캡처 때 StopRequested.
+        (pause 는 조작 사이의 기본 대기다)"""
         self.stopper.pause()
 
     def check_weight(self, every: float = 20) -> None:

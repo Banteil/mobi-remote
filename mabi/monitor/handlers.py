@@ -275,7 +275,7 @@ def network(bot, ctx, seen):
     shot = _shot(bot, "network")
     if len(tries) >= NETWORK_TRIES:
         bot.log.error(f"'네트워크가 불안정' 이 {len(tries)}번 다시 시도해도 또 뜸 → 일시정지 ({shot})")
-        bot.pause()  # F12 일시정지와 같게 — F12 로 이어 한다
+        bot.pause_as_key()  # F12 일시정지와 같게 — F12 로 이어 한다
         raise StopRequested()
     bot.marks.network_tries = tries + [now]
     bot.log.warning(f"'네트워크가 불안정' → 다시 시도하기 ({len(tries) + 1}/{NETWORK_TRIES}, {shot})")

@@ -470,6 +470,7 @@ class NetworkTest(unittest.TestCase):
     """'네트워크가 불안정' — 다시 시도하기를 세며 (bot.marks), 너무 잦으면 F12 와 같은 일시정지 (StopWatcher.pause)."""
     def test_retry_then_pause(self):
         from mabi.exceptions import StopRequested
+        from mabi.bot import Bot
         from mabi.inputs import StopWatcher
         b = fake_bot()
         seen = Seen(d.NETWORK, (5, 5), frame=frame())
@@ -478,7 +479,7 @@ class NetworkTest(unittest.TestCase):
         self.assertEqual(len(b.marks.network_tries), handlers.NETWORK_TRIES)
         sw = StopWatcher.__new__(StopWatcher)  # 키 감시 스레드 없이
         sw.by_key, sw.stopped = False, threading.Event()
-        b.pause.side_effect = sw.pause
+        b.stopper, b.pause_as_key = sw, Bot.pause_as_key.__get__(b)  # 진짜 Bot 의 것 (기본 대기 pause 와 헷갈리지 않게)
         with self.assertRaises(StopRequested):
             handlers.network(b, None, seen)
         self.assertTrue(sw.by_key and sw.stopped.is_set())
