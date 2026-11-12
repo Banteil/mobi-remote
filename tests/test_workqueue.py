@@ -192,6 +192,22 @@ class WorkQueueTest(unittest.TestCase):
         self.assertTrue(wait_for(lambda: self.long.started == [1, 1]))
         self.assertEqual(self.q.items[0]["status"], "run")
 
+    def test_preempted_card_that_finishes_still_runs_top(self):
+        # 밀어내기(preempt)를 받은 카드가 멈추지 않고 끝까지 간 경우 — 맨 위에 올린 카드가 이어서 돌아야 한다.
+        # 2026-11-13 06:37 숙제 마지막 단계에서 '게임 다시 켜기' 를 올렸는데 숙제가 완료로 끝나자 큐가 서 버렸다
+        class FinishAnyway(Kind):
+            def run(self, q, it):
+                wait_for(lambda: q.stop)
+                return True
+        q = WorkQueue(self.dir / "q2.json", self.dir / "h2.jsonl", lambda ch, v: None,
+                      {"daily": FinishAnyway(), "restart": self.quick})
+        q.add({"kind": "daily", "label": "숙제"}, "now")
+        self.assertTrue(wait_for(lambda: q.current()))
+        q.put_first({"kind": "restart", "label": "게임 다시 켜기"})
+        q.preempt("먼저 할 카드에 밀림")
+        self.assertTrue(wait_for(lambda: self.quick.ran == ["게임 다시 켜기"] and not q.running))
+        self.assertEqual(q.items, [])
+
     def test_replace_paused_and_removed_hook(self):
         self.q.add({"kind": "daily", "label": "옛 숙제"})
         self.q.items[0]["status"] = "pause"

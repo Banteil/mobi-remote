@@ -476,6 +476,10 @@ class WorkQueue:
         try:
             while True:
                 with self.lock:
+                    if self.stop and self.stop["reason"] == "preempt":
+                        # 밀어내려던 카드가 멈추기 전에 끝까지 갔다 (끝나서 치움) — 밀어낸 까닭인 맨 위 카드를 그대로 이어 한다.
+                        # 예전엔 여기서 큐가 서서 '게임 다시 켜기' 카드가 대기로 남은 채 아무것도 안 했다 (2026-11-13 06:37)
+                        self.stop = None
                     if self.stop:
                         break
                     it, later = self._pick()
