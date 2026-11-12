@@ -301,8 +301,14 @@ function paintStopKey() {
   $('#dl-stop').textContent = '일시정지 (' + stopKey() + ')';
 }
 
-async function loadPathSettings() {
+/** 옵션 창의 숙제 쪽 칸 (일시정지·염색 키, 화면 맞추기, 폴더, 게임 단축키) — 설정을 한 번 읽어 나눠 그린다 */
+async function loadOptionSettings() {
   const s = await mm.daily.settings();
+  paintPathSettings(s);
+  paintGameKeys(s.game_keys || []);
+}
+
+function paintPathSettings(s) {
   dl.settings = Object.assign(dl.settings || {}, { stop_key: s.stop_key });
   const fkeys = (cur) => selectOptions(Array.from({ length: 12 }, (_, i) => ['f' + (i + 1), 'F' + (i + 1)]), cur);
   $('#opt-stop-key').innerHTML = fkeys(s.stop_key);
@@ -317,7 +323,7 @@ async function saveRemoteKeys() {
   const r = await mm.daily.saveSettings({ stop_key: $('#opt-stop-key').value, dye_key: $('#opt-dye-key').value });
   if (!(r && r.error)) { dl.settings = Object.assign(dl.settings || {}, { stop_key: $('#opt-stop-key').value }); paintStopKey(); }
   $('#opt-rkeys-msg').textContent = r && r.error ? r.error : '저장했습니다';
-  if (!(r && r.error)) await loadPathSettings();
+  if (!(r && r.error)) paintPathSettings(await mm.daily.settings());
 }
 
 async function savePathSettings() {
@@ -325,7 +331,7 @@ async function savePathSettings() {
     paths: { data: $('#dl-p-data').value, logs: $('#dl-p-logs').value, shots: $('#dl-p-shots').value },
   });
   $('#opt-paths-msg').textContent = r && r.error ? r.error : '저장했습니다';
-  if (!(r && r.error)) await loadPathSettings();
+  if (!(r && r.error)) paintPathSettings(await mm.daily.settings());
 }
 
 /* 게임 단축키 — 칸을 누르고 키를 누르면 그 키 (한글 입력 상태에서도 되게 e.code 로) */
@@ -352,17 +358,12 @@ function paintGameKeys(list) {
   }).join('');
 }
 
-async function loadGameKeys() {
-  const s = await mm.daily.settings();
-  paintGameKeys(s.game_keys || []);
-}
-
 async function saveGameKeys() {
   const v = {};
   document.querySelectorAll('#opt-game-keys .game-key').forEach((i) => { v[i.dataset.name] = i.value.toLowerCase(); });
   const r = await mm.daily.saveSettings({ game_keys: v });
   $('#opt-keys-msg').textContent = r && r.error ? r.error : '저장했습니다';
-  if (!(r && r.error)) await loadGameKeys();
+  if (!(r && r.error)) paintGameKeys((await mm.daily.settings()).game_keys || []);
 }
 
 async function saveDailySettings() {
