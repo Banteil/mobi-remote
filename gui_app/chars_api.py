@@ -287,8 +287,11 @@ class CharsApi:
     def chars_scan(self) -> dict:
         if self._scan_thread and self._scan_thread.is_alive():
             return {"error": "이미 읽는 중입니다"}
-        if getattr(self, "_daily_thread", None) and self._daily_thread.is_alive():
-            return {"error": "일일 숙제가 도는 중입니다"}
+        # 게임을 조작하는 다른 일이 돌면 시작하지 않는다 — 예전엔 일일 숙제만 봐서 어비스·레이드·큐 카드 중에도 시작됐다
+        if (why := self._busy_reason()):
+            return {"error": why}
+        if getattr(self, "queue", None) and self.queue.running:
+            return {"error": "작업 큐가 도는 중입니다"}
 
         def work():
             from mabi.bot import Bot
