@@ -172,16 +172,16 @@ def _dialog_blocker(bot, seen):
     talk = (s is not None and s.in_dialogue and menu_open(bot) is False
             and not (seen.frame is not None and bot.at_main(seen.frame)))
     if not (hit and hit[0] == "dialog") and not talk:
-        bot._skip_seen = None
+        bot.marks.skip_seen = None
         return None
     if bot.behind():
-        since = getattr(bot, "_skip_seen", None)
+        since = bot.marks.skip_seen
         if since is None:
-            bot._skip_seen = time.monotonic()
+            bot.marks.skip_seen = time.monotonic()
             return None
         if time.monotonic() - since < 30:
             return None
-    bot._skip_seen = None
+    bot.marks.skip_seen = None
     if hit and hit[0] == "dialog":
         bot.click(hit[1])
         return "대화 넘기기"
@@ -193,11 +193,11 @@ def _dialog_blocker(bot, seen):
 def confirm(bot, ctx, seen):
     """퀘스트 클리어 등의 '확인' — Space. 뒤에서 보낸 Space 가 안 먹어 같은 창이 그대로면 누른다."""
 
-    if bot.background and time.monotonic() - getattr(bot, "_confirm_keyed", 0) < 10:
+    if bot.background and time.monotonic() - bot.marks.confirm_keyed < 10:
         bot.click(seen.hit)
     else:
         bot.key("space")
-        bot._confirm_keyed = time.monotonic()
+        bot.marks.confirm_keyed = time.monotonic()
     if ctx.menus:
         bot.sleep(2, 2.5)
     ctx.event("confirmed")
@@ -271,14 +271,13 @@ def network(bot, ctx, seen):
     """'네트워크가 불안정' → '다시 시도하기'. NETWORK_WINDOW 안에 NETWORK_TRIES 번을 넘기면 사람에게 넘긴다 —
     F12 와 같은 일시정지 (사용자 2026-10-28). '시작 화면으로' 는 누르지 않는다."""
     now = time.monotonic()
-    tries = [t for t in getattr(bot, "_network_tries", []) if now - t < NETWORK_WINDOW]
+    tries = [t for t in bot.marks.network_tries if now - t < NETWORK_WINDOW]
     shot = _shot(bot, "network")
     if len(tries) >= NETWORK_TRIES:
         bot.log.error(f"'네트워크가 불안정' 이 {len(tries)}번 다시 시도해도 또 뜸 → 일시정지 ({shot})")
-        bot.stopper.by_key = True  # F12 일시정지와 같게 — F12 로 이어 한다
-        bot.stopper.stopped.set()
+        bot.pause()  # F12 일시정지와 같게 — F12 로 이어 한다
         raise StopRequested()
-    bot._network_tries = tries + [now]
+    bot.marks.network_tries = tries + [now]
     bot.log.warning(f"'네트워크가 불안정' → 다시 시도하기 ({len(tries) + 1}/{NETWORK_TRIES}, {shot})")
     if seen.hit and seen.hit != (0, 0):
         bot.click(seen.hit)

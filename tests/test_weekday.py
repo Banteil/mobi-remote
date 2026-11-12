@@ -1,4 +1,5 @@
 """일요일 요일 던전 — 임무 게시판에서 던전 고르기 (mabi.tasks.weekday). 화면·CLI 는 가짜로 돌린다."""
+import contextlib
 import unittest
 from unittest import mock
 
@@ -7,6 +8,7 @@ import numpy as np
 from mabi.monitor import detect as d
 from mabi.monitor.detect import Seen
 from mabi.tasks import weekday
+from mabi.bot import Marks
 from mabi.exceptions import CannotProceed
 
 CHOICES = [("빛나는 동굴(골드)", 667, 996), ("눈부신 저택(보석)", 891, 997), ("찬란한 유적(연금술 재연소 촉매)", 1183, 996)]
@@ -34,6 +36,7 @@ def board_bot(acts):
     b = mock.Mock()
     b.cfg = {"arbeit": {"dialog_next_xy": [1800, 45]}, "monitor": {}}
     b.shot_dir, b.packets.ok, b.character = None, False, None
+    b.marks, b.no_interrupt = Marks(), contextlib.nullcontext
     seq, now = list(acts), {"act": {}}
 
     def look(bot, frame=None, skip=(), ocr=False):

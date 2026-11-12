@@ -10,6 +10,7 @@ import random
 import re
 import time
 from contextlib import contextmanager
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
@@ -27,6 +28,24 @@ from .screen import Screen
 from .vision import Match, Vision
 from .window import GameWindow
 from .exceptions import AuthBlocked, MissingTemplate, Overweight, StepTimeout, StopRequested
+
+
+@dataclass
+class Marks:
+    """Bot 하나에 걸쳐 다른 모듈(점검자·출석·아르바이트)이 기억하는 시각·값. 예전엔 모듈마다 bot 에 밑줄 속성
+    (bot._skip_seen 등)을 붙이고 getattr 기본값으로 읽어, 이름이 틀려도 조용히 기본값이 나왔다. 이제 칸을 여기 적는다."""
+    # 점검자 (monitor)
+    network_looked: float = 0.0       # '네트워크가 불안정' 창을 마지막으로 글자로 본 때 (detect.look)
+    network_tries: list[float] = field(default_factory=list)  # '다시 시도하기' 를 누른 때들 (handlers.network)
+    skip_seen: float | None = None    # 뒤에서 도는 중 '대화 넘기기' 를 처음 본 때 (handlers.skip)
+    confirm_keyed: float = 0.0        # 뒤에서 '확인' 을 Space 로 보낸 때 (handlers.confirm)
+    attendance_clicked: float = 0.0   # 출석 대사를 누른 때 (situation)
+    # 아르바이트 (tasks.arbeit)
+    gatherable: set[str] | None = None  # 채집으로 구할 수 있는 물품 (한 번 묻고 기억)
+    arb_titles: set[str] | None = None  # 아르바이트 탭에서 본 카드 제목 (None = 아직 안 봄)
+    arb_read: list[list[str]] = field(default_factory=list)  # 카드 버튼을 못 찾았을 때 쪽마다 읽은 글자
+    arb_scrolled: int = 0             # 아르바이트 목록을 내린 쪽 수
+    arb_closed: bool = False          # 구인 마감이고 수락한 일도 없음
 
 
 SHOT_KEEP_DAYS = 7
@@ -155,6 +174,8 @@ class Bot:
         self._cli_checked = 0.0  # CLI 연결 여부를 마지막으로 다시 물은 때
         self.deadline: float | None = None  # 지금 숙제의 시간 상한 (monotonic, runner 가 정함) — check_stop 이 본다
         self.on_step = None  # 단계가 바뀔 때 (step, text) — runner 가 화면(작업 큐 카드·오버레이)에 알리려고 설정
+        self.marks = Marks()  # 다른 모듈이 이 Bot 에 걸쳐 기억하는 것
+        self.monitor = None   # 이 Bot 의 점검자 (monitor.of 가 처음 부를 때 만든다)
         self._frame: np.ndarray | None = None
         # 게임을 앞으로 가져오지 않고 한다 — 화면은 가려져 있어도 찍고(PrintWindow), 키는 창에 직접 보낸다.
         # 클릭은 그렇게 안 되므로 누를 때만 잠깐 앞으로 가져왔다가 원래 창을 되돌린다 (어비스 반복 중에 쓴다)
@@ -293,6 +314,10 @@ class Bot:
             yield
         finally:
             self._interrupting = prev
+
+    def pause(self) -> None:
+        """멈춤 키(F12)를 누른 것과 같은 일시정지 — 사람이 F12 로 이어 한다. 뒤이어 대기·캡처 때 StopRequested."""
+        self.stopper.pause()
 
     def check_weight(self, every: float = 20) -> None:
         """watch_weight 가 켜져 있으면 every 초마다 CLI 로 가방 무게를 보고, 꽉 찼으면 Overweight."""

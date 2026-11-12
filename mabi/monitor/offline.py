@@ -10,7 +10,7 @@ from unittest import mock
 import cv2
 import numpy as np
 
-from ..bot import Bot
+from ..bot import Bot, Marks
 from ..vision import Vision
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -51,6 +51,7 @@ def screen_bot(frame: np.ndarray, cfg: dict | None = None):
                  "dialogue_playing", "in_combat", "behind", "may_skip_scene"):
         setattr(b, name, getattr(Bot, name).__get__(b))
     b._require_template = lambda name: None
+    b.marks = Marks()
     return b
 
 

@@ -76,18 +76,18 @@ def clear_attendance(bot, frame=None) -> str | None:
         return "출석부 건너뛰기"
     if p.ok and p.state.attending():
         # 패킷은 대사 창이 그려지기 전에 온다 — HUD 가 남아 있으면 아직 (그때 가운데를 누르면 필드의 무언가가 눌린다)
-        if time.monotonic() - getattr(bot, "_attendance_clicked", 0) < 2 or bot.at_main(frame):
+        if time.monotonic() - bot.marks.attendance_clicked < 2 or bot.at_main(frame):
             return "출석 대사 기다림"
-        bot._attendance_clicked = time.monotonic()
+        bot.marks.attendance_clicked = time.monotonic()
         bot.click(tuple(c["first_dialog_xy"]))
         return "출석 대사 넘김"
     if not attendance_due(bot):
         return None
     if not (p.ok and p.state.in_dialogue) or bot.skip_button(frame) or bot.at_main():
         return None
-    if time.monotonic() - getattr(bot, "_attendance_clicked", 0) < 4:
+    if time.monotonic() - bot.marks.attendance_clicked < 4:
         return None
-    bot._attendance_clicked = time.monotonic()
+    bot.marks.attendance_clicked = time.monotonic()
     bot.log.info("날짜가 바뀐 뒤 버튼 없는 대사 (출석 첫 대사) → 화면 한 번 클릭")
     bot.click(tuple(c["first_dialog_xy"]))
     return "출석 첫 대사"

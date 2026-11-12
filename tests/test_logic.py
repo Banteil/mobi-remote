@@ -1,11 +1,12 @@
 """게임 없이 돌리는 판정 로직 테스트.  .venv\\Scripts\\python.exe -m unittest discover tests"""
+import contextlib
 import itertools
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from mabi import progress
-from mabi.bot import Bot
+from mabi.bot import Bot, Marks
 from mabi.monitor import handlers
 from mabi.profile import game_date
 from mabi.tasks import abyss, arbeit, content
@@ -74,7 +75,7 @@ class SceneSkipTest(unittest.TestCase):
         b.ui = {"scene_skip": "scene_skip", "dialog_skip": "dialog_skip"}
         b.background = background
         b.scene_skip = True
-        b._skip_seen = None
+        b.marks, b.no_interrupt = Marks(), contextlib.nullcontext
         b.packets.ok = False
         b.state.available.return_value = False
         b.activity.return_value = None
@@ -288,7 +289,7 @@ class AttendanceTest(unittest.TestCase):
         b = mock.Mock()
         b.cfg = {"login": {"attendance_skip": "attendance_skip", "first_dialog_xy": [960, 540]}}
         b.attendance_date = date
-        b._attendance_clicked = 0
+        b.marks = Marks()
         b.vision.has.return_value = True
         b.vision.find.side_effect = lambda f, n: Match(n, 5, 5, 10, 10, 0.9) if n in shown else None
         b.packets.ok = True

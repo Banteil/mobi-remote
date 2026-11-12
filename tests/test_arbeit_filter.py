@@ -3,6 +3,7 @@ from pathlib import Path
 from unittest import mock
 
 from mabi import craft
+from mabi.bot import Marks
 from mabi.tasks import arbeit
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -18,12 +19,13 @@ class AcceptedTest(unittest.TestCase):
         """고정해 둔 사이드 퀘스트도 pinned_sub — 아르바이트 탭에서 본 제목만 아르바이트로 본다."""
         bot = mock.Mock()
         bot.state.query.return_value = [quest("[긴급 의뢰] 사이드"), quest("튼튼한 나무가 필요해")]
-        bot._arb_titles = {"튼튼한 나무가 필요해"}
+        bot.marks = Marks(arb_titles={"튼튼한 나무가 필요해"})
         self.assertEqual([j["title"] for j in arbeit.accepted(bot)], ["튼튼한 나무가 필요해"])
         self.assertEqual(len(arbeit.accepted(bot, raw=True)), 2)
 
     def test_unfiltered_before_panel_seen(self):
-        bot = mock.Mock(spec=["state"])
+        bot = mock.Mock(spec=["state", "marks"])
+        bot.marks = Marks()
         bot.state.query.return_value = [quest("[긴급 의뢰] 사이드")]
         self.assertEqual(len(arbeit.accepted(bot)), 1)
 

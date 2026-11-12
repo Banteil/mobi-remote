@@ -184,8 +184,8 @@ def look(bot, frame=None, skip=(), ocr: bool = False) -> Seen:
     if bot.at_main():
         return Seen(MAIN, frame=frame, idle=idle(bot))
     import time
-    if time.monotonic() - vars(bot).get("_network_looked", 0) > NETWORK_EVERY:
-        bot._network_looked = time.monotonic()
+    if time.monotonic() - bot.marks.network_looked > NETWORK_EVERY:
+        bot.marks.network_looked = time.monotonic()
         if (xy := network_popup(bot, frame)):
             return Seen(NETWORK, xy, src="ocr", frame=frame)
     return Seen(UNKNOWN, frame=frame)

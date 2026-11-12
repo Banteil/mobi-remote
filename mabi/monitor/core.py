@@ -115,13 +115,8 @@ class Monitor:
     # ---------------------------------------------------------------- 점검
     def check(self, ctx: Ctx, frame=None, skip=(), ocr: bool = False, guard: bool = True) -> d.Seen:
         # 점검하는 동안(처리기의 sleep·클릭 포함)은 끼어들지 않는다 — 점검자가 이미 지금 화면을 다룬다
-        if getattr(self.bot, "_interrupting", True) is not False:
+        with self.bot.no_interrupt():
             return self._check(ctx, frame, skip, ocr, guard)
-        self.bot._interrupting = True
-        try:
-            return self._check(ctx, frame, skip, ocr, guard)
-        finally:
-            self.bot._interrupting = False
 
     def _check(self, ctx: Ctx, frame=None, skip=(), ocr: bool = False, guard: bool = True) -> d.Seen:
         bot = self.bot
@@ -255,7 +250,7 @@ class Monitor:
 
 def of(bot) -> Monitor:
     """bot 의 점검자 (없으면 만든다)."""
-    m = getattr(bot, "_monitor", None)
+    m = bot.monitor
     if not isinstance(m, Monitor) or m.bot is not bot:
-        m = bot._monitor = Monitor(bot)
+        m = bot.monitor = Monitor(bot)
     return m
