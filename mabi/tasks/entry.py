@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from .. import gamedata as gd
 from ..bot import Bot
 from ..ocr import find_texts, nospace
+from ..vision import green_ratio
 from . import ui_text
 from .content import CannotProceed
 
@@ -44,8 +45,7 @@ def parse(frame) -> Entry | None:
 def _switch_on(frame, label: tuple[int, int]) -> bool:
     """스위치가 켜져 있나 (켜지면 초록)."""
     x, y = label[0] + SWITCH_DX, label[1]
-    patch = frame[y - 6:y + 6, x - 20:x + 20].reshape(-1, 3).astype(int)
-    return bool(((patch[:, 1] > 150) & (patch[:, 2] < 120) & (patch[:, 0] < 150)).mean() > 0.2)
+    return green_ratio(frame[y - 6:y + 6, x - 20:x + 20], g_min=150, b_max=150) > 0.2  # 스위치 자리에서 잰 기준
 
 
 def read(bot: Bot) -> Entry | None:

@@ -15,6 +15,7 @@ from typing import Callable, NamedTuple
 
 from .. import gamedata as gd, keys
 from ..bot import Bot, StepTimeout
+from ..vision import green, green_ratio
 
 
 def ensure_auto(bot: Bot) -> None:
@@ -217,9 +218,7 @@ def achieved_mark(bot: Bot, label: str) -> bool:
         raise CannotProceed(f"콘텐츠 가이드 일일 달성에 '{label}' 이 없음 → {bot.snapshot('guide').name}")
     dx, dy = g["check_offset"]
     x, y = m.x + dx, m.y + dy
-    patch = bot.frame()[y - 5:y + 5, x - 5:x + 5].reshape(-1, 3).astype(int)
-    green = ((patch[:, 1] > 120) & (patch[:, 2] < 120) & (patch[:, 0] < 160)).mean()
-    return green > 0.3
+    return green_ratio(bot.frame()[y - 5:y + 5, x - 5:x + 5]) > 0.3
 
 
 # 일일 달성 아이콘(템플릿) → CLI get_growth_guide 의 Target
@@ -352,8 +351,8 @@ def guide_goal(bot: Bot, name: str, weekly: bool = False) -> Goal | None:
     x, y = hit
     frame = bot.frame()
     white = np.percentile(frame[y - 10:y + 10, x - 30:x + 30].mean(axis=2), 95) >= GOAL_WHITE
-    p = frame[y - 5:y + 25, max(0, x - 140):x].reshape(-1, 3).astype(int)  # 글자 왼쪽 = 아이콘과 그 오른쪽 아래 체크
-    check = int(((p[:, 1] > 120) & (p[:, 2] < 120) & (p[:, 0] < 160)).sum()) >= GOAL_CHECK
+    # 글자 왼쪽 = 아이콘과 그 오른쪽 아래 체크
+    check = int(green(frame[y - 5:y + 25, max(0, x - 140):x]).sum()) >= GOAL_CHECK
     return Goal(x, y, None if white == check else check)
 
 
