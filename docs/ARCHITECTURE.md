@@ -15,7 +15,22 @@ mabi/
   workqueue.py                작업 큐: 카드를 위에서부터 Kind.run 으로 돌린다
   queue_report.py             큐 결과(한 일·얻은 것). 얻은 것은 LootMeter 하나로 잰다
   monitor/                    점검자: 화면·패킷을 보고 처리기를 고른다 (Ctx 로 일마다 다른 것만 넘긴다)
+  packet_monitor/             패킷 감시 (받기만). 밖에서는 패키지 이름으로 가져온다 (PacketMonitor·PacketState·shared …)
+    ├ capture.py              Npcap 수신 (수신 함수만) · stream.py  TCP 조각 → 메시지 · appearing.py  등장 메시지의 이름·나
+    ├ state.py                PacketState · Seen · history 사본
+    ├ events.py               이벤트 → 상태 반영 (Events.apply — 맵 진입·던전·사냥터·드릴·어비스·레이드·대화·변신 …)
+    ├ cli_sync.py             CLI 답과 맞추기 (merge_cli · reconcile · forget · map_contradicts)
+    ├ link_watch.py           서버 연결 끊김 단서 로그 (판단에는 아직 안 씀)
+    └ monitor.py              PacketMonitor 본체 (캡처 스레드, wait·find·saw·mark …) · shared · current
   tasks/                      숙제·콘텐츠 하나씩. 공통 부품은 아래 표
+web/                          화면 (빌드 없이 <script> 여러 개가 같은 전역을 쓴다 — 순서는 index.html)
+  app.js                      공통 부품 ($·esc·검색·<option>·시간 글자·토스트·모달·pref/setPref·btnBusy)
+  actions.js · topbar.js      명령 실행(비용 확인·결과 알림) · 상단바와 자동 갱신
+  dash.js · lists.js          대시보드·주변 · 채집·소지품·미션 탭
+  tables.js                   표 공통 — 정렬·즐겨찾기·페이저
+  options.js                  옵션 창 (버전·호환성·Npcap·설정·오버레이·콘솔)
+  wire.js                     탭 전환 LOADERS (다른 파일이 자기 탭을 더한다) · 이벤트 배선 wire()
+  craft · queue · music · dye-ui · daily · chars .js   탭별 화면,  main.js  시작 (맨 마지막)
 ```
 
 ## 공통 부품 — 같은 일을 또 만들지 말고 이것을 쓴다
@@ -73,6 +88,10 @@ mabi/
 | 화면: `<option>` 줄 · 캐릭터 고르기 | `selectOptions(items, cur)` · `charOptions` · `charCheck` (web/app.js) | 곳곳의 select, 숙제·어비스·레이드 탭, 큐 카드 |
 | 화면: 검색 · 시간 글자 | `normSearch` · `hit` · `fmtDur` · `dur`(남은 시간) · `fmtClock` · `fmtHM` (web/app.js) | 목록 검색, 큐 결과·기록, 연주 |
 | 화면: 다시 켜도 기억할 값 | `pref` · `setPref` (web/app.js → 파이썬 settings) — `mm.cfg.set` 을 직접 부르지 않는다 | 곳곳 |
+| 화면: 게임 명령 하나 실행 (비용 확인 → 실행 → 결과 알림·기록) | `runAction(command, body, opts)` · `confirmCost` (web/actions.js) | 옵션 콘솔, 채팅·행동 정지(wire.js), 연주·소셜, 제작 |
+| 화면: 표 정렬·즐겨찾기 구역·쪽 나누기 | `sortRows` · `favTableBody` · `favChips` · `paged`·`paintPager` · 다시 그릴 것 `PAGE_RENDER` (web/tables.js) | 제작·가공·채집·소지품·연주·소셜 |
+| 화면: 탭 하나 더하기 | `LOADERS[이름] = 불러오기` (web/wire.js — 그 뒤에 읽히는 파일에서) | daily.js · chars.js |
+| 패킷 상태 고치기 (받는 스레드·작업 스레드 모두 잠금 `_cond` 안에서) | 이벤트 `packet_monitor/events.Events.apply` · CLI 로 맞추기 `cli_sync.CliSync.merge_cli`·`reconcile`·`forget` | `Bot` (CLI 물을 때·check_in), 시험 |
 
 ## 새 기능을 짤 때
 
@@ -140,6 +159,9 @@ mabi/
 - 처리 결과 글자 비교 → `monitor.Did`
 - `Vision.find` 는 같은 frame 객체에 같은 질문이면 앞 답을 쓴다 (frame 이 바뀌면 버림) · `has` 는 이름마다 한 번
 - queue.json 은 파일에 남는 칸이 바뀔 때만 쓴다 (`craft.queue.encode` 로 비교 — 시간으로 미루지 않아 잃는 것 없음)
+
+(2026-11-12, 파일 나누기) `mabi/packet_monitor.py` → `mabi/packet_monitor/` 패키지, `web/app.js` → 공통 + 기능별
+파일 일곱 개 (위 '한눈에'). 코드는 옮기기만 했다. 패킷 감시의 낮은 부품(Stream·parse_tcp·appearing_*)은 그 모듈에서 가져온다.
 
 새로 비슷한 것을 발견하면 아래 '아직 모으지 못한 것' 절에 적고, 모으면 위 기록으로 옮긴다.
 
