@@ -104,7 +104,7 @@ class ReviveTest(unittest.TestCase):
         """전멸 — '여기서 부활' 이 없고 '전멸하였습니다' 가 보이면 R 을 누르지 않고 바로 나간다 (2026-11-03 사용자)."""
         bot = FakeBot(FakePackets(used=0, mx=6))
         bot.vision = SimpleNamespace(find=lambda frame, name: False)
-        with mock.patch.object(abyss, "_find_text", return_value=(960, 221)):
+        with mock.patch.object(abyss.ui_text, "find", return_value=(960, 221)):
             self.assertFalse(run(bot))
         self.assertEqual(bot.keys, [])
 

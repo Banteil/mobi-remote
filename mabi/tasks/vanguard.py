@@ -18,7 +18,7 @@ import time
 from .. import gamedata as gd, monitor
 from ..bot import Bot, StepTimeout
 from . import ui_text
-from .content import CannotProceed, after_clear, cleared_now, game_space, go_from_guide, growth_done, watch
+from .content import CannotProceed, after_clear, cleared_now, game_space, go_from_guide, growth_done, wait_arrival, watch
 
 GROWTH = "뱅가드 브리치"   # CLI 성장 가이드의 Target, 가이드 카드 제목
 SPACE = "뱅가드"           # 안일 때 CLI 장소 이름에 들어가는 글자
@@ -42,18 +42,9 @@ def travel(bot: Bot) -> None:
     """가이드 '바로 가기' 뒤 입구까지 (빠른 이동) → 입장 창이 뜰 때까지."""
     bot.step("vg_travel", "뱅가드 브리치 입구로 이동")
     bot.fast_travel(wait=6)
-    end = time.monotonic() + _cfg(bot).get("travel_timeout", 600)
-    tried = False
-    while time.monotonic() < end:
-        if bot.map_loading():
-            bot.wait_loaded(end - time.monotonic())
-            continue
-        if ui_text.find(bot, gd.text("vg_title"), gd.region("vg_title"), exact=False):
-            return
-        if not tried and bot.fast_travel():  # 늦게 시작한 자동 이동
-            tried = True
-        bot.sleep(1.5, 2)
-    raise CannotProceed(f"뱅가드 브리치 입구에 닿지 못함 (입장 창이 안 뜸) → {bot.snapshot('vg_travel').name}")
+    wait_arrival(bot, lambda: bool(ui_text.find(bot, gd.text("vg_title"), gd.region("vg_title"), exact=False)),
+                 _cfg(bot).get("travel_timeout", 600), "vg_travel", "뱅가드 브리치 입구에 닿지 못함 (입장 창이 안 뜸)",
+                 retry_fast=True, interval=(1.5, 2))
 
 
 def enter(bot: Bot) -> None:

@@ -21,7 +21,7 @@ from .. import gamedata as gd, monitor
 from ..bot import Bot
 from . import ui_text
 from .boss_skills import BossSkills, slot_of
-from .content import CannotProceed, confirm_text, growth_done, watch
+from .content import CannotProceed, confirm_text, growth_done, wait_arrival, watch
 
 MAP = "FieldBoss"
 HOURS = (12, 18, 20, 22)   # 출현 시간 (시)
@@ -82,14 +82,7 @@ def _texts(bot: Bot, key: str) -> str:
 
 def open_window(bot: Bot, boss: str, difficulty: str) -> None:
     """메뉴(ESC) → 필드 보스 창 → 보스 · 난이도를 고른다."""
-    for _ in range(3):
-        bot.to_main()
-        bot.key("esc")
-        bot.sleep(1.5, 1.8)
-        if ui_text.find(bot, gd.text("fb_menu"), gd.region("menu_right")):
-            break
-        bot.clear_blockers(ocr=True)
-    ui_text.click(bot, gd.text("fb_menu"), gd.region("menu_right"), what="메뉴의 필드 보스", shot="field_boss")
+    ui_text.open_menu(bot, "fb_menu", "메뉴의 필드 보스", "field_boss")
     if not ui_text.wait(bot, gd.text("fb_title"), gd.region("fb_title"), timeout=8):
         raise CannotProceed(f"필드 보스 창이 열리지 않음 → {bot.snapshot('field_boss').name}")
     bot.sleep(0.8, 1.2)
@@ -109,15 +102,9 @@ def travel(bot: Bot, boss: str) -> None:
     if ui_text.wait(bot, gd.text("fb_move_confirm"), gd.region("fb_dialog"), timeout=5, exact=False):
         bot.key("space")  # '이동하시겠습니까' 이동하기
     bot.fast_travel(wait=6)
-    end = time.monotonic() + bot.cfg.get("field_boss", {}).get("travel_timeout", 300)
-    tried = False
-    while time.monotonic() < end:
-        if ui_text.find(bot, gd.text("fb_enter"), gd.region("fb_dialog"), exact=False):
-            return
-        if not tried and bot.fast_travel():  # 늦게 시작한 자동 이동
-            tried = True
-        bot.sleep(1.0, 1.4)
-    raise CannotProceed(f"'{boss}' 지역에 닿지 못함 (입장 창이 안 뜸) → {bot.snapshot('fb_travel').name}")
+    wait_arrival(bot, lambda: bool(ui_text.find(bot, gd.text("fb_enter"), gd.region("fb_dialog"), exact=False)),
+                 bot.cfg.get("field_boss", {}).get("travel_timeout", 300), "fb_travel",
+                 f"'{boss}' 지역에 닿지 못함 (입장 창이 안 뜸)", retry_fast=True, interval=(1.0, 1.4))
 
 
 def enter(bot: Bot) -> None:

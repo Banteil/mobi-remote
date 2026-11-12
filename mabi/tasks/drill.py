@@ -22,9 +22,9 @@ import time
 from .. import gamedata as gd, monitor
 from ..bot import Bot, StepTimeout
 from ..ocr import find_texts, nospace, read_text
-from . import ui_text
+from . import entry, ui_text
 from .boss_skills import BossSkills, slot_of
-from .content import CannotProceed, watch
+from .content import CannotProceed, wait_arrival, watch
 
 GOAL = 20
 MAP = "InstanceBreakthroughDungeon"
@@ -69,14 +69,7 @@ def result_buttons(bot: Bot) -> set[str]:
 
 def open_window(bot: Bot) -> int | None:
     """메뉴(ESC) → 나이트메어 드릴 창. 창 왼쪽 위의 다음 도전 구역을 돌려준다 (못 읽으면 None)."""
-    for _ in range(3):
-        bot.to_main()
-        bot.key("esc")
-        bot.sleep(1.5, 1.8)
-        if ui_text.find(bot, gd.text("drill_menu"), gd.region("menu_right")):
-            break
-        bot.clear_blockers(ocr=True)
-    ui_text.click(bot, gd.text("drill_menu"), gd.region("menu_right"), what="메뉴의 나이트메어 드릴", shot="drill")
+    ui_text.open_menu(bot, "drill_menu", "메뉴의 나이트메어 드릴", "drill")
     if not ui_text.wait(bot, gd.text("drill_title"), gd.region("drill_title"), timeout=8):
         raise CannotProceed(f"나이트메어 드릴 창이 열리지 않음 → {bot.snapshot('drill').name}")
     bot.sleep(0.8, 1.2)
@@ -95,33 +88,18 @@ def _button(bot: Bot) -> str:
 
 def _travel(bot: Bot) -> bool:
     """'이동하기' 로 입구까지 가는 동안. 도착해 드릴 창이 다시 뜨면 True, 창 없이 멈췄으면 False (raid._travel_to_dock 과 같음)."""
-    end = time.monotonic() + bot.cfg.get("drill", {}).get("travel_timeout", 600)
-    still = 0
-    while time.monotonic() < end:
-        if bot.map_loading():
-            bot.wait_loaded(end - time.monotonic())
-            continue
-        if ui_text.find(bot, gd.text("drill_title"), gd.region("drill_title")):
-            bot.log.info("드릴 입구 도착 → 드릴 창")
-            return True
-        if bot.at_main() and not bot.auto_traveling():
-            still += 1
-            if still >= 3:
-                return False
-        else:
-            still = 0
-        bot.sleep(2, 2.5)
-    raise CannotProceed(f"나이트메어 드릴 입구로 가지 못함 → {bot.snapshot('drill_travel').name}")
+    if wait_arrival(bot, lambda: bool(ui_text.find(bot, gd.text("drill_title"), gd.region("drill_title"))),
+                    bot.cfg.get("drill", {}).get("travel_timeout", 600), "drill_travel", "나이트메어 드릴 입구로 가지 못함",
+                    still=3):
+        bot.log.info("드릴 입구 도착 → 드릴 창")
+        return True
+    return False
 
 
 def enter(bot: Bot) -> None:
     """드릴 창이 열린 상태에서 입장 — 멀면 이동하기로 입구까지 가서 다시 연 창에서 입장하기."""
     for _ in range(3):
-        button = ""
-        for _ in range(5):
-            if (button := _button(bot)):
-                break
-            bot.sleep(1.0, 1.4)
+        button = entry.wait_button(bot, _button)
         if not button:
             raise CannotProceed(f"드릴 창에 입장하기·이동하기가 없음 → {bot.snapshot('drill').name}")
         bot.key("space")
