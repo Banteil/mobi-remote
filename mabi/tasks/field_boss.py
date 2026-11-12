@@ -20,7 +20,7 @@ import time
 from .. import gamedata as gd, monitor
 from ..bot import Bot
 from . import ui_text
-from .boss_skills import BossSkills, slot_of
+from .boss_skills import BossSkills
 from .content import CannotProceed, confirm_text, growth_done, wait_arrival, watch
 
 MAP = "FieldBoss"
@@ -137,9 +137,7 @@ def enter(bot: Bot) -> None:
 def fight(bot: Bot) -> bool:
     """결과 창까지 기다려 확인(Space). 보상을 받았으면 True, '참여하지 않아 보상 없음' 이면 False."""
     bot.step("fb_fight", "보스와 전투 중")
-    name = bot.packets.state.my_name if bot.packets.ok else ""
-    skills = BossSkills.for_character(bot, bot.cfg, slot_of(bot, bot.character, name or ""),
-                                      lambda s: s.channel_type == MAP)
+    skills = BossSkills.for_current(bot, bot.character, lambda s: s.channel_type == MAP)
     ctx = monitor.Ctx("field_boss", "필드 보스 전투", revive=True)
     end = time.monotonic() + bot.cfg.get("field_boss", {}).get("fight_timeout", 900)
     asked = time.monotonic()

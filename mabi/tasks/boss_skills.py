@@ -56,6 +56,15 @@ class BossSkills:
         c = cfg.get("boss_skills", {})
         return cls(bot, on_for(c, "ultimate", slot), on_for(c, "paladin", slot), boss_fight)
 
+    @classmethod
+    def for_current(cls, bot: Bot, character: dict | None, boss_fight, name: str | None = None,
+                    cfg: dict | None = None) -> "BossSkills":
+        """지금 접속한 캐릭터의 설정으로 — 반복(Repeat)·나이트메어 드릴·필드 보스가 같이 쓴다. character 는 고른 캐릭터
+        ({slot, name}, 없으면 None), name 은 지금 이름 (None 이면 패킷이 아는 내 이름). 슬롯 고르기는 slot_of."""
+        if name is None:
+            name = bot.packets.state.my_name if bot.packets.ok else ""
+        return cls.for_character(bot, bot.cfg if cfg is None else cfg, slot_of(bot, character, name or ""), boss_fight)
+
     @property
     def enabled(self) -> bool:
         return bool(self.skills)

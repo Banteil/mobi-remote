@@ -22,7 +22,7 @@ from ..place import place
 from .. import monitor
 from ..monitor import detect as d, handlers
 from . import entry, ui_text
-from .content import (CannotProceed, go_talk, touch_prompt_visible, wait_arrival, wait_settled, watch,
+from .content import (CannotProceed, Fight, go_talk, touch_prompt_visible, wait_arrival, wait_settled,
                       where_settled)
 from .exits import DungeonExit, Exit
 from .repeat import Repeat
@@ -417,48 +417,54 @@ def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: No
     배고프면 그때마다 음식을 먹는다 (어비스 반복은 일일 숙제의 하루 횟수 제한 없이).
     쓰러짐('여기서 부활')과 판 중에 끼어든 창(퀘스트 클리어 창·대화)은 점검자가 (content.watch).
     tick(act): 확인마다 부른다 — 보스전 궁극기·팔라딘 변신 (Repeat.skills).
-    흩어진 물길은 예외로 투창병 속성 패턴을 맡는다 — 내가 대상이 되면 패킷이 기다림을 깨우고 바로 움직인다 (tasks/spear)."""
-    end = time.monotonic() + run_timeout
-    mark = bot.packets.mark()
-    ctx = monitor.Ctx("abyss", "판 진행", revive=revive)
-    spear = SpearDodge(bot)
+    흩어진 물길은 예외로 투창병 속성 패턴을 맡는다 — 내가 대상이 되면 패킷이 기다림을 깨우고 바로 움직인다 (tasks/spear).
+    뼈대는 content.Fight, 어비스만 다른 것은 AbyssPlay."""
+    return AbyssPlay(bot, run_timeout, revive, on_revive, tick).run()
 
-    def cleared(_s=None) -> bool:  # 패킷: 이 판의 결과가 옴 (클리어 순간, CLI 결과 연출 표시와 같은 때)
-        return bot.packets.find("abyss.result", mark, lambda v: bool(v.get("abyss"))) is not None
 
-    while True:
-        # 3초 쉬되 결과가 오거나 투창 대상이 되면 바로 깬다
-        if bot.wait_packet(lambda s: cleared() or spear.wanted(), 3) is None:
-            bot.sleep(3)
-        if cleared():
-            bot.log.info("패킷: 어비스 결과 옴 → 클리어")
+class AbyssPlay(Fight):
+    KIND, WHAT = "abyss", "판 진행"
+
+    def __init__(self, bot: Bot, *a):
+        self.mark = bot.packets.mark()
+        super().__init__(bot, *a)
+        self.spear = SpearDodge(bot)
+        self.here = True
+
+    def cleared(self) -> bool:  # 패킷: 이 판의 결과가 옴 (클리어 순간, CLI 결과 연출 표시와 같은 때)
+        return self.bot.packets.find("abyss.result", self.mark, lambda v: bool(v.get("abyss"))) is not None
+
+    def wake(self, s):  # 3초 쉬되 결과가 오거나 투창 대상이 되면 바로 깬다
+        return self.cleared() or self.spear.wanted()
+
+    def packet_end(self):
+        if self.cleared():
+            self.bot.log.info("패킷: 어비스 결과 옴 → 클리어")
             return "clear"
-        if spear.wanted():
-            spear.run()
-            continue
-        act = bot.activity() or {}
-        if act.get("IsAbyssResultSequencePlaying"):
-            return "clear"
-        if not revive and bot.is_dead(act):
-            return "dead"
-        here = inside(bot)
-        # 나가기 버튼이 가려졌으면 퀘스트 완료 창은 템플릿이 안 맞을 때가 있어 글자로도 본다
-        seen = watch(bot, ctx, act, ocr=not here)
-        if seen.finish and seen.finish.result == "dead":
-            # 부활을 기다리는 사이 파티가 보스를 잡았으면 쓰러진 채로 클리어 — 나가면 안 된다
-            return "clear" if cleared() or at_reward(bot) else "dead"
-        if ctx.take("revived"):
-            on_revive()
-            continue
-        if not here and seen.what in (d.REWARD, d.TOUCH):
+        if self.spear.wanted():
+            self.spear.run()
+            return self.NEXT
+
+    def act_end(self, act):
+        return "clear" if act.get("IsAbyssResultSequencePlaying") else None
+
+    def before_watch(self, act):
+        self.here = inside(self.bot)
+
+    def watch_ocr(self):  # 나가기 버튼이 가려졌으면 퀘스트 완료 창은 템플릿이 안 맞을 때가 있어 글자로도 본다
+        return not self.here
+
+    def dead_end(self, seen):  # 부활을 기다리는 사이 파티가 보스를 잡았으면 쓰러진 채로 클리어 — 나가면 안 된다
+        return "clear" if self.cleared() or at_reward(self.bot) else "dead"
+
+    def screen_end(self, seen):
+        if not self.here and seen.what in (d.REWARD, d.TOUCH):
             return "clear"  # 클리어 연출로 HUD 가 사라졌다 (CLI 를 못 읽었을 때)
-        if not here and not seen.done and touch_prompt_visible(bot):
+        if not self.here and not seen.done and touch_prompt_visible(self.bot):
             return "clear"
-        if here and not seen.done:
-            bot.eat_if_hungry()
-            tick(act)
-        if time.monotonic() > end:
-            return "timeout"
+
+    def fighting(self, seen):
+        return self.here and not seen.done
 
 
 def at_reward(bot: Bot) -> bool:

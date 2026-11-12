@@ -91,5 +91,62 @@ class EntryPartsTest(unittest.TestCase):
         self.assertEqual(entry.wait_button(bot, lambda b: "", tries=2), "")
 
 
+class FightTest(unittest.TestCase):
+    """콘텐츠 안 전투 대기의 뼈대 (content.Fight)."""
+
+    def make(self, ends, seen_done=False, **kw):
+        from mabi.monitor import detect as d
+        c = Clock()
+        bot = fake_bot(c, wait_packet=False, is_dead=False)
+        bot.activity.return_value = {}
+        ends = iter(ends)
+
+        class F(content.Fight):
+            def packet_end(self):
+                return next(ends)
+        seen = d.Seen(d.MAIN, src="test")
+        seen.done = "x" if seen_done else None
+        with mock.patch.object(content.time, "monotonic", c):
+            f = F(bot, 60, **kw)
+        return f, bot, c, seen
+
+    def run_fight(self, f, c, seen):
+        with mock.patch.object(content.time, "monotonic", c), mock.patch.object(content, "watch", return_value=seen):
+            return f.run()
+
+    def test_zero_is_a_result(self):  # 드릴의 '못 깸' 은 0
+        f, bot, c, seen = self.make([None, 0])
+        self.assertEqual(self.run_fight(f, c, seen), 0)
+
+    def test_next_skips_round(self):
+        tick = mock.Mock()
+        f, bot, c, seen = self.make([content.Fight.NEXT, "clear"], tick=tick)
+        self.assertEqual(self.run_fight(f, c, seen), "clear")
+        bot.activity.assert_not_called()
+        tick.assert_not_called()
+
+    def test_eat_and_tick_only_when_fighting(self):
+        tick = mock.Mock()
+        f, bot, c, seen = self.make([None, "clear"], tick=tick)
+        self.run_fight(f, c, seen)
+        bot.eat_if_hungry.assert_called_once()
+        tick.assert_called_once_with({})
+        tick.reset_mock()
+        f, bot, c, seen = self.make([None, "clear"], seen_done=True, tick=tick)
+        self.run_fight(f, c, seen)
+        bot.eat_if_hungry.assert_not_called()
+        tick.assert_not_called()
+
+    def test_timeout(self):
+        f, bot, c, seen = self.make(iter(lambda: None, 1))
+        bot.wait_packet.side_effect = lambda *a, **k: setattr(c, "now", c.now + 3) or False
+        self.assertEqual(self.run_fight(f, c, seen), "timeout")
+
+    def test_dead_without_revive(self):
+        f, bot, c, seen = self.make([None], revive=False)
+        bot.is_dead.return_value = True
+        self.assertEqual(self.run_fight(f, c, seen), "dead")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -19,12 +19,12 @@
 import re
 import time
 
-from .. import gamedata as gd, monitor
+from .. import gamedata as gd
 from ..bot import Bot, StepTimeout
 from ..ocr import find_texts, nospace, read_text
 from . import entry, ui_text
-from .boss_skills import BossSkills, slot_of
-from .content import CannotProceed, wait_arrival, watch
+from .boss_skills import BossSkills
+from .content import CannotProceed, Fight, wait_arrival
 
 GOAL = 20
 MAP = "InstanceBreakthroughDungeon"
@@ -143,38 +143,43 @@ def skip_cutscene(bot: Bot) -> None:
 
 # ---- 구역 진행
 
-def skills_for(bot: Bot) -> BossSkills:
-    """지금 캐릭터의 궁극기·팔라딘 설정. 드릴 안 전체를 보스전으로 친다."""
-    name = bot.packets.state.my_name if bot.packets.ok else ""
-    return BossSkills.for_character(bot, bot.cfg, slot_of(bot, bot.character, name or ""),
-                                    lambda s: s.channel_type == MAP)
-
-
 def wait_zone(bot: Bot, skills: BossSkills | None = None) -> int:
     """한 구역이 끝날 때까지 — 결과 창이 뜨면 깬 구역 번호, 못 깨고 끝났으면 0.
-    패킷이 있으면 결과 패킷을 기다리고 결과 창 글자는 결과가 왔거나 제한 시간이 지났을 때만 본다 (못 깬 결과는 패킷을 모른다)."""
-    ctx = monitor.Ctx("drill", "나이트메어 드릴 진행", revive=True)
-    start = time.monotonic()
-    while True:
-        if bot.wait_packet(lambda s: bool(s.drill_result), 3) is None:
-            bot.sleep(2)
+    패킷이 있으면 결과 패킷을 기다리고 결과 창 글자는 결과가 왔거나 제한 시간이 지났을 때만 본다 (못 깬 결과는 패킷을 모른다).
+    뼈대는 content.Fight (구역 제한 + 90초를 넘기면 StepTimeout)."""
+    return ZoneFight(bot, skills).run()
+
+
+class ZoneFight(Fight):
+    KIND, WHAT = "drill", "나이트메어 드릴 진행"
+    IDLE = 2.0
+
+    def __init__(self, bot: Bot, skills: BossSkills | None):
+        super().__init__(bot, ZONE_LIMIT + 90, revive=True)
+        self.skills = skills
+
+    def wake(self, s):
+        return bool(s.drill_result)
+
+    def packet_end(self):
+        bot = self.bot
         zone = bot.packets.state.drill_result if bot.packets.ok else 0
-        look = zone or not bot.packets.ok or time.monotonic() - start > ZONE_LIMIT
+        look = zone or not bot.packets.ok or time.monotonic() - self.start > ZONE_LIMIT
         buttons = result_buttons(bot) if look else set()
         if buttons:
             if nospace(gd.text("drill_next")) in buttons or zone:
                 return zone or read_zone(bot, "drill_result_zone") or -1
             return 0  # 다음으로가 없는 결과 — 못 깸
-        act = bot.activity() or {}
-        if skills:
-            skills.tick(act)
-        seen = watch(bot, ctx, act)
-        if seen.finish and seen.finish.result == "dead":
-            bot.log.warning(f"드릴에서 쓰러짐 → {bot.snapshot('drill_dead').name}")
-        if not seen.done:
-            bot.eat_if_hungry()
-        if time.monotonic() - start > ZONE_LIMIT + 90:
-            raise StepTimeout(f"드릴 구역이 {ZONE_LIMIT + 90}초 안에 끝나지 않음 → {bot.snapshot('drill_zone').name}")
+
+    def before_watch(self, act):  # 드릴은 보스가 따로 없어 안 전체가 보스전 — 점검자보다 먼저, 처리한 게 있어도 쓴다
+        if self.skills:
+            self.skills.tick(act)
+
+    def dead_end(self, seen):
+        self.bot.log.warning(f"드릴에서 쓰러짐 → {self.bot.snapshot('drill_dead').name}")
+
+    def timed_out(self):
+        raise StepTimeout(f"드릴 구역이 {ZONE_LIMIT + 90}초 안에 끝나지 않음 → {self.bot.snapshot('drill_zone').name}")
 
 
 def leave(bot: Bot) -> None:
@@ -205,7 +210,8 @@ def play(bot: Bot) -> str:
         bot.background = True
         bot.window.give_back(bot.user_window)
     cleared = []
-    skills = skills_for(bot)
+    # 드릴 안 전체를 보스전으로 친다
+    skills = BossSkills.for_current(bot, bot.character, lambda s: s.channel_type == MAP)
     if skills.enabled:
         bot.log.info(f"드릴에서 쓸 것: {skills.describe()}")
     while True:

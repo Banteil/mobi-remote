@@ -17,10 +17,9 @@ import time
 
 from .. import gamedata as gd, keys
 from ..bot import Bot, StepTimeout
-from .. import monitor
 from ..place import RAID_LOBBY, place
 from . import entry, ui_text
-from .content import CannotProceed, confirm_text, wait_arrival, wait_settled, watch, where_settled
+from .content import CannotProceed, Fight, confirm_text, wait_arrival, wait_settled, where_settled
 from .exits import Exit
 from .repeat import Repeat
 
@@ -270,29 +269,23 @@ def wait_matched(bot: Bot, timeout: float) -> bool:
 def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: None, tick=lambda act: False) -> str:
     """레이드 맵에서 보스를 잡을 때까지. 'clear' | 'dead' | 'timeout'.
     쓰러지면 '여기서 부활' (점검자 — abyss.revive_here, 부활 횟수를 다 쓰면 'dead'). 배고프면 먹는다.
-    tick(act): 확인마다 부른다 — 보스전 궁극기·팔라딘 변신 (Repeat.skills)."""
-    end = time.monotonic() + run_timeout
-    ctx = monitor.Ctx("raid", "레이드 진행", revive=revive)
-    while True:
-        if bot.wait_packet(lambda s: bool(s.raid_result) or s.raid_state == "Cleared", 3) is None:
-            bot.sleep(3)
-        if cleared(bot):
-            bot.log.info("패킷: 레이드 보스 처치 → 클리어")
+    tick(act): 확인마다 부른다 — 보스전 궁극기·팔라딘 변신 (Repeat.skills). 뼈대는 content.Fight."""
+    return RaidPlay(bot, run_timeout, revive, on_revive, tick).run()
+
+
+class RaidPlay(Fight):
+    KIND, WHAT = "raid", "레이드 진행"
+
+    def wake(self, s):
+        return bool(s.raid_result) or s.raid_state == "Cleared"
+
+    def packet_end(self):
+        if cleared(self.bot):
+            self.bot.log.info("패킷: 레이드 보스 처치 → 클리어")
             return "clear"
-        act = bot.activity() or {}
-        if not revive and bot.is_dead(act):
-            return "dead"
-        seen = watch(bot, ctx, act)
-        if seen.finish and seen.finish.result == "dead":
-            return "clear" if cleared(bot) else "dead"
-        if ctx.take("revived"):
-            on_revive()
-            continue
-        if not seen.done:
-            bot.eat_if_hungry()
-            tick(act)
-        if time.monotonic() > end:
-            return "timeout"
+
+    def dead_end(self, seen):
+        return "clear" if cleared(self.bot) else "dead"
 
 
 def finish_result(bot: Bot) -> None:
