@@ -37,6 +37,10 @@ COST_RE = re.compile(r"consumes\s+(\d+)\s+([^.]+?)\s*\.", re.I)
 ACTION_COMMANDS = {"write_chat", "play_music_score", "change_instrument", "stop_action", "stand_up",
                    "execute_gathering", "execute_altering", "complete_altering_work", "execute_crafting"}
 
+# 명령(CLI 프로세스)을 끊어도 게임 안에서 계속되는 행동 — 끊을 때 stop_action 을 같이 보낸다
+# (2026-11-12 채집 카드를 일시정지했는데 캐릭터는 계속 캤다)
+KEEPS_GOING = {"execute_gathering"}
+
 REG_KEYS = [(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Nexon\MabinogiM"),
             (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Nexon\MabinogiM"),
             (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Nexon\MabinogiM")]
@@ -155,6 +159,7 @@ class Connector:
         self._located: Located | None = None
         self._action_lock = threading.Lock()
         self._proc: subprocess.Popen | None = None
+        self._proc_cmd = ""  # _proc 이 돌리는 명령
         self._costs: dict | None = None
         self.log = log
         self.on_call: Callable[[str, object, Result], None] | None = None  # 호출 기록용
@@ -225,7 +230,7 @@ class Connector:
             self._notify(command, body, r)
             return r
         if track:
-            self._proc = p
+            self._proc, self._proc_cmd = p, command
         try:
             out, err = p.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
@@ -260,10 +265,15 @@ class Connector:
                 pass
 
     def cancel(self) -> None:
-        """진행 중인 게임 행동 명령을 끊는다 (CLI 프로세스 종료 → 게임도 그 행동을 멈춘다)."""
-        p = self._proc
+        """진행 중인 게임 행동 명령을 끊는다 (CLI 프로세스 종료). 게임 안에서 계속되는 행동(KEEPS_GOING)이면
+        stop_action 도 보낸다 — 끊긴 명령이 행동 잠금을 쥐고 있으므로 잠금 없이 바로 부른다."""
+        p, cmd = self._proc, self._proc_cmd
         if p and p.poll() is None:
             p.kill()
+            if cmd in KEEPS_GOING:
+                r = self._run("stop_action", None, 15, track=False)
+                if self.log:
+                    self.log.info(f"{cmd} 를 끊음 → 행동 정지 {'보냄' if r.ok else '실패: ' + (r.message or r.error or '')}")
 
     def busy(self) -> bool:
         return self._action_lock.locked()

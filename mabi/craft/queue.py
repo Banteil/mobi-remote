@@ -13,6 +13,9 @@ FIELDS = ["id", "via", "name", "label", "recipe", "target", "status", "note",
           "raid",
           # 한 번 하는 행동 카드 (kind='action' — 제작·채집·가공·수령·연주 버튼)
           "act", "command", "body", "detail", "skipConfirm",
+          # 제작·채집·가공 카드가 처음 집을 때 기억한 캐릭터 (queue_api.card_character). 빠지면 다시 켰을 때 잊어
+          # 다른 캐릭터로 이어 할 수 있다
+          "pin",
           "doneRuns", "doneSecs", "fit"]  # 어비스 카드가 멈췄다 다시 돌 때 이미 한 판·초
 
 # 작업 기록 (끝난 항목 한 줄씩, queue-history.jsonl). 화면의 '기록' 창이 읽는다
