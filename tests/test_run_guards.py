@@ -27,7 +27,7 @@ class FailStreakTest(unittest.TestCase):
 
 
 class DailyCardTest(unittest.TestCase):
-    def _run(self, results):
+    def _run(self, results, stop=None):
         from gui_app.queue_api import DailyKind
         api = mock.MagicMock()
         api._q_display.return_value = True
@@ -36,7 +36,7 @@ class DailyCardTest(unittest.TestCase):
         api._daily_result = ("done", results)
         k = DailyKind.__new__(DailyKind)
         k.api = api
-        q = mock.MagicMock(session={})
+        q = mock.MagicMock(session={}, stop=stop)
         return k.run(q, {"id": 1, "chars": [1]}), q
 
     def test_failures_keep_card(self):
@@ -47,6 +47,11 @@ class DailyCardTest(unittest.TestCase):
     def test_all_ok_done(self):
         ok, _ = self._run([("[가] 접속", "OK", ""), ("[가] 아르바이트", "MANUAL", "가공 필요")])
         self.assertTrue(ok)
+
+    def test_preempted_midway_keeps_card(self):
+        # 6명 카드가 1번만 하고 '게임 다시 켜기' 에 밀림 — 결과는 1번 것만 있어 다 OK 지만 완료가 아니다
+        ok, _ = self._run([("[가] 접속", "OK", ""), ("[가] 은동전", "OK", "")], stop={"reason": "preempt"})
+        self.assertFalse(ok)
 
 
 class SkippedClickTest(unittest.TestCase):
