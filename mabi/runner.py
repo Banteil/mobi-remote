@@ -314,12 +314,12 @@ class Runner:
             why = (f"지난 실행이 {prog['at']} '{prog['task']}'"
                    f"{' · ' + prog['stage'] if prog.get('stage') else ''} 에서 멈춤")
         if first is None:
-            from .tasks.login import current_name, snap_name
+            from .tasks.login import current_name, match_character
             try:
-                now = snap_name(current_name(self.bot), [ch["name"] for ch in chars])
+                now = match_character(current_name(self.bot), chars)
             except Exception:
-                now = ""
-            first = next((ch for ch in chars if now and "".join(ch["name"].split()) == now and todo(ch)), None)
+                now = None
+            first = now if now is not None and todo(now) else None
             why = "지금 접속 중인 캐릭터"
         if first and chars[0] is not first:
             chars = [first, *[ch for ch in chars if ch is not first]]

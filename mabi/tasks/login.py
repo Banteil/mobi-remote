@@ -223,10 +223,16 @@ def current_character(bot: Bot) -> dict | None:
         name = current_name(bot)
     except Exception:  # noqa: BLE001 — 이름을 못 읽으면 모르는 것으로
         name = ""
-    if not name:
+    return match_character(name, prof.characters(prof.load_profile(bot.paths.profile) or {"slots": []}))
+
+
+def match_character(read: str, chars: list[dict]) -> dict | None:
+    """읽은 이름에 맞는 캐릭터 (확실할 때만 — 비슷한 이름이 둘이면 None). 읽은 이름으로 캐릭터를 고르는 판단은 이것 하나
+    (snap_name 의 기준 — 예전엔 곳마다 '처음 비슷한 것' 과 snap_name 이 섞여 같은 이름에 다른 답을 낼 수 있었다)."""
+    if not read:
         return None
-    chars = prof.characters(prof.load_profile(bot.paths.profile) or {"slots": []})
-    return next((ch for ch in chars if name_matches(name, ch["name"])), None)
+    snapped = snap_name(read, [ch["name"] for ch in chars])
+    return next((ch for ch in chars if _norm_name(ch["name"]) == snapped), None)
 
 
 def _name_score(a: str, b: str) -> float:
