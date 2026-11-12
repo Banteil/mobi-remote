@@ -177,7 +177,9 @@ class ZoneFight(Fight):
             self.skills.tick(act)
 
     def dead_end(self, seen):
+        # 드릴은 부활이 없고 못 깬 결과는 패킷이 안 온다 — 쓰러지면 그 구역은 못 깬 것 (기다려도 결과 창이 안 뜬다)
         self.bot.log.warning(f"드릴에서 쓰러짐 → {self.bot.snapshot('drill_dead').name}")
+        return 0
 
     def timed_out(self):
         raise StepTimeout(f"드릴 구역이 {self.limit + 90}초 안에 끝나지 않음 → {self.bot.snapshot('drill_zone').name}")
@@ -195,7 +197,13 @@ class DrillExit(Exit):
         return not inside(bot)
 
     def dialog(self, bot, timeout):
-        return ui_text.wait(bot, gd.text("drill_exit"), gd.region("drill_result_buttons"), timeout=max(0.0, timeout))
+        return (ui_text.wait(bot, gd.text("drill_exit"), gd.region("drill_result_buttons"), timeout=max(0.0, timeout))
+                or self.dead_exit(bot))
+
+    @staticmethod
+    def dead_exit(bot):
+        """쓰러진 화면의 '나가기' 자리 (오른쪽 아래 — 아이콘이 붙어 읽혀 들어 있기만 하면), 없으면 None."""
+        return ui_text.find(bot, gd.text("drill_exit"), gd.region("drill_dead_buttons"), exact=False)
 
     def open_dialog(self, bot):  # 결과 창 버튼을 못 읽었어도 ESC 는 결과 창의 나가기다
         bot.key("esc")
@@ -203,6 +211,10 @@ class DrillExit(Exit):
         return None
 
     def confirm(self, bot, hit):
+        if dead := self.dead_exit(bot):  # 쓰러진 화면의 나가기는 단축키 배지가 없다 → 누른다
+            bot.click(dead)
+            bot.wait_packet(lambda s: s.loading, 10, since=bot.input_mark)
+            return
         bot.key("esc")
         if bot.wait_packet(lambda s: s.loading, 10, since=bot.input_mark) is False and (again := self.dialog(bot, 0)):
             bot.log.info("ESC 가 안 들음 → 나가기 버튼을 누름")

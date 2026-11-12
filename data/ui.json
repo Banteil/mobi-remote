@@ -135,6 +135,7 @@
     "drill_zone": [20, 140, 300, 60],
     "drill_button": [1240, 960, 620, 90],
     "drill_result_buttons": [600, 950, 720, 110],
+    "drill_dead_buttons": [1340, 980, 570, 90],
     "drill_result_zone": [760, 220, 400, 55],
     "fb_title": [20, 10, 320, 70],
     "fb_list": [20, 80, 230, 640],
