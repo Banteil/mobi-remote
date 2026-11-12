@@ -58,19 +58,35 @@ def _merged(base: dict, over: dict) -> dict:
     return out
 
 
+def _stamp(p) -> tuple | None:
+    try:
+        st = p.stat()
+    except OSError:
+        return None
+    return st.st_mtime_ns, st.st_size
+
+
 def load_config(paths: Paths) -> dict:
     """사용자 설정(config.toml — 기본값과 다른 값만, mabi.userconfig) 아래에 배포 기본값(config.default.toml)을 깐다.
-    옛 판처럼 통째로 복사해 둔 config.toml 이면 처음 한 번 '다른 값만' 으로 옮긴다."""
+    옛 판처럼 통째로 복사해 둔 config.toml 이면 처음 한 번 '다른 값만' 으로 옮긴다.
+    상단바·단축키 감시가 몇 초마다 부르므로 두 파일이 그대로면(수정 시각·크기) 지난번 읽은 것을 쓴다.
+    부르는 쪽이 고쳐도 다음 사람에게 새지 않게 늘 사본을 준다."""
+    import copy
     from . import userconfig
+    default = paths.resources / "config.default.toml"
+    key = (str(paths.config), _stamp(paths.config), _stamp(default))
+    hit = userconfig.loaded.get(key[0])
+    if hit and hit[0] == key:
+        return copy.deepcopy(hit[1])
     try:
         userconfig.migrate(paths, log)
     except Exception as e:  # noqa: BLE001 — 옮기지 못해도 읽기는 된다
         log.warning(f"설정 파일을 옮기지 못함 — 그대로 씀: {e}")
+    key = (key[0], _stamp(paths.config), key[2])  # 옮겼으면 파일이 바뀌었다
     user = tomllib.loads(paths.config.read_text(encoding="utf-8"))
-    default = paths.resources / "config.default.toml"
-    if not default.exists():
-        return user
-    return _merged(tomllib.loads(default.read_text(encoding="utf-8")), user)
+    cfg = _merged(tomllib.loads(default.read_text(encoding="utf-8")), user) if default.exists() else user
+    userconfig.loaded[key[0]] = (key, cfg)
+    return copy.deepcopy(cfg)
 
 
 def tasks_by_slot(cfg) -> dict[int, list[str]]:

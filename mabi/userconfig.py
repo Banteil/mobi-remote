@@ -47,6 +47,10 @@ def _overlay(base, over) -> None:
 # 읽기만 하는 곳(load_config)은 잡지 않는다. 저장은 부르는 쪽이 save 로 (검사에 걸리면 저장하지 않고 나가도록)
 LOCK = threading.RLock()
 
+# runner.load_config 가 읽어 둔 설정 {config.toml 경로: ((경로, 파일 표시들), 합친 dict)}. save 가 비운다
+# (파일 수정 시각이 같은 틱에 두 번 바뀌어도 옛 값을 주지 않게)
+loaded: dict = {}
+
 
 def silver_defaults(d) -> dict:
     """은동전 숙제 공통값 (캐릭터별로 따로 정하지 않은 캐릭터가 따르는 값). d 는 doc() 또는 load_config 결과."""
@@ -108,6 +112,7 @@ def save(paths: Paths, d) -> None:
     out.add(tomlkit.nl())
     _build(_diff(d, _default_doc(paths)), out)
     paths.config.write_text(tomlkit.dumps(out), encoding="utf-8")
+    loaded.clear()
 
 
 def migrate(paths: Paths, log=None) -> bool:

@@ -51,6 +51,7 @@ class CharsApi:
     _name_now: dict = {"name": "", "at": 0.0}
     _name_checked = 0.0  # 마지막으로 화면을 읽어 본 때 (겹쳐 부를 때 한 번만)
     _name_crop = None    # 마지막으로 OCR 한 이름 칸 그림 — 그대로면 다시 읽지 않는다
+    _name_vision = None  # 이름 칸 화면 확인에 쓰는 Vision (한 번 만들어 둔다)
 
     def chars_nameNow(self) -> dict:  # noqa: N802
         """지금 접속한 캐릭터 이름 {name, fresh}. CLI 에는 이름이 없어 메인 화면 왼쪽 위 이름을 OCR 로 읽는다.
@@ -66,12 +67,17 @@ class CharsApi:
             self._name_now = {"name": bot.character.get("name", ""), "at": _t.time()}
             return {"name": self._name_now["name"], "fresh": True}
         try:
+            cfg = load_config(self.paths)
+        except Exception as e:  # 이름 표시는 덤이다
+            log.debug(f"지금 캐릭터 이름: 설정 읽기 실패: {e}")
+            return {"name": self._name_now["name"], "fresh": _t.time() - self._name_now["at"] < 120}
+        try:
             from mabi import packet_monitor
-            if load_config(self.paths)["game"].get("packet_watch", True):
+            if cfg["game"].get("packet_watch", True):
                 pm = packet_monitor.shared(self.paths.logs)
                 if pm.at_charselect():  # 로그아웃 뒤 = 접속한 캐릭터 없음 (게임이 꺼졌는지는 아래 창 확인이 본다)
                     from mabi.window import GameWindow
-                    if GameWindow(load_config(self.paths)["game"]["window_title"]).find():
+                    if GameWindow(cfg["game"]["window_title"]).find():
                         self._name_now, self._name_crop = {"name": "", "at": 0.0}, None
                         return {"name": "", "fresh": False}
                 if pm.ok and pm.state.my_name and not pm.state.loading:
@@ -87,14 +93,13 @@ class CharsApi:
             from mabi.vision import Vision
             from mabi.window import GameWindow
             try:
-                cfg = load_config(self.paths)
                 w = GameWindow(cfg["game"]["window_title"])
                 if not w.find():
                     self._name_now = {"name": "", "at": 0.0}  # 게임이 꺼짐
                 else:
                     # 게임 창을 앞으로 가져오지 않고 그 창만 찍는다 → 리모콘을 보고 있어도 읽힌다 (예전엔 게임이 맨 앞일 때만)
                     frame = grab_window(w.hwnd)
-                    v = Vision(self.paths.templates)
+                    v = self._name_vision = self._name_vision or Vision(self.paths.templates)  # 템플릿을 매번 다시 읽지 않게
                     if frame is None:
                         pass
                     elif v.find(frame, cfg["ui"]["main_hud"]):
