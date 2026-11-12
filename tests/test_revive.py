@@ -4,7 +4,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from mabi.tasks import abyss
+from mabi.tasks import abyss, content
 
 
 class FakePackets:
@@ -65,7 +65,7 @@ class DeadThenClearTest(unittest.TestCase):
 
     def test_leave_after_result_does_not_leave(self):
         bot = mock.Mock()
-        with mock.patch.object(abyss, "after_clear", return_value=True),                 mock.patch.object(abyss, "inside", return_value=False):
+        with mock.patch.object(abyss, "at_reward", return_value=True),                 mock.patch.object(abyss, "inside", return_value=False):
             self.assertFalse(abyss.leave(bot))
         bot.key.assert_not_called()
         bot.click.assert_not_called()
@@ -79,7 +79,7 @@ class DeadThenClearTest(unittest.TestCase):
         bot.wait_packet.return_value = False
         bot.state.activity.return_value = {}
         seen = d.Seen(d.DEAD, src="packet", finish=Finish("dead"))
-        with mock.patch.object(abyss, "watch", return_value=seen),                 mock.patch.object(abyss, "inside", return_value=False),                 mock.patch.object(abyss, "after_clear", return_value=True):
+        with mock.patch.object(content, "watch", return_value=seen),                 mock.patch.object(abyss, "inside", return_value=False),                 mock.patch.object(abyss, "at_reward", return_value=True):
             self.assertEqual(abyss.play(bot, 60), "clear")
 
 
@@ -104,7 +104,7 @@ class ReviveTest(unittest.TestCase):
         """전멸 — '여기서 부활' 이 없고 '전멸하였습니다' 가 보이면 R 을 누르지 않고 바로 나간다 (2026-11-03 사용자)."""
         bot = FakeBot(FakePackets(used=0, mx=6))
         bot.vision = SimpleNamespace(find=lambda frame, name: False)
-        with mock.patch.object(abyss, "_find_text", return_value=(960, 221)):
+        with mock.patch.object(abyss.ui_text, "find", return_value=(960, 221)):
             self.assertFalse(run(bot))
         self.assertEqual(bot.keys, [])
 

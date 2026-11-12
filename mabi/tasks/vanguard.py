@@ -18,7 +18,7 @@ import time
 from .. import gamedata as gd, monitor
 from ..bot import Bot, StepTimeout
 from . import ui_text
-from .content import CannotProceed, after_clear, cleared_now, game_space, go_from_guide, growth_done, watch
+from .content import CannotProceed, after_clear, cleared_now, game_space, go_from_guide, growth_done, wait_arrival, watch
 
 GROWTH = "뱅가드 브리치"   # CLI 성장 가이드의 Target, 가이드 카드 제목
 SPACE = "뱅가드"           # 안일 때 CLI 장소 이름에 들어가는 글자
@@ -42,18 +42,9 @@ def travel(bot: Bot) -> None:
     """가이드 '바로 가기' 뒤 입구까지 (빠른 이동) → 입장 창이 뜰 때까지."""
     bot.step("vg_travel", "뱅가드 브리치 입구로 이동")
     bot.fast_travel(wait=6)
-    end = time.monotonic() + _cfg(bot).get("travel_timeout", 600)
-    tried = False
-    while time.monotonic() < end:
-        if bot.map_loading():
-            bot.wait_loaded(end - time.monotonic())
-            continue
-        if ui_text.find(bot, gd.text("vg_title"), gd.region("vg_title"), exact=False):
-            return
-        if not tried and bot.fast_travel():  # 늦게 시작한 자동 이동
-            tried = True
-        bot.sleep(1.5, 2)
-    raise CannotProceed(f"뱅가드 브리치 입구에 닿지 못함 (입장 창이 안 뜸) → {bot.snapshot('vg_travel').name}")
+    wait_arrival(bot, lambda: bool(ui_text.find(bot, gd.text("vg_title"), gd.region("vg_title"), exact=False)),
+                 _cfg(bot).get("travel_timeout", 600), "vg_travel", "뱅가드 브리치 입구에 닿지 못함 (입장 창이 안 뜸)",
+                 retry_fast=True, interval=(1.5, 2))
 
 
 def enter(bot: Bot) -> None:
@@ -140,16 +131,11 @@ def run(bot: Bot, cfg: dict) -> str:
         enter(bot)
     else:
         bot.log.info("이미 뱅가드 브리치 안 → 클리어까지")
-    try:
-        if _cfg(bot).get("background", True):
-            # 들어간 뒤로는 게임을 뒤로 보내고 하던 창을 돌려준다 (사용자 — 드릴·어비스와 같다). 키는 창에 직접 가고,
-            # 클릭(화면 터치 등)만 누를 때 잠깐 앞으로 가져왔다가 되돌린다
-            bot.background = True
-            bot.window.give_back(bot.user_window)
+    # 들어간 뒤로는 게임을 뒤로 보내고 하던 창을 돌려준다 (사용자 — 드릴·어비스와 같다). 키는 창에 직접 가고,
+    # 클릭(화면 터치 등)만 누를 때 잠깐 앞으로 가져왔다가 되돌린다
+    with bot.behind_while(_cfg(bot).get("background", True)):
         play(bot)
         quest_clear(bot)
-    finally:
-        bot.background = False
     if done(bot) is False:
         raise CannotProceed("뱅가드 브리치를 클리어했는데 성장 가이드가 안 끝남")
     return "클리어"

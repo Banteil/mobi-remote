@@ -106,3 +106,42 @@ class HousingPlaceTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ContentExitTest(unittest.TestCase):
+    """드릴(결과 창 ESC)·필드 보스(영역 나가기 창) — 같은 틀의 하위 클래스."""
+
+    def run_exit(self, mod, inside_seq, fn, **patches):
+        b = make_bot()
+        b.packets.ok = True
+        seq = iter(inside_seq)
+        with mock.patch.object(mod, "inside", lambda bot: next(seq, False)),                 mock.patch.object(mod.ui_text, "wait", **patches):
+            fn(b)
+        return b
+
+    def test_drill_esc_on_result(self):
+        from mabi.tasks import drill
+        b = self.run_exit(drill, [True], lambda b: self.assertTrue(drill.DrillExit().run(b)), return_value=(700, 990))
+        b.key.assert_called_once_with("esc")
+        b.click.assert_not_called()
+
+    def test_drill_esc_ignored_clicks_exit(self):
+        from mabi.tasks import drill
+
+        def go(b):
+            b.wait_packet.side_effect = [False, True]  # ESC 뒤 로딩 없음 → 버튼 → 로딩
+            drill.DrillExit().run(b)
+        b = self.run_exit(drill, [True], go, return_value=(700, 990))
+        b.click.assert_called_once_with((700, 990))
+
+    def test_field_boss_outside_presses_nothing(self):
+        from mabi.tasks import field_boss
+        b = self.run_exit(field_boss, [False], field_boss.leave, return_value=None)
+        b.click.assert_not_called()
+        b.key.assert_not_called()
+
+    def test_field_boss_clicks_exit_then_space(self):
+        from mabi.tasks import field_boss
+        b = self.run_exit(field_boss, [True], field_boss.leave, side_effect=[None, (960, 500)])
+        b.click.assert_called_once()
+        b.key.assert_called_once_with("space")

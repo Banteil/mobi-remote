@@ -18,10 +18,11 @@ import datetime as dt
 import time
 
 from .. import gamedata as gd, monitor
-from ..bot import Bot
+from ..bot import Bot, StepTimeout
 from . import ui_text
-from .boss_skills import BossSkills, slot_of
-from .content import CannotProceed, confirm_text, growth_done, watch
+from .boss_skills import BossSkills
+from .content import CannotProceed, confirm_text, growth_done, wait_arrival, watch
+from .exits import Exit
 
 MAP = "FieldBoss"
 HOURS = (12, 18, 20, 22)   # 출현 시간 (시)
@@ -89,14 +90,7 @@ def _texts(bot: Bot, key: str) -> str:
 
 def open_window(bot: Bot, boss: str, difficulty: str) -> None:
     """메뉴(ESC) → 필드 보스 창 → 보스 · 난이도를 고른다."""
-    for _ in range(3):
-        bot.to_main()
-        bot.key("esc")
-        bot.sleep(1.5, 1.8)
-        if ui_text.find(bot, gd.text("fb_menu"), gd.region("menu_right")):
-            break
-        bot.clear_blockers(ocr=True)
-    ui_text.click(bot, gd.text("fb_menu"), gd.region("menu_right"), what="메뉴의 필드 보스", shot="field_boss")
+    ui_text.open_menu(bot, "fb_menu", "메뉴의 필드 보스", "field_boss")
     if not ui_text.wait(bot, gd.text("fb_title"), gd.region("fb_title"), timeout=8):
         raise CannotProceed(f"필드 보스 창이 열리지 않음 → {bot.snapshot('field_boss').name}")
     bot.sleep(0.8, 1.2)
@@ -116,15 +110,9 @@ def travel(bot: Bot, boss: str) -> None:
     if ui_text.wait(bot, gd.text("fb_move_confirm"), gd.region("fb_dialog"), timeout=5, exact=False):
         bot.key("space")  # '이동하시겠습니까' 이동하기
     bot.fast_travel(wait=6)
-    end = time.monotonic() + bot.cfg.get("field_boss", {}).get("travel_timeout", 300)
-    tried = False
-    while time.monotonic() < end:
-        if ui_text.find(bot, gd.text("fb_enter"), gd.region("fb_dialog"), exact=False):
-            return
-        if not tried and bot.fast_travel():  # 늦게 시작한 자동 이동
-            tried = True
-        bot.sleep(1.0, 1.4)
-    raise CannotProceed(f"'{boss}' 지역에 닿지 못함 (입장 창이 안 뜸) → {bot.snapshot('fb_travel').name}")
+    wait_arrival(bot, lambda: bool(ui_text.find(bot, gd.text("fb_enter"), gd.region("fb_dialog"), exact=False)),
+                 bot.cfg.get("field_boss", {}).get("travel_timeout", 300), "fb_travel",
+                 f"'{boss}' 지역에 닿지 못함 (입장 창이 안 뜸)", retry_fast=True, interval=(1.0, 1.4))
 
 
 def enter(bot: Bot) -> None:
@@ -157,23 +145,22 @@ def enter(bot: Bot) -> None:
 def fight(bot: Bot) -> bool:
     """결과 창까지 기다려 확인(Space). 보상을 받았으면 True, '참여하지 않아 보상 없음' 이면 False."""
     bot.step("fb_fight", "보스와 전투 중")
-    name = bot.packets.state.my_name if bot.packets.ok else ""
-    skills = BossSkills.for_character(bot, bot.cfg, slot_of(bot, bot.character, name or ""),
-                                      lambda s: s.channel_type == MAP)
+    skills = BossSkills.for_current(bot, bot.character, lambda s: s.channel_type == MAP)
     ctx = monitor.Ctx("field_boss", "필드 보스 전투", revive=True)
     end = time.monotonic() + bot.cfg.get("field_boss", {}).get("fight_timeout", 900)
     asked = time.monotonic()
     while time.monotonic() < end:
+        result = confirm_text(bot.frame())  # 결과 창 '처치 완료' (아래 가운데 '확인') — 한 바퀴에 한 번 읽는다
         # 결과 창을 놓쳤어도(점검자가 먼저 닫음 등) 잡았으면 끝 — 성장 가이드로 가끔 본다
         if time.monotonic() - asked > 15:
             asked = time.monotonic()
             if done(bot):
                 bot.log.info("필드 보스 처치 완료 (성장 가이드)")
-                if confirm_text(bot.frame()):
+                if result:
                     bot.key("space")  # 결과 창이 떠 있으면 닫고 나간다
                     bot.sleep(1.2, 1.6)
                 return True
-        if confirm_text(bot.frame()):  # 결과 창 '처치 완료' (아래 가운데 '확인')
+        if result:
             bot.sleep(1.0, 1.5)  # 보상이 그려지는 동안
             got = gd.text("fb_noreward") not in _texts(bot, "fb_noreward")
             if got and done(bot) is False:  # '확인' 은 있는데 아직 안 잡음 — 퀘스트 완료 같은 다른 창 → 넘기고 계속
@@ -196,28 +183,37 @@ def fight(bot: Bot) -> bool:
                         f"→ {bot.snapshot('fb_fight').name}")
 
 
-def leave(bot: Bot) -> None:
-    """보스 영역 안이면 오른쪽 위 나가기 → '영역에서 나가시겠습니까' 나가기(Space). 영역 밖이면 아무것도 누르지 않는다
-    (밖에서 그 자리를 누르면 다른 창이 열린다)."""
-    for _ in range(3):
-        if bot.packets.ok and not inside(bot):
-            break
+class FieldBossExit(Exit):
+    """보스 영역에서 나간다: 오른쪽 위 나가기 (던전과 다른 자리 — fb_exit_button) → '영역에서 나가시겠습니까' 나가기(Space).
+    영역 밖이면 아무것도 누르지 않는다 (밖에서 그 자리를 누르면 다른 창이 열린다). 패킷이 없으면 안으로 보고 누른다."""
+    NAME, SNAP = "보스 영역", "fb_leave"
+    TIMEOUT = 15  # 나가기 창을 띄우는 데 쓰는 시간 — 예전처럼 몇 번(누르기 + 3초)만 해 보고 그만둔다
+
+    def inside(self, bot):
+        return not bot.packets.ok or inside(bot)
+
+    def gone(self, bot):
+        return not inside(bot)
+
+    def dialog(self, bot, timeout):
+        return ui_text.wait(bot, gd.text("fb_exit"), gd.region("fb_dialog"), timeout=max(0.0, timeout), exact=False)
+
+    def open_dialog(self, bot):
         x, y, w, h = gd.region("fb_exit_button")
         bot.click((x + w // 2, y + h // 2))
-        if ui_text.wait(bot, gd.text("fb_exit"), gd.region("fb_dialog"), timeout=3, exact=False):
-            bot.key("space")
-            bot.log.info("보스 영역 나가기")
-            break
-    else:
-        bot.log.warning(f"보스 영역 나가기 창이 안 뜸 → {bot.snapshot('fb_leave').name}")
-    end = time.monotonic() + bot.cfg["timing"]["loading"]
-    while time.monotonic() < end:
-        if bot.map_loading():
-            bot.wait_loaded(end - time.monotonic())
-            continue
-        if not inside(bot) and bot.at_main():
-            return
-        bot.sleep(1.0, 1.4)
+        return self.dialog(bot, 3)
+
+    def confirm(self, bot, hit):  # 찾은 글자는 창의 문구라 누를 자리가 아니다 — Space 만
+        bot.key("space")
+        bot.log.info("보스 영역 나가기")
+
+
+def leave(bot: Bot) -> None:
+    """보스 영역 안이면 나간다 (FieldBossExit). 못 나가도 멈추지 않고 남긴다 — 영역은 퇴장 시간(4분)이 지나면 저절로 나가진다."""
+    try:
+        FieldBossExit().run(bot)
+    except StepTimeout as e:
+        bot.log.warning(f"보스 영역 나가기: {e}")
 
 
 def run(bot: Bot, cfg: dict) -> str:

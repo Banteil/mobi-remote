@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from .. import gamedata as gd
 from ..bot import Bot
 from ..ocr import find_texts, nospace
+from ..vision import green_ratio
 from . import ui_text
 from .content import CannotProceed
 
@@ -44,8 +45,7 @@ def parse(frame) -> Entry | None:
 def _switch_on(frame, label: tuple[int, int]) -> bool:
     """스위치가 켜져 있나 (켜지면 초록)."""
     x, y = label[0] + SWITCH_DX, label[1]
-    patch = frame[y - 6:y + 6, x - 20:x + 20].reshape(-1, 3).astype(int)
-    return bool(((patch[:, 1] > 150) & (patch[:, 2] < 120) & (patch[:, 0] < 150)).mean() > 0.2)
+    return green_ratio(frame[y - 6:y + 6, x - 20:x + 20], g_min=150, b_max=150) > 0.2  # 스위치 자리에서 잰 기준
 
 
 def read(bot: Bot) -> Entry | None:
@@ -75,6 +75,32 @@ def chance(bot: Bot) -> tuple[bool, tuple[int, int]] | None:
     """'우연한 만남' 스위치 (켜짐, 자리). 함께하기 탭 입장 창이 아니면 None."""
     e = read(bot)
     return e.chance if e else None
+
+
+def wait_button(bot: Bot, read=None, tries: int = 5) -> str:
+    """오른쪽 아래 버튼이 그려질 때까지 몇 번 본다 → 버튼 이름, 끝내 없으면 ''. read: 버튼 읽기 (기본은 이 입장 창의
+    button — 나이트메어 드릴 창처럼 버튼 자리만 다른 창은 그 읽기를 넘긴다)."""
+    read = read or button
+    for _ in range(tries):
+        if (got := read(bot)):
+            return got
+        bot.sleep(1.0, 1.4)
+    return ""
+
+
+def ensure_chance(bot: Bot, shot: str, now: Entry | None = None) -> None:
+    """함께하기 탭 '우연한 만남' 스위치를 켠다 (어비스·레이드 입장 창이 같은 자리·모양). 못 찾거나 안 켜지면 CannotProceed.
+    now: 방금 읽은 입장 창 (버튼까지 그려진 것 — 스위치도 같이 그려져 있다). 있으면 화면을 다시 읽지 않는다."""
+    on = now.chance if now else chance(bot)
+    if on is None:
+        raise CannotProceed(f"'우연한 만남' 을 찾지 못함 → {bot.snapshot(shot).name}")
+    if not on[0]:
+        bot.click(on[1])
+        bot.sleep(1.0, 1.3)
+        on = chance(bot)
+        if not on or not on[0]:
+            raise CannotProceed(f"'우연한 만남' 을 켜지 못함 → {bot.snapshot(shot).name}")
+        bot.log.info("우연한 만남 켬")
 
 
 def _settled(bot: Bot, timeout: float = 3) -> Entry | None:

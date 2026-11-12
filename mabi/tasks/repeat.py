@@ -11,7 +11,7 @@ import time
 from .. import cutpoint
 from ..bot import Bot
 from . import login, repair
-from .boss_skills import BossSkills, slot_of
+from .boss_skills import BossSkills
 from .login import current_name, name_matches
 
 
@@ -68,8 +68,7 @@ class Repeat:
     def to_back(self) -> None:
         """뒤에서 도는 설정이면 게임을 뒤로 보내고 하던 창을 돌려준다."""
         if self.behind:
-            self.bot.background = True
-            self.bot.window.give_back(self.user_window)
+            self.bot.to_back(self.user_window)
 
     def play_round(self, play, step: str) -> str:
         """판 하나 (종류별 play). 부활하면 같은 판으로 센다."""
@@ -162,7 +161,7 @@ class Repeat:
             at = self.where()
         self.bot.watch_weight = True  # 가방이 꽉 차면 보상을 못 받는다 → Overweight 로 멈춤 (일일 숙제와 같게, 접속 뒤부터)
         name = (self.character or {}).get("name") or current_name(self.bot) or ""
-        self.skills = BossSkills.for_character(self.bot, self.cfg, slot_of(self.bot, self.character, name), self.boss_fight)
+        self.skills = BossSkills.for_current(self.bot, self.character, self.boss_fight, name, self.cfg)
         if self.skills.enabled:
             self.bot.log.info(f"보스전에서 쓸 것: {self.skills.describe()}")
         if self.loot:  # 이 캐릭터로 접속을 마침 — 여기서부터 얻은 것을 잰다 (queue_report.LootMeter, 닫기는 부른 쪽)

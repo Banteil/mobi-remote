@@ -140,3 +140,19 @@ class Vision:
             if all(abs(x - (p.x - ox)) > tw // 2 or abs(y - (p.y - oy)) > th // 2 for p in picked):
                 picked.append(Match(name, ox + int(x), oy + int(y), tw, th, float(score)))
         return sorted(picked, key=lambda m: (m.y, m.x))
+
+
+# ---- 색 판정 (초록 체크·켜진 스위치)
+
+def green(patch, g_min: int = 120, r_max: int = 120, b_max: int = 160) -> np.ndarray:
+    """patch(BGR 화면 조각) 화소마다 초록인가. 기본 기준(G>120 · R<120 · B<160)은 콘텐츠 가이드 일일·주간 달성의 초록 체크.
+    기준값은 자리마다 그 자리에서 재서 맞춘 값이라 인자로 남긴다 — '우연한 만남' 스위치는 G>150 · B<150 (tasks/entry).
+    하나로 맞추려면 두 자리를 다시 재야 한다."""
+    p = np.asarray(patch).reshape(-1, 3).astype(int)
+    return (p[:, 1] > g_min) & (p[:, 2] < r_max) & (p[:, 0] < b_max)
+
+
+def green_ratio(patch, **kw) -> float:
+    """patch 중 초록 화소 비율 (0~1, 빈 조각은 0). 기준값은 green 과 같다."""
+    m = green(patch, **kw)
+    return float(m.mean()) if m.size else 0.0

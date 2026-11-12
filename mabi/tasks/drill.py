@@ -19,12 +19,13 @@
 import re
 import time
 
-from .. import gamedata as gd, monitor
+from .. import gamedata as gd
 from ..bot import Bot, StepTimeout
 from ..ocr import find_texts, nospace, read_text
-from . import ui_text
-from .boss_skills import BossSkills, slot_of
-from .content import CannotProceed, watch
+from . import entry, ui_text
+from .boss_skills import BossSkills
+from .content import CannotProceed, Fight, wait_arrival
+from .exits import Exit
 
 GOAL = 20
 MAP = "InstanceBreakthroughDungeon"
@@ -69,14 +70,7 @@ def result_buttons(bot: Bot) -> set[str]:
 
 def open_window(bot: Bot) -> int | None:
     """메뉴(ESC) → 나이트메어 드릴 창. 창 왼쪽 위의 다음 도전 구역을 돌려준다 (못 읽으면 None)."""
-    for _ in range(3):
-        bot.to_main()
-        bot.key("esc")
-        bot.sleep(1.5, 1.8)
-        if ui_text.find(bot, gd.text("drill_menu"), gd.region("menu_right")):
-            break
-        bot.clear_blockers(ocr=True)
-    ui_text.click(bot, gd.text("drill_menu"), gd.region("menu_right"), what="메뉴의 나이트메어 드릴", shot="drill")
+    ui_text.open_menu(bot, "drill_menu", "메뉴의 나이트메어 드릴", "drill")
     if not ui_text.wait(bot, gd.text("drill_title"), gd.region("drill_title"), timeout=8):
         raise CannotProceed(f"나이트메어 드릴 창이 열리지 않음 → {bot.snapshot('drill').name}")
     bot.sleep(0.8, 1.2)
@@ -95,33 +89,18 @@ def _button(bot: Bot) -> str:
 
 def _travel(bot: Bot) -> bool:
     """'이동하기' 로 입구까지 가는 동안. 도착해 드릴 창이 다시 뜨면 True, 창 없이 멈췄으면 False (raid._travel_to_dock 과 같음)."""
-    end = time.monotonic() + bot.cfg.get("drill", {}).get("travel_timeout", 600)
-    still = 0
-    while time.monotonic() < end:
-        if bot.map_loading():
-            bot.wait_loaded(end - time.monotonic())
-            continue
-        if ui_text.find(bot, gd.text("drill_title"), gd.region("drill_title")):
-            bot.log.info("드릴 입구 도착 → 드릴 창")
-            return True
-        if bot.at_main() and not bot.auto_traveling():
-            still += 1
-            if still >= 3:
-                return False
-        else:
-            still = 0
-        bot.sleep(2, 2.5)
-    raise CannotProceed(f"나이트메어 드릴 입구로 가지 못함 → {bot.snapshot('drill_travel').name}")
+    if wait_arrival(bot, lambda: bool(ui_text.find(bot, gd.text("drill_title"), gd.region("drill_title"))),
+                    bot.cfg.get("drill", {}).get("travel_timeout", 600), "drill_travel", "나이트메어 드릴 입구로 가지 못함",
+                    still=3):
+        bot.log.info("드릴 입구 도착 → 드릴 창")
+        return True
+    return False
 
 
 def enter(bot: Bot) -> None:
     """드릴 창이 열린 상태에서 입장 — 멀면 이동하기로 입구까지 가서 다시 연 창에서 입장하기."""
     for _ in range(3):
-        button = ""
-        for _ in range(5):
-            if (button := _button(bot)):
-                break
-            bot.sleep(1.0, 1.4)
+        button = entry.wait_button(bot, _button)
         if not button:
             raise CannotProceed(f"드릴 창에 입장하기·이동하기가 없음 → {bot.snapshot('drill').name}")
         bot.key("space")
@@ -165,69 +144,81 @@ def skip_cutscene(bot: Bot) -> None:
 
 # ---- 구역 진행
 
-def skills_for(bot: Bot) -> BossSkills:
-    """지금 캐릭터의 궁극기·팔라딘 설정. 드릴 안 전체를 보스전으로 친다."""
-    name = bot.packets.state.my_name if bot.packets.ok else ""
-    return BossSkills.for_character(bot, bot.cfg, slot_of(bot, bot.character, name or ""),
-                                    lambda s: s.channel_type == MAP)
-
-
 def wait_zone(bot: Bot, skills: BossSkills | None = None) -> int:
     """한 구역이 끝날 때까지 — 결과 창이 뜨면 깬 구역 번호, 못 깨고 끝났으면 0.
-    패킷이 있으면 결과 패킷을 기다리고 결과 창 글자는 결과가 왔거나 제한 시간이 지났을 때만 본다 (못 깬 결과는 패킷을 모른다)."""
-    ctx = monitor.Ctx("drill", "나이트메어 드릴 진행", revive=True)
-    start = time.monotonic()
-    while True:
-        if bot.wait_packet(lambda s: bool(s.drill_result), 3) is None:
-            bot.sleep(2)
+    패킷이 있으면 결과 패킷을 기다리고 결과 창 글자는 결과가 왔거나 제한 시간이 지났을 때만 본다 (못 깬 결과는 패킷을 모른다).
+    뼈대는 content.Fight (구역 제한 + 90초를 넘기면 StepTimeout)."""
+    return ZoneFight(bot, skills).run()
+
+
+class ZoneFight(Fight):
+    KIND, WHAT = "drill", "나이트메어 드릴 진행"
+    IDLE = 2.0
+
+    def __init__(self, bot: Bot, skills: BossSkills | None):
+        super().__init__(bot, ZONE_LIMIT + 90, revive=True)
+        self.skills = skills
+
+    def wake(self, s):
+        return bool(s.drill_result)
+
+    def packet_end(self):
+        bot = self.bot
         zone = bot.packets.state.drill_result if bot.packets.ok else 0
-        look = zone or not bot.packets.ok or time.monotonic() - start > ZONE_LIMIT
+        look = zone or not bot.packets.ok or time.monotonic() - self.start > ZONE_LIMIT
         buttons = result_buttons(bot) if look else set()
         if buttons:
             if nospace(gd.text("drill_next")) in buttons or zone:
                 return zone or read_zone(bot, "drill_result_zone") or -1
             return 0  # 다음으로가 없는 결과 — 못 깸
-        act = bot.activity() or {}
-        if skills:
-            skills.tick(act)
-        seen = watch(bot, ctx, act)
-        if seen.finish and seen.finish.result == "dead":
-            bot.log.warning(f"드릴에서 쓰러짐 → {bot.snapshot('drill_dead').name}")
-        if not seen.done:
-            bot.eat_if_hungry()
-        if time.monotonic() - start > ZONE_LIMIT + 90:
-            raise StepTimeout(f"드릴 구역이 {ZONE_LIMIT + 90}초 안에 끝나지 않음 → {bot.snapshot('drill_zone').name}")
+
+    def before_watch(self, act):  # 드릴은 보스가 따로 없어 안 전체가 보스전 — 점검자보다 먼저, 처리한 게 있어도 쓴다
+        if self.skills:
+            self.skills.tick(act)
+
+    def dead_end(self, seen):
+        self.bot.log.warning(f"드릴에서 쓰러짐 → {self.bot.snapshot('drill_dead').name}")
+
+    def timed_out(self):
+        raise StepTimeout(f"드릴 구역이 {ZONE_LIMIT + 90}초 안에 끝나지 않음 → {self.bot.snapshot('drill_zone').name}")
+
+
+class DrillExit(Exit):
+    """구역 결과 창에서 나간다: 결과 창 '나가기'(ESC) — 따로 확인 창이 없다. ESC 가 안 들고 창이 남으면 '나가기' 버튼을 누른다.
+    결과 창(의 '나가기' 버튼)을 확인 창 자리에 둔다. 안인지는 패킷 맵으로 — 모르면 안으로 보고 누르고, 다 나왔는지는 메인 화면으로."""
+    NAME, SNAP = "나이트메어 드릴", "drill_leave"
+
+    def inside(self, bot):
+        return not bot.packets.ok or inside(bot)
+
+    def gone(self, bot):
+        return not inside(bot)
+
+    def dialog(self, bot, timeout):
+        return ui_text.wait(bot, gd.text("drill_exit"), gd.region("drill_result_buttons"), timeout=max(0.0, timeout))
+
+    def open_dialog(self, bot):  # 결과 창 버튼을 못 읽었어도 ESC 는 결과 창의 나가기다
+        bot.key("esc")
+        bot.wait_packet(lambda s: s.loading, 10, since=bot.input_mark)
+        return None
+
+    def confirm(self, bot, hit):
+        bot.key("esc")
+        if bot.wait_packet(lambda s: s.loading, 10, since=bot.input_mark) is False and (again := self.dialog(bot, 0)):
+            bot.log.info("ESC 가 안 들음 → 나가기 버튼을 누름")
+            bot.click(again)
 
 
 def leave(bot: Bot) -> None:
-    """결과 창에서 나가기(ESC) → 드릴 밖 필드 메인 화면까지."""
-    for _ in range(3):
-        bot.key("esc")
-        if bot.wait_packet(lambda s: s.loading, 10, since=bot.input_mark) is not False or not result_buttons(bot):
-            break
-        bot.log.info("ESC 가 안 들음 → 나가기 버튼을 누름")
-        if hit := ui_text.find(bot, gd.text("drill_exit"), gd.region("drill_result_buttons")):
-            bot.click(hit)
-            break
-    end = time.monotonic() + bot.cfg["timing"]["loading"]
-    while time.monotonic() < end:
-        if bot.map_loading():
-            bot.wait_loaded(end - time.monotonic())
-            continue
-        if not inside(bot) and bot.at_main():
-            return
-        bot.sleep(1.5, 2)
-    raise StepTimeout(f"드릴에서 나온 뒤 메인 화면이 나오지 않음 → {bot.snapshot('drill_leave').name}")
+    """결과 창에서 나가기(ESC) → 드릴 밖 필드 메인 화면까지 (DrillExit)."""
+    DrillExit().run(bot)
 
 
 def play(bot: Bot) -> str:
     """드릴 안에서 20구역까지 — 구역마다 결과 창의 다음으로(Space), 20구역(또는 그 위)이면 나가기."""
-    if bot.cfg.get("drill", {}).get("background", True):
-        # 들어온 뒤로는 게임을 뒤로 보내고 하던 창을 돌려준다 (사용자 — 어비스 반복과 같다). 키는 창에 직접 간다
-        bot.background = True
-        bot.window.give_back(bot.user_window)
     cleared = []
-    skills = skills_for(bot)
+    # 드릴 안 전체를 보스전으로 친다
+    skills = BossSkills.for_current(bot, bot.character, lambda s: s.channel_type == MAP)
     if skills.enabled:
         bot.log.info(f"드릴에서 쓸 것: {skills.describe()}")
     while True:
@@ -273,10 +264,9 @@ def run(bot: Bot, cfg: dict) -> str:
 
 
 def _play_behind(bot: Bot) -> str:
-    try:
+    # 들어온 뒤로는 게임을 뒤로 보내고 하던 창을 돌려준다 (사용자 — 어비스 반복과 같다). 키는 창에 직접 간다
+    with bot.behind_while(bot.cfg.get("drill", {}).get("background", True)):
         return play(bot)
-    finally:
-        bot.background = False
 
 
 def verify(bot: Bot, cfg: dict) -> bool:

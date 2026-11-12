@@ -49,7 +49,7 @@ class AbyssPhaseTest(unittest.TestCase):
         bot = make_bot(in_abyss(), seen={"reward_exit"})
         self.assertEqual(abyss.phase(bot), "reward")
         self.assertFalse(abyss.inside(bot))
-        self.assertTrue(abyss.after_clear(bot))
+        self.assertTrue(abyss.at_reward(bot))
         bot.log.info.assert_called()  # 패킷 맵(판 안)과 어긋났다고 남긴다
 
     def test_play_when_nothing_else(self):
