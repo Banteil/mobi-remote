@@ -3,9 +3,11 @@
 - ui.json: 게임 화면에서 글자로 찾는 문구(text)와 글자를 읽을 영역(regions)
 - game-rules.json: 재화 이름·날개 비용·직업 목록 같은 게임 쪽 사실 (가공 시설 칸 수는 craft.gamerules 가 따로 읽는다)
 - labels.json: 상태·출처 같은 표시 문구. 웹 화면도 같은 파일을 받아 쓴다 (api.labels)
+- content.json: 필드 보스·레이드·어비스 목록과 주간 일정 (게임 데이터에서 뽑음 — 저장소 밖 도구 mabi-content-research)
 
 데이터 폴더(paths.data)\\data 에 같은 이름의 파일이 있으면 그쪽이 우선 — 게임이 패치됐을 때 새 판을 기다리지 않고 고칠 수 있게.
 """
+import datetime as dt
 import json
 from functools import cache
 from pathlib import Path
@@ -74,3 +76,63 @@ def currency(key: str) -> str:
 
 def labels() -> dict:
     return _load("labels.json")
+
+
+# ---- content.json: 게임 데이터에서 뽑은 필드 보스·레이드·어비스 목록과 일정
+# 일정 표는 몇 달 치가 들어 있어 이번 주가 무엇인지는 부를 때 계산한다.
+# 표가 끝나도(다음 패치 전까지 다시 뽑지 않았을 때) 마지막으로 시작한 칸을 그대로 쓴다.
+
+_TZ = {"KST": dt.timezone(dt.timedelta(hours=9)), "UTC": dt.timezone.utc}
+
+
+def _when(s: str, tz: str) -> dt.datetime | None:
+    return dt.datetime.strptime(s, "%Y-%m-%d %H:%M:%S").replace(tzinfo=_TZ[tz]) if s else None
+
+
+def _this_week(rows: list[dict], now: dt.datetime | None) -> list[dict]:
+    """일정 표에서 지금 걸리는 칸들. 없으면 지금보다 먼저 시작한 마지막 칸 하나."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=_TZ["KST"])
+    started = [r for r in rows if (_when(r["start"], r["tz"]) or now) <= now]
+    hit = [r for r in started if (_when(r["end"], r["tz"]) or now + dt.timedelta(seconds=1)) > now]
+    if hit:
+        return hit
+    return [max(started, key=lambda r: _when(r["start"], r["tz"]))] if started else []
+
+
+def content() -> dict:
+    return _load("content.json")
+
+
+def field_bosses() -> dict[str, list[str]]:
+    """필드 보스 → 고를 수 있는 난이도 (창 왼쪽 목록 순서)."""
+    return {b["name"]: list(b["difficulties"]) for b in content()["fieldBoss"]["bosses"]}
+
+
+def field_boss_hours() -> tuple[tuple[int, ...], int]:
+    """(출현 시각들 (KST 시), 열려 있는 시간 (분))."""
+    fb = content()["fieldBoss"]
+    return tuple(fb["hours"]), int(fb["openMinutes"])
+
+
+def raids(now: dt.datetime | None = None) -> dict[str, list[str]]:
+    """이번 주 레이드 → 열린 난이도 (그 레이드 난이도 중 이번 주 최고 난이도까지)."""
+    c = content()["raid"]
+    out: dict[str, list[str]] = {}
+    for row in _this_week(c["schedule"], now):
+        for name, top in row["raids"]:
+            full = c["raids"][name]
+            out[name] = full[:full.index(top) + 1]
+    return out
+
+
+def abysses(now: dt.datetime | None = None, mode: str = "solo") -> dict[str, list[str]]:
+    """이번 주 어비스 던전 → 그 방식(solo 혼자하기 · party 함께하기)으로 열린 난이도."""
+    c = content()["abyss"]
+    out: dict[str, list[str]] = {}
+    for row in _this_week(c["schedule"], now):
+        for name, opened in row["dungeons"]:
+            opened = set(opened.split(","))
+            out[name] = [x["name"] for x in c["dungeons"][name]["difficulties"] if x[mode] and x["raw"] in opened]
+    return out
