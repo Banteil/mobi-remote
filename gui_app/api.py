@@ -166,8 +166,7 @@ class Api(DailyApi, CharsApi, QueueApi):
             self.qov.close()
         if self._daily_runner:
             self._daily_runner.stop()
-        if self._scan_bot:
-            self._scan_bot.stopper.request()
+        self._bot_stop("scan")
         self.cli.cancel()
 
     def _emit(self, channel: str, payload=None) -> None:

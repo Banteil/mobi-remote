@@ -29,14 +29,14 @@ class AbyssKindLootTest(unittest.TestCase):
         api = mock.MagicMock()
         api._q_fit.return_value = False
         api._busy_reason.return_value = None
-        api._abyss_result = {"type": "done"}
+        api._rep.return_value.result = {"type": "done"}
 
-        def launch(v, on_event):
+        def launch(kind, v, on_event):
             on_event({"type": "loot", "who": "B", "gained": {"석탄": 2}, "used": {}, "cur": {}})
             t = threading.Thread(target=lambda: None)
             t.start()
             return t
-        api._abyss_launch.side_effect = launch
+        api._repeat_launch.side_effect = launch
         self.assertTrue(AbyssKind.own_loot)  # 큐가 카드 앞뒤로 재지 않는다
         self.assertTrue(AbyssKind(api).run(q, {"id": 1, "runs": 1, "slot": 2, "dungeon": "d", "difficulty": "x"}))
         q.report.add_loot.assert_called_once()

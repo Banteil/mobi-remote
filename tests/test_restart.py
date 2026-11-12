@@ -275,7 +275,7 @@ class KindTest(unittest.TestCase):
     def test_force_only_once(self):
         # 명령 카드(force)는 한 번만 끈다 — 켜다 실패해 사람이 게임을 켜고 ▶ 면 다시 끄지 않고 접속만 확인
         from gui_app.queue_api import RestartKind
-        api = mock.Mock()
+        api = mock.MagicMock()  # _game_bot 은 with 로 쓴다
         api._busy_reason.return_value = None
         it = {"id": 1, "kind": "restart", "force": True}
         q = mock.Mock()
@@ -286,7 +286,7 @@ class KindTest(unittest.TestCase):
             forced.append(force)
             keep({"slot": 1, "name": "하나"})
             return "ok"
-        with mock.patch("gui_app.queue_api.load_config", return_value={}), mock.patch("mabi.bot.Bot"), \
+        with mock.patch("gui_app.queue_api.load_config", return_value={}), \
                 mock.patch.object(restart, "run", side_effect=run):
             self.assertTrue(RestartKind(api).run(q, it))
             self.assertTrue(RestartKind(api).run(q, it))

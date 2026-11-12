@@ -31,10 +31,10 @@ FLOORS = {int(k): v for k, v in gd.labels()["floors"].items()}
 
 
 class CharsApi:
-    """self.paths, self.qc(QueryCache), self._emit, self._on_gui, self.win, self._doc() 가 있는 클래스에 섞는다."""
+    """self.paths, self.qc(QueryCache), self._emit, self._on_gui, self.win, self._doc(), DailyApi 의 _game_bot·_bot_stop·
+    _busy_reason 이 있는 클래스에 섞는다."""
 
     _scan_thread: threading.Thread | None = None
-    _scan_bot = None
 
     # ---- 경로 ----
     def _portrait(self, slot: int, scan: bool = False) -> Path:
@@ -293,17 +293,16 @@ class CharsApi:
             return {"error": "작업 큐가 도는 중입니다"}
 
         def work():
-            from mabi.bot import Bot
             from mabi.tasks import charscan
             try:
                 cfg = load_config(self.paths)
-                bot = self._scan_bot = Bot(cfg, self.paths, force_exit=False)
-                if not bot.window.find():
-                    raise RuntimeError("게임이 꺼져 있습니다. 게임을 켠 뒤 다시 눌러 주세요")
-                bot.window.focus()
-                bot.sleep(0.5)
-                self._emit("mm:chars-scan", {"stage": "캐릭터 선택 화면으로 나가는 중"})
-                r = charscan.scan(bot, cfg)  # 캐릭터 선택 화면에 머문다 (다시 접속하지 않음)
+                with self._game_bot("scan", cfg) as bot:
+                    if not bot.window.find():
+                        raise RuntimeError("게임이 꺼져 있습니다. 게임을 켠 뒤 다시 눌러 주세요")
+                    bot.window.focus()
+                    bot.sleep(0.5)
+                    self._emit("mm:chars-scan", {"stage": "캐릭터 선택 화면으로 나가는 중"})
+                    r = charscan.scan(bot, cfg)  # 캐릭터 선택 화면에 머문다 (다시 접속하지 않음)
                 shutil.rmtree(self.paths.data / "portraits" / "scan", ignore_errors=True)
                 for c in r["cards"]:
                     charscan.save_portrait(c["portrait"], self._portrait(c["slot"], scan=True))
@@ -315,20 +314,12 @@ class CharsApi:
             except Exception as e:
                 log.exception("캐릭터 자동 설정 실패")
                 self._emit("mm:chars-scan", {"error": str(e) if isinstance(e, RuntimeError) else f"{type(e).__name__}: {e}"})
-            finally:
-                try:
-                    self._scan_bot.stopper.close()
-                except Exception:
-                    pass
-                self._scan_bot = None
         self._scan_thread = threading.Thread(target=work, name="chars-scan", daemon=True)
         self._scan_thread.start()
         return {"ok": True}
 
     def chars_scanStop(self) -> dict:  # noqa: N802
-        if self._scan_bot:
-            self._scan_bot.stopper.request()
-        return {"ok": True}
+        return self._bot_stop("scan")
 
     def chars_applyScan(self, items: list) -> dict:  # noqa: N802
         """확인 창에서 고른 것만 반영한다. items: [{slot, name, portrait: bool, level, job}]."""

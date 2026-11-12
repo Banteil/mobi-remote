@@ -1,7 +1,7 @@
 """작업 큐 화면(web/queue.js)이 부르는 파이썬 쪽 (mm.queue.*). Api 가 이 클래스를 섞어 쓴다.
 
 큐의 주인은 mabi.workqueue.WorkQueue 다. 여기는 카드 종류의 실행기와 화면 연결만 둔다.
-  daily · abyss · raid : 숙제·어비스·레이드 (DailyApi 의 _daily_launch · _abyss_launch · _raid_launch 를 기다린다)
+  daily · abyss · raid : 숙제·어비스·레이드 (DailyApi 의 _daily_launch · _repeat_launch 를 기다린다)
   goal          : 제작·채집·가공 목표 (판단 엔진 mabi.craft.goal 의 걸음을 하나씩 실행)
   action        : 한 번 하는 행동 (버튼 하나 = 명령 하나, 전체 수령)
   enhance       : 각인 강화 반복 (열어 둔 창에서 성공할 때까지 Space)
@@ -21,6 +21,8 @@ from mabi import queue_report
 from mabi import restart
 from mabi.runner import RunOptions, load_config
 from mabi.workqueue import STOP_WHY, Kind, WorkQueue
+
+from .daily_api import REPEATS
 
 log = logging.getLogger("mabi")
 
@@ -184,10 +186,15 @@ def card_character(it: dict, chars: list[dict]) -> tuple[str, dict | None]:
 class AbyssKind(Kind):
     own_loot = True  # 반복이 캐릭터 접속 뒤부터 잰다 ('loot' 이벤트 — 일일 숙제와 같은 queue_report.LootMeter)
     STAGE = {"match": "매칭 중", "play": "진행 중", "clear": "클리어", "repair": "장비 수리"}
-    KIND, PLACE = "abyss", "dungeon"  # 반복 종류 (DailyApi._<KIND>_launch · 진행 이벤트 type), 카드의 장소 칸
+    KIND = "abyss"  # 반복 종류 (DailyApi.REPEATS — 진행 이벤트 type), 장소 칸은 REPEATS 가 정한다
 
     def __init__(self, api):
         self.api = api
+
+    @classmethod
+    def place(cls) -> str:
+        """카드의 장소 칸 (어비스 dungeon · 레이드 raid)."""
+        return REPEATS[cls.KIND][1]
 
     @classmethod
     def detail(cls, x) -> str:
@@ -195,7 +202,7 @@ class AbyssKind(Kind):
             (f"{x['runs']}판" + (f" ({x['doneRuns']}판 함)" if x.get("doneRuns") else "")) if x.get("runs") else "",
             f"{x['minutes']}분" if x.get("minutes") else ""] if s)
         mode = {"solo": " 혼자하기", "party": " 함께하기"}.get(x.get("mode"), "")
-        return f"{x.get(cls.PLACE)} {x.get('difficulty')}{mode} · {lim or '멈출 때까지'}" + (" · 쓰러지면 나감" if x.get("revive") is False else "")
+        return f"{x.get(cls.place())} {x.get('difficulty')}{mode} · {lim or '멈출 때까지'}" + (" · 쓰러지면 나감" if x.get("revive") is False else "")
 
     def where(self, it) -> str:
         return f"{it['doneRuns']}판 한 뒤" if it.get("doneRuns") else ""
@@ -246,14 +253,15 @@ class AbyssKind(Kind):
                     p.update(clears=e["clears"], revives=e.get("revives") or 0, deaths=e.get("deaths") or 0,
                              secs=e.get("seconds") or 0)
                 q.patch(it["id"], {"prog": p})
-        launch = getattr(api, f"_{self.KIND}_launch")
-        t = launch({"slot": it.get("slot"), self.PLACE: it.get(self.PLACE), "difficulty": it.get("difficulty"),
-                    "mode": it.get("mode"), "runs": runs, "minutes": minutes, "revive": it.get("revive") is not False,
-                    "interface": fit and not q.session.get("iface")}, on_event)
+        place = self.place()
+        t = api._repeat_launch(self.KIND, {
+            "slot": it.get("slot"), place: it.get(place), "difficulty": it.get("difficulty"), "mode": it.get("mode"),
+            "runs": runs, "minutes": minutes, "revive": it.get("revive") is not False,
+            "interface": fit and not q.session.get("iface")}, on_event)
         t.join()
         q.patch(it["id"], {"doneRuns": int(it.get("doneRuns") or 0) + last["clears"],
                            "doneSecs": float(it.get("doneSecs") or 0) + last["secs"], "prog": {}})
-        r = getattr(api, f"_{self.KIND}_result")
+        r = api._rep(self.KIND).result
         if r.get("type") == "failed":
             q.note(it, f"실패 — {r.get('message', '')}")
             return False
@@ -265,13 +273,13 @@ class AbyssKind(Kind):
         return True
 
     def stop(self, reason):
-        getattr(self.api, f"daily_{self.KIND}Stop")(STOP_WHY.get(reason, ""))
+        self.api._repeat_stop(self.KIND, STOP_WHY.get(reason, ""))
 
 
 class RaidKind(AbyssKind):
     """레이드 반복 (혼자하기) — 어비스 카드와 같은 틀, 장소 칸이 raid."""
     STAGE = {"entry": "입장", "sail": "출항", "play": "진행 중", "clear": "클리어", "repair": "장비 수리"}
-    KIND, PLACE = "raid", "raid"
+    KIND = "raid"
 
 
 class GoalKind(Kind):
@@ -451,7 +459,6 @@ class EnhanceKind(Kind):
 
     def __init__(self, api):
         self.api = api
-        self.bot = None
 
     @staticmethod
     def detail(x) -> str:
@@ -465,8 +472,6 @@ class EnhanceKind(Kind):
         return v
 
     def run(self, q, it):
-        from mabi import outcome
-        from mabi.bot import Bot
         from mabi.tasks import enhance
         if (err := self.api._busy_reason()):
             q.note(it, f"시작 못 함 — {err}")
@@ -474,34 +479,22 @@ class EnhanceKind(Kind):
         q.patch(it["id"], {"prog": {}, "note": ""})
         bot = None
         try:
-            self.api._daily_hook_log()
-            bot = self.bot = Bot(load_config(self.api.paths), self.api.paths, force_exit=False)
-            if not bot.window.find():
-                q.note(it, "실패 — 게임이 꺼져 있습니다")
-                return False
-            bot.background = True  # 게임을 앞으로 가져오지 않는다 — 키는 창에 직접
-            r = enhance.repeat(bot, lambda n, t: q.patch(it["id"], {"prog": {"tries": n, "target": t}}))
-            q.note(it, f"+{r['level']} 성공 ({r['tries']}번째)")
-            return True
-        except Exception as e:  # noqa: BLE001 — 가르는 규칙은 다른 반복과 같은 outcome
-            if bot is None:
-                log.exception("각인 강화 반복 시작 실패")
-                q.note(it, f"실패 — {e}")
-                return False
-            status, summary, _ = outcome.classify(bot, "enhance", "각인 강화 반복", e)
-            if status == "STOP":  # F12·멈추기 → 일시정지 (▶ 로 다시 — 창이 그대로면 이어서 누른다)
-                q.set_stop("stopped")
-            else:
+            with self.api._game_bot("enhance") as bot:
+                if not bot.window.find():
+                    q.note(it, "실패 — 게임이 꺼져 있습니다")
+                    return False
+                bot.background = True  # 게임을 앞으로 가져오지 않는다 — 키는 창에 직접
+                r = enhance.repeat(bot, lambda n, t: q.patch(it["id"], {"prog": {"tries": n, "target": t}}))
+                q.note(it, f"+{r['level']} 성공 ({r['tries']}번째)")
+                return True
+        except Exception as e:  # noqa: BLE001 — F12·멈추기는 일시정지 (▶ 로 다시 — 창이 그대로면 이어서 누른다)
+            status, summary = self.api._q_failed(q, bot, e, "enhance", "각인 강화 반복")
+            if status != "STOP":
                 q.note(it, f"실패 — {summary}")
             return False
-        finally:
-            self.bot = None
-            if bot:
-                bot.stopper.close()
 
     def stop(self, reason):
-        if self.bot:
-            self.bot.stopper.request(STOP_WHY.get(reason, ""))
+        self.api._bot_stop("enhance", STOP_WHY.get(reason, ""))
 
 
 class RestartKind(Kind):
@@ -511,7 +504,6 @@ class RestartKind(Kind):
 
     def __init__(self, api):
         self.api = api
-        self.bot = None
 
     @staticmethod
     def detail(x) -> str:
@@ -521,41 +513,27 @@ class RestartKind(Kind):
         return True
 
     def run(self, q, it):
-        from mabi import outcome
-        from mabi.bot import Bot
         bot = None
         try:
             if (err := self.api._busy_reason()):
                 raise RuntimeError(err)
-            self.api._daily_hook_log()
             cfg = load_config(self.api.paths)
-            bot = self.bot = Bot(cfg, self.api.paths, force_exit=False)
-            q.note(it, "게임을 다시 켜는 중…")
-            # 끄기 전 캐릭터를 카드에 적어 둔다 — 켜다 실패해 ▶ 로 다시 할 때 같은 캐릭터로 들어가게. 명령(force)은 한 번만
-            # 끈다 (이미 끈 카드를 ▶ 로 이어 하면 사람이 켠 게임을 다시 끄지 않게)
-            q.note(it, restart.run(bot, cfg, it.get("who"), force=bool(it.get("force")) and not it.get("closed"),
-                                   keep=lambda ch: q.patch(it["id"], {"who": ch, "closed": True}, quiet=True)))
-            return True
+            with self.api._game_bot("restart", cfg) as bot:
+                q.note(it, "게임을 다시 켜는 중…")
+                # 끄기 전 캐릭터를 카드에 적어 둔다 — 켜다 실패해 ▶ 로 다시 할 때 같은 캐릭터로 들어가게. 명령(force)은 한 번만
+                # 끈다 (이미 끈 카드를 ▶ 로 이어 하면 사람이 켠 게임을 다시 끄지 않게)
+                q.note(it, restart.run(bot, cfg, it.get("who"), force=bool(it.get("force")) and not it.get("closed"),
+                                       keep=lambda ch: q.patch(it["id"], {"who": ch, "closed": True}, quiet=True)))
+                return True
         except Exception as e:  # noqa: BLE001 — 가르는 규칙은 다른 카드와 같은 outcome
-            summary = str(e)
-            if bot is None:
-                log.exception("게임 다시 켜기 시작 실패")
-            else:
-                status, summary, _ = outcome.classify(bot, "restart", "게임 다시 켜기", e)
-                if status == "STOP":  # F12·멈추기
-                    q.set_stop("stopped")
-                    return False
-            # 다음 카드가 꺼진 게임에서 돌지 않게 큐를 세운다 — ▶ 면 이 카드부터 (게임이 켜져 있으면 접속만 확인)
-            q.set_stop("stopped", {"note": f"게임을 다시 켜지 못함 — {summary} · 게임을 켠 뒤 ▶"})
+            status, summary = self.api._q_failed(q, bot, e, "restart", "게임 다시 켜기")
+            if status != "STOP":
+                # 다음 카드가 꺼진 게임에서 돌지 않게 큐를 세운다 — ▶ 면 이 카드부터 (게임이 켜져 있으면 접속만 확인)
+                q.set_stop("stopped", {"note": f"게임을 다시 켜지 못함 — {summary} · 게임을 켠 뒤 ▶"})
             return False
-        finally:
-            self.bot = None
-            if bot:
-                bot.stopper.close()
 
     def stop(self, reason):
-        if self.bot:
-            self.bot.stopper.request(STOP_WHY.get(reason, ""))
+        self.api._bot_stop("restart", STOP_WHY.get(reason, ""))
 
 
 class QueueApi:
@@ -680,14 +658,23 @@ class QueueApi:
     def _q_toast(self, title: str, text: str = "", kind: str = "ok") -> None:
         self._emit("mm:queue-toast", {"title": title, "text": text, "kind": kind})
 
-    _q_char_bot = None
+    def _q_failed(self, q: WorkQueue, bot, e: BaseException, tag: str, label: str) -> tuple[str, str]:
+        """큐 카드가 게임 조작 중 예외로 끝났다 → (상태, 요약). 가르는 규칙은 다른 일과 같은 outcome.classify.
+        Bot 을 만들기도 전이면(bot None) '시작 실패' 로 로그를 남기고 ERROR. 멈춤(F12·멈추기)이면 큐를 일시정지한다
+        (▶ 로 다시). 카드 메모는 부르는 쪽이 상태를 보고 남긴다."""
+        from mabi import outcome
+        if bot is None:
+            log.exception(f"{label} 시작 실패")
+            return "ERROR", str(e)
+        status, summary, _ = outcome.classify(bot, tag, label, e)
+        if status == "STOP":
+            q.set_stop("stopped")
+        return status, summary
 
     def _q_char(self, q: WorkQueue, it: dict) -> bool:
         """제작·채집·가공 카드를 시작하기 전 캐릭터 맞추기 (card_character). 다른 캐릭터면 그 캐릭터로 접속한다.
         못 맞추면 카드 메모에 까닭을 적고 False (멈추기·F12 는 일시정지)."""
-        from mabi import outcome
         from mabi import profile as prof
-        from mabi.bot import Bot
         from mabi.tasks import login
         chars = prof.chars(self.paths)
         what, want = card_character(it, chars)
@@ -702,44 +689,32 @@ class QueueApi:
         bot = None
         try:
             cfg = load_config(self.paths)
-            self._daily_hook_log()
-            bot = self._q_char_bot = Bot(cfg, self.paths, force_exit=False)
-            if not bot.window.find():
-                q.note(it, "실패 — 게임이 꺼져 있습니다")
-                return False
-            if what == "remember":
-                now = login.current_character(bot)
-                if now:  # 모르면 적지 않는다 — 다음에 집을 때 다시 본다
-                    q.patch(it["id"], {"pin": {"slot": now["slot"], "name": now["name"]}})
+            with self._game_bot("char", cfg) as bot:
+                if not bot.window.find():
+                    q.note(it, "실패 — 게임이 꺼져 있습니다")
+                    return False
+                if what == "remember":
+                    now = login.current_character(bot)
+                    if now:  # 모르면 적지 않는다 — 다음에 집을 때 다시 본다
+                        q.patch(it["id"], {"pin": {"slot": now["slot"], "name": now["name"]}})
+                    return True
+                name = login.current_name(bot)
+                if name and login.name_matches(name, want["name"]):
+                    return True
+                if not self._q_display(q, it):
+                    return False
+                log.info(f"{it.get('label') or '카드'}: {want['name']} 로 하는 카드 → 접속을 바꿈 (지금 {name or '이름 모름'})")
+                bot.log.info(login.run(bot, cfg, want))
                 return True
-            name = login.current_name(bot)
-            if name and login.name_matches(name, want["name"]):
-                return True
-            if not self._q_display(q, it):
-                return False
-            log.info(f"{it.get('label') or '카드'}: {want['name']} 로 하는 카드 → 접속을 바꿈 (지금 {name or '이름 모름'})")
-            bot.log.info(login.run(bot, cfg, want))
-            return True
         except Exception as e:  # noqa: BLE001 — 가르는 규칙은 다른 반복과 같은 outcome
-            if bot is None:
-                log.exception("카드 캐릭터 맞추기 시작 실패")
-                q.note(it, f"실패 — {e}")
-                return False
-            status, summary, _ = outcome.classify(bot, "login", "캐릭터 맞추기", e)
-            if status == "STOP":
-                q.set_stop("stopped")
-            else:
-                q.note(it, f"캐릭터 맞추기 실패 — {summary}")
+            status, summary = self._q_failed(q, bot, e, "login", "캐릭터 맞추기")
+            if status != "STOP":
+                q.note(it, f"{'실패' if bot is None else '캐릭터 맞추기 실패'} — {summary}")
             return False
-        finally:
-            self._q_char_bot = None
-            if bot:
-                bot.stopper.close()
 
     def _q_char_stop(self, reason: str) -> None:
         """큐가 선다 — 캐릭터를 바꾸는 중이면 멈춘다 (걸음 사이에서 멈추는 것은 q.stop 이 한다)."""
-        if self._q_char_bot:
-            self._q_char_bot.stopper.request(STOP_WHY.get(reason, ""))
+        self._bot_stop("char", STOP_WHY.get(reason, ""))
 
     def _q_fit(self) -> bool:
         """옵션 창 '화면 설정 맞추기' ([run] fit_display) — 숙제·어비스·레이드 카드가 시작할 때 모두 이 값을 따른다

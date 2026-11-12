@@ -9,6 +9,8 @@ import json
 import logging
 import os
 import threading
+from contextlib import ExitStack, contextmanager
+from dataclasses import dataclass, field
 
 import tomlkit
 
@@ -23,6 +25,22 @@ from mabi.tasks.weekday import SUNDAY_CHOICES
 from .chars_api import CharsApi
 
 log = logging.getLogger("mabi")
+
+# 게임을 조작하는 일(스레드·Bot 주인) → 다른 일을 시작하지 못하는 까닭 (_busy_reason)
+BUSY = {"daily": "일일 숙제가 도는 중입니다", "scan": "캐릭터 자동 설정이 도는 중입니다",
+        "abyss": "어비스 반복이 도는 중입니다", "raid": "레이드 반복이 도는 중입니다",
+        "display": "화면 설정 작업 중입니다", "enhance": "각인 강화 반복이 도는 중입니다",
+        "restart": "게임을 다시 켜는 중입니다", "char": "카드 캐릭터를 맞추는 중입니다"}
+
+# 반복 종류 → (제목, 장소 칸 = config [종류] 의 키·카드 칸). 둘 다 mabi.tasks.<종류>.repeat 를 같은 틀로 돌린다
+REPEATS = {"abyss": ("어비스", "dungeon"), "raid": ("레이드", "raid")}
+
+
+@dataclass
+class RepeatRun:
+    """어비스·레이드 반복 한 종류의 상태. Bot 은 다른 게임 조작과 같이 주인 이름(종류)으로 등록한다 (DailyApi._bots)."""
+    thread: threading.Thread | None = None
+    result: dict = field(default_factory=dict)  # 끝 이벤트 {type: done|failed, stopped?, message?, ...}
 
 
 class _LogToScreen(logging.Handler):
@@ -88,17 +106,55 @@ class DailyApi:
             t.join(5)
         return bool(t and t.is_alive())
 
+    @property
+    def _bots(self) -> dict:
+        """지금 게임을 조작하는 Bot {주인: Bot} — _game_bot 이 넣고 뺀다. 멈추기(_bot_stop)·_busy_reason 이 여기 하나만 본다."""
+        return self.__dict__.setdefault("_bot_owners", {})
+
+    @contextmanager
+    def _game_bot(self, owner: str | None, cfg: dict | None = None):
+        """게임 조작용 Bot 하나의 수명: 만들기 → 주인 이름으로 등록 → 끝나면 빼고 닫기 (키 감시 정리).
+        owner=None 은 등록하지 않는다 (잠깐 화면만 보는 확인 — 다른 일을 막지 않게). 만들다 실패하면 예외가 그대로 나간다
+        (부르는 쪽이 `bot = None` … `with … as bot` 이면 except 에서 bot 이 None 인지로 '시작 실패' 를 가른다)."""
+        from mabi.bot import Bot
+        self._daily_hook_log()
+        bot = Bot(cfg if cfg is not None else load_config(self.paths), self.paths, force_exit=False)
+        if owner:
+            self._bots[owner] = bot
+        try:
+            yield bot
+        finally:
+            if owner and self._bots.get(owner) is bot:
+                del self._bots[owner]
+            bot.stopper.close()
+
+    def _bot_stop(self, owner: str, why: str = "") -> dict:
+        """그 주인의 Bot 에 멈춤을 요청한다 (돌고 있지 않으면 아무것도). why: 사람이 아닌 까닭 (로그에)."""
+        bot = self._bots.get(owner)
+        if bot:
+            bot.stopper.request(why)
+        return {"ok": True}
+
     def _busy_reason(self) -> str | None:
-        """숙제·어비스·캐릭터 자동 설정 중 하나가 돌고 있으면 그 이유 (게임 조작이 겹치면 안 된다)."""
+        """게임을 조작하는 일이 돌고 있으면 그 까닭 (게임 조작이 겹치면 안 된다). 작업 스레드(숙제·어비스·레이드·
+        캐릭터 자동 설정·화면 설정 되돌리기)와 등록된 Bot(큐 카드의 캐릭터 맞추기·각인 강화·게임 다시 켜기·화면 설정)을
+        모두 본다. 큐 카드는 자기 Bot 을 만들기 전에 부르므로 자기 때문에 막히지 않는다."""
         if self._alive(self._daily_thread):
-            return "일일 숙제가 도는 중입니다"
-        if getattr(self, "_scan_thread", None) and self._scan_thread.is_alive():
-            return "캐릭터 자동 설정이 도는 중입니다"
-        if self._alive(self._abyss_thread):
-            return "어비스 반복이 도는 중입니다"
-        if self._alive(self._raid_thread):
-            return "레이드 반복이 도는 중입니다"
+            return BUSY["daily"]
+        if self._alive_now(getattr(self, "_scan_thread", None)):
+            return BUSY["scan"]
+        for owner in ("abyss", "raid"):
+            if self._alive(self._rep(owner).thread):
+                return BUSY[owner]
+        if self._alive(self._display_thread):  # 큐 끝의 화면 설정 되돌리기 — 잠깐 기다려 본다
+            return BUSY["display"]
+        for owner in list(self._bots):
+            return BUSY.get(owner, "게임 조작이 도는 중입니다")
         return None
+
+    @staticmethod
+    def _alive_now(t: threading.Thread | None) -> bool:
+        return bool(t and t.is_alive())
 
     _daily_result: tuple = ("failed", "")
 
@@ -165,7 +221,6 @@ class DailyApi:
     def daily_displayCheck(self, opts: dict | None = None) -> dict:  # noqa: N802
         """{ok, running, problems, target}. 게임 창 크기·화면 모드 (1초 안팎).
         고른 캐릭터·숙제가 오늘 다 끝났으면 화면을 보지 않고 ok (idle) — 숙제는 '오늘 완료' 만 알리고 게임을 건드리지 않는다."""
-        from mabi.bot import Bot
         from mabi.tasks import display
         target = "테두리 없는 전체화면 · 16:9 (1280×720 이상) — 숙제 동안만 맞추고 끝나면 원래대로"
         try:
@@ -174,36 +229,26 @@ class DailyApi:
             # 어비스·레이드 카드는 숙제가 다 끝난 날에도 화면을 본다 (always) — 예전엔 숙제 기준으로 건너뛰어 한 번도 안 봤다
             if not o.get("always") and not Runner(self.paths, force_exit=False).has_work(run_opts):
                 return {"ok": True, "idle": True, "running": True, "problems": [], "target": target}
-            cfg = load_config(self.paths)
-            bot = Bot(cfg, self.paths, force_exit=False)
-            try:
+            with self._game_bot(None) as bot:  # 화면만 잠깐 본다 — 등록하지 않는다
                 if not display.game_running(bot.window):
                     return {"ok": False, "running": False, "problems": ["게임이 꺼져 있음"], "target": target}
                 return {**display.check(bot, interface=False), "target": target}
-            finally:
-                bot.stopper.close()
         except Exception as e:
             log.exception("화면 설정 확인 실패")
             return {"ok": False, "running": False, "problems": [f"확인 실패: {e}"], "target": target}
 
     def _display_fix_sync(self) -> dict:
         """화면 설정 맞추기 (막는다). {ok, message, running}."""
-        from mabi.bot import Bot
         from mabi.tasks import display
-        bot = None
         try:
-            self._daily_hook_log()
             cfg = load_config(self.paths)
-            bot = Bot(cfg, self.paths, force_exit=False)
-            msg = display.ensure(bot, cfg, self.paths.data / "backup", remember=self.paths.data / display.RESTORE_FILE)
-            log.info(f"화면 설정: {msg}")
-            return {"ok": True, "message": msg, "running": display.game_running(bot.window)}
+            with self._game_bot("display", cfg) as bot:
+                msg = display.ensure(bot, cfg, self.paths.data / "backup", remember=self.paths.data / display.RESTORE_FILE)
+                log.info(f"화면 설정: {msg}")
+                return {"ok": True, "message": msg, "running": display.game_running(bot.window)}
         except Exception as e:
             log.exception("화면 설정 맞추기 실패")
             return {"ok": False, "message": f"{e}"}
-        finally:
-            if bot:
-                bot.stopper.close()
 
     def daily_displayRestore(self) -> dict:  # noqa: N802
         """작업 큐가 다 끝났을 때 한 번: 숙제·어비스 동안 맞춰 둔 인터페이스와 화면 모드·해상도를 원래대로.
@@ -214,18 +259,15 @@ class DailyApi:
             return {"error": why}
 
         def work():
-            from mabi.bot import Bot
             from mabi.tasks import display
-            bot, msgs = None, []
+            msgs = []
             try:
-                self._daily_hook_log()
-                cfg = load_config(self.paths)
-                bot = Bot(cfg, self.paths, force_exit=False)
-                state = prof.DailyState(self.paths.state)
-                if state.data.get(display.RESTORE_KEY) and bot.window.find():
-                    msgs.append(display.restore_interface(bot, state))
-                if (self.paths.data / display.RESTORE_FILE).is_file():
-                    msgs.append(display.restore_screen(bot, self.paths.data / display.RESTORE_FILE))
+                with self._game_bot("display") as bot:
+                    state = prof.DailyState(self.paths.state)
+                    if state.data.get(display.RESTORE_KEY) and bot.window.find():
+                        msgs.append(display.restore_interface(bot, state))
+                    if (self.paths.data / display.RESTORE_FILE).is_file():
+                        msgs.append(display.restore_screen(bot, self.paths.data / display.RESTORE_FILE))
                 msg = " · ".join(m for m in msgs if m)
                 if msg:
                     log.info(f"작업 큐 끝 → {msg}")
@@ -233,43 +275,28 @@ class DailyApi:
             except Exception as e:
                 log.warning(f"화면 설정을 되돌리지 못함 — 다음 큐가 끝날 때 다시 시도: {e}")
                 self._emit("mm:display", {"restored": True, "ok": False, "message": str(e)})
-            finally:
-                if bot:
-                    bot.stopper.close()
         self._display_thread = threading.Thread(target=work, name="display-restore", daemon=True)
         self._display_thread.start()
         return {"ok": True}
 
-    # ---- 어비스 반복 (mabi.tasks.abyss) ----
-    _abyss_thread: threading.Thread | None = None
-    _abyss_bot = None
+    # ---- 어비스·레이드 반복 (mabi.tasks.abyss · raid) — 종류마다 RepeatRun 하나 ----
+    def _rep(self, kind: str) -> RepeatRun:
+        return self.__dict__.setdefault("_repeat", {}).setdefault(kind, RepeatRun())
+
+    def _rep_default(self, kind: str, key: str) -> str:
+        """화면·카드가 비워 보낸 값의 기본값 (config.default.toml [종류])."""
+        return str(userconfig.default(self.paths, kind, key, ""))
 
     def daily_abyssSettings(self) -> dict:  # noqa: N802
         a = load_config(self.paths)["abyss"]
         from mabi.tasks import abyss
-        return {"dungeon": a["dungeon"], "difficulty": a.get("difficulty") or "매우 어려움2", "runs": int(a.get("runs", 0)),
+        return {"dungeon": a["dungeon"], "difficulty": a.get("difficulty") or self._rep_default("abyss", "difficulty"),
+                "runs": int(a.get("runs", 0)),
                 "slot": int(a.get("slot", 0)), "chars": [{"slot": c["slot"], "name": c["name"]} for c in prof.chars(self.paths)],
                 "minutes": float(a.get("minutes", 0)), "dungeons": abyss.DUNGEONS, "frontOnly": list(abyss.FRONT_ONLY),
-                "revive": bool(a.get("revive", True)), "mode": a.get("mode") or "party",
+                "revive": bool(a.get("revive", True)), "mode": a.get("mode") or self._rep_default("abyss", "mode"),
                 "difficulties": abyss.DIFFICULTIES,
-                "running": bool(self._abyss_thread and self._abyss_thread.is_alive())}
-
-    _abyss_result: dict = {}
-
-    def _abyss_launch(self, v: dict, on_event=None) -> threading.Thread:
-        """고른 던전·난이도·횟수·시간을 config.toml [abyss] 에 저장하고 반복을 작업 스레드에서 시작한다 (작업 큐가 join).
-        진행은 'mm:abyss' {type: start|abyss|done|failed, clears, deaths, ...}, 결과는 self._abyss_result (끝 이벤트와 같은 값)."""
-        def save(a):
-            a["dungeon"] = str(v.get("dungeon") or "허상의 정박지")
-            a["difficulty"] = str(v.get("difficulty") or "매우 어려움2")
-            if v.get("mode") in ("solo", "party"):  # 없으면(예전 카드·명령) 탭에 고른 그대로
-                a["mode"] = v["mode"]
-        return self._repeat_launch("abyss", "어비스", v, save, on_event)
-
-    # ---- 레이드 반복 (mabi.tasks.raid) — 어비스와 같은 틀 ----
-    _raid_thread: threading.Thread | None = None
-    _raid_bot = None
-    _raid_result: dict = {}
+                "running": self._alive_now(self._rep("abyss").thread)}
 
     # ---- 보스전 기본값 (어비스·레이드 탭) — 캐릭터 탭에서 따로 정하지 않은 캐릭터에 ----
     def daily_bossSettings(self) -> dict:  # noqa: N802
@@ -305,46 +332,40 @@ class DailyApi:
     def daily_raidSettings(self) -> dict:  # noqa: N802
         from mabi.tasks import raid
         r = load_config(self.paths)["raid"]
-        return {"raid": r["raid"], "difficulty": r.get("difficulty") or "어려움", "slot": int(r.get("slot", 0)),
+        return {"raid": r["raid"], "difficulty": r.get("difficulty") or self._rep_default("raid", "difficulty"),
+                "slot": int(r.get("slot", 0)),
                 "runs": int(r.get("runs", 0)), "minutes": float(r.get("minutes", 0)), "revive": bool(r.get("revive", True)),
-                "mode": r.get("mode") or "party", "raids": raid.RAIDS, "difficulties": raid.DIFFICULTIES,
-                "running": bool(self._raid_thread and self._raid_thread.is_alive())}
+                "mode": r.get("mode") or self._rep_default("raid", "mode"), "raids": raid.RAIDS,
+                "difficulties": raid.DIFFICULTIES, "running": self._alive_now(self._rep("raid").thread)}
 
     def daily_fieldBossSettings(self) -> dict:  # noqa: N802
         """필드 보스 칸의 보스·난이도 목록과 기본값 (mabi.tasks.field_boss). 고른 값은 화면이 fieldBoss 로 기억한다."""
         from mabi.tasks import field_boss
         return field_boss.choices()
 
-    def _raid_launch(self, v: dict, on_event=None) -> threading.Thread:
-        """레이드 반복 — [raid] 에 저장하고 시작 ('mm:raid', self._raid_result). 나머지는 _abyss_launch 와 같다."""
-        def save(a):
-            a["raid"] = str(v.get("raid") or "카브락")
-            a["difficulty"] = str(v.get("difficulty") or "어려움")
-            if v.get("mode") in ("solo", "party"):  # 없으면(예전 카드·명령) 탭에 고른 그대로
-                a["mode"] = v["mode"]
-        return self._repeat_launch("raid", "레이드", v, save, on_event)
-
-    def daily_raidStop(self, why: str = "") -> dict:  # noqa: N802
-        if self._raid_bot:
-            self._raid_bot.stopper.request(why)
-        return {"ok": True}
-
-    def _repeat_launch(self, kind: str, title: str, v: dict, save, on_event=None) -> threading.Thread:
-        """어비스·레이드 반복 공통: config.toml [kind] 에 저장하고 mabi.tasks.<kind>.repeat 를 작업 스레드에서."""
+    def _repeat_launch(self, kind: str, v: dict, on_event=None) -> threading.Thread:
+        """어비스·레이드 반복 (kind: REPEATS): 고른 장소(던전·레이드)·난이도·횟수·시간을 config.toml [kind] 에 저장하고
+        mabi.tasks.<kind>.repeat 를 작업 스레드에서 시작한다 (작업 큐가 join). 진행은 'mm:<kind>'
+        {type: start|<kind>|done|failed, clears, deaths, ...}, 결과는 self._rep(kind).result (끝 이벤트와 같은 값)."""
+        title, place = REPEATS[kind]
+        rep = self._rep(kind)
         on_event = on_event or (lambda e: None)
 
         def event(e):
             self._emit(f"mm:{kind}", e)
             on_event(e)
             if e.get("type") in ("done", "failed"):
-                setattr(self, f"_{kind}_result", e)
-        setattr(self, f"_{kind}_result", {"type": "failed", "message": "시작하지 못함"})
+                rep.result = e
+        rep.result = {"type": "failed", "message": "시작하지 못함"}
         with userconfig.LOCK:  # 화면·작업 큐가 함께 고친다
             doc = self._doc()
             if kind not in doc:
                 doc[kind] = tomlkit.table()
             a = doc[kind]
-            save(a)
+            a[place] = str(v.get(place) or self._rep_default(kind, place))
+            a["difficulty"] = str(v.get("difficulty") or self._rep_default(kind, "difficulty"))
+            if v.get("mode") in ("solo", "party"):  # 없으면(예전 카드·명령) 탭에 고른 그대로
+                a["mode"] = v["mode"]
             a["slot"] = max(0, int(v.get("slot") or 0))
             a["runs"] = max(0, int(v.get("runs") or 0))
             a["minutes"] = max(0, int(v.get("minutes") or 0))
@@ -354,58 +375,62 @@ class DailyApi:
 
         def work():
             import importlib
-            from mabi import outcome
-            from mabi.bot import Bot
-            task = importlib.import_module(f"mabi.tasks.{kind}")
-            bot = None
             from mabi.queue_report import LootMeter
+            task = importlib.import_module(f"mabi.tasks.{kind}")
             meter = LootMeter(lambda x: event({"type": "loot", **x}))
-            try:
-                self._daily_hook_log()
-                cfg = load_config(self.paths)
-                bot = Bot(cfg, self.paths, force_exit=False)
-                setattr(self, f"_{kind}_bot", bot)
-                if not bot.window.find():
-                    raise ValueError("게임이 꺼져 있습니다")
-                a = cfg[kind]  # 게임은 입장할 때만 앞으로 가져온다 (abyss.repeat)
-                ch = next((c for c in prof.chars(self.paths) if c["slot"] == int(a.get("slot", 0))), None)
-                from mabi.tasks import display
-                # 화면 설정 맞추기 — 인터페이스 PC·80% (큐에서 이번 처음일 때만, 되돌리기는 큐 끝). 일일 숙제와 같은 InterfaceFit
-                fit = display.InterfaceFit(prof.DailyState(self.paths.state), enabled=bool(v.get("interface")),
-                                           on_fit=lambda: event({"type": "interface"}))
-                res = task.repeat(bot, cfg, int(a["runs"]), float(a["minutes"]), on_event=event, character=ch, loot=meter,
-                                  iface=fit)
-                event({"type": "done", **res})
-            except Exception as e:  # noqa: BLE001 — 가르는 규칙은 일일 숙제와 같은 outcome
-                if bot is None:
+            with ExitStack() as stack:  # 끝나면 Bot 등록을 빼고 닫는다
+                try:
+                    cfg = load_config(self.paths)
+                    bot = stack.enter_context(self._game_bot(kind, cfg))
+                except Exception as e:  # noqa: BLE001 — Bot 을 만들지 못함 (설정 오류 등)
                     log.exception(f"{title} 반복 시작 실패")
                     event({"type": "failed", "message": str(e)})
                     return
-                status, summary, messy = outcome.classify(bot, kind, f"{title} 반복", e)
-                if messy:
-                    outcome.recover(bot)  # 어비스·레이드 안에서 실패했으면 나와 둔다 — 다음 카드가 그 안에서 시작하지 않게
-                status, summary = outcome.escalate(bot, status, summary)
-                if status == "STOP":  # 사용자 중단·게임 꺼짐·연속 실행 제한 → 일시정지 (▶ 로 다시)
-                    event({"type": "done", "stopped": True, "message": summary})
-                else:
-                    event({"type": "failed", "message": summary})
-            finally:
-                setattr(self, f"_{kind}_bot", None)
-                if bot:
-                    try:
-                        meter.close(bot)  # 멈췄어도 그때까지 얻은 것
-                    except Exception:  # noqa: BLE001 — 못 재도 끝맺음은 한다
-                        log.exception(f"{title} 반복: 얻은 것 재기 실패")
-                    bot.stopper.close()
-        t = threading.Thread(target=work, name=kind, daemon=True)
-        setattr(self, f"_{kind}_thread", t)
-        t.start()
-        return t
+                self._repeat_body(kind, title, task, bot, cfg, v, event, meter)
+        rep.thread = threading.Thread(target=work, name=kind, daemon=True)
+        rep.thread.start()
+        return rep.thread
 
+    def _repeat_body(self, kind, title, task, bot, cfg, v, event, meter) -> None:
+        """반복 한 번 (Bot 은 부르는 쪽이 _game_bot 으로 쥐고 있다). 실패는 outcome 으로 가른다 — 키 감시가 살아 있는 동안
+        (나와 두기·게임 상태 확인이 F12 로 멈출 수 있게)."""
+        from mabi import outcome
+        try:
+            if not bot.window.find():
+                raise ValueError("게임이 꺼져 있습니다")
+            a = cfg[kind]  # 게임은 입장할 때만 앞으로 가져온다 (abyss.repeat)
+            ch = next((c for c in prof.chars(self.paths) if c["slot"] == int(a.get("slot", 0))), None)
+            from mabi.tasks import display
+            # 화면 설정 맞추기 — 인터페이스 PC·80% (큐에서 이번 처음일 때만, 되돌리기는 큐 끝). 일일 숙제와 같은 InterfaceFit
+            fit = display.InterfaceFit(prof.DailyState(self.paths.state), enabled=bool(v.get("interface")),
+                                       on_fit=lambda: event({"type": "interface"}))
+            res = task.repeat(bot, cfg, int(a["runs"]), float(a["minutes"]), on_event=event, character=ch, loot=meter,
+                              iface=fit)
+            event({"type": "done", **res})
+        except Exception as e:  # noqa: BLE001 — 가르는 규칙은 일일 숙제와 같은 outcome
+            status, summary, messy = outcome.classify(bot, kind, f"{title} 반복", e)
+            if messy:
+                outcome.recover(bot)  # 어비스·레이드 안에서 실패했으면 나와 둔다 — 다음 카드가 그 안에서 시작하지 않게
+            status, summary = outcome.escalate(bot, status, summary)
+            if status == "STOP":  # 사용자 중단·게임 꺼짐·연속 실행 제한 → 일시정지 (▶ 로 다시)
+                event({"type": "done", "stopped": True, "message": summary})
+            else:
+                event({"type": "failed", "message": summary})
+        finally:
+            try:
+                meter.close(bot)  # 멈췄어도 그때까지 얻은 것
+            except Exception:  # noqa: BLE001 — 못 재도 끝맺음은 한다
+                log.exception(f"{title} 반복: 얻은 것 재기 실패")
+
+    def _repeat_stop(self, kind: str, why: str = "") -> dict:
+        return self._bot_stop(kind, why)
+
+    # 화면이 부르는 이름 그대로 (web/bridge.js mm.daily.abyssStop · raidStop)
     def daily_abyssStop(self, why: str = "") -> dict:  # noqa: N802
-        if self._abyss_bot:
-            self._abyss_bot.stopper.request(why)
-        return {"ok": True}
+        return self._repeat_stop("abyss", why)
+
+    def daily_raidStop(self, why: str = "") -> dict:  # noqa: N802
+        return self._repeat_stop("raid", why)
 
     # ---- 캐릭터·숙제 설정 ----
     def _doc(self):

@@ -34,6 +34,12 @@ def _default_doc(paths: Paths):
     return tomlkit.parse(_read(paths.resources / "config.default.toml"))
 
 
+def default(paths: Paths, section: str, key: str, fallback=None):
+    """배포 기본값(config.default.toml) 하나 — 화면·카드가 값을 비워 보냈을 때 쓰는 값 (코드에 같은 글자를 또 적지 않게)."""
+    v = _default_doc(paths).get(section, {}).get(key)
+    return fallback if v is None else (v.unwrap() if hasattr(v, "unwrap") else v)
+
+
 def _overlay(base, over) -> None:
     """tomlkit 표 base 위에 over 를 덮는다 (주석은 사용자 쪽이 있으면 그쪽)."""
     for k, v in over.items():
