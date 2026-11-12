@@ -40,7 +40,7 @@ def board_bot(acts):
         now["act"] = seq.pop(0) if seq else {}
         return Seen(d.DIALOG if now["act"] else d.MAIN, frame=np.zeros((10, 10, 3), np.uint8))
 
-    b._act.side_effect = lambda a: now["act"]
+    b.activity.side_effect = lambda max_age=1.0: now["act"]
     b.dialogue_playing.side_effect = lambda a=None: bool(now["act"])
     b.clicks = lambda: [c.args[0] for c in b.click.call_args_list]
     b.skip_button.return_value = ("dialog", (1800, 45))  # 대화 창이 떠 있음 (dialogue.line_ready)

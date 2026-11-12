@@ -8,6 +8,7 @@
 from dataclasses import dataclass, field
 
 from .. import situation as sit
+from ..game_state import Activity
 
 # 상황 이름 (situation.py 의 것에 아르바이트·제작·던전 화면을 더한 것)
 LOADING, CHARSELECT, TITLE = sit.LOADING, sit.CHARSELECT, sit.TITLE
@@ -52,21 +53,22 @@ class Seen:
 
 def idle(bot) -> bool:
     """이동·자동 진행·대화·전투 중이 아님. 자동 진행(IsAutoPlaying)은 아직 패킷으로 끝을 모른다 — 나머지는 패킷 우선."""
-    a = bot._act(None)
-    return not (a.get("IsAutoPlaying") or bot.auto_traveling(a) or bot.dialogue_playing(a) or bot.in_combat(a))
+    act = bot.activity() or {}
+    return not (Activity.of(act).auto_playing or bot.auto_traveling(act) or bot.dialogue_playing(act)
+                or bot.in_combat(act))
 
 
 def busy_why(bot) -> str | None:
     """idle() 이 아닌 까닭 (로그용). 패킷으로 안 것과 CLI 로 안 것을 가른다. 멈춰 있으면 None."""
-    p, a = bot.packets, bot._act(None)
+    p, a = bot.packets, Activity.of(bot.activity())
     s = p.state if p.ok else None
-    for name, pk, cli in (("자동 진행", None, "IsAutoPlaying"),
-                          ("자동 이동", s and s.traveling, "IsAutoTraveling"),
-                          ("대화", s and (s.fresh or s.in_dialogue) and s.in_dialogue, "IsDialoguePlaying"),
-                          ("전투", s and s.in_combat, "IsInCombat")):
+    packet = {"자동 진행": None, "자동 이동": s and s.traveling,
+              "대화": s and (s.fresh or s.in_dialogue) and s.in_dialogue, "전투": s and s.in_combat}
+    for name, f in Activity.BUSY:
+        pk, cli = packet[name], getattr(a, f)
         if pk:
-            return f"{name} (패킷 · CLI {bool(a.get(cli))})"
-        if pk is None and a.get(cli):
+            return f"{name} (패킷 · CLI {cli})"
+        if pk is None and cli:
             return f"{name} (CLI)"
     return None
 
@@ -76,7 +78,7 @@ def cli_idle(bot) -> bool | None:
     a = bot.activity()
     if not a:
         return None
-    return not any(a.get(k) for k in ("IsAutoPlaying", "IsAutoTraveling", "IsDialoguePlaying", "IsInCombat"))
+    return not Activity.of(a).busy
 
 
 def network_popup(bot, frame):

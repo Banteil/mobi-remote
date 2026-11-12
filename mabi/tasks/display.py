@@ -31,6 +31,7 @@ from . import ui_text
 from ..screen import BASE_H, BASE_W, REG_KEYS, exclusive_fullscreen, is_16_9, screen_mode
 from ..bot import Bot
 from ..exceptions import DisplayFixFailed, MissingTemplate, StepTimeout
+from ..game_state import Activity
 from ..place import ABYSS, RAID, RAID_LOBBY
 
 WIDTH, HEIGHT = 1920, 1080
@@ -323,14 +324,14 @@ def busy(bot: Bot) -> str:
             return "레이드 안·출항선"
         if st.in_dialogue:
             return "NPC 대화 중"
-    act = bot.activity() or {}
-    if (act.get("Dungeon") or {}).get("State") in ("Entering", "InProgress", "Cleared"):
+    a = Activity.of(bot.activity())
+    if a.in_dungeon:
         return "던전 안"
-    if (act.get("Battlefield") or {}).get("IsInBattleField"):
+    if a.in_field:
         return "사냥터 안"
-    if act.get("IsAbyssResultSequencePlaying"):
+    if a.abyss_result:
         return "어비스 결과"
-    if (act.get("dialogue") or {}).get("IsDialoguePlaying"):
+    if a.dialogue:
         return "NPC 대화 중"
     if bot.cfg["black_hole"]["space_keyword"] in game_space(bot):
         return "검은 구멍 안"

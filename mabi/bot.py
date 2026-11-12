@@ -19,7 +19,7 @@ import numpy as np
 from . import keys
 from .digits import DigitReader
 from .connector import Connector
-from .game_state import GameState
+from .game_state import Activity, GameState
 from .inputs import Input, StopWatcher, post_key, vk_of
 from . import cutpoint, judge, packet_monitor
 from .blackbox import BlackBox
@@ -366,15 +366,16 @@ class Bot:
             return p.state.in_game and not p.state.loading
         return self.state.query("get_my_info") is not None
 
-    def _act(self, act: dict | None) -> dict:
-        return act if act is not None else (self.activity() or {})
+    def _act_state(self, act: dict | None) -> Activity:
+        """CLI get_activity 를 읽은 것 (game_state.Activity). act 는 이미 받아 둔 답 — 없으면 묻는다 (activity)."""
+        return Activity.of(act if act is not None else self.activity())
 
     def auto_traveling(self, act: dict | None = None) -> bool:
         """자동 이동 중인가. 패킷(자동 이동 시작·끝, 나한테만 옴)이 알면 그것, 모르면 CLI IsAutoTraveling."""
         p = self.packets
         if p.ok and p.state.traveling is not None:
             return p.state.traveling
-        return bool(self._act(act).get("IsAutoTraveling"))
+        return self._act_state(act).traveling
 
     def fast_travel_ok(self, act: dict | None = None) -> bool:
         """지금 빠른 이동(T)을 누를 만한가. 패킷이면 게임이 알려 주는 빠른 이동 가능 상태,
@@ -382,8 +383,8 @@ class Bot:
         p = self.packets
         if p.ok and p.state.fast_travel_ok is not None and p.state.traveling is not None:
             return p.state.traveling and p.state.fast_travel_ok
-        a = self._act(act)
-        return bool(a.get("IsAutoTraveling") and a.get("AutoTravelRemainingPositionCount", 0) > 0)
+        a = self._act_state(act)
+        return a.traveling and a.travel_left > 0
 
     def fast_travel(self, wait: float = 0) -> bool:
         """빠른 이동(T) — 먼 곳으로 자동 이동 중이면 누른다. 눌렀으면 True. 모든 이동(숙제·아르바이트·어비스·레이드·수리)이 쓴다.
@@ -406,14 +407,14 @@ class Bot:
         p = self.packets
         if p.ok and p.state.in_combat is not None:
             return p.state.in_combat
-        return bool(self._act(act).get("IsInCombat"))
+        return self._act_state(act).combat
 
     def dialogue_playing(self, act: dict | None = None) -> bool:
         """NPC 대화 중인가. 패킷(대화 대상)이 알면 그것, 모르면 CLI IsDialoguePlaying."""
         p = self.packets
         if p.ok and (p.state.fresh or p.state.in_dialogue):
             return p.state.in_dialogue
-        return bool(self._act(act).get("IsDialoguePlaying"))
+        return self._act_state(act).dialogue
 
     def cutscene_playing(self) -> bool | None:
         """컷신(연출) 재생 중인가 — 패킷(컷신 시작·끝)으로만 안다. 모르면 None (CLI 에는 일반 컷신 상태가 없다)."""
@@ -479,7 +480,7 @@ class Bot:
         ui = self.ui.get("revive")
         return bool(judge.decide(self, "쓰러짐", [
             ("패킷 방금", lambda: st.dead if recent else None),  # 부활 창 신호가 CLI IsDead 보다 약 3초 빠르다
-            ("CLI", lambda: bool(act.get("IsDead")) if act else None),
+            ("CLI", lambda: Activity.of(act).dead if act else None),
             ("패킷", lambda: st.dead if p.ok else None),
             # 화면은 둘 다 모를 때만 본다 — 부활한 뒤에도 버튼이 잠깐 남는다
             ("화면 부활 버튼", lambda: True if (not act and not p.ok and ui and self.vision.has(ui)

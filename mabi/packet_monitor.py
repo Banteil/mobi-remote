@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import packet_diag
+from .game_state import NOT_IN_DUNGEON, Activity
 from .place import ABYSS, DUNGEON, FIELD, OPEN_MAPS, RAID, RAID_LOBBY, is_instance
 from .spear import MAP_NAME, SpearState
 
@@ -53,8 +54,8 @@ def map_contradicts(channel_type: str, act: dict) -> bool:
     """패킷 맵 종류가 CLI 와 어긋나나 — 마을인데 던전 안·사냥터 안이라 함, 던전·사냥터 맵인데 밖이라 함.
     장소 이름은 CLI 와 패킷이 글자가 달라 비교하지 않는다. 어비스·레이드는 CLI 가 던전으로 치지 않아 보지 않는다."""
     t = channel_type
-    dungeon = (act.get("Dungeon") or {}).get("State") not in (None, "NotInDungeon")
-    field = bool((act.get("Battlefield") or {}).get("IsInBattleField"))
+    a = Activity.of(act)
+    dungeon, field = a.in_dungeon, a.in_field
     return bool(t) and ((t in OPEN_MAPS and dungeon) or (t == FIELD) != field
                         or (t == DUNGEON and not dungeon))
 CLI_LAG = 5.0  # CLI 가 패킷보다 늦게 바뀌는 시간 (쓰러짐 약 3초, death1 실측) — 패킷이 이보다 최근에 바꿨으면 패킷을 믿는다
@@ -790,14 +791,13 @@ class PacketMonitor:
         안에 바꾼 값은 패킷이 더 새로우니 둔다. 대화·이동·전투 같은 순간 상태는 패킷이 빠르고 CLI 와 뜻이 조금 달라
         (메뉴 대기 등) 여기서 덮지 않는다 — 작업 시작 점검(reconcile)에서만 맞춘다. 바뀐 것 ['이름 전 → 후']."""
         s = self.state
-        dungeon = (act.get("Dungeon") or {}).get("State") or None
-        field_in = bool((act.get("Battlefield") or {}).get("IsInBattleField"))
+        a = Activity.of(act)
         want = {
-            "dungeon_state": dungeon or s.dungeon_state,
+            "dungeon_state": a.dungeon or s.dungeon_state,
             # 사냥터 안이면 InProgress·WaitingForChannelTransfer 를 CLI 가 가르지 못한다 → 밖이라던 패킷만 모름으로
-            "field_state": ("NotInBattlefield" if not field_in
+            "field_state": ("NotInBattlefield" if not a.in_field
                             else None if s.field_state == "NotInBattlefield" else s.field_state),
-            "dead": bool(act.get("IsDead")),
+            "dead": a.dead,
         }
         out, fixed = [], False
         recent = min(asked_at, time.monotonic() - CLI_LAG)
@@ -853,20 +853,21 @@ class PacketMonitor:
             s.loading = False
             if map_contradicts(s.channel_type, act):
                 s.channel, s.channel_type, s.channel_name = None, "", ""
-            s.dungeon_state = (act.get("Dungeon") or {}).get("State") or None
-            if not (act.get("Battlefield") or {}).get("IsInBattleField"):
+            a = Activity.of(act)
+            s.dungeon_state = a.dungeon
+            if not a.in_field:
                 s.field_state = "NotInBattlefield"
             elif s.field_state in (None, "NotInBattlefield"):
                 s.field_state = None  # 사냥터 안인데 패킷은 밖이라 한다 → 모름
-            s.dead = bool(act.get("IsDead"))
-            s.traveling = bool(act.get("IsAutoTraveling"))
-            s.combat = "InCombat" if act.get("IsInCombat") else "NonCombat"
-            s.boss_battle = bool((act.get("Dungeon") or {}).get("IsBossBattleInProgress"))
+            s.dead = a.dead
+            s.traveling = a.traveling
+            s.combat = "InCombat" if a.combat else "NonCombat"
+            s.boss_battle = a.boss_battle
             if not s.traveling:
                 s.fast_travel_ok = None  # 다음 자동 이동 때 다시 온다
-            if not act.get("IsDialoguePlaying"):
+            if not a.dialogue:
                 s.dialogue_npc, s.dialogue_action, s.dialogue_menu = None, "", False
-            if not (act.get("Mode") or {}).get("IsPlayingMiniGame"):
+            if not a.minigame:
                 s.dye_open_at = None  # 염색 미니게임 닫힘을 놓쳤어도
         else:
             s.dungeon_state = s.field_state = s.dead = s.traveling = s.combat = s.fast_travel_ok = None
@@ -918,8 +919,8 @@ class PacketMonitor:
             s.dead = None  # 쓰러진 채 맵을 옮기면 부활 신호가 안 올 수 있다 → 다시 쓰러질 때까지 CLI 로
             # 마을·사냥터면 던전 밖이다. 던전을 나가는 패킷(NotInDungeon)을 놓치면 지난밤 'Cleared' 가 남아,
             # 아침에 접속 단계가 메인 화면을 던전 클리어 화면으로 알고 6명 모두 3분씩 헛돌았다 (2026-10-30 06:44)
-            if s.channel_type in OPEN_MAPS and s.dungeon_state not in (None, "NotInDungeon"):
-                s.dungeon_state = "NotInDungeon"
+            if s.channel_type in OPEN_MAPS and s.dungeon_state not in (None, NOT_IN_DUNGEON):
+                s.dungeon_state = NOT_IN_DUNGEON
             # 대화는 맵을 옮기면 끝난다 — 끝 패킷 없이 끊긴 대화가 '대화 중' 으로 남아 끼어들기·정리가 헛돌지 않게
             s.dialogue_npc, s.dialogue_action, s.dialogue_menu = None, "", False
             self.spear.reset(s.channel_type == ABYSS and MAP_NAME in (s.channel_name or ""))

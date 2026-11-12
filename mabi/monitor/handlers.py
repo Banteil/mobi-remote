@@ -10,6 +10,7 @@ import time
 from dataclasses import dataclass
 
 from .. import gamedata as gd, ocr, situation as sit
+from ..game_state import Activity
 from ..exceptions import StepTimeout, StopRequested
 from . import detect as d
 
@@ -127,7 +128,7 @@ def _choose(bot, ctx, shown):
     """선택지 중 ctx.choose 낱말이 든 것을 누른다. 선택지 버튼은 메뉴(패킷 · 없으면 CLI)가 켜진 뒤 조금 늦게 그려진다 →
     버튼 줄을 글자로 읽고, 원하는 것이 없으면 아무거나 누르지 않고 기다린다 (시간 상한은 태스크 몫). 고른 뒤 남은 대사는 넘긴다."""
     from ..tasks.dialogue import next_line
-    if "chosen" not in ctx.events and (shown if shown is not None else bot._act(None).get("IsWaitingForSelection")):
+    if "chosen" not in ctx.events and (shown if shown is not None else Activity.of(bot.activity()).selecting):
         hit = next(((t, x, y) for t, x, y in ocr.find_texts(bot.frame(), gd.region(ctx.choose_region))
                     if ctx.choose in ocr.nospace(t)), None)
         if not hit:
@@ -147,7 +148,7 @@ def _leave_line(bot):
     from ..tasks.dialogue import menu_shown, next_line, step, wait_next
     shown = menu_shown(bot)
     if shown is None:
-        shown = bool(bot._act(None).get("IsWaitingForSelection"))
+        shown = bool(Activity.of(bot.activity()).selecting)
     if not shown:
         next_line(bot)
         return "대사 넘김"

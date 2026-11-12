@@ -16,6 +16,7 @@ from typing import Callable, NamedTuple
 from .. import gamedata as gd, keys
 from ..bot import Bot
 from ..exceptions import CannotProceed, StepTimeout
+from ..game_state import Activity
 from ..place import FIELD, OPEN_FIELD
 from ..vision import green, green_ratio
 
@@ -772,8 +773,7 @@ def dungeon_state(bot: Bot) -> str | None:
     """던전 상태. 패킷 상태(바뀌는 즉시 + CLI 를 물을 때마다 CLI 답으로 맞춰짐), 모르면 CLI."""
     if bot.packets.ok and bot.packets.state.dungeon_state:
         return bot.packets.state.dungeon_state
-    act = bot.activity()
-    return (act or {}).get("Dungeon", {}).get("State")
+    return Activity.of(bot.activity()).dungeon
 
 
 def wait_dungeon(bot: Bot, pred: Callable[[str], bool], timeout: float, interval: float = 3.0) -> str | None:

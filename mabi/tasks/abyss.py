@@ -19,6 +19,7 @@ import time
 from .. import gamedata as gd, judge
 from ..bot import Bot
 from ..exceptions import CannotProceed, LootPending, StepTimeout
+from ..game_state import Activity
 from ..place import ABYSS, place
 from .. import monitor
 from ..monitor import detect as d, handlers
@@ -77,7 +78,7 @@ def phase(bot: Bot):
         return None if not pl.name else "abyss" if pl.kind == ABYSS else "out"
 
     def cli_result() -> bool:
-        return bool((bot.activity() or {}).get("IsAbyssResultSequencePlaying"))
+        return Activity.of(bot.activity()).abyss_result
 
     def exit_button():  # 결과 연출 동안엔 나가기 버튼이 남는다 — 결과를 알면 보지 않는다 (어긋남이 아니다)
         if cli_result() or (p.ok and st.abyss_result):
@@ -448,7 +449,7 @@ class AbyssPlay(Fight):
             return self.NEXT
 
     def act_end(self, act):
-        return "clear" if act.get("IsAbyssResultSequencePlaying") else None
+        return "clear" if Activity.of(act).abyss_result else None
 
     def before_watch(self, act):
         self.here = inside(self.bot)

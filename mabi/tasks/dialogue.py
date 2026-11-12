@@ -18,6 +18,7 @@ leave() 에 넘기는 처리기(handlers)로 끼워 넣는다 — 처리기가 �
 import time
 
 from ..bot import Bot
+from ..game_state import Activity
 
 
 def _packet(bot: Bot):
@@ -67,8 +68,8 @@ def lines_left(bot: Bot) -> bool:
     hit = bot.skip_button()
     if hit and hit[0] == "dialog":
         return True
-    act = bot.activity()
-    return bool(act and act.get("IsDialogueNextAvailable") and not act.get("IsWaitingForSelection"))
+    a = Activity.of(bot.activity())
+    return a.dialogue_next and not a.selecting
 
 
 def menu_shown(bot: Bot) -> bool | None:

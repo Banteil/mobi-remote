@@ -13,6 +13,7 @@
 from dataclasses import dataclass
 
 from . import gamedata as gd
+from .game_state import Activity
 
 # 맵 종류 (패킷 channel_type 이름). 맵 종류 글자는 여기서만 적고 다른 모듈은 이 이름을 쓴다
 ABYSS = "InstanceAbyssDungeon"
@@ -64,8 +65,8 @@ def place(bot) -> Place:
     act = bot.activity()
     if act is None:  # 로딩 중이거나 게임 밖이거나 CLI 가 없다
         return Place(None, None, "", "", s.dungeon_state if p.ok else None, None)
-    dungeon = (act.get("Dungeon") or {}).get("State")
-    in_field = bool((act.get("Battlefield") or {}).get("IsInBattleField"))
+    a = Activity.of(act)
+    dungeon, in_field = a.dungeon, a.in_field
     env = bot.environment() or {}
     name = env.get("ChannelDisplayName", "") or ""
     kind = None
@@ -79,6 +80,6 @@ def place(bot) -> Place:
         kind = ABYSS
     elif name and name == gd.text("raid_ship"):
         kind = RAID_LOBBY
-    elif dungeon not in (None, "NotInDungeon"):
+    elif a.in_dungeon:
         kind = DUNGEON
     return Place(False, kind, "cli" if kind else "", name, dungeon, in_field)
