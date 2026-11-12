@@ -7,7 +7,7 @@
               결과 Seen: done(한 일) · finish(이 일은 여기서 끝) · 둘 다 없으면 태스크 몫 (메인 화면 등)
   settle(ctx) 처리할 것이 없어질 때까지 check — 퀘스트 창(J)·ESC 를 누르기 전에 남은 대화·창을 끝까지 처리한다
   act(...)    동작 전에 settle → 동작 → 기대한 결과가 시간 안에 나오나. 안 나오면 다시 (tries 번까지)
-  clear(...)  막는 화면 하나만 넘긴다 (기다리는 중에 끼어든 창 — content.clear_blockers 가 이걸 부른다)
+  clear(...)  막는 화면 하나만 넘긴다 (기다리는 중에 끼어든 창 — clear.clear_blockers 가 이걸 부른다)
 
 헛돌기 방지: 같은 처리가 화면이 그대로인 채 same_limit 번 거듭되거나, 모르는 상황이 unknown_limit 초 이어지면
 (메인 화면으로 한 번 돌려 본 뒤에도) Stuck. 판단과 동작은 logs/acts/날짜.jsonl 에 한 줄씩 남긴다.

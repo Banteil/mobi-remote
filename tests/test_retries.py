@@ -3,14 +3,14 @@ import unittest
 from unittest import mock
 
 from mabi.exceptions import StepTimeout
-from mabi.tasks import content
+from mabi.tasks import arrival, steps
 
 
 class WithRetriesTest(unittest.TestCase):
     def test_retries_then_succeeds(self):
         bot = mock.Mock()
         fn = mock.Mock(side_effect=[StepTimeout("a"), RuntimeError("b"), "ok"])
-        self.assertEqual(content.with_retries(bot, "x", fn), "ok")
+        self.assertEqual(steps.with_retries(bot, "x", fn), "ok")
         self.assertEqual(fn.call_count, 3)
         self.assertEqual(bot.to_main.call_count, 2)
 
@@ -18,8 +18,8 @@ class WithRetriesTest(unittest.TestCase):
         bot = mock.Mock()
         fn = mock.Mock(side_effect=StepTimeout("a"))
         with self.assertRaises(StepTimeout):
-            content.with_retries(bot, "x", fn)
-        self.assertEqual(fn.call_count, content.STEP_RETRIES + 1)
+            steps.with_retries(bot, "x", fn)
+        self.assertEqual(fn.call_count, steps.STEP_RETRIES + 1)
 
 
 class TravelStopTest(unittest.TestCase):
@@ -32,9 +32,9 @@ class TravelStopTest(unittest.TestCase):
         bot.auto_traveling.return_value = False
         bot.map_loading.return_value = False
         t = time.monotonic()
-        with mock.patch.object(content, "ARRIVE_GRACE", 0.05):
+        with mock.patch.object(arrival, "ARRIVE_GRACE", 0.05):
             with self.assertRaises(StepTimeout):
-                content.travel(bot, ["a"], 600)
+                arrival.travel(bot, ["a"], 600)
         self.assertLess(time.monotonic() - t, 5)
 
 

@@ -11,7 +11,9 @@ from .. import gamedata as gd
 from ..bot import Bot
 from ..exceptions import CannotProceed, StepTimeout
 from . import black_hole
-from .content import enter_from_dungeon_window, go_to_place, has_word, mission_button, play_field, read_button, select_zone
+from .dungeon import enter_from_dungeon_window, mission_button, play_field, select_zone
+from .ui_text import has_word, read_button
+from .worldmap import go_to_place
 
 
 def verify(bot: Bot, cfg: dict) -> bool:

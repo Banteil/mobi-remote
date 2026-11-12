@@ -15,8 +15,11 @@ from .. import situation
 from ..bot import Bot
 from ..exceptions import CannotProceed, StepTimeout
 from .dialogue import in_dialog
-from .content import (GROWTH, daily_achieved, growth_done, enter_from_dungeon_window, open_arbeit_tab, questwin_buttons, travel,
-                      with_retries)
+from .arrival import travel
+from .dungeon import enter_from_dungeon_window
+from .guide import daily_achieved, GROWTH, growth_done
+from .questwin import open_arbeit_tab, questwin_buttons
+from .steps import with_retries
 
 SUNDAY_CHOICES = ("골드", "보석", "촉매")  # 선택지 글자 괄호 안의 낱말. 이 낱말이 든 버튼을 누른다
 
@@ -120,7 +123,7 @@ def _task(bot: Bot, cfg: dict) -> str:
         bot.verified = result == "clear"
         return f"요일 던전 {result}"
     # 단계: wd_card(요일 아르바이트 찾기) → travel → [일요일: wd_board → wd_card → travel] → dungeon_enter → in_dungeon
-    # → dungeon_reward (content 가 남김). 던전 안에서 끊겼으면 접속 단계가 클리어까지 보고 나오고,
+    # → dungeon_reward (dungeon 이 남김). 던전 안에서 끊겼으면 접속 단계가 클리어까지 보고 나오고,
     # 여기서는 일일 달성 체크로 끝났는지 본다
     if known or known is None and verify(bot, cfg):
         bot.verified = True

@@ -270,7 +270,7 @@ def dead(bot, ctx, seen):
     if not ctx.revive:
         return None
     from ..tasks.abyss import revive_here
-    from ..tasks.content import ensure_auto
+    from ..tasks.fight import ensure_auto
     if revive_here(bot):
         ensure_auto(bot)
         ctx.event("revived")
@@ -340,7 +340,7 @@ def reward(bot, ctx, seen):
     """보상 화면: (추가 루팅) → again 버튼이 있으면 누르고 끝 (반복 플레이), 아니면 나가기(ESC).
     보상 연출이 길면 버튼이 늦게 뜬다 — 한 번만 보고 나가면 다음 판을 지도에서 다시 찾아간다."""
     if ctx.extra_loot and not ctx.n.get("loot"):
-        from ..tasks.content import do_extra_loot
+        from ..tasks.clear import do_extra_loot
         bot.sleep(2, 3)  # 보상 연출
         do_extra_loot(bot, ctx.extra_loot)
         ctx.n["loot"] = 1

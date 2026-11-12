@@ -7,7 +7,7 @@ from unittest import mock
 
 from mabi.packet_monitor import PacketState
 from mabi.profile import game_day_start
-from mabi.tasks import black_hole, content, weekday
+from mabi.tasks import black_hole, weekday, worldmap
 
 CFG = {"black_hole": {"achieved": "x"}, "weekday_dungeon": {"achieved": "y"}}
 
@@ -80,13 +80,13 @@ class WeekdayTest(unittest.TestCase):
 
 class TownTest(unittest.TestCase):
     def test_other_town(self):
-        self.assertTrue(content.other_town(bot_with(channel=1, channel_type="Field", channel_name="콜헨"), "이멘마하"))
-        self.assertFalse(content.other_town(bot_with(channel=1, channel_type="Field", channel_name="이멘 마하"), "이멘마하"))
+        self.assertTrue(worldmap.other_town(bot_with(channel=1, channel_type="Field", channel_name="콜헨"), "이멘마하"))
+        self.assertFalse(worldmap.other_town(bot_with(channel=1, channel_type="Field", channel_name="이멘 마하"), "이멘마하"))
 
     def test_unknown_or_not_town(self):
-        self.assertFalse(content.other_town(bot_with(channel=1, channel_type="BattleField", channel_name="창백한 산"), "이멘마하"))
-        self.assertFalse(content.other_town(bot_with(), "이멘마하"))
-        self.assertFalse(content.other_town(bot_with(channel=1, channel_type="Field", channel_name="콜헨", loading=True), "이멘마하"))
+        self.assertFalse(worldmap.other_town(bot_with(channel=1, channel_type="BattleField", channel_name="창백한 산"), "이멘마하"))
+        self.assertFalse(worldmap.other_town(bot_with(), "이멘마하"))
+        self.assertFalse(worldmap.other_town(bot_with(channel=1, channel_type="Field", channel_name="콜헨", loading=True), "이멘마하"))
 
 
 if __name__ == "__main__":

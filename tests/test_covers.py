@@ -145,11 +145,11 @@ class WipeTest(unittest.TestCase):
 
 
 class ResultConfirmTest(unittest.TestCase):
-    """레이드·필드 보스 결과 창은 위쪽 '처치 완료'(창 자리 y 약 216) 대신 아래 가운데 '확인' 으로 본다 (content.confirm_text).
+    """레이드·필드 보스 결과 창은 위쪽 '처치 완료'(창 자리 y 약 216) 대신 아래 가운데 '확인' 으로 본다 (clear.confirm_text).
     2026-11-11 화이트 서큐버스 결과 창 — 버튼 띠만 남긴 그림."""
 
     def test_raid_result(self):
-        from mabi.tasks.content import confirm_text
+        from mabi.tasks.clear import confirm_text
         x, y = confirm_text(_frame("raid_result_confirm.png"))
         self.assertTrue(abs(x - 959) < 15 and abs(y - 1009) < 15)
 

@@ -261,7 +261,10 @@ def name_in_frame(frame) -> str:
 
 def _leave_dungeon(bot: Bot) -> bool:
     """던전 안이거나 클리어/보상 화면에 남아 있으면 (중단·충돌 뒤 다시 시작한 경우) 마무리하고 나온다."""
-    from .content import after_clear, dungeon_state, game_space, hunt_quest, inside_space, play_dungeon, wait_field, wait_until
+    from .clear import after_clear
+    from .dungeon import play_dungeon, wait_field
+    from .space import dungeon_state, game_space, hunt_quest, inside_space
+    from .steps import wait_until
     from .exits import leave_instance
     from ..place import ABYSS, HOUSINGS, RAID, RAID_LOBBY, place
     ui = bot.ui
@@ -310,7 +313,7 @@ def _in_field(bot: Bot) -> bool:
     """사냥터 안인가. 자리(place — 패킷 사냥터 상태, 패킷이 맵을 모르면 CLI 의 사냥터 안 여부)로, 그것도 모르면
     진행 중인 사냥터 퀘스트(CLI)가 있는 것으로."""
     from ..place import place
-    from .content import hunt_quest
+    from .space import hunt_quest
     if (inside := place(bot).in_field) is not None:
         return inside
     return bool(hunt_quest(bot))
@@ -341,46 +344,74 @@ def _task(bot: Bot, cfg: dict, character: dict | None = None) -> str:
 
 
 def _run(bot: Bot, cfg: dict, character: dict | None) -> str:
-    c, ui = cfg["login"], bot.ui
-    main, title, charsel = ui["main_hud"], ui["title_start"], ui["charselect_title"]
-    name = character.get("name", f"슬롯 {character['slot']}") if character else "현재 캐릭터"
-    auth = _auth_names(bot)
+    """접속 한 번. 단계는 _Login 의 메서드 — 시작 정리 → 이미 접속 중인가 → 선택 화면까지 → 고르고 게임 시작 → 게임 안까지
+    → 들어간 캐릭터 확인 → 접속 직후 화면 정리."""
+    return _Login(bot, cfg, character).run()
 
-    def wait_screen_for(names: list[str], timeout: float) -> Match:
+
+class _Login:
+    """접속 한 번의 단계들. 설정·화면 이름·접속 오류 창 목록을 단계끼리 같이 쓴다."""
+
+    def __init__(self, bot: Bot, cfg: dict, character: dict | None):
+        self.bot, self.cfg, self.character = bot, cfg, character
+        self.c, self.ui = cfg["login"], bot.ui
+        self.main, self.title, self.charsel = self.ui["main_hud"], self.ui["title_start"], self.ui["charselect_title"]
+        self.name = character.get("name", f"슬롯 {character['slot']}") if character else "현재 캐릭터"
+        self.auth = _auth_names(bot)
+
+    def run(self) -> str:
+        self.tidy_start()
+        if (done := self.already_in()) is not None:
+            return done
+        m = self.reach_charselect()
+        mark = self.enter_game() if m.name == self.charsel else None
+        self.check_character(mark)
+        return self.settle()
+
+    # ---- 화면 기다리기
+    def wait_screen_for(self, names: list[str], timeout: float) -> Match:
         """화면 대기 중 접속 오류 창이 뜨면 바로 StepTimeout (run 이 처리) — 180초를 버리지 않게."""
-        m = bot.wait_any([*names, *auth], timeout=timeout)
-        if m.name in auth:
+        m = self.bot.wait_any([*names, *self.auth], timeout=timeout)
+        if m.name in self.auth:
             raise StepTimeout(f"접속 오류 창 ({m.name})")
         return m
 
-    def wait_screen(names: list[str]) -> Match:
-        return wait_screen_for(names, c["timeout"])
+    def wait_screen(self, names: list[str]) -> Match:
+        return self.wait_screen_for(names, self.c["timeout"])
 
-    if bot.state.available() or bot.packets.ok:  # 던전·사냥터 상태는 패킷만으로도 안다
-        _leave_dungeon(bot)
+    # ---- 단계
+    def tidy_start(self) -> None:
+        """시작 정리: 던전·사냥터 안이면 마무리, NPC 대화 정리, 지금 상황에서 메인 화면까지, 열린 창 닫기."""
+        bot = self.bot
+        if bot.state.available() or bot.packets.ok:  # 던전·사냥터 상태는 패킷만으로도 안다
+            _leave_dungeon(bot)
 
-    # NPC 대화(아르바이트 메뉴·전달 창 등)에 멈춰 있으면 ESC 로는 안 닫히고 (to_main 이 헛돈다) 닫혀도 그 일이 날아간다
-    # → 아르바이트 정리로 끝까지 넘긴다 (Space 선택지면 진행). 2026-10-22 케이틴 메뉴에서 이어 하다 26초 헛돎
-    from .arbeit import _settle
-    from .dialogue import in_dialog
-    if bot.state.available() and in_dialog(bot):
-        bot.log.info("NPC 대화 중에 시작 → 대화부터 정리")
-        _settle(bot)
-    # 어디서 켰든 지금 상황(situation.look)을 보고 메인 화면까지 — 작별 대사('벌써 가?')·출석·전달 창·던전 창 등
-    # (2026-10-26 전달 창을 닫은 뒤 이어 하기 — 작별 대사 화면에서 메인 화면을 1분 넘게 기다림)
-    at = situation.look(bot)
-    if at not in (situation.MAIN, situation.LOADING, situation.CHARSELECT, situation.TITLE, situation.DIALOG):
-        bot.log.info(f"시작 상황: {at} → 메인 화면으로")
-        situation.to_main(bot, 30)
+        # NPC 대화(아르바이트 메뉴·전달 창 등)에 멈춰 있으면 ESC 로는 안 닫히고 (to_main 이 헛돈다) 닫혀도 그 일이 날아간다
+        # → 아르바이트 정리로 끝까지 넘긴다 (Space 선택지면 진행). 2026-10-22 케이틴 메뉴에서 이어 하다 26초 헛돎
+        from .arbeit import _settle
+        from .dialogue import in_dialog
+        if bot.state.available() and in_dialog(bot):
+            bot.log.info("NPC 대화 중에 시작 → 대화부터 정리")
+            _settle(bot)
+        # 어디서 켰든 지금 상황(situation.look)을 보고 메인 화면까지 — 작별 대사('벌써 가?')·출석·전달 창·던전 창 등
+        # (2026-10-26 전달 창을 닫은 뒤 이어 하기 — 작별 대사 화면에서 메인 화면을 1분 넘게 기다림)
+        at = situation.look(bot)
+        if at not in (situation.MAIN, situation.LOADING, situation.CHARSELECT, situation.TITLE, situation.DIALOG):
+            bot.log.info(f"시작 상황: {at} → 메인 화면으로")
+            situation.to_main(bot, 30)
 
-    # 게임 안에서 창(지도, 퀘스트 등)이 열려 있으면 어느 화면인지 판단할 수 없으므로 먼저 닫는다
-    if not bot.at_main() and not (bot.exists(title) or bot.exists(charsel)):
-        try:
-            bot.to_main(tries=4)
-        except StepTimeout:
-            pass  # 로딩 중 등. 아래에서 화면이 나타날 때까지 기다린다
+        # 게임 안에서 창(지도, 퀘스트 등)이 열려 있으면 어느 화면인지 판단할 수 없으므로 먼저 닫는다
+        if not bot.at_main() and not (bot.exists(self.title) or bot.exists(self.charsel)):
+            try:
+                bot.to_main(tries=4)
+            except StepTimeout:
+                pass  # 로딩 중 등. 아래에서 화면이 나타날 때까지 기다린다
 
-    if bot.at_main():
+    def already_in(self) -> str | None:
+        """메인 화면이면: 고를 캐릭터가 없거나 이미 그 캐릭터면 끝 (결과 글자), 다른 캐릭터면 선택 화면으로 나가고 None."""
+        bot, character = self.bot, self.character
+        if not bot.at_main():
+            return None
         if character is None:
             bot.dismiss_popups()
             return "이미 접속 중"
@@ -390,34 +421,56 @@ def _run(bot: Bot, cfg: dict, character: dict | None) -> str:
             bot.log.info(f"이미 {character['name']} 로 접속 중 (화면 이름 확인) → 다시 고르지 않음")
             bot.dismiss_popups()
             bot.to_main()
-            return f"{name} 이미 접속 중"
-        bot.log.info(f"지금 캐릭터: {now or '이름을 못 읽음'} → {name} 로 다시 고름")
+            return f"{self.name} 이미 접속 중"
+        bot.log.info(f"지금 캐릭터: {now or '이름을 못 읽음'} → {self.name} 로 다시 고름")
         bot.to_charselect()
+        return None
 
-    m = wait_screen([main, charsel, title])
-    bot.log.debug(f"접속 시작 화면: {m.name}")
-    if m.name == title:
-        bot.key("space")  # 타이틀 '게임 시작' (Space 배지)
-        m = wait_screen([main, charsel])
-    if m.name == main and character is not None:  # 타이틀에서 바로 마지막 캐릭터로 들어간 경우
-        bot.to_charselect()
-        m = bot.wait(charsel)
+    def reach_charselect(self) -> Match:
+        """메인·선택·타이틀 중 뜬 화면을 기다리고, 타이틀이면 게임 시작, 고를 캐릭터가 있는데 메인이면 선택 화면으로."""
+        bot, main, charsel, title = self.bot, self.main, self.charsel, self.title
+        m = self.wait_screen([main, charsel, title])
+        bot.log.debug(f"접속 시작 화면: {m.name}")
+        if m.name == title:
+            bot.key("space")  # 타이틀 '게임 시작' (Space 배지)
+            m = self.wait_screen([main, charsel])
+        if m.name == main and self.character is not None:  # 타이틀에서 바로 마지막 캐릭터로 들어간 경우
+            bot.to_charselect()
+            m = bot.wait(charsel)
+        return m
 
-    if m.name == charsel:
-        bot.sleep(1.5, 2)  # 카드 목록 표시 대기
-        if character is not None:
-            try:
-                select_character(bot, cfg, character)
-            except SelectFailed as e:  # 화면 전환 직후 카드가 움직이는 중일 수 있다
-                bot.log.warning(f"캐릭터 선택 실패, 다시 시도: {e}")
-                bot.sleep(3, 4)
-                select_character(bot, cfg, character)
-        global _last_login
-        wait = c["min_interval"] - (time.monotonic() - _last_login)
+    def enter_game(self):
+        """선택 화면: 캐릭터 고르기 → 접속 간격 지키기 → 게임 시작 → 게임 안까지. 게임 시작 직전 패킷 자리(mark)를 돌려준다."""
+        self.bot.sleep(1.5, 2)  # 카드 목록 표시 대기
+        if self.character is not None:
+            self.select()
+        self.keep_interval()
+        mark, t0 = self.press_start()
+        self.wait_in_game(mark, t0)
+        return mark
+
+    def select(self) -> None:
+        """캐릭터 고르기 — 실패하면 조금 쉬고 한 번 더."""
+        bot, cfg, character = self.bot, self.cfg, self.character
+        try:
+            select_character(bot, cfg, character)
+        except SelectFailed as e:  # 화면 전환 직후 카드가 움직이는 중일 수 있다
+            bot.log.warning(f"캐릭터 선택 실패, 다시 시도: {e}")
+            bot.sleep(3, 4)
+            select_character(bot, cfg, character)
+
+    def keep_interval(self) -> None:
+        """지난 '게임 시작' 뒤 min_interval 초가 안 지났으면 기다린다."""
+        wait = self.c["min_interval"] - (time.monotonic() - _last_login)
         if _last_login and wait > 0:
-            bot.log.info(f"접속 간격 유지: {wait:.0f}초 대기")  # 너무 잦은 접속 전환은 게임 오류를 부른다
-            bot.sleep(wait)
-        bot.wait(ui["charselect_start"], timeout=10)
+            self.bot.log.info(f"접속 간격 유지: {wait:.0f}초 대기")  # 너무 잦은 접속 전환은 게임 오류를 부른다
+            self.bot.sleep(wait)
+
+    def press_start(self):
+        """'게임 시작'(Space)을 누르고, 눌리지 않았으면 다시 (3번까지). (패킷 자리 mark, 누른 시각 t0)."""
+        global _last_login
+        bot = self.bot
+        bot.wait(self.ui["charselect_start"], timeout=10)
         mark = bot.packets.mark()
         bot.key("space")  # '게임 시작' 단축키. 클릭보다 확실하다
         t0 = _last_login = time.monotonic()
@@ -427,10 +480,15 @@ def _run(bot: Bot, cfg: dict, character: dict | None) -> str:
             started = bot.wait_packet(lambda s: bool(s.in_game) or s.loading, 5, since=mark)
             if started is None:
                 bot.sleep(5)
-            if started or not bot.exists(charsel):
+            if started or not bot.exists(self.charsel):
                 break
             bot.log.info("게임 시작이 눌리지 않음 → 다시 시도")
             bot.key("space")
+        return mark, t0
+
+    def wait_in_game(self, mark, t0: float) -> None:
+        """게임 시작 뒤 메인 화면·하루 첫 접속 화면·팝업이 뜨거나, 버튼 없는 화면이라도 게임 안(패킷·CLI)이 될 때까지."""
+        bot, c, ui = self.bot, self.c, self.ui
         closers = [n for n in ui["popup_closers"] if bot.vision.has(n)]
         first = [c["stella_title"], c["notice_webview"], c["attendance_skip"], c["event_popup_close"],
                  ui["scene_skip"]]  # 하루 첫 접속 화면
@@ -438,7 +496,7 @@ def _run(bot: Bot, cfg: dict, character: dict | None) -> str:
         end = time.monotonic() + c["timeout"]
         while True:
             try:
-                m = wait_screen_for([main, *first, *closers], 6)
+                m = self.wait_screen_for([self.main, *first, *closers], 6)
                 bot.log.debug(f"게임 시작 → {m.name} ({time.monotonic() - t0:.0f}s)")
                 break
             except StepTimeout:
@@ -451,20 +509,27 @@ def _run(bot: Bot, cfg: dict, character: dict | None) -> str:
                     bot.log.debug(f"게임 시작 → 버튼 없는 화면, 게임 안 ({time.monotonic() - t0:.0f}s)")
                     break
                 if time.monotonic() > end:
-                    raise StepTimeout(f"{name} 접속 후 메인 화면이 나타나지 않음 → {bot.snapshot('login').name}")
+                    raise StepTimeout(f"{self.name} 접속 후 메인 화면이 나타나지 않음 → {bot.snapshot('login').name}")
 
-    bot.state.available(refresh=True)
-    # 들어간 캐릭터가 고른 캐릭터인가 — 패킷이 이름을 바로 안다 (다르면 숙제를 시작하지 않는다, 11-04 엉뚱한 캐릭터에 숙제)
-    if character is not None and character.get("name"):
-        bot.wait_packet(lambda s: bool(s.my_name) and not s.loading, 10, since=mark)
-        now = current_name(bot)
-        if now and not name_matches(now, name):
-            raise WrongCharacter(f"{name} 을 골랐는데 {now} 로 접속됨 → {bot.snapshot('wrong_char').name}")
-    handled = settle_first_login(bot, cfg, c["settle_timeout"])
-    situation.attendance_done(bot)
-    if handled:
-        bot.log.info(f"접속 직후 화면 처리: {', '.join(handled)}")
-    closed = bot.dismiss_popups()
-    bot.to_main()
-    extra = handled + ([f"팝업 {closed}개"] if closed else [])
-    return f"{name} 접속 완료" + (f" ({', '.join(extra)})" if extra else "")
+    def check_character(self, mark) -> None:
+        """CLI 를 다시 확인하고, 들어간 캐릭터가 고른 캐릭터인가 — 패킷이 이름을 바로 안다
+        (다르면 숙제를 시작하지 않는다, 11-04 엉뚱한 캐릭터에 숙제)."""
+        bot, character, name = self.bot, self.character, self.name
+        bot.state.available(refresh=True)
+        if character is not None and character.get("name"):
+            bot.wait_packet(lambda s: bool(s.my_name) and not s.loading, 10, since=mark)
+            now = current_name(bot)
+            if now and not name_matches(now, name):
+                raise WrongCharacter(f"{name} 을 골랐는데 {now} 로 접속됨 → {bot.snapshot('wrong_char').name}")
+
+    def settle(self) -> str:
+        """접속 직후 화면(출석·스텔라 픽·공지 …)과 팝업을 정리하고 결과 글자."""
+        bot = self.bot
+        handled = settle_first_login(bot, self.cfg, self.c["settle_timeout"])
+        situation.attendance_done(bot)
+        if handled:
+            bot.log.info(f"접속 직후 화면 처리: {', '.join(handled)}")
+        closed = bot.dismiss_popups()
+        bot.to_main()
+        extra = handled + ([f"팝업 {closed}개"] if closed else [])
+        return f"{self.name} 접속 완료" + (f" ({', '.join(extra)})" if extra else "")

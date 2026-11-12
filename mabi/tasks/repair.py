@@ -20,7 +20,7 @@ import numpy as np
 from .. import gamedata as gd, keys
 from ..bot import Bot
 from . import dialogue, ui_text
-from .content import go_talk
+from .arrival import go_talk
 from ..exceptions import CannotProceed
 from ..monitor import Did
 
@@ -109,7 +109,7 @@ def _open_quick_nav(bot: Bot) -> tuple[int, int]:
 
 
 def _go_smithy(bot: Bot) -> None:
-    """퀵 내비게이터 '대장간' → 도착해 대장간 NPC 대화가 열릴 때까지 (content.go_talk)."""
+    """퀵 내비게이터 '대장간' → 도착해 대장간 NPC 대화가 열릴 때까지 (arrival.go_talk)."""
     go_talk(bot, lambda: bot.click(_open_quick_nav(bot)), "대장간", "repair_menu")
 
 

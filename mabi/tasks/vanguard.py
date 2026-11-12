@@ -19,7 +19,11 @@ from .. import gamedata as gd, monitor
 from ..bot import Bot
 from ..exceptions import CannotProceed, StepTimeout
 from . import ui_text
-from .content import after_clear, cleared_now, game_space, go_from_guide, growth_done, wait_arrival, watch
+from .arrival import wait_arrival
+from .clear import after_clear, cleared_now
+from .fight import watch
+from .guide import go_from_guide, growth_done
+from .space import game_space
 
 GROWTH = "뱅가드 브리치"   # CLI 성장 가이드의 Target, 가이드 카드 제목
 SPACE = "뱅가드"           # 안일 때 CLI 장소 이름에 들어가는 글자

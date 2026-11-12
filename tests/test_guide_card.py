@@ -1,11 +1,11 @@
-"""콘텐츠 가이드에서 콘텐츠로 가기 (mabi.tasks.content) — 위쪽 달성 칸의 글자가 먼저, 안 되면 카드 (뒤쪽 카드는 목록을 내려가며)."""
+"""콘텐츠 가이드에서 콘텐츠로 가기 (mabi.tasks.guide) — 위쪽 달성 칸의 글자가 먼저, 안 되면 카드 (뒤쪽 카드는 목록을 내려가며)."""
 import types
 import unittest
 from unittest import mock
 
 import numpy as np
 
-from mabi.tasks import content, ui_text
+from mabi.tasks import guide, ui_text
 
 
 class FakeBot:
@@ -48,9 +48,9 @@ def fake_find(bot, want, region=None, exact=True):
 
 class OpenGuideCardTest(unittest.TestCase):
     def open(self, bot):
-        with mock.patch.object(content, "open_guide"), mock.patch.object(content, "guide_tab"), \
+        with mock.patch.object(guide, "open_guide"), mock.patch.object(guide, "guide_tab"), \
                 mock.patch.object(ui_text, "find", fake_find):
-            return content.open_guide_card(bot, "뱅가드", weekly=True, text=True)
+            return guide.open_guide_card(bot, "뱅가드", weekly=True, text=True)
 
     def test_found_on_first_screen(self):
         bot = FakeBot(shows_at=0)
@@ -97,7 +97,7 @@ class GoalBot:
 class GuideGoalTest(unittest.TestCase):
     def goal(self, bot):
         with mock.patch.object(ui_text, "find", lambda b, want, region=None, exact=True: (GoalBot.X, GoalBot.Y)):
-            return content.guide_goal(bot, "뱅가드 브리치", weekly=True)
+            return guide.guide_goal(bot, "뱅가드 브리치", weekly=True)
 
     def test_white_is_not_done(self):
         self.assertIs(self.goal(GoalBot(white=True, check=False)).done, False)
@@ -111,7 +111,7 @@ class GuideGoalTest(unittest.TestCase):
 
     def test_missing(self):
         with mock.patch.object(ui_text, "find", lambda *a, **k: None):
-            self.assertIsNone(content.guide_goal(GoalBot(True, False), "뱅가드 브리치", weekly=True))
+            self.assertIsNone(guide.guide_goal(GoalBot(True, False), "뱅가드 브리치", weekly=True))
 
 
 class GoFromGuideTest(unittest.TestCase):
@@ -119,26 +119,26 @@ class GoFromGuideTest(unittest.TestCase):
         bot = mock.Mock()
         bot.ui = {"guide_title": "guide_title"}
         bot.exists.return_value = not closes  # 눌렀는데 가이드 제목이 그대로 = 안 넘어감
-        with mock.patch.object(content, "open_guide"), mock.patch.object(content, "guide_goal", return_value=goal), \
-                mock.patch.object(content, "open_guide_card", return_value=card) as by_card:
-            got = content.go_from_guide(bot, "뱅가드 브리치", weekly=True, card="뱅가드", text=True)
+        with mock.patch.object(guide, "open_guide"), mock.patch.object(guide, "guide_goal", return_value=goal), \
+                mock.patch.object(guide, "open_guide_card", return_value=card) as by_card:
+            got = guide.go_from_guide(bot, "뱅가드 브리치", weekly=True, card="뱅가드", text=True)
         return got, bot, by_card
 
     def test_white_goal_clicked(self):
-        got, bot, by_card = self.go(content.Goal(1549, 257, False))
+        got, bot, by_card = self.go(guide.Goal(1549, 257, False))
         self.assertTrue(got)
         bot.click.assert_called_once_with((1549, 257))
         by_card.assert_not_called()
 
     def test_done_goal(self):
-        got, bot, by_card = self.go(content.Goal(1549, 257, True))
+        got, bot, by_card = self.go(guide.Goal(1549, 257, True))
         self.assertFalse(got)
         bot.click.assert_not_called()
         by_card.assert_not_called()
 
     def test_falls_back_to_card(self):
         # 달성 칸에서 못 읽음 · 색과 체크가 어긋남 · 눌러도 가이드가 그대로 → 아래 카드 (이미 열린 가이드에서)
-        for goal, closes in ((None, True), (content.Goal(1549, 257, None), True), (content.Goal(1549, 257, False), False)):
+        for goal, closes in ((None, True), (guide.Goal(1549, 257, None), True), (guide.Goal(1549, 257, False), False)):
             got, bot, by_card = self.go(goal, closes=closes)
             self.assertTrue(got)
             by_card.assert_called_once_with(bot, "뱅가드", opened=True, weekly=True, text=True)

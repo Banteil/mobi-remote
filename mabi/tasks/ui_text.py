@@ -2,6 +2,7 @@
 
 글자는 띄어쓰기를 빼고 비교한다. region 은 [x, y, 너비, 높이] (1920x1080 기준) — 보통 gamedata.region(키).
 """
+import re
 import time
 
 from .. import gamedata as gd
@@ -67,3 +68,19 @@ def open_menu(bot: Bot, text_key: str, what: str, shot: str, menu_open: bool = F
             break
         bot.clear_blockers(ocr=True)
     click(bot, want, region, what=what, shot=shot)
+
+
+def read_button(frame, region) -> tuple[int | None, str, str]:
+    """숫자와 한글이 섞인 버튼('20 입장하기', '10 임무 시작', '2층 3구역 진입') → (가격, Windows 글자, 한글 글자).
+    숫자는 Windows OCR, 한글은 RapidOCR 로 읽는다 (ocr.py 머리말). 가격은 버튼 글자의 마지막 숫자."""
+    from ..ocr import read_ko, read_text
+    win, ko = read_text(frame, region), read_ko(frame, region)
+    nums = re.findall(r"\d+", win)
+    return (int(nums[-1]) if nums else None), win, ko
+
+
+def has_word(word: str, *texts: str) -> bool:
+    """한글 단어가 읽은 글자들 중 하나에 있는지 (띄어쓰기 무시)."""
+    from ..ocr import nospace
+    w = nospace(word)
+    return any(w in nospace(t) for t in texts)

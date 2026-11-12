@@ -164,7 +164,7 @@ class Bot:
         self._weight_at = 0.0
         self.daily = None  # 오늘 진행 기록 (profile.DailyState), runner 가 설정
         self.also_done: set[str] = set()  # 다른 태스크 안에서 함께 끝낸 태스크 id (runner 가 완료로 기록)
-        self.on_clear = None  # 클리어 신호가 온 순간 부를 함수 (content.cleared_now) — 숙제가 그 자리에서 횟수를 기록
+        self.on_clear = None  # 클리어 신호가 온 순간 부를 함수 (clear.cleared_now) — 숙제가 그 자리에서 횟수를 기록
         self.done_at_clear = False  # 이 숙제의 클리어를 이미 함 — 뒤 정리 중 멈춰도 오늘 완료로 기록 (runner)
         self.verified = False  # 지금 숙제가 스스로 완료를 확인했다 (runner 가 다시 확인하지 않는다 — 가이드를 두 번 열던 것)
         self.task_id: str | None = None  # 지금 하는 숙제 id, runner 가 설정
@@ -182,7 +182,7 @@ class Bot:
         self.background = False
         # 봇을 만들 때(게임을 앞으로 가져오기 전) 쓰던 창 — 뒤로 보내 도는 숙제(나이트메어 드릴)가 그 창을 돌려준다
         self.user_window = ctypes.windll.user32.GetForegroundWindow()
-        # 기다리는 게 오래 안 나오면 막는 화면(대화·연출·퀘스트 클리어 확인·화면 터치)을 넘겨 본다 (tasks.content.clear_blockers).
+        # 기다리는 게 오래 안 나오면 막는 화면(대화·연출·퀘스트 클리어 확인·화면 터치)을 넘겨 본다 (tasks.clear.clear_blockers).
         # 혼자 오래 도는 일(일일 숙제·어비스 반복)만 켠다 — runner·abyss.repeat 가 설정
         self.auto_clear = False
         self._clearing = False
@@ -594,10 +594,10 @@ class Bot:
             self.sleep(interval)
 
     def clear_blockers(self, skip=(), ocr: bool = False) -> str | None:
-        """막는 화면 하나를 넘긴다 (tasks.content.clear_blockers). 넘겼으면 로그에 남긴다."""
+        """막는 화면 하나를 넘긴다 (tasks.clear.clear_blockers). 넘겼으면 로그에 남긴다."""
         if self._clearing:
             return None
-        from .tasks.content import clear_blockers
+        from .tasks.clear import clear_blockers
         self._clearing = True
         try:
             what = clear_blockers(self, skip, ocr)

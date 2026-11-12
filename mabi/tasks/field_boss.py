@@ -23,7 +23,10 @@ from ..exceptions import CannotProceed, StepTimeout
 from ..place import FIELD_BOSS
 from . import ui_text
 from .boss_skills import BossSkills
-from .content import confirm_text, growth_done, wait_arrival, watch
+from .arrival import wait_arrival
+from .clear import confirm_text
+from .fight import watch
+from .guide import growth_done
 from .exits import Exit
 
 MIN_LEFT = 4 * 60          # 남은 시간이 이보다 적으면 새 캐릭터를 시작하지 않는다 (초) — 한 캐릭터 1~3분

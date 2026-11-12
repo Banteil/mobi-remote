@@ -20,7 +20,9 @@ from ..bot import Bot
 from ..exceptions import CannotProceed, StepTimeout
 from ..place import RAID, RAID_LOBBY, place
 from . import entry, ui_text
-from .content import Fight, confirm_text, wait_arrival, wait_settled, where_settled
+from .arrival import wait_arrival, wait_settled, where_settled
+from .clear import confirm_text
+from .fight import Fight
 from .exits import Exit
 from .repeat import Repeat
 
@@ -266,7 +268,7 @@ def wait_matched(bot: Bot, timeout: float) -> bool:
 def play(bot: Bot, run_timeout: float, revive: bool = True, on_revive=lambda: None, tick=lambda act: False) -> str:
     """레이드 맵에서 보스를 잡을 때까지. 'clear' | 'dead' | 'timeout'.
     쓰러지면 '여기서 부활' (점검자 — abyss.revive_here, 부활 횟수를 다 쓰면 'dead'). 배고프면 먹는다.
-    tick(act): 확인마다 부른다 — 보스전 궁극기·팔라딘 변신 (Repeat.skills). 뼈대는 content.Fight."""
+    tick(act): 확인마다 부른다 — 보스전 궁극기·팔라딘 변신 (Repeat.skills). 뼈대는 fight.Fight."""
     return RaidPlay(bot, run_timeout, revive, on_revive, tick).run()
 
 

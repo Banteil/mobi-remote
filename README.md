@@ -81,7 +81,9 @@ opencv-python-headless 가 들어와 opencv-python 과 겹칩니다).
 - `mabi/` window(창) · screen(캡처) · vision(매칭) · ocr(한글 RapidOCR / 숫자·영어 Windows OCR) · inputs(입력) ·
   game_state(CLI 조회) · bot(대기/클릭/복구 API) · whoami(캐릭터 카드 정보)
 - `mabi/tasks/` login · charscan(캐릭터 선택 화면 읽기) · weekday · silver · tribute · black_hole · daily_mission ·
-  arbeit(아르바이트) · display(게임 화면 설정) · content(던전/사냥터 공용)
+  arbeit(아르바이트) · display(게임 화면 설정) ·
+  던전/사냥터 공용: dungeon(한 판) · clear(클리어 뒤) · fight(안에서 지켜보기) · space(장소·상태) · arrival(이동·도착) ·
+  worldmap(지도) · guide(콘텐츠 가이드) · questwin(퀘스트 창) · steps(재시도·대기)
 - `gui_app/` · `web/` 화면 (docs/PLAN.md '지금 구조')
 - `config.default.toml` 기본 설정 (실행 순서·숙제별 설정·템플릿 이름). `config.toml` 에는 이와 다른 값만 저장되고
   나머지는 기본값을 따른다 — 새 판에서 바뀐 기본값이 그대로 적용된다 (개인 설정이라 저장소에는 올리지 않음)

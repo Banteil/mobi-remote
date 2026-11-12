@@ -16,7 +16,8 @@ from .. import gamedata as gd, keys, monitor, ocr
 from ..bot import Bot
 from ..exceptions import CannotProceed, StepTimeout
 from ..ocr import read_ko, read_text
-from .content import has_word, list_views, wait_until
+from .steps import list_views, wait_until
+from .ui_text import has_word
 
 
 def _ctx(what: str) -> monitor.Ctx:
@@ -113,7 +114,7 @@ def _scroll_list(bot: Bot, c: dict, notches: int) -> None:
 
 
 def _list_views(bot: Bot, c: dict):
-    """미션 목록 맨 위부터 조금씩 내려가며 한 화면씩 (content.list_views)."""
+    """미션 목록 맨 위부터 조금씩 내려가며 한 화면씩 (steps.list_views)."""
     return list_views(bot, c["list_area"], c["list_scroll_at"], c["list_step"], c["list_steps"])
 
 

@@ -9,7 +9,7 @@ from mabi.bot import Bot
 from mabi.packet_monitor import PacketMonitor
 from mabi.packet_monitor.appearing import appearing_is_mine, appearing_name
 from mabi.packet_monitor.stream import Stream, parse_tcp
-from mabi.tasks.content import wait_dungeon
+from mabi.tasks.space import wait_dungeon
 
 KNOWN = frozenset({0x4f6e, 0x5026, 0x272fa, 0x30d4b})
 

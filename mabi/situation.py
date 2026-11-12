@@ -6,7 +6,7 @@
 
 출석: 오전 6시(게임 날짜 바뀜)가 지나면 다음에 필드로 나올 때 출석 대사가 뜬다. 접속 단계(login)는 원래 넘겼지만
 어비스 반복처럼 캐릭터를 바꾸지 않고 6시를 넘기면 — 쓰러져 나가거나 수리하러 나가는 순간 — 출석 대사에 막혔다
-(2026-10-26 사용자). clear_attendance() 를 막는 화면 넘기기(content.clear_blockers)가 늘 먼저 부른다.
+(2026-10-26 사용자). clear_attendance() 를 막는 화면 넘기기(clear.clear_blockers)가 늘 먼저 부른다.
 """
 import time
 

@@ -101,9 +101,9 @@ Qt 위젯 화면(gui_app/*_tab.py)은 모양이 별로라, **레거시 리모콘
 ### OCR 규칙 (사용자 결정, 2026-10-21)
 - **한글은 RapidOCR**(PP-OCRv5 한국어, onnxruntime) — `ocr.read_ko(frame, region)`, `ocr.read_line(img)`.
   게임 글꼴에서 Windows OCR 보다 훨씬 정확 ('옥'을 Windows 는 '목' 처럼 받침·모음을 틀림, '임무ÅI작' → '임무 시작').
-  띄어쓰기는 자주 빠뜨리므로 비교는 공백을 빼고 (`ocr.nospace`, `content.has_word`).
+  띄어쓰기는 자주 빠뜨리므로 비교는 공백을 빼고 (`ocr.nospace`, `ui_text.has_word`).
 - **숫자·영어는 Windows OCR** — `ocr.read_text`. RapidOCR 은 버튼 앞 동전 아이콘에 헷갈려 '20 입장하기' 의 숫자를 빠뜨린다.
-- 섞인 버튼('20 입장하기', '10 임무 시작', '2층 3구역 진입')은 `content.read_button` → (가격 = Windows, 글자 = 둘 다).
+- 섞인 버튼('20 입장하기', '10 임무 시작', '2층 3구역 진입')은 `ui_text.read_button` → (가격 = Windows, 글자 = 둘 다).
   가격은 Windows 숫자, 단어('입장'·'시작'·'심층'·'N층 M구역')는 두 OCR 중 하나라도 맞으면. '심층'은 어느 쪽이든 보이면 중단.
 - 예외: 캐릭터 카드 레벨 배지(흰 바탕 검은 숫자)는 Windows(흰 글자용)가 못 읽어 RapidOCR — 표시용.
 - 주의: `onnxruntime` 을 `winrt` 보다 **먼저** import 해야 한다 (반대면 프로세스가 segfault). `mabi/ocr.py` 맨 위에서 처리.
@@ -122,7 +122,8 @@ gui_app/            web_shell(QtWebEngine 껍데기) · web_main(진입점·트�
                     queue_api(작업 큐 카드 종류: 숙제·어비스·목표·행동, F12) · dye_service(+dye_tab: 겹쳐 그리는 창)
 mabi/               엔진: paths, userconfig, runner, report, bot, vision, ocr, inputs, game_state, profile, whoami, connector,
                     cache, query, progress, workqueue(작업 큐), craft/, dye/,
-                    tasks/(login, charscan, weekday, silver, tribute, black_hole, daily_mission, arbeit, abyss, display, content)
+                    tasks/(login, charscan, weekday, silver, tribute, black_hole, daily_mission, arbeit, abyss, display,
+                           dungeon, clear, fight, space, arrival, worldmap, guide, questwin, steps)
 tests/              python -m unittest discover tests · node tests/queue.test.js (게임 없이)
 config.toml         숙제 설정 — 기본값과 다른 값만 (mabi.userconfig, 화면은 tomlkit 으로 고침)
 profile.json        숙제할 슬롯·이름 · characters.json 슬롯별 지문·카드 정보 · portraits/ 카드 그림

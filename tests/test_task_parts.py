@@ -2,7 +2,8 @@
 import unittest
 from unittest import mock
 
-from mabi.tasks import content, entry, ui_text
+from mabi.exceptions import CannotProceed
+from mabi.tasks import arrival, entry, fight, ui_text
 
 
 class Clock:
@@ -24,8 +25,8 @@ def fake_bot(clock, **kw):
 
 class WaitArrivalTest(unittest.TestCase):
     def run_wait(self, bot, clock, visible, **kw):
-        with mock.patch.object(content.time, "monotonic", clock):
-            return content.wait_arrival(bot, visible, 30, "shot", "못 감", **kw)
+        with mock.patch.object(arrival.time, "monotonic", clock):
+            return arrival.wait_arrival(bot, visible, 30, "shot", "못 감", **kw)
 
     def test_visible(self):
         c = Clock()
@@ -42,14 +43,14 @@ class WaitArrivalTest(unittest.TestCase):
     def test_timeout_raises(self):
         c = Clock()
         bot = fake_bot(c, at_main=False, fast_travel=False)
-        with self.assertRaises(content.CannotProceed):
+        with self.assertRaises(CannotProceed):
             self.run_wait(bot, c, lambda: False, retry_fast=True)
         self.assertGreater(bot.fast_travel.call_count, 1)  # 될 때까지 다시 해 본다
 
     def test_fast_travel_once(self):
         c = Clock()
         bot = fake_bot(c, fast_travel=True)
-        with self.assertRaises(content.CannotProceed):
+        with self.assertRaises(CannotProceed):
             self.run_wait(bot, c, lambda: False, retry_fast=True)
         bot.fast_travel.assert_called_once()
 
@@ -81,7 +82,7 @@ class EntryPartsTest(unittest.TestCase):
         bot.click.assert_called_once_with((900, 800))
 
     def test_chance_missing(self):
-        with mock.patch.object(entry, "chance", return_value=None), self.assertRaises(content.CannotProceed):
+        with mock.patch.object(entry, "chance", return_value=None), self.assertRaises(CannotProceed):
             entry.ensure_chance(mock.Mock(), "raid")
 
     def test_wait_button(self):
@@ -92,7 +93,7 @@ class EntryPartsTest(unittest.TestCase):
 
 
 class FightTest(unittest.TestCase):
-    """콘텐츠 안 전투 대기의 뼈대 (content.Fight)."""
+    """콘텐츠 안 전투 대기의 뼈대 (fight.Fight)."""
 
     def make(self, ends, seen_done=False, **kw):
         from mabi.monitor import detect as d
@@ -101,17 +102,17 @@ class FightTest(unittest.TestCase):
         bot.activity.return_value = {}
         ends = iter(ends)
 
-        class F(content.Fight):
+        class F(fight.Fight):
             def packet_end(self):
                 return next(ends)
         seen = d.Seen(d.MAIN, src="test")
         seen.done = "x" if seen_done else None
-        with mock.patch.object(content.time, "monotonic", c):
+        with mock.patch.object(fight.time, "monotonic", c):
             f = F(bot, 60, **kw)
         return f, bot, c, seen
 
     def run_fight(self, f, c, seen):
-        with mock.patch.object(content.time, "monotonic", c), mock.patch.object(content, "watch", return_value=seen):
+        with mock.patch.object(fight.time, "monotonic", c), mock.patch.object(fight, "watch", return_value=seen):
             return f.run()
 
     def test_zero_is_a_result(self):  # 드릴의 '못 깸' 은 0
@@ -120,7 +121,7 @@ class FightTest(unittest.TestCase):
 
     def test_next_skips_round(self):
         tick = mock.Mock()
-        f, bot, c, seen = self.make([content.Fight.NEXT, "clear"], tick=tick)
+        f, bot, c, seen = self.make([fight.Fight.NEXT, "clear"], tick=tick)
         self.assertEqual(self.run_fight(f, c, seen), "clear")
         bot.activity.assert_not_called()
         tick.assert_not_called()

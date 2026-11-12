@@ -9,7 +9,7 @@ from mabi import progress
 from mabi.bot import Bot, Marks
 from mabi.monitor import handlers
 from mabi.profile import game_date
-from mabi.tasks import abyss, arbeit, content
+from mabi.tasks import abyss, arbeit, clear, questwin
 from mabi.vision import Match
 import tomllib
 from pathlib import Path as _P
@@ -61,11 +61,11 @@ class QuestWindowTest(unittest.TestCase):
         bot.find_all.return_value = [Match("go", 1700, 900, 150, 60, 0.9),   # 걸침 (아래 끝 960)
                                      Match("go", 1700, 640, 150, 60, 0.9),
                                      Match("go", 1700, 300, 150, 60, 0.9)]
-        self.assertEqual([b.y for b in content.questwin_buttons(bot, "go")], [300, 640])
+        self.assertEqual([b.y for b in questwin.questwin_buttons(bot, "go")], [300, 640])
 
     def test_text_ok(self):
-        self.assertTrue(content.questwin_text_ok(671))
-        self.assertFalse(content.questwin_text_ok(975))
+        self.assertTrue(questwin.questwin_text_ok(671))
+        self.assertFalse(questwin.questwin_text_ok(975))
 
 
 class SceneSkipTest(unittest.TestCase):
@@ -103,31 +103,31 @@ class SceneSkipTest(unittest.TestCase):
 
     def test_front_clicks_right_away(self):
         b = self.bot(background=False)
-        self.assertEqual(content.clear_blockers(b), "장면 넘기기")
+        self.assertEqual(clear.clear_blockers(b), "장면 넘기기")
         b.click.assert_called_once()
 
     def test_behind_never_grabs(self):
         b = self.bot(background=True)
         with mock.patch.object(handlers.time, "monotonic", side_effect=(100.0 * i for i in itertools.count(1))):
             for _ in range(5):
-                self.assertIsNone(content.clear_blockers(b))
+                self.assertIsNone(clear.clear_blockers(b))
         b.click.assert_not_called()
 
     def test_background_task_but_game_in_front_clicks(self):
         b = self.bot(background=True, foreground=True)  # 사람이 게임을 앞에 두고 보고 있으면 눌러도 된다
-        self.assertEqual(content.clear_blockers(b), "장면 넘기기")
+        self.assertEqual(clear.clear_blockers(b), "장면 넘기기")
 
     def test_scene_skip_off_never_clicks_scene(self):
         b = self.bot(background=False)  # 어비스·던전 중 — 앞에 있어도 연출은 기다린다
         b.scene_skip = False
-        self.assertIsNone(content.clear_blockers(b))
+        self.assertIsNone(clear.clear_blockers(b))
         b.click.assert_not_called()
 
     def test_scene_looking_like_dialog(self):
         # 밝은 보스 출현 연출: '장면 넘기기' 가 '대화 넘기기' 기준도 넘음 → 점수 높은 쪽(장면)으로 본다 (2026-10-25)
         b = self.bot(background=False, shown={"dialog_skip": 0.72, "scene_skip": 0.86})
         b.scene_skip = False
-        self.assertIsNone(content.clear_blockers(b))
+        self.assertIsNone(clear.clear_blockers(b))
         b.click.assert_not_called()
 
     def test_packet_cutscene_is_not_dialog(self):
@@ -135,7 +135,7 @@ class SceneSkipTest(unittest.TestCase):
         b.scene_skip = False
         b.packets.ok, b.packets.state.cutscene, b.packets.state.fresh = True, True, True
         b.packets.state.attending.return_value = False
-        self.assertIsNone(content.clear_blockers(b))
+        self.assertIsNone(clear.clear_blockers(b))
         b.click.assert_not_called()
 
     def packet_bot(self, in_dialogue, cutscene=False):
@@ -160,9 +160,9 @@ class SceneSkipTest(unittest.TestCase):
     def test_behind_dialog_waits_then_clicks(self):
         b = self.bot(background=True, shown={"dialog_skip": 0.9})
         with mock.patch.object(handlers.time, "monotonic", return_value=100.0):
-            self.assertIsNone(content.clear_blockers(b))
+            self.assertIsNone(clear.clear_blockers(b))
         with mock.patch.object(handlers.time, "monotonic", return_value=131.0):
-            self.assertEqual(content.clear_blockers(b), "대화 넘기기")
+            self.assertEqual(clear.clear_blockers(b), "대화 넘기기")
         b.click.assert_called_once()
 
 
