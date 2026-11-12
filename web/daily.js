@@ -136,8 +136,8 @@ mm.daily.onDisplay((m) => {
 });
 
 /* 일일 숙제는 작업 큐(app.js)의 한 항목으로 돈다. 두 가지로 넣는다 (어비스와 같다):
- *  '시작' = 지금 바로 — 맨 위에 넣고 바로 시작한다. 돌던 작업은 뒤로 밀렸다가 끝나면 이어서 (qStartNow)
- *  '목표'     = 큐 맨 아래에 담기만 한다 (재생을 눌러야 진행) — 제작·채집 목표와 같은 방식
+ *  '시작' = 지금 바로 — 맨 위에 넣고 바로 시작한다. 돌던 작업은 뒤로 밀렸다가 끝나면 이어서 (queue.js qStart)
+ *  '목표'     = 큐 맨 아래에 담기만 한다 (재생을 눌러야 진행) — 제작·채집 목표와 같은 방식 (qEnqueue)
  * 게임 캐릭터는 하나라 둘이 동시에 돌면 안 되는데, 큐가 하나씩만 돌리므로 막힌다. */
 function dailySpec() {
   const chars = [...dl.pickedChars];
@@ -147,24 +147,6 @@ function dailySpec() {
     kind: 'daily', label: '일일 숙제',
     chars: chars, only: only.length === dl.st.order.length ? null : only, force: $('#dl-force').checked,
   };
-}
-
-function startDaily() {
-  if (qItems.some((x) => x.kind === 'daily' && x.status === 'run')) { toast('이미 실행 중입니다', '', 'bad'); return; }
-  const it = dailySpec();
-  if (!it) return;
-  const cur = qItems.find((x) => x.status === 'run');
-  toast('일일 숙제 시작', stopKey() + ' = 일시정지 · 다시 누르면 재개' +
-    (cur ? ' · 진행 중이던 "' + cur.label + '" 은 뒤로 미룹니다' : ''), 'ok');
-  qStartNow(it, true);  // 멈춰 둔 숙제 카드는 새 것으로 바꾼다
-}
-
-async function queueDaily() {
-  const it = dailySpec();
-  if (!it) return;
-  await mm.queue.add(it, 'end');
-  toast('큐에 담았습니다', '일일 숙제 — ' + it.chars.length + '명 · ' + (it.only ? '숙제 ' + it.only.length + '개' : '전체') +
-    ' · 재생을 누르면 진행합니다.', 'ok');
 }
 
 /* 기타 숙제 — 나이트메어 드릴. 일일 숙제와 같은 큐 카드(kind 'daily')에 only=['drill'] 로 담는다.
@@ -202,18 +184,20 @@ function pickedSlots(key) {
   return chars;
 }
 
-/* 고른 카드를 지금 바로 (진행 중이던 것은 뒤로) · 큐 맨 아래에 */
-function startHomework(it, title) {
-  if (qItems.some((x) => x.kind === 'daily' && x.status === 'run')) { toast('이미 숙제가 실행 중입니다', '', 'bad'); return; }
-  const cur = qItems.find((x) => x.status === 'run');
-  toast(title + ' 시작', stopKey() + ' = 일시정지 · 다시 누르면 재개' +
-    (cur ? ' · 진행 중이던 "' + cur.label + '" 은 뒤로 미룹니다' : ''), 'ok');
-  qStartNow(it, false);
+/* 숙제 카드(kind 'daily')를 지금 바로 — 진행 중이던 것은 뒤로. replacePaused: 멈춰 둔 숙제 카드를 새 것으로 바꾼다 (일일 숙제 '시작') */
+function startHomework(it, replacePaused) {
+  qStart(it, { title: it.label + ' 시작', hint: stopKey() + ' = 일시정지 · 다시 누르면 재개', busy: '이미 숙제가 실행 중입니다', replacePaused });
 }
 
-async function queueHomework(it, title) {
-  await mm.queue.add(it, 'end');
-  toast('큐에 담았습니다', title + ' — ' + it.chars.length + '명 · 재생을 누르면 진행합니다.', 'ok');
+/** 탭의 '시작'·'목표' 버튼 짝 (pre: 요소 id 앞말). spec() 이 null 이면(고른 게 없음) 아무것도 안 한다.
+ * first: '시작' 을 먼저 가로채는 일 (true 를 돌려주면 그것으로 끝 — 일일 숙제의 이어 하기) */
+function bindStartQueue(pre, spec, start, first) {
+  $('#' + pre + '-start').addEventListener('click', () => {
+    if (first && first()) return;
+    const it = spec();
+    if (it) start(it);
+  });
+  $('#' + pre + '-queue').addEventListener('click', () => { const it = spec(); if (it) qEnqueue(it); });
 }
 
 function paintDrillChars() { paintPick('dr', 'drillChars'); }
@@ -513,15 +497,7 @@ function repeatSpec(kind, pre, title, place) {
 }
 
 function startRepeat(it, title) {
-  if (qItems.some((x) => x.kind === it.kind && x.status === 'run')) { toast('이미 ' + title + ' 반복 중입니다', '', 'bad'); return; }
-  const cur = qItems.find((x) => x.status === 'run');
-  toast(title + ' 반복 시작', stopKey() + ' = 멈춤' + (cur ? ' · 진행 중이던 "' + cur.label + '" 은 뒤로 미룹니다' : ''), 'ok');
-  qStartNow(it);
-}
-
-async function queueRepeat(it, amount) {  // 탭에서 고른 그대로 (0판·0분 = 멈출 때까지)
-  await mm.queue.add(it, 'end');
-  toast('큐에 담았습니다', it.label + ' — ' + amount + ' · 재생을 누르면 진행합니다.', 'ok');
+  qStart(it, { title: title + ' 반복 시작', hint: stopKey() + ' = 멈춤', busy: '이미 ' + title + ' 반복 중입니다' });
 }
 
 function abyssSpec() { return repeatSpec('abyss', '#ab', '어비스', 'dungeon'); }
@@ -610,21 +586,18 @@ mm.daily.onRaid(onRepeatEvent('raid', '#rd', '레이드'));
 LOADERS.daily = loadDaily;
 LOADERS.abyss = loadAbyss;
 
-$('#dl-start').addEventListener('click', () => {
+bindStartQueue('dl', dailySpec, (it) => startHomework(it, true), () => {
   const card = dlPausedCard();
-  if (card) { qPlayOne(card.id); return; }  // 일시정지 중이면 이어 하기 (F12 와 같다)
-  startDaily();
+  if (card) qPlayOne(card.id);  // 일시정지 중이면 이어 하기 (F12 와 같다)
+  return !!card;
 });
-$('#dl-queue').addEventListener('click', queueDaily);
 $('#opt-fit-display').addEventListener('change', () => mm.daily.saveSettings({ fit_display: $('#opt-fit-display').checked }));
 $('#opt-restart-auto').addEventListener('change', () => mm.daily.saveSettings({ restart_auto: $('#opt-restart-auto').checked }));
 $('#ab-dungeon').addEventListener('change', paintAbyssBg);
-$('#ab-start').addEventListener('click', () => startRepeat(abyssSpec(), '어비스'));
-$('#ab-queue').addEventListener('click', () => { const it = abyssSpec(); queueRepeat(it, abyssAmount(it)); });
+bindStartQueue('ab', abyssSpec, (it) => startRepeat(it, '어비스'));
 $('#ab-stop').addEventListener('click', () => mm.daily.abyssStop());
 $('#rd-raid').addEventListener('change', () => paintRaidDiffs($('#rd-difficulty').value));
-$('#rd-start').addEventListener('click', () => startRepeat(raidSpec(), '레이드'));
-$('#rd-queue').addEventListener('click', () => { const it = raidSpec(); queueRepeat(it, raidAmount(it)); });
+bindStartQueue('rd', raidSpec, (it) => startRepeat(it, '레이드'));
 $('#rd-stop').addEventListener('click', () => mm.daily.raidStop());
 $('#qr-close').addEventListener('click', () => $('#q-report').classList.add('hidden'));
 $('#qr-logs').addEventListener('click', () => mm.daily.openFolder('logs'));
@@ -671,13 +644,10 @@ $('#dl-table').addEventListener('change', (e) => {
   paintDailyTable();
 });
 bindPick('dr', 'drillChars');
-$('#dr-start').addEventListener('click', () => { const it = drillSpec(); if (it) startHomework(it, '나이트메어 드릴'); });
-$('#dr-queue').addEventListener('click', () => { const it = drillSpec(); if (it) queueHomework(it, '나이트메어 드릴'); });
+bindStartQueue('dr', drillSpec, startHomework);
 $('#en-start').addEventListener('click', startEnhance);
 bindPick('fb', 'fbChars');
 $('#fb-boss').addEventListener('change', () => paintFieldBossLevels($('#fb-level').value));
-$('#fb-start').addEventListener('click', () => { const it = fieldBossSpec(); if (it) startHomework(it, '필드 보스'); });
-$('#fb-queue').addEventListener('click', () => { const it = fieldBossSpec(); if (it) queueHomework(it, '필드 보스'); });
+bindStartQueue('fb', fieldBossSpec, startHomework);
 bindPick('vg', 'vgChars');
-$('#vg-start').addEventListener('click', () => { const it = vanguardSpec(); if (it) startHomework(it, '뱅가드 브리치'); });
-$('#vg-queue').addEventListener('click', () => { const it = vanguardSpec(); if (it) queueHomework(it, '뱅가드 브리치'); });
+bindStartQueue('vg', vanguardSpec, startHomework);

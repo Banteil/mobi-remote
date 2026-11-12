@@ -47,7 +47,7 @@ vm.createContext(ctx);
 const order = [...fs.readFileSync(ROOT + 'index.html', 'utf8').matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
 let src = "'use strict';\n" + order.map((f) => fs.readFileSync(ROOT + f, 'utf8').replace(/^'use strict';/, '')).join('\n;\n');
 src += `
-;globalThis.__q = { Q_KINDS, get items() { return qItems; }, qStartNow, setBlocked: (f) => { goalBlockedModal = f; } };`;
+;globalThis.__q = { Q_KINDS, get items() { return qItems; }, qStartNow, qStart, qEnqueue, setBlocked: (f) => { goalBlockedModal = f; } };`;
 try { vm.runInContext(src, ctx, { filename: 'web/*.js' }); } catch (e) { console.error('load error', e); process.exit(1); }
 const Q = ctx.__q;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -82,6 +82,21 @@ function assert(c, m) { if (!c) throw new Error(m); }
     Q.qStartNow({ kind: 'daily', label: '일일 숙제' }, true);
     await sleep(5);
     assert(calls.some((c) => c[0] === 'add' && c[1] === 'daily' && c[2] === 'now' && c[3] === true), 'add now replace');
+  });
+
+  await scenario('시작 버튼: 같은 종류가 돌면 막고, 아니면 지금 바로', async () => {
+    handlers.change({ items: [{ id: 1, kind: 'abyss', status: 'run', label: '어비스' }], running: true });
+    Q.qStart({ kind: 'abyss', label: '어비스 · 2' }, { title: '어비스 반복 시작', busy: '이미 어비스 반복 중입니다' });
+    Q.qStart({ kind: 'daily', label: '일일 숙제' }, { title: '일일 숙제 시작', busy: '이미', replacePaused: true });
+    await sleep(5);
+    assert(!calls.some((c) => c[0] === 'add' && c[1] === 'abyss'), 'same kind blocked');
+    assert(calls.some((c) => c[0] === 'add' && c[1] === 'daily' && c[2] === 'now' && c[3] === true), 'other kind starts now');
+    handlers.change({ items: [], running: false });
+  });
+
+  await scenario('목표 버튼: 큐 맨 아래에 담는다', async () => {
+    await Q.qEnqueue({ kind: 'daily', label: '일일 숙제', chars: [1] });
+    assert(calls.some((c) => c[0] === 'add' && c[1] === 'daily' && c[2] === 'end'), 'add end');
   });
 
   await scenario('mm:queue 상태를 그대로 받는다', async () => {

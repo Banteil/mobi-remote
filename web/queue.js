@@ -109,10 +109,8 @@ async function qShowAsk(ask) {
 }
 
 /** 목표 카드를 맨 아래에 담는다 (돌리지는 않는다 — 날개가 나가는 일은 사람이 재생을 누른 뒤에). */
-async function qAdd(spec) {
-  const it = await mm.queue.add(Object.assign({ spent: 0, steps: 0 }, spec), 'end');
-  toast('큐에 담았습니다', it.label + ' 새로 ' + num(it.target) + '개 — 재생을 누르면 진행합니다.', 'ok');
-  return it;
+function qAdd(spec) {
+  return qEnqueue(Object.assign({ spent: 0, steps: 0 }, spec));
 }
 
 function qFind(id) { return qItems.find((x) => String(x.id) === String(id)); }
@@ -133,6 +131,29 @@ function qStartNow(spec, replacePaused) {
   return mm.queue.add(spec, 'now', !!replacePaused);
 }
 
+/**
+ * '시작' 버튼 공통 (숙제·어비스·레이드·한 번 하는 행동) — 알리고 qStartNow. 돌던 카드는 뒤로 밀렸다가 이어 한다.
+ *   o.busy           같은 종류 카드가 돌고 있으면 이 글로 막는다 (없으면 막지 않는다)
+ *   o.title, o.hint  토스트 제목·내용. 제목이 없으면 돌던 카드가 있을 때만 '먼저 합니다' 로 알린다
+ *   o.replacePaused  같은 종류의 일시정지 카드를 이걸로 바꾼다
+ */
+function qStart(spec, o) {
+  o = o || {};
+  if (o.busy && qItems.some((x) => x.kind === spec.kind && x.status === 'run')) { toast(o.busy, '', 'bad'); return; }
+  const cur = qItems.find((x) => x.status === 'run');
+  const later = cur ? '진행 중이던 "' + cur.label + '" 은 뒤로 미룹니다' : '';
+  if (o.title || cur) toast(o.title || '먼저 합니다', [o.hint, later].filter(Boolean).join(' · '), 'ok');
+  return qStartNow(spec, o.replacePaused);
+}
+
+/** '목표'(담기) 버튼 공통 — 큐 맨 아래에 담기만 한다 (재생을 눌러야 진행). 알림 글은 text, 없으면 카드 이름 — 종류의 amount */
+async function qEnqueue(spec, text) {
+  const it = (await mm.queue.add(spec, 'end')) || spec;
+  const what = text || [it.label, qKind(it).amount(it)].filter(Boolean).join(' — ');
+  toast('큐에 담았습니다', what + ' · 재생을 누르면 진행합니다.', 'ok');
+  return it;
+}
+
 /* ── 한 번 하는 행동 (제작·채집·가공·수령·연주) ──
  * 파란 버튼 = 지금 바로 (qStartNow — 돌던 작업은 뒤로 밀렸다가 이어서), '목표' 버튼 = 큐 맨 아래에 담기.
  * 숙제·어비스가 도는 중에 버튼을 눌러도 게임 조작이 겹치지 않게 모두 큐를 거친다. 날개가 드는 것은 넣기 전에 묻는다. */
@@ -143,17 +164,12 @@ async function actSpec(spec) {
 
 async function actNow(spec) {
   const it = await actSpec(spec);
-  if (!it) return;
-  const cur = qItems.find((x) => x.status === 'run');
-  if (cur) toast('먼저 합니다', it.label + ' — 진행 중이던 "' + cur.label + '" 은 끝나면 이어서', 'ok');
-  qStartNow(it);
+  if (it) qStart(it, { hint: it.label });
 }
 
 async function actGoal(spec) {
   const it = await actSpec(spec);
-  if (!it) return;
-  await mm.queue.add(it, 'end');
-  toast('큐에 담았습니다', it.label + ' — 재생을 누르면 진행합니다.', 'ok');
+  if (it) await qEnqueue(it);
 }
 
 /** 큐가 행동을 마친 뒤 다시 읽을 탭 (app.js 의 mm.onExecDone 이 부른다) */
