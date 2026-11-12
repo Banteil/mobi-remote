@@ -10,6 +10,11 @@ const esc = (s) =>
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
+/** 검색어 정규화 — 공백·대소문자 무시 */
+const normSearch = (s) => String(s === undefined || s === null ? '' : s).toLowerCase().replace(/\s+/g, '');
+/** text 가 검색어 q(normSearch 한 것)를 담나. q 가 비면 늘 참 */
+function hit(text, q) { return !q || normSearch(text).includes(q); }
+
 /** <select> 의 <option> 줄. items: 값 또는 [값, 글자] (글자가 없으면 값 그대로), cur 와 같은 값을 고른다 */
 function selectOptions(items, cur) {
   return items.map((o) => {
@@ -955,10 +960,7 @@ function renderGather() {
 
   let rows = gatherCache.items;
   if (onlyOk) rows = rows.filter((x) => x.tool);
-  if (q) {
-    const n = q.toLowerCase().replace(/\s+/g, '');
-    rows = rows.filter((x) => x.name.toLowerCase().replace(/\s+/g, '').includes(n));
-  }
+  if (q) { const n = normSearch(q); rows = rows.filter((x) => hit(x.name, n)); }
 
   $('#gather-count').textContent = '전체 ' + gatherCache.total + ' · 도구 보유 ' + gatherCache.toolOk + ' · 표시 ' + rows.length;
 
@@ -1033,10 +1035,7 @@ function renderItems() {
   let rows = itemsCache.items;
   if (cat) rows = rows.filter((x) => x.category === cat);
   if (loc && LOC_FILTER[loc]) rows = rows.filter(LOC_FILTER[loc]);
-  if (q) {
-    const n = q.toLowerCase().replace(/\s+/g, '');
-    rows = rows.filter((x) => x.name.toLowerCase().replace(/\s+/g, '').includes(n));
-  }
+  if (q) { const n = normSearch(q); rows = rows.filter((x) => hit(x.name, n)); }
 
   // 보이는 것들의 보관처별 합계도 같이 알려준다 — "계정창고에 뭐가 얼마나 있나"가 한 줄로 나온다
   const sum = rows.reduce((s, x) => {

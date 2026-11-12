@@ -156,10 +156,7 @@ function renderCraft() {
 
   let rows = craftCache.items;
   if (onlyOk) rows = rows.filter((x) => x.ok);
-  if (q) {
-    const n = q.toLowerCase().replace(/\s+/g, '');
-    rows = rows.filter((x) => x.name.toLowerCase().replace(/\s+/g, '').includes(n));
-  }
+  if (q) { const n = normSearch(q); rows = rows.filter((x) => hit(x.name, n)); }
 
   $('#craft-count').textContent =
     '전체 ' + craftCache.total + ' · 가능 ' + craftCache.craftable + ' · 조건에 맞는 것 ' + rows.length;
@@ -701,10 +698,7 @@ function renderAlter() {
   const lvPick = $('#alter-level').value;
   if (lvPick === '?') rows = rows.filter((x) => x.level == null);
   else if (lvPick) rows = rows.filter((x) => x.level === Number(lvPick));
-  if (q) {
-    const n = q.toLowerCase().replace(/\s+/g, '');
-    rows = rows.filter((x) => x.name.toLowerCase().replace(/\s+/g, '').includes(n));
-  }
+  if (q) { const n = normSearch(q); rows = rows.filter((x) => hit(x.name, n)); }
 
   // 거르지 않았으면 "조건에 맞는 것"은 전체와 같다 — 같은 수를 두 번 적을 이유가 없고,
   // 그 한 토막이 도구줄에서 자리를 꽤 먹는다.

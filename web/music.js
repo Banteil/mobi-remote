@@ -22,13 +22,6 @@ async function loadSocial(refresh) {
   if (!r.error) { socialCache = r; renderSocial(); }
 }
 
-/** 검색어 정규화 — 공백 무시, 대소문자 무시 */
-function normQ(sel) {
-  return $(sel).value.trim().toLowerCase().replace(/\s+/g, '');
-}
-function hit(text, q) {
-  return !q || String(text).toLowerCase().replace(/\s+/g, '').includes(q);
-}
 
 /**
  * 악보 제목 앞의 "악보: " 를 뗀다.
@@ -68,7 +61,7 @@ function renderInstruments() {
 
 function renderMusic() {
   if (!musicCache) return;
-  const q = normQ('#music-search');
+  const q = normSearch($('#music-search').value);
   // 제목 전부가 "악보:" 로 시작하므로 검색도 뗀 제목에 건다
   const rows = sortRows('music', musicCache.items.filter((x) => hit(scoreLabel(x.title), q)));
 
@@ -84,7 +77,7 @@ function renderMusic() {
 
 function renderSocial() {
   if (!socialCache) return;
-  const q = normQ('#social-search');
+  const q = normSearch($('#social-search').value);
 
   // 표정과 행동은 카드가 따로 있으니 정렬도 카드마다 따로 고른다.
   const facials = sortRows('facial', socialCache.facials.filter((x) => hit(x.name, q)));
