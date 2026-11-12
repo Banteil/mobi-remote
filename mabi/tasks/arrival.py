@@ -119,8 +119,9 @@ def npc_moving(bot: Bot) -> bool | None:
     return bot.wait_packet(lambda s: s.traveling or s.loading or bool(s.ai) or s.in_dialogue, 5, since=bot.input_mark)
 
 
-def go_talk(bot: Bot, start: Callable[[], None], what: str, shot: str) -> None:
+def go_talk(bot: Bot, start: Callable[[], None], what: str, shot: str, timeout: float) -> None:
     """start() 로 NPC 에게 가는 이동을 시작하고, 도착해 그 NPC 대화가 열릴 때까지 (도착하면 대화가 저절로 열린다).
+    timeout: 도착 상한 (초, 부르는 쪽 설정).
     눌렀는데 패킷으로 움직임이 없으면 한 번 더 start(). 이동 중 빠른 이동이 되면 T.
     대장간 수리(퀵 내비게이터 '대장간') · 어비스 주간 전리품(관청 에반) 이 같이 쓴다."""
     from .dialogue import talking
@@ -133,5 +134,5 @@ def go_talk(bot: Bot, start: Callable[[], None], what: str, shot: str) -> None:
         raise CannotProceed(f"'{what}' 을 눌러도 움직이지 않음 → {bot.snapshot(shot).name}")
     bot.log.info(f"{what} 으로 이동")
     # 도착해 대화가 열리면 끝 — 메뉴는 인사말을 넘긴 뒤에 뜬다
-    wait_arrival(bot, lambda: talking(bot), bot.cfg["abyss"].get("travel_timeout", 300), shot + "_npc",
+    wait_arrival(bot, lambda: talking(bot), timeout, shot + "_npc",
                  f"{what} NPC 대화가 열리지 않음", retry_fast=True, interval=(1.5, 2))

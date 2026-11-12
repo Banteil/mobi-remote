@@ -187,7 +187,7 @@ def settle_loot(bot: Bot) -> None:
         return
     bot.step("abyss_loot", "주간 전리품 정산")
     with bot.npc_talk():  # 대화는 여기서 다룬다 — 끼어들기가 넘기지 않게 (대장간 수리와 같음)
-        go_talk(bot, lambda: bot.click(hit), "주간 전리품(관청)", "abyss_loot")
+        go_talk(bot, lambda: bot.click(hit), "주간 전리품(관청)", "abyss_loot", bot.cfg["abyss"]["travel_timeout"])
         mon = monitor.of(bot)
         ctx = monitor.Ctx("abyss", "주간 전리품", choose=gd.text("abyss_loot_claim"), choose_region="board_choices")
         chosen, waits, end = False, 0, time.monotonic() + LOOT_MENU_LIMIT

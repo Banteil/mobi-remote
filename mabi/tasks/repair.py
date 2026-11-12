@@ -110,7 +110,8 @@ def _open_quick_nav(bot: Bot) -> tuple[int, int]:
 
 def _go_smithy(bot: Bot) -> None:
     """퀵 내비게이터 '대장간' → 도착해 대장간 NPC 대화가 열릴 때까지 (arrival.go_talk)."""
-    go_talk(bot, lambda: bot.click(_open_quick_nav(bot)), "대장간", "repair_menu")
+    go_talk(bot, lambda: bot.click(_open_quick_nav(bot)), "대장간", "repair_menu",
+            bot.cfg["timing"]["smithy_travel"])
 
 
 def _open_repair(bot: Bot) -> bool:
