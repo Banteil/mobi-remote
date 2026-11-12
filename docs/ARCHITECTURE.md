@@ -9,7 +9,11 @@ gui.py ─ gui_app/            화면(PySide6 + web/ 의 HTML·JS). 화면이 �
           ├ daily_api.py      일일 숙제·어비스·레이드 시작/멈춤 (작업 스레드를 띄운다)
           └ queue_api.py      작업 큐의 카드 종류(Kind) — 숙제·어비스·레이드·목표·동작
 mabi/
-  bot.py                      게임 조작의 바탕: 창·캡처·입력·대기(wait/sleep, 멈춤·시간 상한 확인)·상태(state = CLI, packets = 패킷)
+  session.py                  GameSession — 게임 하나와의 연결 (창·캡처·입력·Vision·CLI·패킷·블랙박스). 기다리지 않는다:
+                              한 번 찍기·누르기, 게임 상태 읽기(activity·map_loading·in_game·overweight …), snapshot·dump_box
+  bot.py                      Bot — 작업 하나의 문맥 (설정·캐릭터·단계 기록·marks·멈춤 키·시간 상한·뒤에서 돌기·끼어들기)과
+                              기다리며 하는 조작(wait/sleep·click·key·to_main …). session 을 들고 bot.window·bot.packets·
+                              bot.activity() 는 넘긴다 (바깥에서는 Bot 만 보면 된다)
   place.py                    '지금 어디인가' 공통 사실 (맵 종류·던전 안 등) — 새 판단은 여기에 더한다
   runner.py                   일일 숙제 실행기: 캐릭터마다 접속 → 숙제들 → 실패 분류·복구
   workqueue.py                작업 큐: 카드를 위에서부터 Kind.run 으로 돌린다
@@ -38,7 +42,7 @@ web/                          화면 (빌드 없이 <script> 여러 개가 같�
   dash.js · lists.js          대시보드·주변 · 채집·소지품·미션 탭
   tables.js                   표 공통 — 정렬·즐겨찾기·페이저
   options.js                  옵션 창 (버전·호환성·Npcap·설정·오버레이·콘솔)
-  wire.js                     탭 전환 LOADERS (다른 파일이 자기 탭을 더한다) · 이벤트 배선 wire()
+  wire.js                     탭 전환 LOADERS (다른 파일이 자기 탭을 더한다) · 상태바 취소 onCancel · 이벤트 배선 wire()
   craft · queue · music · dye-ui · daily · chars .js   탭별 화면,  main.js  시작 (맨 마지막)
 ```
 
@@ -85,6 +89,8 @@ web/                          화면 (빌드 없이 <script> 여러 개가 같�
 | 염색 팔레트가 떠 있나·색 찾을 범위 (자리는 게임 화면 비율로 정해 둠, 테두리로 확인) | `dye.detect.palette_at` · `frame_skip` | `dye.tracker.DyeTracker` |
 | 큐 카드 한 종류 | `workqueue.Kind` 를 상속 (`own_loot`, `run`, `view`, `where` …) | `queue_api` |
 | GUI 에서 게임 조작용 Bot 하나 (만들기 → 주인 이름으로 등록 → 닫기) · 멈추기 · '다른 일이 도는 중인가' | `DailyApi._game_bot(주인)` · `_bot_stop(주인)` · `_busy_reason` (스레드 + 등록된 Bot 모두) · 큐 카드 예외 가르기 `QueueApi._q_failed` | 큐 카드(캐릭터 맞추기·각인 강화·게임 다시 켜기), 어비스·레이드 반복, 캐릭터 자동 설정, 화면 설정 |
+| 게임 연결 (창·캡처·입력·Vision·CLI·패킷) — 작업마다 새로 만들지 않고 같이 쓴다. 연결 쪽 설정이 바뀌면 새로 | `session.GameSession` · GUI 는 `DailyApi._game_session(cfg)` (`GameSession.fits`) → `Bot(…, session=)` · `Runner(session=)` | `_game_bot`, 숙제 실행기 |
+| 게임 상태 읽기·한 번 누르기 (기다리지 않음) vs 기다리며 하는 조작 — 새 메서드를 어디 둘지 | 설정·멈춤·쉬기가 필요 없으면 `GameSession` (Bot 에 한 줄 위임을 더한다), 아니면 `Bot` | — |
 | 어비스·레이드 반복 시작·결과·멈춤 (종류별 상태 `RepeatRun`, 장소 칸 `REPEATS`) | `DailyApi._repeat_launch(kind, …)` · `_rep(kind).result` · `_repeat_stop(kind)` | `AbyssKind`·`RaidKind`, 화면 `daily_abyssStop`·`raidStop` |
 | 큐 카드의 게임 명령 (막힘 → 확인 창이 닫히길 기다림 → 한 번 더) | `QueueApi._q_exec` | 목표 카드, 전체 수령 |
 | 목표 걸음 → CLI 명령·본문, 거절 → 할 일 (게임 규칙) | `craft.execute.step_command` · `step_failure` (`STEP_*`) | `GoalKind._execute` |
@@ -99,7 +105,8 @@ web/                          화면 (빌드 없이 <script> 여러 개가 같�
 | 화면: 다시 켜도 기억할 값 | `pref` · `setPref` (web/app.js → 파이썬 settings) — `mm.cfg.set` 을 직접 부르지 않는다 | 곳곳 |
 | 화면: 게임 명령 하나 실행 (비용 확인 → 실행 → 결과 알림·기록) | `runAction(command, body, opts)` · `confirmCost` (web/actions.js) | 옵션 콘솔, 채팅·행동 정지(wire.js), 연주·소셜, 제작 |
 | 화면: 표 정렬·즐겨찾기 구역·쪽 나누기 | `sortRows` · `favTableBody` · `favChips` · `paged`·`paintPager` · 다시 그릴 것 `PAGE_RENDER` (web/tables.js) | 제작·가공·채집·소지품·연주·소셜 |
-| 화면: 탭 하나 더하기 | `LOADERS[이름] = 불러오기` (web/wire.js — 그 뒤에 읽히는 파일에서) | daily.js · chars.js |
+| 화면: 탭 하나 더하기 (탭을 열 때 refresh 없이, 새로 고침 버튼은 refresh = true) | `LOADERS[이름] = (refresh) => 불러오기` (web/wire.js — 그 뒤에 읽히는 파일에서) | daily.js · chars.js |
+| 화면: 상태바 '취소' 때 자기 반복을 멈추기 — 다른 파일 전역을 직접 만지지 않는다 | `onCancel(fn)` (web/wire.js) | craft.js(가공 채우기) · music.js(연주) · queue.js(큐 일시정지) |
 | 패킷 상태 고치기 (받는 스레드·작업 스레드 모두 잠금 `_cond` 안에서) | 이벤트 `packet_monitor/events.Events.apply` · CLI 로 맞추기 `cli_sync.CliSync.merge_cli`·`reconcile`·`forget` | `Bot` (CLI 물을 때·check_in), 시험 |
 
 ## 새 기능을 짤 때
@@ -172,13 +179,24 @@ web/                          화면 (빌드 없이 <script> 여러 개가 같�
 (2026-11-12, 파일 나누기) `mabi/packet_monitor.py` → `mabi/packet_monitor/` 패키지, `web/app.js` → 공통 + 기능별
 파일 일곱 개 (위 '한눈에'). 코드는 옮기기만 했다. 패킷 감시의 낮은 부품(Stream·parse_tcp·appearing_*)은 그 모듈에서 가져온다.
 
+(2026-11-12, Bot 나누기) `Bot` 하나에 섞여 있던 게임 연결과 작업 문맥을 `GameSession`(mabi/session.py)·`Bot` 으로 나눔.
+바깥 호출(`bot.click`·`bot.packets`·`bot.activity()` …)은 그대로. GUI 는 연결 하나를 큐 카드·숙제·반복이 같이 쓴다.
+같이 정리: 설정에 있는 키를 `.get(키, 값)` 으로 또 들던 것 → `cfg[구역][키]` (`tests/test_value_homes.py` 키 단위 검사),
+`go_talk` 도착 상한을 부르는 쪽이 넘김(대장간 수리는 `[timing] smithy_travel`), 접속 오류 횟수 → `Marks.auth_fails`,
+패킷 감시의 겹친 잠금·brotli import(`stream.decompress`), 화면의 탭 불러오기 표 하나(`LOADERS(refresh)`)·상태바 취소 등록(`onCancel`).
+
 새로 비슷한 것을 발견하면 아래 '아직 모으지 못한 것' 절에 적고, 모으면 위 기록으로 옮긴다.
 
 ## 아직 모으지 못한 것
 
 - 모듈 사이 밑줄 이름 import 가 아직 남음: `login` → `charscan._read_card`·`arbeit._settle`, `window` → `inputs._send`,
   `craft.lists` → `query._fail`. 점검자(monitor) 밖이라 이번 정리(2026-11-12 코어)에서는 두었다.
-- `monitor.offline.screen_bot` 은 Mock 에 Bot 의 `_frame`·`_require_template` 을 심어 진짜 Bot 메서드를 빌려 쓴다 (화면 판정 시험 도구).
+- `monitor.offline.screen_bot` 은 Mock 에 Bot 의 `_frame`·`_require_template` 을 심어 진짜 Bot·GameSession 메서드를 빌려 쓴다 (화면 판정 시험 도구).
+- 리모콘 화면(`gui_app/api.py` 의 `self.cli`)과 게임 연결(`GameSession.cli`)이 CLI Connector 를 따로 든다 — 화면 쪽은 호출 기록(calllog)을
+  붙이고 CLI 경로를 settings 에서 읽는다. 합치려면 기록·경로 출처를 하나로 정해야 한다.
+- `Repeat`(어비스·레이드)의 `self.a.get("background", True)`·`repair_below`·`revive`, `raid` 의 `match_timeout` 은 설정에 있는 키를
+  `.get` 으로 또 든다 — 시험(`test_value_homes`)은 `cfg[self.KIND]` 처럼 구역 이름이 변수인 곳은 못 본다. 시험의 가짜 cfg 가 일부 키만
+  들고 있어 함께 고쳐야 한다. `restart.enabled` 의 `(cfg.get("restart") or {})` 도 같다.
 - 화면의 '지금 하는 행동'(gui_app/legacy_shapes `q_activity`)은 get_activity 를 따로 읽는다 — 연주·선택지 기다림까지 '바쁨' 으로 보는
   화면용 뜻이라 `Activity.busy` 와 다르다. 합치려면 `Activity` 에 연주·앉음 칸을 더하고 화면용 busy 를 따로 둔다.
 

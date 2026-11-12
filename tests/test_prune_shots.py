@@ -5,7 +5,7 @@ import time
 import unittest
 from pathlib import Path
 
-from mabi.bot import prune_shots
+from mabi.session import prune_shots
 
 
 class PruneShotsTest(unittest.TestCase):

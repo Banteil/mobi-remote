@@ -22,7 +22,7 @@ from . import keys
 from .game_state import Activity
 from .inputs import StopWatcher, vk_of
 from . import cutpoint, judge, packet_monitor
-from .session import GameSession, prune_shots  # noqa: F401 — prune_shots: 예전 자리(bot)에서 가져오는 곳
+from .session import GameSession
 from .vision import Match
 from .exceptions import AuthBlocked, MissingTemplate, Overweight, StepTimeout, StopRequested
 
