@@ -49,9 +49,12 @@ UNINSTALL_ROOTS = [(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\
 
 
 def is_run_limit(error, message) -> bool:
-    """CLI 오류가 '연속 실행 제한' 인가. 오류 코드는 아직 실측 전이라 코드·문구 어느 쪽이든 continuous/run limit 이면."""
+    """CLI 오류가 '연속 실행 제한' 인가. 오류 코드는 아직 실측 전이라 코드·문구 어느 쪽이든 continuous/run limit 이거나
+    제한 창 문구(ui.json text run_limit)가 들어 있으면."""
+    from . import gamedata as gd
     t = f"{error or ''} {message or ''}".lower().replace("_", " ")
-    return "continuous" in t or "run limit" in t or "오랫동안 실행" in t
+    flat = t.replace(" ", "")
+    return "continuous" in t or "run limit" in t or any(w.replace(" ", "") in flat for w in gd.words("run_limit"))
 
 
 @dataclass

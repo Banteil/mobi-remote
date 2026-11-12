@@ -102,8 +102,8 @@ def run_limit_shown(frame) -> bool:
     from . import gamedata as gd, ocr
     if _share(frame, "run_limit_button", _green) < 0.6:
         return False
-    texts = "".join(t for t, _, _ in ocr.find_texts(frame, gd.region("run_limit_popup"))).replace(" ", "")
-    return "오랫동안실행" in texts or "재시작해주세요" in texts
+    texts = "".join(ocr.nospace(t) for t, _, _ in ocr.find_texts(frame, gd.region("run_limit_popup")))
+    return any(ocr.nospace(w) in texts for w in gd.words("run_limit"))
 
 
 def server_down_shown(frame) -> bool:
