@@ -245,7 +245,7 @@ async function applyReview() {
 
 /* ── 배선 ── */
 
-LOADERS.chars = loadChars;
+LOADERS.chars = () => loadChars();
 
 $('#ch-grid').addEventListener('click', (e) => {
   const del = e.target.closest('[data-ch-del]');

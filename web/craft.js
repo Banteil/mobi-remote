@@ -752,6 +752,8 @@ function renderAlter() {
  * 매 등록 뒤 큐를 다시 읽어 실제로 늘었는지 확인하고, 안 늘었으면 즉시 멈춘다.
  * 헛돌면서 날개를 태우는 것이 가장 나쁜 실패다.
  */
+onCancel(() => { fillAltering.aborted = true; });  // 상태바 '취소' — 반복 등록을 멈춘다
+
 async function fillAltering(name, label) {
   if (busy) { toast('실행 중', '이전 명령이 끝난 뒤 시도하세요.', 'bad'); return; }
 

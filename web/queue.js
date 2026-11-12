@@ -16,6 +16,7 @@
  */
 let qItems = [];      // 파이썬이 준 카드 목록 (보기용 — 고치려면 mm.queue.* 로)
 let qRunning = false;
+onCancel(() => { if (qRunning) mm.queue.pause(); });  // 상태바 '취소' — 큐는 일시정지 (돌던 명령은 mm.cancel 이 끊는다)
 
 /**
  * 카드 종류의 화면 쪽 표시 (daily·abyss 등은 daily.js 가 qRegisterKind 로 더한다). 실행은 모두 파이썬.

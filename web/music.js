@@ -127,6 +127,7 @@ let plCurrent = null;
 
 /** 재생 상태. setInterval 대신 루프 안에서 플래그를 보고 멈춘다. */
 const player = { active: false, stopping: false, index: 0, title: null };
+onCancel(() => { player.stopping = true; });  // 상태바 '취소' — 재생 루프를 멈춘다
 
 
 function ownedTitles() {

@@ -133,7 +133,7 @@ mm.daily.onDisplay((m) => {
   if (m && m.restored && m.message) toast(m.ok ? '화면 설정을 되돌렸습니다' : '화면 설정을 되돌리지 못했습니다', m.message, m.ok ? 'ok' : 'bad');
 });
 
-/* 일일 숙제는 작업 큐(app.js)의 한 항목으로 돈다. 두 가지로 넣는다 (어비스와 같다):
+/* 일일 숙제는 작업 큐(queue.js)의 한 항목으로 돈다. 두 가지로 넣는다 (어비스와 같다):
  *  '시작' = 지금 바로 — 맨 위에 넣고 바로 시작한다. 돌던 작업은 뒤로 밀렸다가 끝나면 이어서 (queue.js qStart)
  *  '목표'     = 큐 맨 아래에 담기만 한다 (재생을 눌러야 진행) — 제작·채집 목표와 같은 방식 (qEnqueue)
  * 게임 캐릭터는 하나라 둘이 동시에 돌면 안 되는데, 큐가 하나씩만 돌리므로 막힌다. */
@@ -582,8 +582,8 @@ mm.daily.onRaid(onRepeatEvent('raid', '#rd', '레이드'));
 
 /* ── 배선 ── */
 
-LOADERS.daily = loadDaily;
-LOADERS.abyss = loadAbyss;
+LOADERS.daily = () => loadDaily();
+LOADERS.abyss = () => loadAbyss();
 
 bindStartQueue('dl', dailySpec, (it) => startHomework(it, true), () => {
   const card = dlPausedCard();

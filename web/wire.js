@@ -4,15 +4,17 @@
 
 /* ── 탭 ─────────────────────────────────────────── */
 
+/* 탭 이름 → 불러오기(refresh). 탭을 열 때는 refresh 없이 (받아 둔 게 있으면 그대로 그림), 새로 고침(refreshActive)은
+ * refresh = true 로 부른다. 칸마다 화살표로 감싸 두어 이 파일보다 뒤에 읽히는 함수도 쓸 수 있다. */
 const LOADERS = {
-  dash: loadDash,
-  craft: () => (craftCache ? renderCraft() : loadCraft()),
-  alter: () => loadAlter(),
-  gather: () => (gatherCache ? renderGather() : loadGather()),
-  items: () => (itemsCache ? renderItems() : loadItems()),
-  mission: () => loadMission(),
-  music: () => loadMusic(),
-  social: () => loadSocial(),
+  dash: () => loadDash(),
+  craft: (refresh) => (!refresh && craftCache ? renderCraft() : loadCraft(refresh)),
+  alter: (refresh) => loadAlter(refresh),
+  gather: (refresh) => (!refresh && gatherCache ? renderGather() : loadGather(refresh)),
+  items: (refresh) => (!refresh && itemsCache ? renderItems() : loadItems(refresh)),
+  mission: (refresh) => loadMission(refresh),
+  music: (refresh) => loadMusic(refresh),
+  social: (refresh) => loadSocial(refresh),
   dye: () => loadDye(),
 };
 
@@ -32,15 +34,13 @@ async function showTab(name) {
 }
 
 function refreshActive() {
-  const R = {
-    dash: loadDash, craft: () => loadCraft(true), alter: () => loadAlter(true),
-    gather: () => loadGather(true), items: () => loadItems(true), mission: () => loadMission(true),
-    music: () => loadMusic(true), social: () => loadSocial(true), dye: () => loadDye(),
-    daily: () => LOADERS.daily(), abyss: () => LOADERS.abyss(), chars: () => LOADERS.chars(),
-  };
   refreshTopbar();
-  return R[activeTab]();
+  return LOADERS[activeTab](true);
 }
+
+/* 상태바 '취소' 때 할 일 — 여러 단계짜리 작업(가공 채우기·연주·큐)이 자기 멈춤을 등록한다 (onCancel) */
+const CANCELERS = [];
+function onCancel(fn) { CANCELERS.push(fn); }
 
 /* ── 이벤트 배선 ────────────────────────────────── */
 
@@ -281,10 +281,8 @@ function wire() {
 
   $('#sb-cancel').addEventListener('click', async () => {
     // 실행 중인 명령 하나만 죽이면 여러 단계짜리 작업은 다음 단계로 넘어가 버린다.
-    // 반복 루프에도 중단 신호를 같이 보낸다.
-    fillAltering.aborted = true;
-    if (qRunning) mm.queue.pause();  // 명령은 아래 mm.cancel 이 끊는다
-    player.stopping = true;
+    // 반복 루프에도 중단 신호를 같이 보낸다 (각 파일이 onCancel 로 등록).
+    CANCELERS.forEach((fn) => fn());
     await mm.cancel();
     say('취소 요청을 보냈습니다.');
   });
