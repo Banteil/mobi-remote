@@ -47,6 +47,12 @@ mabi/
 | 게임 화면(실제 픽셀) 위에 Qt 창 겹치기 — 게임이 있는 모니터·배율 | `queue_overlay.to_logical` | 작업 큐 오버레이, 염색 표시 |
 | 염색 팔레트가 떠 있나·색 찾을 범위 (자리는 게임 화면 비율로 정해 둠, 테두리로 확인) | `dye.detect.palette_at` · `frame_skip` | `dye.tracker.DyeTracker` |
 | 큐 카드 한 종류 | `workqueue.Kind` 를 상속 (`own_loot`, `run`, `view`, `where` …) | `queue_api` |
+| 화면: 카드 종류의 표시 · 큐 그림이 바뀔 때 부를 것 | `qRegisterKind(name, def)` · `qOnPaint(fn)` (web/queue.js) | daily.js |
+| 화면: '시작'(지금 바로, 돌던 카드는 뒤로) · '목표'(큐 맨 아래에 담기) | `qStart(spec, opts)` · `qEnqueue(spec)` (web/queue.js) · 버튼 짝 `bindStartQueue` (daily.js) | 숙제·어비스·레이드 탭, 제작·가공·채집·연주 |
+| 화면: 모달 창 (확인·숫자·목록·글자 입력 모두) | `openModal({title, body, ok, cancel, value, no})` (web/app.js) | `confirmModal` · `prompt*` · 큐 질문 창 |
+| 화면: `<option>` 줄 · 캐릭터 고르기 | `selectOptions(items, cur)` · `charOptions` · `charCheck` (web/app.js) | 곳곳의 select, 숙제·어비스·레이드 탭, 큐 카드 |
+| 화면: 검색 · 시간 글자 | `normSearch` · `hit` · `fmtDur` · `dur`(남은 시간) · `fmtClock` · `fmtHM` (web/app.js) | 목록 검색, 큐 결과·기록, 연주 |
+| 화면: 다시 켜도 기억할 값 | `pref` · `setPref` (web/app.js → 파이썬 settings) — `mm.cfg.set` 을 직접 부르지 않는다 | 곳곳 |
 
 ## 새 기능을 짤 때
 
@@ -73,6 +79,10 @@ mabi/
 - 나가기: 네 벌 → `exits.Exit` (실패 뒤 정리·접속이 어비스·레이드 안도 처리)
 - 실패 가르기·가방 무게: runner 에만 → `outcome` · `Bot.overweight`
 - 빠른 이동: 네 벌 → `Bot.fast_travel`
-- 화면(web/daily.js): 어비스·레이드 탭 진행·시작·담기 → `onRepeatEvent` · `startRepeat` · `queueRepeat` · `repeatSpec`
+- 화면(web/daily.js): 어비스·레이드 탭 진행·시작·담기 → `onRepeatEvent` · `startRepeat` · `repeatSpec`,
+  탭마다의 '시작'·'목표' → `qStart` · `qEnqueue` · `bindStartQueue`, 필드 보스 목록 → 파이썬 `field_boss.choices`
+- 화면(web/*.js, 2026-11-12): 모달 네 벌 → `openModal`, `<option>`·캐릭터 고르기 → `selectOptions` · `charOptions` · `charCheck`,
+  검색 다섯 벌 → `hit`, 시간 글자 여섯 벌 → `fmtDur` · `fmtClock` · `fmtHM`, 큐 결과 이름표 두 벌 → `Q_RESULT`,
+  설정 저장 → `setPref`
 
 새로 비슷한 것을 발견하면 여기 '아직 모으지 못한 것' 절을 다시 만들어 적고, 모으면 위 기록으로 옮긴다.
