@@ -481,7 +481,7 @@ def _apply_top(bot: Bot) -> bool | None:
         end, still = time.monotonic() + a["travel_timeout"], 0
         while r and time.monotonic() < end:
             seen = mon.check(ctx)
-            if seen.done == "수락":
+            if seen.done == monitor.Did.ACCEPT:
                 mon.settle(Ctx("arbeit", menus=True))  # 수락 뒤 이어지는 대사
                 return True
             if seen.finish:

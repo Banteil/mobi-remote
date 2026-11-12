@@ -208,7 +208,7 @@ def settle_loot(bot: Bot) -> None:
             seen = mon.check(ctx, guard=False)
             if ctx.take("chosen") and not chosen:
                 chosen, end = True, time.monotonic() + LOOT_FINISH_LIMIT  # 여기부터는 마무리 상한
-            if seen.done == "선택지 기다림":
+            if seen.done == monitor.Did.CHOICE_WAIT:
                 waits += 1
                 if waits == 4:  # 메뉴는 떴는데 '주간 전리품 받기' 를 못 읽음 — 왜 못 읽는지 볼 화면을 남긴다
                     bot.log.debug(f"'주간 전리품 받기' 를 글자로 못 찾음 ({bot.snapshot('missed_abyss_loot_menu').name})")

@@ -850,7 +850,7 @@ class Bot:
             # 연출은 스스로 끝나길 기다리되, 120초가 넘으면 넘기기를 누른다
             from . import monitor
             seen = monitor.of(self).check(monitor.Ctx("to_main"), guard=False)
-            if seen.done == "연출 대기" and not waiting and (hit := self.skip_button()):
+            if seen.done == monitor.Did.SCENE and not waiting and (hit := self.skip_button()):
                 self.click(hit[1])
                 n += 1
                 continue

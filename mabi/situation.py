@@ -65,6 +65,7 @@ def clear_attendance(bot, frame=None) -> str | None:
       시작을 알렸으면 건너뛰기가 뜰 때까지 가운데를 2초에 한 번 눌러 대사를 넘긴다
     - 패킷이 없으면: 날짜가 바뀐 뒤(attendance_due)에 패킷이 NPC 대화 중이라는데 넘기기 버튼이 없을 때만 가운데를 누른다
       (4초에 한 번 — 대사가 뜬 뒤 잠깐 입력을 안 받는다)"""
+    from .monitor.handlers import Did  # 점검자가 이 모듈을 불러오므로 여기서
     frame = bot.frame() if frame is None else frame
     c = bot.cfg["login"]
     p = bot.packets
@@ -77,10 +78,10 @@ def clear_attendance(bot, frame=None) -> str | None:
     if p.ok and p.state.attending():
         # 패킷은 대사 창이 그려지기 전에 온다 — HUD 가 남아 있으면 아직 (그때 가운데를 누르면 필드의 무언가가 눌린다)
         if time.monotonic() - bot.marks.attendance_clicked < 2 or bot.at_main(frame):
-            return "출석 대사 기다림"
+            return Did.ATTEND_WAIT
         bot.marks.attendance_clicked = time.monotonic()
         bot.click(tuple(c["first_dialog_xy"]))
-        return "출석 대사 넘김"
+        return Did.ATTEND_LINE
     if not attendance_due(bot):
         return None
     if not (p.ok and p.state.in_dialogue) or bot.skip_button(frame) or bot.at_main():

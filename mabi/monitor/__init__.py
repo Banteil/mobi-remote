@@ -2,6 +2,6 @@
 from . import detect
 from .core import WAITS, Ctx, Monitor, of
 from ..exceptions import Stuck
-from .handlers import Finish, fast_travel
+from .handlers import Did, Finish, fast_travel
 
-__all__ = ["WAITS", "Ctx", "Finish", "Monitor", "Stuck", "detect", "fast_travel", "of"]
+__all__ = ["WAITS", "Ctx", "Did", "Finish", "Monitor", "Stuck", "detect", "fast_travel", "of"]

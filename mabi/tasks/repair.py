@@ -22,6 +22,7 @@ from ..bot import Bot
 from . import dialogue, ui_text
 from .content import go_talk
 from ..exceptions import CannotProceed
+from ..monitor import Did
 
 def _find(bot: Bot, key: str, region: str, exact: bool = True):
     return ui_text.find(bot, gd.text(key), gd.region(region), exact)
@@ -135,7 +136,7 @@ def _open_repair(bot: Bot) -> bool:
             continue
         if not seen.done:
             bot.sleep(0.8, 1.2)
-    why = "대장간 메뉴에 '수리' 가 없음" if last == "선택지 기다림" else "수리하기 창이 열리지 않음"
+    why = "대장간 메뉴에 '수리' 가 없음" if last == Did.CHOICE_WAIT else "수리하기 창이 열리지 않음"
     raise CannotProceed(f"{why} → {bot.snapshot('repair_open').name}")
 
 
