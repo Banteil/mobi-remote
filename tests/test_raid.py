@@ -91,8 +91,12 @@ class CardTest(unittest.TestCase):
             store.save(f, {"items": [{"id": 1, "kind": "raid", "raid": "에이렐", "difficulty": "어려움"}]})
             self.assertEqual(store.load(f)["items"][0]["raid"], "에이렐")
 
-    def test_difficulties_cover_raids(self):
-        self.assertEqual(set(raid.DIFFICULTIES), set(raid.RAIDS))
+    def test_raids_have_difficulties(self):
+        self.assertTrue(raid.raids())
+        self.assertTrue(all(raid.raids().values()))
+
+
+WEEK_1112 = __import__("datetime").datetime(2026, 11, 12, 12)  # 아래 화면을 찍은 주 (11-05 화면과 같은 레이드)
 
 
 class ScreenTest(unittest.TestCase):
@@ -109,13 +113,13 @@ class ScreenTest(unittest.TestCase):
 
     def test_list_has_all_raids(self):
         (names,) = self.texts("raid_list_1105.png", "raid_list")
-        self.assertEqual(names, raid.RAIDS)
+        self.assertEqual(names, list(raid.raids(WEEK_1112)))
 
     def test_new_raid_entry_window(self):
         title, diff, top, right = self.texts("raid_entry_scas.png", "raid_entry_title", "raid_difficulty",
                                              "abyss_entry_top", "abyss_entry_right")
         self.assertEqual(title, ["적월의 스카스"])
-        self.assertEqual(diff, raid.DIFFICULTIES["적월의 스카스"])
+        self.assertEqual(diff, raid.raids(WEEK_1112)["적월의 스카스"])
         self.assertEqual(top, ["혼자하기", "함께하기"])
         self.assertIn("출항하기", right)
 

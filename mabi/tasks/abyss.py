@@ -28,8 +28,18 @@ from .exits import DungeonExit, Exit
 from .repeat import Repeat
 from .spear import SpearDodge
 
-DIFFICULTIES = ["입문", "어려움", "매우 어려움", "매우 어려움2"]
-DUNGEONS = ["허상의 정박지", "광기의 동굴", "흩어진 물길"]
+
+
+def dungeons(now=None) -> list[str]:
+    """이번 주 어비스 던전 (게임 데이터 일정 — data/content.json)."""
+    return list(gd.abysses(now))
+
+
+def difficulties(dungeon: str | None = None, mode: str = "solo") -> list[str]:
+    """그 던전(없으면 이번 주 첫 던전)의 이번 주 열린 난이도. mode: solo 혼자하기 · party 함께하기."""
+    by = gd.abysses(mode=mode)
+    return list(by.get(dungeon) or next(iter(by.values()), []))
+
 # 게임을 앞에 두고만 도는 던전 — 패턴 이동(WASD 를 누른 채)이 있어 뒤에서 돌면 창을 가져오느라 늦는다 (AbyssRepeat.setup)
 FRONT_ONLY = ("흩어진 물길",)
 

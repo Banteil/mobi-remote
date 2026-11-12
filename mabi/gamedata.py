@@ -127,6 +127,13 @@ def raids(now: dt.datetime | None = None) -> dict[str, list[str]]:
     return out
 
 
+@cache
+def abyss_names() -> tuple[str, ...]:
+    """어비스 시즌(이름에 '어비스')의 던전 이름 전부 — 장소 이름으로 어비스 안인지 볼 때 (이번 주 것만이 아님).
+    '마스 던전 심연' 같은 옛 시즌은 일반 던전 이름과 겹칠 수 있어 뺀다."""
+    return tuple(n for n, v in content()["abyss"]["dungeons"].items() if "어비스" in v["season"])
+
+
 def abysses(now: dt.datetime | None = None, mode: str = "solo") -> dict[str, list[str]]:
     """이번 주 어비스 던전 → 그 방식(solo 혼자하기 · party 함께하기)으로 열린 난이도."""
     c = content()["abyss"]

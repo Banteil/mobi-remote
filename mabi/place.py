@@ -25,7 +25,6 @@ HOUSING_INN = "HousingInn"
 HOUSING = "Housing"
 HOUSINGS = (HOUSING_INN, HOUSING)
 INN_SUFFIX = "여관"   # CLI 장소 이름 '반호르 여관' — 여관 보관함 구역에선 CLI Housing.IsInHousing 이 false (2026-10-31 실측)
-ABYSS_NAMES = ("어비스", "허상의 정박지", "광기의 동굴", "흩어진 물길")
 
 
 @dataclass
@@ -64,7 +63,7 @@ def place(bot) -> Place:
         kind = HOUSING_INN
     elif in_field:
         kind = FIELD
-    elif name and any(n in name for n in ABYSS_NAMES):
+    elif name and any(n in name for n in ("어비스", *gd.abyss_names())):
         kind = ABYSS
     elif name and name == gd.text("raid_ship"):
         kind = RAID_LOBBY

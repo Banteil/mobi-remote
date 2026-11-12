@@ -25,21 +25,19 @@ from .content import CannotProceed, confirm_text, growth_done, wait_arrival, wat
 from .exits import Exit
 
 MAP = "FieldBoss"
-HOURS = (12, 18, 20, 22)   # 출현 시간 (시)
-OPEN_MIN = 30              # 열려 있는 시간 (분)
 MIN_LEFT = 4 * 60          # 남은 시간이 이보다 적으면 새 캐릭터를 시작하지 않는다 (초) — 한 캐릭터 1~3분
 GROWTH = "필드 보스"       # CLI 성장 가이드의 Target
 SKIP_WAIT = 1.0            # '장면 넘기기' 가 뜬 뒤 누르기까지 (사용자 — 0.5초는 안 먹었다)
-# 보스 → 고를 수 있는 난이도 수. 창 왼쪽 목록에 이 순서로 있다 — 누를 때는 순서로 (OCR 이 '드로흐에넴' 을 '…넬' 로 읽는다)
-BOSSES = {"페리": 3, "크라브바흐": 3, "크라마": 3, "드로흐에넴": 3, "토르모그": 2, "앙그르바한": 2}
+# 보스·난이도·출현 시각은 게임 데이터(data/content.json, gamedata.field_bosses·field_boss_hours).
+# 보스는 창 왼쪽 목록에 그 순서로 있다 — 누를 때는 순서로 (OCR 이 '드로흐에넴' 을 '…넬' 로 읽는다)
 ROW_Y = (130, 230, 330, 440, 540, 640)  # 목록 카드 가운데 y (1920 기준, x 130)
-DIFFICULTIES = ("일반", "어려움", "매우 어려움")
 DEFAULT_BOSS, DEFAULT_DIFFICULTY = "드로흐에넴", "매우 어려움"  # 화면에서 아직 고른 적이 없을 때
 
 
 def choices() -> dict:
     """화면(필드 보스 칸)이 고를 수 있는 것 — 보스 목록, 보스마다 고를 수 있는 난이도, 기본값."""
-    return {"bosses": list(BOSSES), "difficulties": {b: list(DIFFICULTIES[:n]) for b, n in BOSSES.items()},
+    bosses = gd.field_bosses()
+    return {"bosses": list(bosses), "difficulties": bosses,
             "boss": DEFAULT_BOSS, "difficulty": DEFAULT_DIFFICULTY}
 
 
@@ -48,14 +46,15 @@ def choices() -> dict:
 def window(now: dt.datetime | None = None) -> tuple[int, dt.datetime]:
     """(지금 열려 있으면 남은 초, 아니면 0, 다음에 열리는 때 — 열려 있으면 지금 회차의 시작)."""
     now = now or dt.datetime.now()
-    for h in HOURS:
+    hours, open_min = gd.field_boss_hours()
+    for h in hours:
         start = now.replace(hour=h, minute=0, second=0, microsecond=0)
-        end = start + dt.timedelta(minutes=OPEN_MIN)
+        end = start + dt.timedelta(minutes=open_min)
         if start <= now < end:
             return int((end - now).total_seconds()), start
         if now < start:
             return 0, start
-    tomorrow = (now + dt.timedelta(days=1)).replace(hour=HOURS[0], minute=0, second=0, microsecond=0)
+    tomorrow = (now + dt.timedelta(days=1)).replace(hour=hours[0], minute=0, second=0, microsecond=0)
     return 0, tomorrow
 
 
@@ -94,9 +93,12 @@ def open_window(bot: Bot, boss: str, difficulty: str) -> None:
     if not ui_text.wait(bot, gd.text("fb_title"), gd.region("fb_title"), timeout=8):
         raise CannotProceed(f"필드 보스 창이 열리지 않음 → {bot.snapshot('field_boss').name}")
     bot.sleep(0.8, 1.2)
-    if boss not in BOSSES:
-        raise CannotProceed(f"모르는 필드 보스 '{boss}' (고를 수 있는 것: {', '.join(BOSSES)})")
-    bot.click_xy(130, ROW_Y[list(BOSSES).index(boss)])
+    bosses = list(gd.field_bosses())
+    if boss not in bosses:
+        raise CannotProceed(f"모르는 필드 보스 '{boss}' (고를 수 있는 것: {', '.join(bosses)})")
+    if bosses.index(boss) >= len(ROW_Y):
+        raise CannotProceed(f"필드 보스 목록 칸 자리(ROW_Y)가 {len(ROW_Y)}개뿐 — '{boss}' 는 {bosses.index(boss) + 1}번째")
+    bot.click_xy(130, ROW_Y[bosses.index(boss)])
     bot.sleep(1.0, 1.4)
     if difficulty:
         ui_text.click(bot, difficulty, gd.region("fb_difficulty"), what=f"난이도 '{difficulty}'", shot="field_boss")

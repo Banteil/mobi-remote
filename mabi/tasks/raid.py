@@ -25,9 +25,12 @@ from .repeat import Repeat
 
 # 게임 목록 순서. 적월의 스카스는 11-05 추가 — 목록·입장 창(난이도는 '매우 어려움' 하나, 혼자하기 '이동하기'·함께하기 '출항하기')은
 # 다른 레이드와 같은 자리로 확인했고, 레이드 안 패턴은 아직 모른다 (입장해 보지 않음)
-RAIDS = ["적월의 스카스", "카브락", "에이렐", "화이트 서큐버스"]
-DIFFICULTIES = {"적월의 스카스": ["매우 어려움"], "카브락": ["입문", "어려움"], "에이렐": ["어려움", "매우 어려움"],
-                "화이트 서큐버스": ["어려움", "매우 어려움"]}
+
+
+def raids(now=None) -> dict[str, list[str]]:
+    """이번 주 레이드 → 열린 난이도. 순서는 레이드 목록 화면 순서 (게임 데이터 일정 — data/content.json)."""
+    return gd.raids(now)
+
 
 LOBBY_MAP = "InstanceRaidLobby"  # 출항선 (레이드마다 같은 맵)
 RAID_MAP = "InstanceRaid"

@@ -293,9 +293,9 @@ class DailyApi:
         return {"dungeon": a["dungeon"], "difficulty": a.get("difficulty") or self._rep_default("abyss", "difficulty"),
                 "runs": int(a.get("runs", 0)),
                 "slot": int(a.get("slot", 0)), "chars": [{"slot": c["slot"], "name": c["name"]} for c in prof.chars(self.paths)],
-                "minutes": float(a.get("minutes", 0)), "dungeons": abyss.DUNGEONS, "frontOnly": list(abyss.FRONT_ONLY),
+                "minutes": float(a.get("minutes", 0)), "dungeons": abyss.dungeons(), "frontOnly": list(abyss.FRONT_ONLY),
                 "revive": bool(a.get("revive", True)), "mode": a.get("mode") or self._rep_default("abyss", "mode"),
-                "difficulties": abyss.DIFFICULTIES,
+                "difficulties": abyss.difficulties(),
                 "running": self._alive_now(self._rep("abyss").thread)}
 
     # ---- 보스전 기본값 (어비스·레이드 탭) — 캐릭터 탭에서 따로 정하지 않은 캐릭터에 ----
@@ -332,11 +332,12 @@ class DailyApi:
     def daily_raidSettings(self) -> dict:  # noqa: N802
         from mabi.tasks import raid
         r = load_config(self.paths)["raid"]
+        raids = raid.raids()
         return {"raid": r["raid"], "difficulty": r.get("difficulty") or self._rep_default("raid", "difficulty"),
                 "slot": int(r.get("slot", 0)),
                 "runs": int(r.get("runs", 0)), "minutes": float(r.get("minutes", 0)), "revive": bool(r.get("revive", True)),
-                "mode": r.get("mode") or self._rep_default("raid", "mode"), "raids": raid.RAIDS,
-                "difficulties": raid.DIFFICULTIES, "running": self._alive_now(self._rep("raid").thread)}
+                "mode": r.get("mode") or self._rep_default("raid", "mode"), "raids": list(raids),
+                "difficulties": raids, "running": self._alive_now(self._rep("raid").thread)}
 
     def daily_fieldBossSettings(self) -> dict:  # noqa: N802
         """필드 보스 칸의 보스·난이도 목록과 기본값 (mabi.tasks.field_boss). 고른 값은 화면이 fieldBoss 로 기억한다."""
