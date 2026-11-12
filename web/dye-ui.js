@@ -38,9 +38,7 @@ async function loadDye() {
 function paintDyePresets() {
   const p = dyeUI.prefs;
   const sel = $('#dye-preset');
-  sel.innerHTML = p.presets.map((x) =>
-    '<option value="' + esc(x.id) + '"' + (x.id === p.currentId ? ' selected' : '') + '>' +
-    esc(x.name) + '</option>').join('');
+  sel.innerHTML = selectOptions(p.presets.map((x) => [x.id, x.name]), p.currentId);
 }
 
 function paintDyeSlots() {

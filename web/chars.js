@@ -7,7 +7,6 @@
  * '자동 설정' 은 게임을 캐릭터 선택 화면으로 내보내 카드를 읽고 그 화면에 머문다 (사람이 누를 때만, 확인을 받고).
  */
 const ch = { data: null, here: null, edit: null, review: null };
-const FIELD_RUNS = [0, 1, 2, 3, 4, 5];
 
 async function loadChars() {
   ch.data = await mm.chars.list();
@@ -70,11 +69,6 @@ function paintChars() {
 
 /* ── 캐릭터별 설정 창 ── */
 
-function options(list, cur) {
-  return list.map(([v, label]) =>
-    '<option value="' + esc(v) + '"' + (String(v) === String(cur) ? ' selected' : '') + '>' + esc(label) + '</option>').join('');
-}
-
 function openEdit(slot) {
   const d = ch.data;
   const c = slot == null ? null : d.chars.find((x) => x.slot === slot);
@@ -85,12 +79,12 @@ function openEdit(slot) {
   const e = ch.edit;
   $('#ch-e-slot').textContent = '슬롯 ' + e.slot + (e.level ? ' · Lv.' + e.level + ' ' + (e.job || '') : '');
   $('#ch-e-name').value = e.name || '';
-  $('#ch-e-field').innerHTML = options(d.fields.map((f) => [f, f]), e.field);
-  $('#ch-e-runs').innerHTML = options(FIELD_RUNS.map((r) => [r, r === 0 ? '안 감' : r + '회']), e.field_runs);
-  $('#ch-e-dungeon').innerHTML = options([['', '던전 안 감']].concat(d.dungeons.map((x) => [x, x])), e.dungeon);
-  $('#ch-e-floor').innerHTML = options(Object.entries(d.floors), e.floor);
+  $('#ch-e-field').innerHTML = selectOptions(d.fields, e.field);
+  $('#ch-e-runs').innerHTML = selectOptions(FIELD_RUNS.map((r) => [r, r === 0 ? '안 감' : r + '회']), e.field_runs);
+  $('#ch-e-dungeon').innerHTML = selectOptions([['', '던전 안 감'], ...d.dungeons], e.dungeon);
+  $('#ch-e-floor').innerHTML = selectOptions(Object.entries(d.floors), e.floor);
   $('#ch-e-bh').checked = e.black_hole !== false;
-  $('#ch-e-sun').innerHTML = options(d.sundays.map((x) => [x, x]), e.sunday);
+  $('#ch-e-sun').innerHTML = selectOptions(d.sundays, e.sunday);
   $('#ch-e-arb').checked = !!e.arbeit;
   $('#ch-e-ult').checked = !!e.ultimate;
   $('#ch-e-pal').checked = !!e.paladin;

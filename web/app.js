@@ -10,6 +10,14 @@ const esc = (s) =>
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
+/** <select> 의 <option> 줄. items: 값 또는 [값, 글자] (글자가 없으면 값 그대로), cur 와 같은 값을 고른다 */
+function selectOptions(items, cur) {
+  return items.map((o) => {
+    const [v, label] = Array.isArray(o) ? o : [o, o];
+    return '<option value="' + esc(v) + '"' + (String(v) === String(cur) ? ' selected' : '') + '>' + esc(label) + '</option>';
+  }).join('');
+}
+
 /** 남은 초를 사람이 읽는 형태로 */
 function dur(sec) {
   if (!sec || sec <= 0) return '완료';
@@ -118,11 +126,7 @@ function promptSelect(title, label, options, current, hint) {
     $('#modal-title').textContent = title;
     $('#modal-body').innerHTML =
       '<p>' + esc(label) + '</p>' +
-      '<select id="modal-input" class="w-full">' +
-      options.map((o) =>
-        '<option value="' + esc(o.value) + '"' + (String(o.value) === String(current) ? ' selected' : '') + '>' +
-        esc(o.label) + '</option>').join('') +
-      '</select>' +
+      '<select id="modal-input" class="w-full">' + selectOptions(options.map((o) => [o.value, o.label]), current) + '</select>' +
       (hint ? '<p class="hint">' + esc(hint) + '</p>' : '');
     $('#modal-ok').textContent = '확인';
     $('#modal').classList.remove('hidden');
@@ -756,9 +760,7 @@ function paintSortMenu(key) {
   if (!sel) return;
   const cur = sortKey(key);
   const over = SORT_LABEL[key] || {};
-  sel.innerHTML = (SORT_MENU[key] || []).map((k) =>
-    '<option value="' + k + '"' + (k === cur ? ' selected' : '') + '>' +
-    esc(over[k] || SORTS[k].label) + '</option>').join('');
+  sel.innerHTML = selectOptions((SORT_MENU[key] || []).map((k) => [k, over[k] || SORTS[k].label]), cur);
 }
 
 /** 저장해 둔 정렬 기준을 읽어 온다. 앱을 다시 켜도 고른 대로 보이게. */
@@ -891,7 +893,7 @@ function pagerHtml(key, p, total) {
   const to = Math.min(total, p.from + p.rows.length);
 
   const per = '<select data-pg-per="' + key + '" title="한 쪽에 보일 줄 수">' +
-    PAGE_SIZES.map((n) => '<option value="' + n + '"' + (n === p.per ? ' selected' : '') + '>' + n + '줄</option>').join('') +
+    selectOptions(PAGE_SIZES.map((n) => [n, n + '줄']), p.per) +
     '</select>';
 
   // 한 쪽뿐이면 넘길 곳이 없다. 죽은 버튼 넷을 늘어놓지 않는다.

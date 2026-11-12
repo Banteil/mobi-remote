@@ -10,13 +10,13 @@ const ST_TEXT = {
   SKIP: '건너뜀', STOP: '중단', RUN: '진행 중',
 };
 const INHERIT = 'inherit';
-const dl = { st: null, settings: null, pickedChars: null, pickedTasks: null, logN: 0 };
+const dl = { st: null, settings: null, fb: null, pickedChars: null, pickedTasks: null, logN: 0 };
 
 /* ── 오늘 진행 표 ── */
 
 async function loadDaily() {
-  dl.st = await mm.daily.state();
-  dl.settings = await mm.daily.settings();
+  // 셋을 함께 묻는다 (필드 보스 목록은 바뀌지 않으므로 처음 한 번만)
+  [dl.st, dl.settings, dl.fb] = await Promise.all([mm.daily.state(), mm.daily.settings(), dl.fb || mm.daily.fieldBossSettings()]);
   if (!dl.pickedChars) dl.pickedChars = new Set(dl.st.chars.map((c) => c.slot));
   if (!dl.pickedTasks) dl.pickedTasks = new Set(dl.st.order);
   $('#dl-date').textContent = '게임 날짜 ' + dl.st.date + ' (오전 6시에 바뀜)';
@@ -244,25 +244,26 @@ function vanguardSpec() {
 
 /* 주간 숙제 — 필드 보스. 일일 숙제 카드(kind 'daily')에 only=['field_boss'] 로, 고른 보스·난이도는 카드의 fieldBoss.
  * 이번 주에 잡았는지는 들어가기 전에 게임(성장 가이드)으로 보므로 늘 force. 열린 시간(12·18·20·22시부터 30분)이
- * 아니면 큐에서 비켜 있다가 열리면 돈다 (gui_app DailyKind.ready) */
-const FB_BOSSES = { '페리': 3, '크라브바흐': 3, '크라마': 3, '드로흐에넴': 3, '토르모그': 2, '앙그르바한': 2 };
-const FB_LEVELS = ['일반', '어려움', '매우 어려움'];
-
+ * 아니면 큐에서 비켜 있다가 열리면 돈다 (gui_app DailyKind.ready).
+ * 보스·난이도 목록과 기본값은 파이썬이 준다 (mm.daily.fieldBossSettings ← mabi/tasks/field_boss.choices) */
 function paintFieldBoss() {
   paintPick('fb', 'fbChars');
   const boss = $('#fb-boss');
-  if (!boss.options.length) {
+  if (!boss.options.length && dl.fb) {
     const saved = pref('fieldBoss', {});
-    boss.innerHTML = Object.keys(FB_BOSSES).map((b) => '<option>' + b + '</option>').join('');
-    boss.value = FB_BOSSES[saved.boss] ? saved.boss : '드로흐에넴';
-    paintFieldBossLevels(saved.difficulty || '매우 어려움');
+    boss.innerHTML = selectOptions(dl.fb.bosses, dl.fb.bosses.includes(saved.boss) ? saved.boss : dl.fb.boss);
+    paintFieldBossLevels(saved.difficulty || dl.fb.difficulty);
   }
 }
 
+/** 난이도 칸 (필드 보스·레이드 공통) — want 가 목록에 없으면 highest 면 가장 높은 것, 아니면 맨 앞 */
+function paintLevels(sel, list, want, highest) {
+  sel.innerHTML = selectOptions(list, want);
+  if (highest && list.length && !list.includes(want)) sel.value = list[list.length - 1];
+}
+
 function paintFieldBossLevels(want) {
-  const levels = FB_LEVELS.slice(0, FB_BOSSES[$('#fb-boss').value]);
-  $('#fb-level').innerHTML = levels.map((l) => '<option>' + l + '</option>').join('');
-  $('#fb-level').value = levels.includes(want) ? want : levels[levels.length - 1];  // 없으면 그 보스의 가장 높은 난이도
+  paintLevels($('#fb-level'), dl.fb.difficulties[$('#fb-boss').value] || [], want, true);  // 없으면 그 보스의 가장 높은 난이도
 }
 
 function fieldBossSpec() {
@@ -286,23 +287,19 @@ Q_KINDS.daily = { amount: dailyAmount };
 
 /* ── 설정 ── */
 
-function opts(list, cur, extra) {
-  return (extra || []).concat(list.map((v) => [v, v])).map(([v, label]) =>
-    '<option value="' + esc(v) + '"' + (String(v) === String(cur) ? ' selected' : '') + '>' + esc(label) + '</option>').join('');
-}
+const FIELD_RUNS = [0, 1, 2, 3, 4, 5];  // 사냥터 출장 횟수 (캐릭터 탭 설정 창도 같이 쓴다)
 
 function paintDailySettings() {
   const s = dl.settings;
-  $('#dl-field-runs').innerHTML = opts(['0', '1', '2', '3', '4', '5'], s.silver.field_runs);
-  $('#dl-field').innerHTML = opts(s.fields, s.field);
-  $('#dl-dungeon').innerHTML = opts(s.dungeons, s.silver.dungeon);
-  // [value, label] 짝을 바로 넘겨 값 목록(list)은 비운다
-  $('#dl-floor').innerHTML = opts([], s.silver.floor, Object.entries(mm.labels.floors || {}));
+  $('#dl-field-runs').innerHTML = selectOptions(FIELD_RUNS, s.silver.field_runs);
+  $('#dl-field').innerHTML = selectOptions(s.fields, s.field);
+  $('#dl-dungeon').innerHTML = selectOptions(s.dungeons, s.silver.dungeon);
+  $('#dl-floor').innerHTML = selectOptions(Object.entries(mm.labels.floors || {}), s.silver.floor);
   const f = s.follow || {};
   const fol = (n) => (f.total ? n + '명 적용' : '');
   $('#dl-follow-field').textContent = fol(f.field);
   $('#dl-follow-dungeon').textContent = fol(f.dungeon);
-  $('#dl-sunday').innerHTML = opts(s.sundays, s.sunday);
+  $('#dl-sunday').innerHTML = selectOptions(s.sundays, s.sunday);
   $('#dl-follow-sunday').textContent = fol(f.sunday);
   paintStopKey();
 }
@@ -327,8 +324,7 @@ function paintStopKey() {
 async function loadPathSettings() {
   const s = await mm.daily.settings();
   dl.settings = Object.assign(dl.settings || {}, { stop_key: s.stop_key });
-  const fkeys = (cur) => Array.from({ length: 12 }, (_, i) => 'f' + (i + 1)).map((k) =>
-    '<option value="' + k + '"' + (k === cur ? ' selected' : '') + '>' + k.toUpperCase() + '</option>').join('');
+  const fkeys = (cur) => selectOptions(Array.from({ length: 12 }, (_, i) => ['f' + (i + 1), 'F' + (i + 1)]), cur);
   $('#opt-stop-key').innerHTML = fkeys(s.stop_key);
   $('#opt-dye-key').innerHTML = fkeys(s.dye_key);
   $('#opt-fit-display').checked = s.fit_display !== false;
@@ -450,9 +446,8 @@ function dailyReportHtml(results, loots) {
 async function loadAbyss() {
   const a = await mm.daily.abyssSettings();
   if (!a) return;
-  $('#ab-dungeon').innerHTML = a.dungeons.map((d) => '<option' + (d === a.dungeon ? ' selected' : '') + '>' + esc(d) + '</option>').join('');
-  $('#ab-difficulty').innerHTML =
-    a.difficulties.map((d) => '<option' + (d === a.difficulty ? ' selected' : '') + '>' + esc(d) + '</option>').join('');
+  $('#ab-dungeon').innerHTML = selectOptions(a.dungeons, a.dungeon);
+  $('#ab-difficulty').innerHTML = selectOptions(a.difficulties, a.difficulty);
   $('#ab-char').innerHTML = '<option value="0">지금 접속한 캐릭터</option>' + a.chars.map((c) =>
     '<option value="' + c.slot + '"' + (c.slot === a.slot ? ' selected' : '') + '>' + c.slot + '. ' + esc(c.name) + '</option>').join('');
   $('#ab-runs').value = a.runs;
@@ -584,7 +579,7 @@ async function loadRaid(chars) {
   const r = await mm.daily.raidSettings();
   if (!r) return;
   raidDiffs = r.difficulties;
-  $('#rd-raid').innerHTML = r.raids.map((d) => '<option' + (d === r.raid ? ' selected' : '') + '>' + esc(d) + '</option>').join('');
+  $('#rd-raid').innerHTML = selectOptions(r.raids, r.raid);
   paintRaidDiffs(r.difficulty);
   $('#rd-char').innerHTML = '<option value="0">지금 접속한 캐릭터</option>' + chars.map((c) =>
     '<option value="' + c.slot + '"' + (c.slot === r.slot ? ' selected' : '') + '>' + c.slot + '. ' + esc(c.name) + '</option>').join('');
@@ -596,8 +591,7 @@ async function loadRaid(chars) {
 }
 
 function paintRaidDiffs(want) {
-  const list = raidDiffs[$('#rd-raid').value] || [];
-  $('#rd-difficulty').innerHTML = list.map((d) => '<option' + (d === want ? ' selected' : '') + '>' + esc(d) + '</option>').join('');
+  paintLevels($('#rd-difficulty'), raidDiffs[$('#rd-raid').value] || [], want);
 }
 
 function paintRaidRunning(on) { paintRepeatRunning('#rd', on); }

@@ -33,6 +33,13 @@ SKIP_WAIT = 1.0            # '장면 넘기기' 가 뜬 뒤 누르기까지 (사
 BOSSES = {"페리": 3, "크라브바흐": 3, "크라마": 3, "드로흐에넴": 3, "토르모그": 2, "앙그르바한": 2}
 ROW_Y = (130, 230, 330, 440, 540, 640)  # 목록 카드 가운데 y (1920 기준, x 130)
 DIFFICULTIES = ("일반", "어려움", "매우 어려움")
+DEFAULT_BOSS, DEFAULT_DIFFICULTY = "드로흐에넴", "매우 어려움"  # 화면에서 아직 고른 적이 없을 때
+
+
+def choices() -> dict:
+    """화면(필드 보스 칸)이 고를 수 있는 것 — 보스 목록, 보스마다 고를 수 있는 난이도, 기본값."""
+    return {"bosses": list(BOSSES), "difficulties": {b: list(DIFFICULTIES[:n]) for b, n in BOSSES.items()},
+            "boss": DEFAULT_BOSS, "difficulty": DEFAULT_DIFFICULTY}
 
 
 # ---- 열리는 시간
@@ -215,7 +222,7 @@ def leave(bot: Bot) -> None:
 
 def run(bot: Bot, cfg: dict) -> str:
     fb = cfg.get("field_boss", {})
-    boss, difficulty = fb.get("boss", "드로흐에넴"), fb.get("difficulty", "매우 어려움")
+    boss, difficulty = fb.get("boss", DEFAULT_BOSS), fb.get("difficulty", DEFAULT_DIFFICULTY)
     if done(bot):
         return "이번 주 이미 잡음"
     if inside(bot):

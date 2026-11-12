@@ -313,6 +313,11 @@ class DailyApi:
                 "mode": r.get("mode") or "party", "raids": raid.RAIDS, "difficulties": raid.DIFFICULTIES,
                 "running": bool(self._raid_thread and self._raid_thread.is_alive())}
 
+    def daily_fieldBossSettings(self) -> dict:  # noqa: N802
+        """필드 보스 칸의 보스·난이도 목록과 기본값 (mabi.tasks.field_boss). 고른 값은 화면이 fieldBoss 로 기억한다."""
+        from mabi.tasks import field_boss
+        return field_boss.choices()
+
     def _raid_launch(self, v: dict, on_event=None) -> threading.Thread:
         """레이드 반복 — [raid] 에 저장하고 시작 ('mm:raid', self._raid_result). 나머지는 _abyss_launch 와 같다."""
         def save(a):
