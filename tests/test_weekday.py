@@ -7,7 +7,7 @@ import numpy as np
 from mabi.monitor import detect as d
 from mabi.monitor.detect import Seen
 from mabi.tasks import weekday
-from mabi.tasks.content import CannotProceed
+from mabi.exceptions import CannotProceed
 
 CHOICES = [("빛나는 동굴(골드)", 667, 996), ("눈부신 저택(보석)", 891, 997), ("찬란한 유적(연금술 재연소 촉매)", 1183, 996)]
 C = {"board_timeout": 5}

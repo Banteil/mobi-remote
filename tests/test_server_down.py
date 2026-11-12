@@ -11,7 +11,7 @@ from unittest import mock
 import numpy as np
 
 from mabi import bot as botmod, restart
-from mabi.bot import StopRequested
+from mabi.exceptions import StopRequested
 from mabi.monitor import detect as d, handlers
 from mabi.workqueue import Kind, WorkQueue
 

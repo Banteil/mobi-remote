@@ -24,6 +24,8 @@ import os
 import time
 from typing import TYPE_CHECKING
 
+from .exceptions import CannotProceed, StopRequested
+
 if TYPE_CHECKING:  # bot 이 cutpoint → restart 를 불러오므로 여기서 bot 을 바로 불러오면 돌고 돈다
     from .bot import Bot
 
@@ -135,7 +137,6 @@ def _quit(bot: Bot, timeout: float) -> None:
     게임 종료) 창을 띄우고 두 번째 신호에 꺼진다 (2026-11-11 실기 네 번 — 두 번째 뒤 5~16초). 그래서 3초 뒤 한 번 더
     보내고, 그래도 창이 남아 있으면 다시 보낸다. 창이 닫혀도 정리하느라 프로세스가 남아 있을 수 있어 끝날 때까지
     기다린다 (다 끝나기 전에 켜면 '이미 실행 중' 일 수 있다)."""
-    from .tasks.content import CannotProceed
     pid = _pid(bot.window.hwnd)
     for attempt in range(CLOSE_TRIES):
         bot.log.info("게임 창 닫기" + ("", " (종료 확인)", f" (다시 {attempt - 1})")[min(attempt, 2)])
@@ -160,7 +161,6 @@ def server_down(bot: Bot) -> str:
     그 자리부터 이어 한다. 끄는 길은 다시 켜기와 같은 창 닫기 신호(_quit). 창의 '확인' 이 무엇을 하는지는 아직 몰라 먼저
     누르지 않고, 닫기 신호로 창이 안 닫힐 때만 '확인'(Space) 뒤 한 번 더 보낸다. 큐에 남길 메모를 돌려준다 —
     봇은 멈춤 요청 상태가 된다 (뒤이어 무엇을 하려 해도 StopRequested)."""
-    from .tasks.content import CannotProceed
     timeout = float(bot.cfg["restart"]["exit_timeout"])
     bot.log.error(f"게임 서버와 연결이 끊김 (점검 등) → 게임을 끄고 작업 큐 일시정지 ({bot.snapshot('server_down').name})")
     note = DOWN_NOTE
@@ -189,8 +189,6 @@ def server_down(bot: Bot) -> str:
 
 def _launch(bot: Bot, cfg: dict) -> None:
     """넥슨 플러그 바로실행 링크로 켜고 타이틀(또는 캐릭터 선택·메인)이 보일 때까지."""
-    from .bot import StopRequested
-    from .tasks.content import CannotProceed
     c, ui = cfg["restart"], bot.ui
     limit = float(c["start_timeout"])
     bot.log.info("게임 켜기 — 넥슨 플러그 바로실행")

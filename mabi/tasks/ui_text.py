@@ -7,7 +7,7 @@ import time
 from .. import gamedata as gd
 from ..bot import Bot
 from ..ocr import find_texts, nospace as norm
-from .content import CannotProceed
+from ..exceptions import CannotProceed
 
 
 def match(items, want: str, exact: bool = True):

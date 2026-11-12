@@ -11,7 +11,8 @@
 """
 import time
 
-from ..bot import Bot, StepTimeout
+from ..bot import Bot
+from ..exceptions import StepTimeout
 from ..profile import game_day_start
 from .content import GROWTH, achieved_mark, daily_achieved, growth_done, game_space, inside_space, open_guide, open_guide_card, watch
 

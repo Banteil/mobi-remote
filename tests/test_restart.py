@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from mabi import outcome, restart
-from mabi.tasks.content import CannotProceed
+from mabi.exceptions import CannotProceed
 from mabi.workqueue import Kind, WorkQueue
 from gui_app.queue_api import QueueApi
 

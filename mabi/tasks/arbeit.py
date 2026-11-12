@@ -16,13 +16,13 @@ import time
 
 from .. import craft, gamedata as gd, monitor, ocr, richtext
 from ..bot import Bot
-from ..monitor import Ctx, Stuck, detect as d
+from ..monitor import Ctx, detect as d
+from ..exceptions import CannotProceed, Stuck
 from ..progress import Progress
-from .content import CannotProceed, open_arbeit_tab, questwin_text_ok
+from .content import open_arbeit_tab, questwin_text_ok
 
 PROGRESS, APPLY = gd.text("arbeit_progress"), gd.text("arbeit_apply")  # 카드 버튼 '진행하기' · '지원하기'
 HAVE = gd.text("arbeit_have_item")  # CLI 조건 '… 보유 3/10'
-
 
 
 def accepted(bot: Bot, raw: bool = False) -> list[dict]:

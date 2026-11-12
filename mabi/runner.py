@@ -21,11 +21,11 @@ from typing import Callable
 
 from . import profile as prof
 from . import queue_report, tasks
-from .bot import Bot, MissingTemplate, StepTimeout, StopRequested
+from .bot import Bot
+from .exceptions import CannotProceed, MissingTemplate, StepTimeout, StopRequested
 from .paths import Paths
 from .report import RunReport
 from .tasks import display, login
-from .tasks.content import CannotProceed
 from . import outcome
 
 log = logging.getLogger("mabi")

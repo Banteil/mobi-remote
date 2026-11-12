@@ -20,16 +20,9 @@ import numpy as np
 from .. import gamedata as gd
 from ..ocr import nospace
 from .. import situation
-from ..bot import AuthBlocked, Bot, StepTimeout
+from ..bot import Bot
+from ..exceptions import AuthBlocked, SelectFailed, StepTimeout, WrongCharacter
 from ..vision import Match
-
-
-class SelectFailed(StepTimeout):
-    pass
-
-
-class WrongCharacter(StepTimeout):
-    """접속해 보니 고른 캐릭터가 아님 — 숙제를 시작하지 않는다."""
 
 
 _last_login = 0.0  # 마지막으로 '게임 시작'을 누른 시각 (monotonic)
@@ -197,7 +190,6 @@ def _clear_auth_fail(bot: Bot, cfg: dict) -> None:
 
 
 NAME_AREA = gd.region("main_name")  # 메인 화면 왼쪽 위 캐릭터 이름 줄 [x, y, w, h] (위 줄은 타이틀)
-
 
 
 def current_name(bot: Bot) -> str:

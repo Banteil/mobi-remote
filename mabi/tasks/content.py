@@ -14,7 +14,8 @@ import time
 from typing import Callable, NamedTuple
 
 from .. import gamedata as gd, keys
-from ..bot import Bot, StepTimeout
+from ..bot import Bot
+from ..exceptions import CannotProceed, StepTimeout
 from ..vision import green, green_ratio
 
 
@@ -190,7 +191,6 @@ def open_arbeit_tab(bot: Bot) -> None:
         bot.log.debug(f"아르바이트 탭 그림이 가려짐 → 탭 글자 {hit} 를 누름")
         bot.click(hit)  # 아이콘 쪽은 겹친 '진행하기' 버튼이라 글자를 누른다
     bot.sleep(1, 1.5)
-
 
 
 def open_guide(bot: Bot) -> None:
@@ -525,10 +525,6 @@ def go_talk(bot: Bot, start: Callable[[], None], what: str, shot: str) -> None:
     # 도착해 대화가 열리면 끝 — 메뉴는 인사말을 넘긴 뒤에 뜬다
     wait_arrival(bot, lambda: talking(bot), bot.cfg["abyss"].get("travel_timeout", 300), shot + "_npc",
                  f"{what} NPC 대화가 열리지 않음", retry_fast=True, interval=(1.5, 2))
-
-
-class CannotProceed(RuntimeError):
-    """던전 미해금, 장소를 못 찾음 등 진행할 수 없는 상황. 실행기는 실패로 기록하고 다음 숙제로 넘어간다."""
 
 
 def open_map(bot: Bot) -> None:

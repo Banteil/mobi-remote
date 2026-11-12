@@ -26,26 +26,7 @@ from .blackbox import BlackBox
 from .screen import Screen
 from .vision import Match, Vision
 from .window import GameWindow
-
-
-class StopRequested(Exception):
-    pass
-
-
-class StepTimeout(Exception):
-    pass
-
-
-class Overweight(Exception):
-    """가방 무게가 한도를 넘어 숙제를 이어갈 수 없음. 실행기는 그 캐릭터를 건너뛴다."""
-
-
-class MissingTemplate(Exception):
-    pass
-
-
-class AuthBlocked(Exception):
-    """'계정 인증 실패'가 거듭 나서 접속을 더 시도하지 않는다. 실행기는 전체 실행을 멈춘다."""
+from .exceptions import AuthBlocked, MissingTemplate, Overweight, StepTimeout, StopRequested
 
 
 SHOT_KEEP_DAYS = 7

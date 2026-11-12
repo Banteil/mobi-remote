@@ -10,9 +10,9 @@ import time
 import numpy as np
 
 from .. import gamedata as gd, keys, situation
-from ..bot import Bot, StepTimeout
-from .content import (QUESTWIN_TAB_BAR_Y, CannotProceed, enter_from_dungeon_window, questwin_buttons, travel,
-                      with_retries)
+from ..bot import Bot
+from ..exceptions import CannotProceed, StepTimeout
+from .content import QUESTWIN_TAB_BAR_Y, enter_from_dungeon_window, questwin_buttons, travel, with_retries
 
 QUEST_TITLE = gd.text("tribute_quest")
 CARD_H = 450  # 퀘스트 카드 하나의 높이 (1920 기준, 제목 → '진행하기' 약 400px)

@@ -4,7 +4,7 @@ import unittest
 from unittest import mock
 
 from mabi.tasks import enhance
-from mabi.tasks.content import CannotProceed
+from mabi.exceptions import CannotProceed
 
 
 class FakePackets:

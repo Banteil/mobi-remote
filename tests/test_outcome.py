@@ -3,8 +3,7 @@ import unittest
 from unittest import mock
 
 from mabi import outcome
-from mabi.bot import Overweight, StepTimeout, StopRequested
-from mabi.tasks.content import CannotProceed
+from mabi.exceptions import CannotProceed, Overweight, StepTimeout, StopRequested
 
 
 class OutcomeTest(unittest.TestCase):
@@ -52,7 +51,6 @@ class OutcomeTest(unittest.TestCase):
         self.assertEqual(Bot.overweight(b), "가방 무게 300/300")
         b.packets.state.weight = 100
         self.assertIsNone(Bot.overweight(b))
-
 
 
 class StopReasonTest(unittest.TestCase):

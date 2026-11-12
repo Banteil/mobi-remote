@@ -16,10 +16,11 @@
 import time
 
 from .. import gamedata as gd, keys, richtext
-from ..bot import Bot, StepTimeout
+from ..bot import Bot
+from ..exceptions import CannotProceed, StepTimeout
 from ..place import RAID_LOBBY, place
 from . import entry, ui_text
-from .content import CannotProceed, Fight, confirm_text, wait_arrival, wait_settled, where_settled
+from .content import Fight, confirm_text, wait_arrival, wait_settled, where_settled
 from .exits import Exit
 from .repeat import Repeat
 
@@ -108,7 +109,6 @@ def where(bot: Bot, raid: str) -> str:
     if m is None and bot.is_loading():
         return "loading"
     return "other"
-
 
 
 def open_entry(bot: Bot, raid: str, difficulty: str = "", at: str = "", solo: bool = True) -> None:

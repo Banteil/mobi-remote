@@ -8,10 +8,10 @@
 예) 어떤 캐릭터 = 사냥터 2회, 남은 건 피오드 던전 → field_runs = 2, dungeon = "피오드 던전"
 """
 from .. import gamedata as gd
-from ..bot import Bot, StepTimeout
+from ..bot import Bot
+from ..exceptions import CannotProceed, StepTimeout
 from . import black_hole
-from .content import (CannotProceed, enter_from_dungeon_window, go_to_place, has_word, mission_button, play_field, read_button,
-                      select_zone)
+from .content import enter_from_dungeon_window, go_to_place, has_word, mission_button, play_field, read_button, select_zone
 
 
 def verify(bot: Bot, cfg: dict) -> bool:

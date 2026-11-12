@@ -17,17 +17,16 @@
 import time
 
 from .. import gamedata as gd, judge
-from ..bot import Bot, StepTimeout
+from ..bot import Bot
+from ..exceptions import CannotProceed, LootPending, StepTimeout
 from ..place import place
 from .. import monitor
 from ..monitor import detect as d, handlers
 from . import entry, ui_text
-from .content import (CannotProceed, Fight, go_talk, touch_prompt_visible, wait_arrival, wait_settled,
-                      where_settled)
+from .content import Fight, go_talk, touch_prompt_visible, wait_arrival, wait_settled, where_settled
 from .exits import DungeonExit, Exit
 from .repeat import Repeat
 from .spear import SpearDodge
-
 
 
 def dungeons(now=None) -> list[str]:
@@ -152,7 +151,6 @@ def where(bot: Bot, dungeon: str) -> str:
     return "other"
 
 
-
 def loot_pending(bot: Bot) -> tuple[int, int] | None:
     """어비스 목록 왼쪽 아래 '주간 전리품' 칸의 '전리품 받기' 버튼 자리 — 정산할 게 남았을 때만.
     글자만으로는 모른다: 정산한 뒤에도 버튼은 '전리품 받기' 그대로 흐려지고 'N일 후 수령 가능' 이 붙는다 (2026-11-09 11:27
@@ -164,11 +162,6 @@ def loot_pending(bot: Bot) -> tuple[int, int] | None:
     if int(((r > 70) & (r > 3 * g) & (r > 3 * b)).sum()) < 12:
         return None
     return ui_text.find(bot, gd.text("abyss_loot"), gd.region("abyss_loot"))
-
-
-class LootPending(Exception):
-    """입장하려는데 정산 안 한 주간 전리품이 있다 — open_entry 는 여기서 멈추고, 정산(settle_loot)은 별개 과정으로 한 뒤
-    입장을 다시 이어 간다 (enter_screen). 어비스 목록은 열린 채로 둔다."""
 
 
 LOOT_MENU_LIMIT = 180   # 에반 대화가 열린 뒤 메뉴 '주간 전리품 받기' 를 고르기까지 (빛나는 버튼 글자를 1분 넘게 못 읽은 적 있음)
@@ -480,7 +473,6 @@ class AbyssPlay(Fight):
 def at_reward(bot: Bot) -> bool:
     """클리어 화면('화면을 터치해 주세요')이나 보상 화면(다시 하기 / 나가기)인가 (phase)."""
     return phase(bot) == "reward"
-
 
 
 def to_reward(bot: Bot) -> str:

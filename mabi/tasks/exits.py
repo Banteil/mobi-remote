@@ -10,7 +10,8 @@ leave_instance(bot) 는 지금 자리(place)를 보고 맞는 나가기를 부�
 import time
 
 from .. import keys
-from ..bot import Bot, StepTimeout
+from ..bot import Bot
+from ..exceptions import StepTimeout
 
 
 class Exit:

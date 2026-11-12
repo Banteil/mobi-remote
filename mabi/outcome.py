@@ -7,7 +7,8 @@
 import logging
 
 from . import restart
-from .bot import AuthBlocked, Bot, MissingTemplate, Overweight, StepTimeout, StopRequested
+from .bot import Bot
+from .exceptions import AuthBlocked, CannotProceed, MissingTemplate, Overweight, StepTimeout, StopRequested
 
 log = logging.getLogger("mabi")
 
@@ -25,7 +26,6 @@ def box(bot: Bot, tag: str) -> None:
 
 def classify(bot: Bot, tag: str, label: str, e: BaseException) -> tuple[str, str, bool]:
     """예외 → (상태, 요약, 화면 정리가 필요한가). 실패면 스냅샷·블랙박스를 남긴다."""
-    from .tasks.content import CannotProceed
     if isinstance(e, StopRequested):
         log.warning(bot.stopper.reason())
         return "STOP", "", False

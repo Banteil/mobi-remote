@@ -14,7 +14,7 @@ from ..bot import Bot
 from ..ocr import find_texts, nospace
 from ..vision import green_ratio
 from . import ui_text
-from .content import CannotProceed
+from ..exceptions import CannotProceed
 
 BUTTONS = (("abyss_enter", "enter"), ("raid_sail", "sail"), ("abyss_move", "move"))  # ui.json 문구 → 버튼
 SWITCH_DX = 95  # '우연한 만남' 글자 가운데 → 스위치 가운데 (1920 기준)

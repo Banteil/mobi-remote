@@ -20,7 +20,8 @@ import numpy as np
 from .. import gamedata as gd, keys
 from ..bot import Bot
 from . import dialogue, ui_text
-from .content import CannotProceed, go_talk
+from .content import go_talk
+from ..exceptions import CannotProceed
 
 def _find(bot: Bot, key: str, region: str, exact: bool = True):
     return ui_text.find(bot, gd.text(key), gd.region(region), exact)

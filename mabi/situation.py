@@ -11,6 +11,7 @@
 import time
 
 from .profile import game_date
+from .exceptions import StepTimeout
 
 # look() 결과
 LOADING = "loading"                # 맵 로딩 중 (패킷)
@@ -99,7 +100,6 @@ def to_main(bot, timeout: float = 60) -> str:
     점검자(mabi.monitor)가 남은 대사·확인·전달 창·작별 화면·출석을 정리하고, 그래도 메인이 아니면 ESC (Bot.to_main).
     NPC 대화 도중이면 메뉴(수락·결과 보고)까지 처리한다 — ESC 가 하던 아르바이트를 날리지 않게."""
     from . import monitor
-    from .bot import StepTimeout
     mon = monitor.of(bot)
     end = time.monotonic() + timeout
     at = look(bot)

@@ -20,11 +20,12 @@ import re
 import time
 
 from .. import gamedata as gd
-from ..bot import Bot, StepTimeout
+from ..bot import Bot
+from ..exceptions import CannotProceed, StepTimeout
 from ..ocr import find_texts, nospace, read_text
 from . import entry, ui_text
 from .boss_skills import BossSkills
-from .content import CannotProceed, Fight, wait_arrival
+from .content import Fight, wait_arrival
 from .exits import Exit
 
 GOAL = 20

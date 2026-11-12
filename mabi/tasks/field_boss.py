@@ -18,10 +18,11 @@ import datetime as dt
 import time
 
 from .. import gamedata as gd, monitor
-from ..bot import Bot, StepTimeout
+from ..bot import Bot
+from ..exceptions import CannotProceed, StepTimeout
 from . import ui_text
 from .boss_skills import BossSkills
-from .content import CannotProceed, confirm_text, growth_done, wait_arrival, watch
+from .content import confirm_text, growth_done, wait_arrival, watch
 from .exits import Exit
 
 MAP = "FieldBoss"

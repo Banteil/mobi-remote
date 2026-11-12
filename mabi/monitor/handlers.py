@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass
 
 from .. import gamedata as gd, ocr, situation as sit
-from ..bot import StepTimeout
+from ..exceptions import StepTimeout, StopRequested
 from . import detect as d
 
 # 제작·가공 창 왼쪽 위 제목 칸 (1920 기준). 가공 시설 창은 제목이 '…가공' ('식재료 가공' 등)
@@ -276,7 +276,6 @@ def network(bot, ctx, seen):
         bot.log.error(f"'네트워크가 불안정' 이 {len(tries)}번 다시 시도해도 또 뜸 → 일시정지 ({shot})")
         bot.stopper.by_key = True  # F12 일시정지와 같게 — F12 로 이어 한다
         bot.stopper.stopped.set()
-        from ..bot import StopRequested
         raise StopRequested()
     bot._network_tries = tries + [now]
     bot.log.warning(f"'네트워크가 불안정' → 다시 시도하기 ({len(tries) + 1}/{NETWORK_TRIES}, {shot})")
@@ -292,7 +291,6 @@ def server_down(bot, ctx, seen):
     """게임 서버와 연결이 끊긴 창(점검 등) → 게임을 끄고 작업 큐 일시정지 (mabi/restart.server_down — 사용자 2026-11-12).
     창의 '확인' 은 먼저 누르지 않는다. 하던 일은 여기서 멈추고, 점검 뒤 게임을 켜고 ▶ 면 그 자리부터 이어 한다."""
     from .. import restart
-    from ..bot import StopRequested
     restart.server_down(bot)
     raise StopRequested()
 

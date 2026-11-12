@@ -15,7 +15,8 @@ import cv2
 import numpy as np
 
 from .. import gamedata as gd, ocr
-from ..bot import Bot, StepTimeout
+from ..bot import Bot
+from ..exceptions import CannotProceed, StepTimeout
 from . import login
 
 
@@ -173,7 +174,6 @@ def scan(bot: Bot, cfg: dict) -> dict:
     bot.wait(charsel)
     bot.sleep(1.5, 2)
     if bot.run_limit_popup():  # 2번 카드 '•••' 가 창에 가려 카드가 한 칸씩 밀려 읽힌다 — 틀린 슬롯을 저장하지 않게
-        from .content import CannotProceed
         raise CannotProceed("연속 실행 제한 창이 카드를 가림 — 게임을 다시 켠 뒤 다시 읽어 주세요")
 
     total = login.count_characters(bot, cfg)  # 스크롤 맨 위

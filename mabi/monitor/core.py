@@ -20,10 +20,7 @@ import numpy as np
 
 from . import detect as d, handlers as h
 from .handlers import Finish
-
-
-class Stuck(RuntimeError):
-    """점검자가 보기에 같은 자리에서 헛돌고 있다."""
+from ..exceptions import StepTimeout, Stuck
 
 
 class Ctx:
@@ -195,7 +192,6 @@ class Monitor:
             self._unknown_tried, self._unknown_since = True, now
             self.bot.log.warning(f"점검: [{ctx.what or ctx.task}] 모르는 상황이 {self.unknown_limit}초째 → 메인 화면으로 ({shot})")
             self.record(ctx, "모름", seen, did="메인 화면으로", shot=shot)
-            from ..bot import StepTimeout
             try:
                 self.bot.to_main(tries=3)
             except StepTimeout:
@@ -224,7 +220,6 @@ class Monitor:
 
     def leave(self, ctx: Ctx | None = None) -> None:
         """하던 일을 놓고 메인 화면으로 (남은 화면을 정리한 뒤 ESC)."""
-        from ..bot import StepTimeout
         self.settle(Ctx(ctx.task if ctx else "settle", ctx.what if ctx else "", menus=True))
         try:
             self.bot.to_main()

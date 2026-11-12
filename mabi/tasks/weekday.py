@@ -12,9 +12,10 @@
 import time
 
 from .. import situation
-from ..bot import Bot, StepTimeout
+from ..bot import Bot
+from ..exceptions import CannotProceed, StepTimeout
 from .dialogue import in_dialog
-from .content import (GROWTH, CannotProceed, daily_achieved, growth_done, enter_from_dungeon_window, open_arbeit_tab, questwin_buttons, travel,
+from .content import (GROWTH, daily_achieved, growth_done, enter_from_dungeon_window, open_arbeit_tab, questwin_buttons, travel,
                       with_retries)
 
 SUNDAY_CHOICES = ("골드", "보석", "촉매")  # 선택지 글자 괄호 안의 낱말. 이 낱말이 든 버튼을 누른다

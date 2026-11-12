@@ -29,7 +29,8 @@ import numpy as np
 from .. import gamedata as gd, ocr
 from . import ui_text
 from ..screen import BASE_H, BASE_W, REG_KEYS, exclusive_fullscreen, is_16_9, screen_mode
-from ..bot import Bot, MissingTemplate, StepTimeout
+from ..bot import Bot
+from ..exceptions import DisplayFixFailed, MissingTemplate, StepTimeout
 
 WIDTH, HEIGHT = 1920, 1080
 SCALE = 80
@@ -48,10 +49,6 @@ REG = {
     "Screenmanager Resolution Height_h": HEIGHT,
     "Screenmanager Fullscreen mode_h": 1,  # 1 = 테두리 없는 전체화면 (FullScreenWindow)
 }
-
-
-class DisplayFixFailed(RuntimeError):
-    pass
 
 
 MIN_W, MIN_H = 1280, 720  # 이보다 작으면 늘려 써도 글자·아이콘이 뭉개져 인식이 흔들린다

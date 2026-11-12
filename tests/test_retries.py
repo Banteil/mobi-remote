@@ -2,7 +2,7 @@ import time
 import unittest
 from unittest import mock
 
-from mabi.bot import StepTimeout
+from mabi.exceptions import StepTimeout
 from mabi.tasks import content
 
 
