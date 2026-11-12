@@ -685,6 +685,9 @@ class QueueApi:
                     now = login.current_character(bot)
                     if now:  # 모르면 적지 않는다 — 다음에 집을 때 다시 본다
                         q.patch(it["id"], {"pin": {"slot": now["slot"], "name": now["name"]}})
+                        log.info(f"{it.get('label') or '카드'}: 지금 캐릭터(슬롯 {now['slot']})로 하는 카드로 기억")
+                    else:
+                        log.info(f"{it.get('label') or '카드'}: 지금 캐릭터 이름을 몰라 기억하지 않음 — 다음에 집을 때 다시 봄")
                     return True
                 name = login.current_name(bot)
                 if name and login.name_matches(name, want["name"]):
