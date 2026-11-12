@@ -18,10 +18,11 @@ import datetime as dt
 import time
 
 from .. import gamedata as gd, monitor
-from ..bot import Bot
+from ..bot import Bot, StepTimeout
 from . import ui_text
 from .boss_skills import BossSkills
 from .content import CannotProceed, confirm_text, growth_done, wait_arrival, watch
+from .exits import Exit
 
 MAP = "FieldBoss"
 HOURS = (12, 18, 20, 22)   # 출현 시간 (시)
@@ -175,28 +176,37 @@ def fight(bot: Bot) -> bool:
                         f"→ {bot.snapshot('fb_fight').name}")
 
 
-def leave(bot: Bot) -> None:
-    """보스 영역 안이면 오른쪽 위 나가기 → '영역에서 나가시겠습니까' 나가기(Space). 영역 밖이면 아무것도 누르지 않는다
-    (밖에서 그 자리를 누르면 다른 창이 열린다)."""
-    for _ in range(3):
-        if bot.packets.ok and not inside(bot):
-            break
+class FieldBossExit(Exit):
+    """보스 영역에서 나간다: 오른쪽 위 나가기 (던전과 다른 자리 — fb_exit_button) → '영역에서 나가시겠습니까' 나가기(Space).
+    영역 밖이면 아무것도 누르지 않는다 (밖에서 그 자리를 누르면 다른 창이 열린다). 패킷이 없으면 안으로 보고 누른다."""
+    NAME, SNAP = "보스 영역", "fb_leave"
+    TIMEOUT = 15  # 나가기 창을 띄우는 데 쓰는 시간 — 예전처럼 몇 번(누르기 + 3초)만 해 보고 그만둔다
+
+    def inside(self, bot):
+        return not bot.packets.ok or inside(bot)
+
+    def gone(self, bot):
+        return not inside(bot)
+
+    def dialog(self, bot, timeout):
+        return ui_text.wait(bot, gd.text("fb_exit"), gd.region("fb_dialog"), timeout=max(0.0, timeout), exact=False)
+
+    def open_dialog(self, bot):
         x, y, w, h = gd.region("fb_exit_button")
         bot.click((x + w // 2, y + h // 2))
-        if ui_text.wait(bot, gd.text("fb_exit"), gd.region("fb_dialog"), timeout=3, exact=False):
-            bot.key("space")
-            bot.log.info("보스 영역 나가기")
-            break
-    else:
-        bot.log.warning(f"보스 영역 나가기 창이 안 뜸 → {bot.snapshot('fb_leave').name}")
-    end = time.monotonic() + bot.cfg["timing"]["loading"]
-    while time.monotonic() < end:
-        if bot.map_loading():
-            bot.wait_loaded(end - time.monotonic())
-            continue
-        if not inside(bot) and bot.at_main():
-            return
-        bot.sleep(1.0, 1.4)
+        return self.dialog(bot, 3)
+
+    def confirm(self, bot, hit):  # 찾은 글자는 창의 문구라 누를 자리가 아니다 — Space 만
+        bot.key("space")
+        bot.log.info("보스 영역 나가기")
+
+
+def leave(bot: Bot) -> None:
+    """보스 영역 안이면 나간다 (FieldBossExit). 못 나가도 멈추지 않고 남긴다 — 영역은 퇴장 시간(4분)이 지나면 저절로 나가진다."""
+    try:
+        FieldBossExit().run(bot)
+    except StepTimeout as e:
+        bot.log.warning(f"보스 영역 나가기: {e}")
 
 
 def run(bot: Bot, cfg: dict) -> str:

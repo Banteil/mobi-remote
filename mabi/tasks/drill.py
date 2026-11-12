@@ -25,6 +25,7 @@ from ..ocr import find_texts, nospace, read_text
 from . import entry, ui_text
 from .boss_skills import BossSkills
 from .content import CannotProceed, Fight, wait_arrival
+from .exits import Exit
 
 GOAL = 20
 MAP = "InstanceBreakthroughDungeon"
@@ -182,25 +183,35 @@ class ZoneFight(Fight):
         raise StepTimeout(f"드릴 구역이 {ZONE_LIMIT + 90}초 안에 끝나지 않음 → {self.bot.snapshot('drill_zone').name}")
 
 
-def leave(bot: Bot) -> None:
-    """결과 창에서 나가기(ESC) → 드릴 밖 필드 메인 화면까지."""
-    for _ in range(3):
+class DrillExit(Exit):
+    """구역 결과 창에서 나간다: 결과 창 '나가기'(ESC) — 따로 확인 창이 없다. ESC 가 안 들고 창이 남으면 '나가기' 버튼을 누른다.
+    결과 창(의 '나가기' 버튼)을 확인 창 자리에 둔다. 안인지는 패킷 맵으로 — 모르면 안으로 보고 누르고, 다 나왔는지는 메인 화면으로."""
+    NAME, SNAP = "나이트메어 드릴", "drill_leave"
+
+    def inside(self, bot):
+        return not bot.packets.ok or inside(bot)
+
+    def gone(self, bot):
+        return not inside(bot)
+
+    def dialog(self, bot, timeout):
+        return ui_text.wait(bot, gd.text("drill_exit"), gd.region("drill_result_buttons"), timeout=max(0.0, timeout))
+
+    def open_dialog(self, bot):  # 결과 창 버튼을 못 읽었어도 ESC 는 결과 창의 나가기다
         bot.key("esc")
-        if bot.wait_packet(lambda s: s.loading, 10, since=bot.input_mark) is not False or not result_buttons(bot):
-            break
-        bot.log.info("ESC 가 안 들음 → 나가기 버튼을 누름")
-        if hit := ui_text.find(bot, gd.text("drill_exit"), gd.region("drill_result_buttons")):
-            bot.click(hit)
-            break
-    end = time.monotonic() + bot.cfg["timing"]["loading"]
-    while time.monotonic() < end:
-        if bot.map_loading():
-            bot.wait_loaded(end - time.monotonic())
-            continue
-        if not inside(bot) and bot.at_main():
-            return
-        bot.sleep(1.5, 2)
-    raise StepTimeout(f"드릴에서 나온 뒤 메인 화면이 나오지 않음 → {bot.snapshot('drill_leave').name}")
+        bot.wait_packet(lambda s: s.loading, 10, since=bot.input_mark)
+        return None
+
+    def confirm(self, bot, hit):
+        bot.key("esc")
+        if bot.wait_packet(lambda s: s.loading, 10, since=bot.input_mark) is False and (again := self.dialog(bot, 0)):
+            bot.log.info("ESC 가 안 들음 → 나가기 버튼을 누름")
+            bot.click(again)
+
+
+def leave(bot: Bot) -> None:
+    """결과 창에서 나가기(ESC) → 드릴 밖 필드 메인 화면까지 (DrillExit)."""
+    DrillExit().run(bot)
 
 
 def play(bot: Bot) -> str:

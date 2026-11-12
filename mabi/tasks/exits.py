@@ -2,7 +2,7 @@
 
 순서는 같다: 오른쪽 위 나가기(단축키 또는 아이콘) → 확인 창 → 확인(Space, 안 먹으면 버튼 클릭) → 로딩 → 밖 메인 화면.
 종류마다 다른 것(안인가 · 확인 창 알아보기 · 확인 방법 · 나가기 전에 판이 끝났나)만 하위 클래스가 덮어쓴다
-(DungeonExit 은 여기, abyss.AbyssExit · raid.RaidExit · raid.ShipExit).
+(DungeonExit 은 여기, abyss.AbyssExit · raid.RaidExit · raid.ShipExit · drill.DrillExit · field_boss.FieldBossExit).
 예전엔 네 벌이 따로 있어 'Space 가 안 먹으면 클릭'(레이드)·'나가기 전에 판이 끝났나'(어비스)가 한쪽에만 있었다.
 
 leave_instance(bot) 는 지금 자리(place)를 보고 맞는 나가기를 부른다 — 실패 뒤 정리(runner.recover)·접속(login)이 쓴다.
@@ -55,6 +55,28 @@ class Exit:
         """나가기 버튼이 안 보일 때 — 가린 창(부활 창 등)을 닫아 본다."""
         bot.key("esc")
 
+    def open_dialog(self, bot: Bot):
+        """확인 창이 아직 없을 때 나가기를 눌러 띄운다 → dialog 표시, 못 띄웠으면 None (안인지부터 다시 본다).
+        기본: 오른쪽 위 나가기 아이콘 — 단축키가 있고 안이 확실하면 키 먼저. 아이콘이 안 보이면 uncover."""
+        ui = bot.ui
+        if not bot.exists(ui["abyss_exit"]):
+            self.uncover(bot)
+            bot.sleep(1.0, 1.5)
+            return None
+        hit = None
+        # 단축키(X)는 안이 확실할 때만 — X 는 본래 '보관함으로 이동'이다 (콘텐츠 안에선 나가기 창이 먼저 뜨지만
+        # 메인 필드로 나가면 그 이동이 이어진다, 2026-11-02). 필드로 나가는 쪽은 HOTKEY 를 두지 않는다 → 아이콘
+        if self.HOTKEY and self.surely_inside(bot):
+            key = keys.of(bot, self.HOTKEY)
+            bot.log.debug(f"{self.NAME} 나가기: {key} 키")
+            bot.key(key)
+            hit = self.dialog(bot, 4)
+        if not hit:
+            bot.log.debug(f"{self.NAME} 나가기: 아이콘 클릭")
+            bot.click(ui["abyss_exit"])
+            hit = self.dialog(bot, 5)
+        return hit
+
     # ---- 공통
     def run(self, bot: Bot) -> bool:
         """나간다. 다 나와 메인 화면이 보이면 True, 나가기 전에 판이 끝났으면 False."""
@@ -75,7 +97,6 @@ class Exit:
 
     def _press(self, bot: Bot) -> bool | None:
         """나가기 → 확인 → 밖. True 나옴 / False 나가기 전에 판이 끝남 / None 확인까지 눌렀는데 안에 남음."""
-        ui = bot.ui
         deadline = time.monotonic() + self.TIMEOUT
         while True:
             if self.finished_before(bot):
@@ -87,21 +108,7 @@ class Exit:
                 raise StepTimeout(f"{self.NAME}에서 나가지 못함 → {bot.snapshot(self.SNAP).name}")
             hit = self.dialog(bot, 0)  # 확인 창이 이미 떠 있으면(지난 시도의 Space 가 안 먹음) 그 창부터
             if not hit:
-                if not bot.exists(ui["abyss_exit"]):
-                    self.uncover(bot)
-                    bot.sleep(1.0, 1.5)
-                    continue
-                # 단축키(X)는 안이 확실할 때만 — X 는 본래 '보관함으로 이동'이다 (콘텐츠 안에선 나가기 창이 먼저 뜨지만
-                # 메인 필드로 나가면 그 이동이 이어진다, 2026-11-02). 필드로 나가는 쪽은 HOTKEY 를 두지 않는다 → 아이콘
-                if self.HOTKEY and self.surely_inside(bot):
-                    key = keys.of(bot, self.HOTKEY)
-                    bot.log.debug(f"{self.NAME} 나가기: {key} 키")
-                    bot.key(key)
-                    hit = self.dialog(bot, 4)
-                if not hit:
-                    bot.log.debug(f"{self.NAME} 나가기: 아이콘 클릭")
-                    bot.click(ui["abyss_exit"])
-                    hit = self.dialog(bot, 5)
+                hit = self.open_dialog(bot)
                 if not hit:
                     continue
                 bot.sleep(0.5, 0.9)
