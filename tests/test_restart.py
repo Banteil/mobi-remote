@@ -300,8 +300,11 @@ class CommandTest(unittest.TestCase):
         self.assertEqual(_command(["gui.py", "--restart-game", "--no-elevate"]), b"restart")
 
     def test_command_forces(self):  # 명령은 제한 창이 없어도 끄고 다시 켠다 — 다른 PC 에서 시험
+        from gui_app import control
         from gui_app.web_main import _on_message
         win, conn = mock.Mock(), mock.Mock()
+        win.api.queue_add.return_value = {"id": 1, "label": "게임 다시 켜기", "status": "wait"}
+        win.commands = control.Commands(win.api)  # 예전 통로도 제어 통로와 같은 명령표를 거친다
         conn.readAll.return_value = b"restart"
         _on_message(win, conn)
         spec, where = win.api.queue_add.call_args[0]
