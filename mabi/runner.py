@@ -516,6 +516,11 @@ class Runner:
                     for t in bot.also_done:
                         state.set(slot, t, "done")
                 if status == "STOP":
+                    if results[-1][1] != "STOP":
+                        # 클리어 뒤에 멈추면 그 숙제는 OK 로 남는다 — 실행이 멈췄다는 것은 따로 남겨, 큐가 카드를 완료로
+                        # 치우지 않고 일시정지로 두고 진행 기록도 지우지 않게 한다 (2026-11-13 F12 를 누르니 3명 카드가
+                        # 1번 공물 클리어 뒤 완료로 사라지고, 다시 F12 를 누르니 다음 카드가 돌았다)
+                        results.append(("실행", "STOP", "클리어 뒤 멈춤 — 이어 하면 다음 숙제부터"))
                     return
                 if status == "HEAVY":
                     break
