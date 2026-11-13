@@ -184,7 +184,7 @@ pre { user-select: text; }
   border-bottom: 1px solid var(--warn-line);
 }
 .banner-mark { color: var(--warn); }
-#offline-banner .btn { margin-left: auto; }
+#offline-text { margin-right: auto; }  /* 버튼들(게임 켜기·다시 확인)은 오른쪽에 나란히 */
 #npcap-banner [data-npcap] { margin-left: auto; }
 
 /* ── 본문 ───────────────────────────────────────── */
