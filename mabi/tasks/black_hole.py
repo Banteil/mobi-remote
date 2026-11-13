@@ -117,7 +117,10 @@ def run(bot: Bot, cfg: dict) -> str:
         watch(bot, ctx)
         bot.sleep(5)
     bot.step("bh_done", "검은 구멍 클리어 → 정리")
-    bot.done_at_clear = True
+    # 클리어로 숙제가 끝났다는 표시는 검은 구멍 숙제일 때만. 은동전 사냥터 안에서 부른 검은 구멍이 표시를 켜서,
+    # 사냥터 뒤 던전 직전에 멈췄는데 은동전 숙제가 완료로 남았다 (2026-11-13 06:37 — 던전 1회가 남음)
+    if bot.task_id == "black_hole":
+        bot.done_at_clear = True
     bot.sleep(2, 3)
     monitor.of(bot).settle(monitor.Ctx("black_hole", "검은 구멍 클리어 뒤"))  # 클리어 화면·퀘스트 완료·대화
     bot.dismiss_popups()

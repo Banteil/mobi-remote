@@ -70,6 +70,19 @@ class ClearMomentTest(unittest.TestCase):
             clear.cleared_now(bot, "던전")
             self.assertEqual(bot.done_at_clear, done, tid)
 
+    def test_black_hole_in_field_does_not_finish_silver(self):
+        # 사냥터 안에서 부른 검은 구멍 클리어가 은동전 숙제의 '클리어로 완료' 를 켜면, 던전 직전에 멈춰도 완료로 남았다
+        from mabi.tasks import black_hole
+        cfg = {"black_hole": {"space_keyword": "검은 구멍", "clear_timeout": 60}}
+        for tid, done in (("silver", False), ("black_hole", True)):
+            bot = make_bot()
+            bot.task_id, bot.done_at_clear = tid, False
+            with mock.patch.object(black_hole, "game_space", return_value="지하로 뚫린 검은 구멍"), \
+                    mock.patch.object(black_hole, "inside_space", return_value=False), \
+                    mock.patch("mabi.monitor.of"):
+                black_hole.run(bot, cfg)
+            self.assertEqual(bot.done_at_clear, done, tid)
+
     def test_silver_done_at_last_run_clear(self):
         bot = make_bot()
         bot.task_id, bot.done_at_clear = "silver", False
