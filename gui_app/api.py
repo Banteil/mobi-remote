@@ -245,6 +245,30 @@ class Api(DailyApi, CharsApi, QueueApi):
         except Exception as e:
             return {"connected": False, "pipe": "error", "reason": None, "message": str(e)}
 
+    def game_window(self) -> bool:
+        """게임 창이 떠 있나 — 창 제목으로만 본다 (커넥터를 부르지 않는다: 자주 물어도 게임의 사용 제한에 안 잡히게)."""
+        try:
+            from mabi.runner import load_config
+            from mabi.window import GameWindow
+            return GameWindow(load_config(self.paths)["game"]["window_title"]).find()
+        except Exception:  # noqa: BLE001
+            return False
+
+    def game_launch(self):
+        """'게임이 실행되어 있지 않습니다' 알림의 '게임 켜기' — 넥슨 플러그 바로실행 링크만 연다 (다시 켜기와 같은 링크).
+        캐릭터 접속·작업 큐는 건드리지 않는다. 게임 창이 이미 있으면 열지 않는다."""
+        from mabi import restart
+        from mabi.runner import load_config
+        if self.game_window():
+            return {"ok": True, "already": True}
+        try:
+            restart.start_game(load_config(self.paths))
+        except Exception as e:
+            log.exception("게임 켜기 실패")
+            return {"ok": False, "message": str(e)}
+        log.info("게임 켜기 (화면 버튼) — 넥슨 플러그 바로실행")
+        return {"ok": True}
+
     def query(self, name, opts=None):
         try:
             return self.shapes.run(name, opts or {})

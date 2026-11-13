@@ -24,6 +24,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable
 
+from mabi.workqueue import DEFAULT_KIND
+
 log = logging.getLogger("mabi")
 
 PIPE = "MobiRemote-control"
@@ -57,7 +59,7 @@ class Command:
 def _card(x: dict) -> dict:
     """작업 큐 카드 → 밖에 줄 모양 (화면용 내부 칸은 뺀다)."""
     v = x.get("view") or {}
-    out = {"id": x.get("id"), "kind": x.get("kind"), "label": x.get("label") or "", "status": x.get("status"),
+    out = {"id": x.get("id"), "kind": x.get("kind") or DEFAULT_KIND, "label": x.get("label") or "", "status": x.get("status"),
            "note": x.get("note") or ""}
     for k in ("goal", "now", "step", "stat"):
         if v.get(k):
@@ -203,12 +205,7 @@ class Commands:
 
     def _game_window(self) -> bool:
         """게임 창이 떠 있나 — 창 제목으로만 본다 (커넥터를 부르지 않는다: 자주 물어도 게임의 사용 제한에 안 잡히게)."""
-        try:
-            from mabi.runner import load_config
-            from mabi.window import GameWindow
-            return GameWindow(load_config(self.api.paths)["game"]["window_title"]).find()
-        except Exception:  # noqa: BLE001
-            return False
+        return self.api.game_window()
 
     def options(self, a: dict) -> dict:
         from mabi import gamedata as gd

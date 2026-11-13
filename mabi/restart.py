@@ -187,12 +187,18 @@ def server_down(bot: Bot) -> str:
     return note
 
 
+def start_game(cfg: dict) -> None:
+    """넥슨 플러그 '바로실행' 링크를 연다 — 켜지길 기다리지 않는다. 다시 켜기(_launch)와 화면 알림의 '게임 켜기' 버튼
+    (gui_app/api.game_launch)이 같이 쓴다."""
+    os.startfile(cfg["restart"]["launch"])  # noqa: S606 — 사용자가 쓰는 바로가기와 같은 링크 (설정값)
+
+
 def _launch(bot: Bot, cfg: dict) -> None:
     """넥슨 플러그 바로실행 링크로 켜고 타이틀(또는 캐릭터 선택·메인)이 보일 때까지."""
     c, ui = cfg["restart"], bot.ui
     limit = float(c["start_timeout"])
     bot.log.info("게임 켜기 — 넥슨 플러그 바로실행")
-    os.startfile(c["launch"])  # noqa: S606 — 사용자가 쓰는 바로가기와 같은 링크 (설정값)
+    start_game(cfg)
     end = time.monotonic() + limit
     while not bot.window.find():
         if time.monotonic() > end:

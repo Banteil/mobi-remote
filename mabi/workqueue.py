@@ -83,9 +83,12 @@ class Kind:
         return {"goal": self.detail(it) if hasattr(self, "detail") else "", "now": "", "step": "", "stat": "", "bar": None}
 
 
+DEFAULT_KIND = "goal"  # kind 칸이 없는 카드 — 화면의 목표·제작 버튼으로 만든 카드는 kind 를 적지 않는다
+
+
 class WorkQueue:
     def __init__(self, file: Path, history_file: Path, emit: Callable[[str, object], None],
-                 kinds: dict[str, Kind], default_kind: str = "goal",
+                 kinds: dict[str, Kind], default_kind: str = DEFAULT_KIND,
                  on_drained: Callable[["WorkQueue"], None] | None = None, pause_note: Callable[[], str] | None = None,
                  snap: Callable[[], dict | None] | None = None, on_report: Callable[[dict], None] | None = None):
         """on_drained(q) 할 일이 다 끝났을 때 (일시정지 카드도 없음) · pause_note() 일시정지 카드 메모 ·

@@ -9,6 +9,8 @@
  */
 function setOffline(st) {
   const banner = $('#offline-banner');
+  // 게임이 꺼져 있을 때만 '게임 켜기' (넥슨 플러그 바로실행 — 다시 켜기와 같은 링크)
+  $('#offline-launch').classList.toggle('hidden', !st || st.connected || st.reason !== 'game_off');
   if (!st || st.connected) {
     banner.classList.add('hidden');
     return;
@@ -31,6 +33,38 @@ function setOffline(st) {
       : '게임에 연결할 수 없습니다.';
   $('#offline-text').textContent = what + ' 표시된 값은 마지막으로 받아 둔 정보이며 실시간이 아닙니다.';
   banner.classList.remove('hidden');
+}
+
+/** '게임 켜기'를 누른 뒤 연결될 때까지 상단바를 다시 보는 간격·최대 시간. 업데이트가 있으면 더 걸리므로 그때는 '다시 확인'. */
+const LAUNCH_POLL_MS = 10000;
+const LAUNCH_WAIT_MS = 3 * 60 * 1000;
+let launching = false;
+
+/** 넥슨 플러그 바로실행 링크로 게임을 켠다 (캐릭터 접속은 사람이나 작업 큐가). 켜지는 동안은 다시 누르지 못한다. */
+async function launchGame() {
+  if (launching) return;
+  const btn = $('#offline-launch');
+  const r = await mm.game.launch();
+  if (!r || !r.ok) {
+    toast('게임을 켜지 못했습니다', (r && r.message) || '넥슨 플러그가 설치·로그인되어 있는지 확인하세요.', 'bad');
+    return;
+  }
+  if (r.already) toast('게임 창이 이미 있습니다', '켜지는 중이면 잠시 기다린 뒤 다시 확인을 누르세요.');
+  else toast('게임을 켜는 중', '넥슨 플러그 바로실행으로 켭니다. 업데이트가 있으면 오래 걸릴 수 있습니다.', 'ok');
+  launching = true;
+  btn.disabled = true;
+  btn.textContent = '켜는 중…';
+  try {
+    const end = Date.now() + LAUNCH_WAIT_MS;
+    while (Date.now() < end) {
+      await new Promise((ok) => setTimeout(ok, LAUNCH_POLL_MS));
+      if (await refreshTopbar()) { await refreshActive(); break; }
+    }
+  } finally {
+    launching = false;
+    btn.disabled = false;
+    btn.textContent = '게임 켜기';
+  }
 }
 
 /** 이미 받아 둔 값으로 상단바만 그린다 (조회는 하지 않는다). */

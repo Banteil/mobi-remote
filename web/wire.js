@@ -328,6 +328,8 @@ function wire() {
   wireUpdate();
   wireNpcap();
 
+  $('#offline-launch').addEventListener('click', launchGame);
+
   $('#offline-retry').addEventListener('click', async () => {
     // 커넥터를 못 찾은 상태에서는 '다시 확인'이 아무 소용이 없다. 찾기부터 시킨다.
     if ($('#offline-retry').textContent === '커넥터 찾기') {
