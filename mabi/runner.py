@@ -356,6 +356,22 @@ class Runner:
             log.info(f"이어 하기: [{first['name']}] 부터 ({why})")
         return chars
 
+    @staticmethod
+    def _later(bot, cfg, state, slot, tid: str, pending: list, later: set) -> str:
+        """차례가 온 숙제를 이 캐릭터의 다른 숙제 뒤로 미룰 까닭 (tasks.LATER, 아니면 ""). 한 번만, 뒤에 할 숙제가 남았을 때만 —
+        미뤄도 앞에 할 게 없으면 지금 하는 것과 같다."""
+        check = tasks.LATER.get(tid)
+        if not check or tid in later or not any(t not in later and t not in bot.also_done for t in pending):
+            return ""
+        last = state.last_step(slot, tid) if slot is not None else None
+        try:
+            return check(bot, cfg, last)
+        except StopRequested:
+            raise
+        except Exception as e:  # noqa: BLE001 — 묻다 실패하면 미루지 않고 제 차례에 한다
+            log.debug(f"{tid} 미룰지 묻기 실패: {e}")
+            return ""
+
     def _loop(self, cfg, opts, registry, by_slot, characters, state, bot, report, results) -> None:
         def recover(tid: str) -> None:
             """실패한 숙제 뒤 정리 (outcome.recover). 접속 실패는 게임 밖 화면이라 건드리지 않는다."""
@@ -479,11 +495,19 @@ class Runner:
             bot.watch_weight = True  # 숙제 중에만 가방 무게 감시
             self._loot.open(bot, who)
             ended = {}  # 숙제 → (results 자리, 상태)
-            for tid in order:
+            pending, later, seq = list(order), set(), []  # 남은 숙제 · 뒤로 미룬 숙제 · 차례가 온 순서
+            while pending:
+                tid = pending.pop(0)
+                seq.append(tid)
                 label, fn = registry[tid]
                 if tid in bot.also_done:  # 다른 숙제 안에서 이미 끝냄 (사냥터 안 검은 구멍 등)
                     log.info(f"▷ [{who}] {label}: 완료")
                     self._emit("task_end", slot=slot, task=tid, label=label, status="DONE", summary="완료", seconds=0)
+                    continue
+                if (why := self._later(bot, cfg, state, slot, tid, pending, later)):
+                    log.info(f"▷ [{who}] {label}: {why} → 이 캐릭터의 다른 숙제 뒤로")
+                    later.add(tid)
+                    pending.append(tid)
                     continue
                 status = step(slot, tid, f"[{who}] {label}", lambda fn=fn: fn(bot, cfg))
                 ended[tid] = (len(results) - 1, status)
@@ -497,7 +521,7 @@ class Runner:
                     break
             else:
                 # 일일 미션 뒤에 한 숙제(아르바이트 → '따뜻한 손길')로 새로 깬 미션의 선물. 받을 게 있을 때만 창을 연다
-                if "daily_mission" in order and order[-1] != "daily_mission":
+                if "daily_mission" in order and seq[-1] != "daily_mission":
                     try:
                         got = tasks.daily_mission.claim_leftovers(bot, cfg)
                         if got:

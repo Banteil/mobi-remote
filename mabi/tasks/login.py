@@ -455,6 +455,7 @@ class _Login:
         self.keep_interval()
         mark, t0 = self.press_start()
         self.wait_in_game(mark, t0)
+        self.bot.session.login_at = time.monotonic()  # 접속 뒤 몇 분 지나야 나타나는 공물 퀘스트가 본다
         return mark
 
     def select(self) -> None:

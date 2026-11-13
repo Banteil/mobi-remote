@@ -348,6 +348,7 @@ quest_go = "quest_go_orange"          # 메인 퀘스트 카드의 주황색 '�
 dungeon_tab = "dungeon_tab_deep_on"   # 이동 도착 후 던전 창의 '심층 던전' 탭 (선택된 상태)
 very_hard = "dungeon_deep_veryhard_on" # '매우 어려움' 선택된 상태
 quest_wait = 180                      # 퀘스트가 나타날 때까지 최대 대기 (초). 앞 숙제를 하는 동안 보통 뜬다. 안 뜨면 건너뜀
+quest_login_wait = 600                # 리모콘이 접속시킨 캐릭터면 접속 뒤 이 초까지는 기다린다 (퀘스트는 접속 몇 분 뒤에 뜸)
 max_runs = 1                          # 숙제로는 하루 1회 (고난도 심층 퀘스트 한 번 깨면 완료). 공물이 남아도 더 돌지 않는다
 travel_timeout = 600
 clear_timeout = 900

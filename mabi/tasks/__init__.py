@@ -35,6 +35,13 @@ def not_ready(order) -> str:
     return whys[0] if whys and all(whys) else ""
 
 
+# 차례가 와도 지금은 이르면 그 캐릭터의 다른 숙제 뒤로 한 번 미루는 숙제 → 이른 까닭 (괜찮으면 ""). runner 가 차례마다 묻는다.
+# 공물 퀘스트는 접속 몇 분 뒤에 나타나서, 다시 켠 직후 바로 차례가 오면 기다리다 건너뛰었다 (tribute.not_yet)
+LATER = {
+    "tribute": tribute.not_yet,
+}
+
+
 # 확인 결과 남아도 '남음(직접 처리)' 으로 두고 다시 시작할 때 넘기는 숙제 (자동으로는 더 할 수 없는 것만 남는다)
 MANUAL_LEFT = {"arbeit"}
 

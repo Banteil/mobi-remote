@@ -31,6 +31,23 @@ def quest_visible(bot: Bot) -> bool | None:
     return any(q.get("QuestTitle") == QUEST_TITLE for q in quests)
 
 
+def not_yet(bot: Bot, cfg: dict, last: dict | None = None) -> str:
+    """지금 하면 퀘스트를 기다리다 건너뛸 것 같으면 그 까닭 (아니면 ""). 숙제 순서(runner)가 보고 이 캐릭터의 다른 숙제 뒤로 미룬다.
+    게임을 다시 켠 직후 앞 숙제(요일·은동전)가 이미 끝나 있으면 접속 1분 만에 공물 차례가 와서, 3분 기다려도 퀘스트가
+    안 떠 건너뛰었다 (2026-11-13 08:17). 목록이 비었으면(None) 모르는 것이라 미루지 않는다 — run 이 퀘스트 창에서 찾는다.
+    last: 오늘 이 숙제의 마지막 단계 기록. 퀘스트를 연 뒤(이동·던전 안)에 끊겼으면 미루지 않고 그 자리부터 잇는다."""
+    if last and last.get("step") not in (None, "end", "tr_wait"):
+        return ""
+    return "고난도 퀘스트가 아직 없음" if quest_visible(bot) is False else ""
+
+
+def _wait_until(bot: Bot, c: dict) -> float:
+    """퀘스트를 언제까지 기다리나 (monotonic). 지금부터 quest_wait 초, 이 연결로 접속한 때를 알면 접속 뒤 quest_login_wait 초까지는."""
+    end = time.monotonic() + c["quest_wait"]
+    login_at = getattr(bot.session, "login_at", 0.0)
+    return max(end, login_at + c["quest_login_wait"]) if login_at else end
+
+
 def open_quest(bot: Bot, c: dict) -> None:
     """퀘스트 창 메인 탭에서 고난도 퀘스트 카드의 '진행하기'를 누른다."""
     ui = bot.ui
@@ -90,17 +107,18 @@ def run(bot: Bot, cfg: dict) -> str:
     # 접속 직후에는 퀘스트가 아직 없을 수 있다
     # 단계: tr_wait(퀘스트 대기) → tr_open(n회차 진행하기) → travel → dungeon_enter → in_dungeon → dungeon_reward.
     # 몇 번 남았는지는 공물 개수가 알려 주므로 끊겨도 남은 만큼만 돈다 (던전 안이면 접속 단계가 클리어까지 본다)
-    end = time.monotonic() + c["quest_wait"]
+    end = _wait_until(bot, c)
     if ready:
         return f"공물 {start} → " + _enter(bot, c, start)
+    t0 = time.monotonic()
     if not quest_visible(bot):
-        bot.step("tr_wait", f"공물 {start}개 — 고난도 퀘스트가 나타나길 기다림")
+        bot.step("tr_wait", f"공물 {start}개 — 고난도 퀘스트가 나타나길 기다림 (최대 {end - t0:.0f}초)")
     while not (seen := quest_visible(bot)):
         if seen is None:
             bot.log.info("CLI 퀘스트 목록이 비어 있음 → 퀘스트 창에서 직접 찾음")
             break
         if time.monotonic() > end:
-            raise CannotProceed(f"공물 {start}개인데 {c['quest_wait']}초 동안 고난도 퀘스트가 나타나지 않음 → 건너뜀")
+            raise CannotProceed(f"공물 {start}개인데 {time.monotonic() - t0:.0f}초 동안 고난도 퀘스트가 나타나지 않음 → 건너뜀")
         bot.log.info("고난도 퀘스트 대기 중")
         bot.sleep(5)  # 20초 간격이면 퀘스트가 뜬 뒤에도 한참 서 있어 멈춘 것처럼 보인다
 

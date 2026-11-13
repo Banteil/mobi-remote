@@ -81,6 +81,9 @@ class GameSession:
         self._act_cache: tuple[float, dict | None] | None = None  # (받은 때, CLI get_activity 답) — activity()
         self._env_cache: tuple[float, dict | None] | None = None  # (받은 때, get_current_environment 답) — environment()
         self.cli_checked = 0.0  # CLI 연결 여부를 마지막으로 다시 물은 때
+        # 이 연결로 캐릭터를 골라 게임에 들어간 때 (monotonic, 0 = 모름 — 리모콘을 켜기 전에 접속했거나 사람이 접속).
+        # 게임 다시 켜기 카드와 숙제가 같은 연결을 쓰므로, 다시 켠 직후 숙제도 접속한 지 얼마 안 됐음을 안다 (공물 퀘스트)
+        self.login_at = 0.0
 
     @staticmethod
     def shape(cfg: dict, paths, dry_run: bool = False) -> tuple:
