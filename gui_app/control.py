@@ -138,6 +138,10 @@ class Commands:
             Command("raid", "레이드 반복 카드를 큐 뒤에 넣는다 (쉬고 있으면 바로 시작)", self.raid,
                     {"slot": slot, "raid": "레이드 이름 (options 의 raid)", "runs": runs,
                      "difficulty": "(선택) 난이도 — 비우면 리모콘 설정대로", "mode": mode}, act=True),
+            Command("goal", "제작·가공·채집 목표 카드를 큐 뒤에 넣는다 — 이것을 새로 N개 (재료 채집·가공 사슬은 카드가 정함, "
+                    "가공을 오래 기다릴 때는 아래 카드를 먼저 돌리다 돌아옴)", self.goal,
+                    {"name": "만들 것 이름 (아이템·가공품·채집물)", "target": "새로 만들 개수",
+                     "slot": "(선택) 캐릭터 슬롯 — 비우면 처음 시작할 때 접속해 있는 캐릭터"}, act=True),
             Command("collect_all", "가공 완료분 전체 수령 카드를 맨 위에 넣고 바로", self.collect_all, act=True),
             Command("enhance", "각인 강화 반복을 지금 시작 (게임에 각인 강화 창을 열어 둔 상태에서, 다른 카드가 돌면 안 함)",
                     self.enhance, act=True),
@@ -329,6 +333,31 @@ class Commands:
 
     def raid(self, a: dict) -> dict:
         return self._repeat("raid", a)
+
+    def goal(self, a: dict) -> dict:
+        """제작·가공·채집 목표 카드 — 화면의 '목표' 버튼(web/craft.js)과 같은 모양. 무엇을 할지는 카드가 걸음마다 정한다
+        (queue_api.GoalKind). 자동으로 못 구하는 재료가 있으면 답의 blocked 에 적는다 (카드는 그때 사람에게 묻는다)."""
+        name = str(a.get("name") or "").strip()
+        if not name:
+            raise BadArgs("'name' 이 필요합니다 (만들 것 이름)")
+        target = _int(a, "target", None, 1)
+        slot = self._slot(a["slot"]) if a.get("slot") not in (None, "", 0, "0") else 0
+        p = self.api.plan_craft(name, target, {"refresh": True})
+        if p.get("error") == "not_found":
+            raise BadArgs(f"제작·가공·채집 어느 목록에서도 {name!r} 을 찾지 못했습니다")
+        if p.get("error"):
+            raise Refused(p.get("message") or p["error"])
+        product = p.get("product") or p.get("name")
+        card = self._start({
+            "kind": "goal", "via": {"alter": "가공", "gather": "채집"}.get(p.get("kind"), "제작"),
+            "name": product, "label": p.get("productName") or p.get("displayName") or name,
+            "recipe": (p.get("displayName") or "") if p.get("product") and p.get("product") != p.get("name") else "",
+            "target": target, "per": p.get("producedPerCraft"), "runs": p.get("runs"), "startHave": p.get("have"),
+            "spent": 0, "steps": 0, **({"slot": slot} if slot else {})})
+        lack = [f"{x.get('displayName')} {x.get('lack')}개" for x in p.get("blockers") or []]
+        if lack:
+            card["blocked"] = "직접 구해야 함 — " + ", ".join(lack)
+        return card
 
     def collect_all(self, a: dict) -> dict:
         return _card(self.api.queue_add({"kind": "action", "act": "collectAll", "label": "가공 완료분 전체 수령",

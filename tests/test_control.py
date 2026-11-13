@@ -72,6 +72,13 @@ class FakeApi:
         return {"raid": "레이드A", "difficulty": "어려움", "mode": "solo", "slot": 1,
                 "difficulties": {"레이드A": ["보통", "어려움"]}}
 
+    def plan_craft(self, name, target, opts=None):
+        if name != "밥":
+            return {"error": "not_found"}
+        return {"kind": "alter", "name": "밥", "product": "밥", "displayName": "밥", "productName": "밥",
+                "producedPerCraft": 3, "runs": 34, "have": 5,
+                "blockers": [{"displayName": "물이 든 병", "lack": 4}]}
+
 
 class CommandsTest(unittest.TestCase):
     def setUp(self):
@@ -84,6 +91,23 @@ class CommandsTest(unittest.TestCase):
         self.addCleanup(p.stop)
         self.api = FakeApi()
         self.c = control.Commands(self.api)
+
+    def test_goal_card_like_screen_button(self):
+        r = self.c.run("goal", {"name": "밥", "target": 100})
+        self.assertTrue(r["ok"], r)
+        spec = self.api.queue.items[-1]
+        self.assertIn(("add", "end", False), self.api.queue.calls)
+        self.assertIn(("tick",), self.api.queue.calls)  # 쉬고 있으면 바로 돈다
+        self.assertEqual((spec["kind"], spec["via"], spec["name"], spec["target"], spec["startHave"]),
+                         ("goal", "가공", "밥", 100, 5))
+        self.assertNotIn("slot", spec)  # 비우면 처음 시작할 때 접속해 있는 캐릭터
+        self.assertIn("물이 든 병 4개", r["data"]["blocked"])
+
+    def test_goal_bad_args(self):
+        self.assertEqual(self.c.run("goal", {"name": "없는것", "target": 3})["error"], "bad_args")
+        self.assertEqual(self.c.run("goal", {"name": "밥", "target": 0})["error"], "bad_args")
+        self.assertEqual(self.c.run("goal", {"target": 3})["error"], "bad_args")
+        self.assertEqual(self.c.run("goal", {"name": "밥", "target": 3, "slot": 9})["error"], "bad_args")
 
     def test_catalog_describes_every_command(self):
         names = {x["name"] for x in self.c.catalog()}
