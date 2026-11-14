@@ -86,7 +86,7 @@ class DailyKind(Kind):
     def detail(it) -> str:
         only = it.get("only")
         n = f"{len(it.get('chars') or [])}명"
-        if only and all(t.startswith("weekend_") for t in only):  # 주말 퀘스트 — 고른 어비스·레이드 (화면 weekendAmount 와 같음)
+        if only and all(t.startswith("weekend_") for t in only):  # 주말 어비스·레이드 — 고른 것 (화면 weekendAmount 와 같음)
             w = it.get("weekend") or {}
             parts = [f"{t} {w[k].get(place)} {w[k].get('difficulty')}" for t, k, place in
                      (("어비스", "abyss", "dungeon"), ("레이드", "raid", "raid")) if f"weekend_{k}" in only and w.get(k)]
@@ -179,7 +179,7 @@ class DailyKind(Kind):
         self.api.daily_stop(reason in ("remove", "skip"), STOP_WHY.get(reason, ""))
 
 
-# 숙제 카드 칸 → 이번 실행만 덮어쓸 설정 칸 (주간 숙제 탭에서 고른 필드 보스 · 주말 퀘스트의 어비스·레이드)
+# 숙제 카드 칸 → 이번 실행만 덮어쓸 설정 칸 (주간 숙제 탭에서 고른 필드 보스 · 주말 어비스·레이드)
 CARD_CFG = {"fieldBoss": "field_boss", "weekend": "weekend"}
 
 

@@ -197,7 +197,7 @@ def verify(kind: str):
 
 
 def choices(cfg: dict) -> dict:
-    """주간 숙제 탭 '주말 퀘스트' 칸이 고를 수 있는 것 — 이번 주 어비스(방식마다 열린 난이도)·레이드, 기본값([weekend])."""
+    """주간 숙제 탭 '주말 어비스·레이드' 칸이 고를 수 있는 것 — 이번 주 어비스(방식마다 열린 난이도)·레이드, 기본값([weekend])."""
     return {"abyss": {m: gd.abysses(mode=m) for m in ("party", "solo")},
             "raids": raid.raids(),
             "pick": {k: {key: cfg["weekend"][k].get(key) for key in (KINDS[k][1], "difficulty", "mode")} for k in KINDS},

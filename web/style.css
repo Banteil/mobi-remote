@@ -1027,7 +1027,13 @@ input[type="number"].num-in { min-width: 0; width: 72px; }
 .ab-row { flex-wrap: wrap; }
 .ab-row select { min-width: 0; }
 .ab-gap { margin-left: 12px; }
-.wk-kind { min-width: 112px; }  /* 주말 퀘스트: 어비스·레이드 두 줄의 고르는 칸을 같은 자리에서 시작 */
+.wk-kind { min-width: 112px; white-space: nowrap; }  /* 주간 숙제: 고르는 칸이 카드마다 같은 자리에서 시작 */
+/* 주말 어비스·레이드: 줄마다 이름 · 장소 · 난이도 · 방식 칸을 표처럼 맞춘다 (필드 보스 줄도 같은 폭) */
+.wk-grid { display: grid; grid-template-columns: minmax(112px, max-content) minmax(110px, 170px) minmax(100px, 140px) minmax(90px, 110px);
+  gap: 8px 8px; align-items: center; justify-content: start; margin-bottom: 10px; }
+.wk-grid select { width: 100%; }
+.wk-sel-place { width: 170px; }
+.wk-sel-level { width: 140px; }
 .dl-log.ab-log { min-height: 360px; max-height: 60vh; }
 
 /* 염색 옵션 — 묶음마다 작은 제목, 설명은 title 풍선으로 */
@@ -1040,8 +1046,10 @@ input[type="number"].num-in { min-width: 0; width: 72px; }
 
 /* 기타 숙제 — 나이트메어 드릴 캐릭터 고르기 */
 /* '전체' 는 머리말 줄 오른쪽(인원수 옆)에 두고 줄 아래를 그어, 아래 캐릭터 체크박스와 다른 것으로 보이게 한다 */
-.card h3.dr-head { padding-bottom: 8px; border-bottom: 1px solid var(--edge); }
-.card h3.dr-head .dr-all { margin-left: auto; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--fg); }
+.card h3.dr-head { padding-bottom: 8px; border-bottom: 1px solid var(--edge); white-space: nowrap; }
+/* 좁아지면 제목과 '전체' 는 그대로 두고 설명만 줄을 바꾼다 */
+.card h3.dr-head small { white-space: normal; min-width: 0; flex: 0 1 auto; }
+.card h3.dr-head .dr-all { flex: none; margin-left: auto; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--fg); }
 .card h3.dr-head .dr-all + .count { margin-left: 0; }
 .dr-chars { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 4px 0 10px; }
 

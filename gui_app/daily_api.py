@@ -358,7 +358,7 @@ class DailyApi:
                                   userconfig.default(self.paths, "field_boss", "difficulty"))
 
     def daily_weekendSettings(self) -> dict:  # noqa: N802
-        """주말 퀘스트 칸의 어비스(방식마다 열린 난이도)·레이드 목록과 기본값 (mabi.tasks.weekend). 고른 값은 화면이 weekend 로 기억한다."""
+        """주말 어비스·레이드 칸의 어비스(방식마다 열린 난이도)·레이드 목록과 기본값 (mabi.tasks.weekend). 고른 값은 화면이 weekend 로 기억한다."""
         from mabi.tasks import weekend
         return weekend.choices(load_config(self.paths))
 

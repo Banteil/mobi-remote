@@ -15,7 +15,7 @@ const dl = { st: null, settings: null, fb: null, wk: null, pickedChars: null, pi
 /* ── 오늘 진행 표 ── */
 
 async function loadDaily() {
-  // 함께 묻는다 (필드 보스 목록은 바뀌지 않으므로 처음 한 번만. 주말 퀘스트는 이번 주 목록·오늘이 주말인지가 바뀌어 매번)
+  // 함께 묻는다 (필드 보스 목록은 바뀌지 않으므로 처음 한 번만. 주말 어비스·레이드는 이번 주 목록·오늘이 주말인지가 바뀌어 매번)
   [dl.st, dl.settings, dl.fb, dl.wk] = await Promise.all([mm.daily.state(), mm.daily.settings(),
     dl.fb || mm.daily.fieldBossSettings(), mm.daily.weekendSettings()]);
   if (!dl.pickedChars) dl.pickedChars = new Set(dl.st.chars.map((c) => c.slot));
@@ -256,7 +256,7 @@ function fieldBossSpec() {
   return { kind: 'daily', label: '필드 보스 · ' + pick.boss, chars: chars, only: ['field_boss'], force: true, fieldBoss: pick };
 }
 
-/* 주간 숙제 — 주말 퀘스트 ('주말에는 어비스!'·'주말에는 레이드!', 토·일요일에만). 일일 숙제 카드(kind 'daily')에
+/* 주간 숙제 — 주말 어비스·레이드 ('주말에는 어비스!'·'주말에는 레이드!', 토·일요일에만). 일일 숙제 카드(kind 'daily')에
  * only=['weekend_abyss', 'weekend_raid'] (끈 쪽은 뺌)로, 고른 던전·레이드·난이도·방식은 카드의 weekend.
  * 캐릭터마다 어비스 → 레이드 순서로 하고 다음 캐릭터로 (실행기 runner). 깼는지는 들어가기 전에 퀘스트 창으로 보므로 늘 force.
  * 주말이 아니면 큐에서 기다렸다가 토요일에 돈다 (mabi/tasks SEASON). 목록·기본값은 파이썬이 준다
@@ -321,7 +321,7 @@ function weekendSpec() {
     raid: { raid: $('#wk-rd-raid').value, difficulty: $('#wk-rd-level').value, mode: $('#wk-rd-mode').value },
   };
   setPref('weekend', Object.assign({ on }, pick));
-  return { kind: 'daily', label: '주말 퀘스트', chars: chars, only: only, force: true, weekend: pick };
+  return { kind: 'daily', label: '주말 어비스·레이드', chars: chars, only: only, force: true, weekend: pick };
 }
 
 /* 카드 줄: '6명 · 어비스 허상의 정박지 매우 어려움2 함께하기 · 레이드 …' */

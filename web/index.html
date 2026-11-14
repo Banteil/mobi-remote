@@ -417,16 +417,16 @@
     </div>
     <div class="hw-pane hidden" data-hw="weekly">
       <div class="card card-wide">
-        <h3 class="h3-tools dr-head">필드 보스 <small>캐릭터마다 이번 주 1번 — 매일 12·18·20·22시부터 30분, 그 시간이 아니면 큐에서 기다렸다가, 열리면 돌던 일을 끊어도 되는 자리(던전 밖)에서 잠시 멈추고 먼저 돕니다</small>
+        <h3 class="h3-tools dr-head">필드 보스 <small title="그 시간이 아니면 큐에서 기다렸다가, 열리면 돌던 일을 끊어도 되는 자리(던전 밖)에서 잠시 멈추고 먼저 돕니다">캐릭터마다 주 1번 · 12·18·20·22시부터 30분</small>
           <label class="chk dr-all"><input type="checkbox" id="fb-all">전체</label><span class="count" id="fb-pick-note"></span></h3>
         <div class="dr-chars" id="fb-chars"></div>
-        <div class="row"><label>보스 <select id="fb-boss"></select></label><label>난이도 <select id="fb-level"></select></label>
+        <div class="row"><label class="chk wk-kind">보스</label><select id="fb-boss" class="wk-sel-place"></select><select id="fb-level" class="wk-sel-level"></select>
           <span class="spacer"></span>
           <button class="btn" id="fb-queue" title="고른 캐릭터를 작업 큐 맨 아래에 담습니다 — 열린 시간이 되면 진행 (재생을 눌러 두세요)">목표</button>
           <button class="btn btn-primary" id="fb-start" title="지금 바로 시작 — 열린 시간이 아니면 열릴 때까지 기다립니다">시작</button></div>
       </div>
       <div class="card card-wide">
-        <h3 class="h3-tools dr-head">뱅가드 브리치 <small>캐릭터마다 이번 주 1번 — 콘텐츠 가이드로 가서 우연한 만남으로 들어가 클리어하면 나옵니다. 이번 주에 이미 한 캐릭터는 넘깁니다</small>
+        <h3 class="h3-tools dr-head">뱅가드 브리치 <small title="콘텐츠 가이드로 가서 우연한 만남으로 들어가 클리어하면 나옵니다">캐릭터마다 주 1번 · 이미 한 캐릭터는 넘김</small>
           <label class="chk dr-all"><input type="checkbox" id="vg-all">전체</label><span class="count" id="vg-pick-note"></span></h3>
         <div class="dr-chars" id="vg-chars"></div>
         <div class="row"><span class="spacer"></span>
@@ -434,16 +434,18 @@
           <button class="btn btn-primary" id="vg-start" title="지금 바로 시작">시작</button></div>
       </div>
       <div class="card card-wide">
-        <h3 class="h3-tools dr-head">주말 퀘스트 <small>토·일요일에만 있는 '주말에는 어비스!'·'주말에는 레이드!' — 캐릭터마다 어비스를 클리어한 판으로 채운 뒤 레이드를 클리어하고 다음 캐릭터로 갑니다. 퀘스트 창에 그 퀘스트가 없는(이미 깬) 캐릭터는 넘기고, 주말이 아니면 큐에서 기다렸다가 토요일 오전 6시부터 돕니다</small>
+        <h3 class="h3-tools dr-head">주말 어비스·레이드 <small title="'주말에는 어비스!'·'주말에는 레이드!' 퀘스트 — 캐릭터마다 어비스를 클리어한 판으로 채운 뒤 레이드를 클리어하고 다음 캐릭터로 갑니다. 이미 깬 캐릭터는 넘기고, 주말이 아니면 큐에서 기다렸다가 토요일 오전 6시부터 돕니다">토·일 이벤트 퀘스트 · 캐릭터마다 어비스 → 레이드</small>
           <label class="chk dr-all"><input type="checkbox" id="wk-all">전체</label><span class="count" id="wk-pick-note"></span></h3>
         <div class="dr-chars" id="wk-chars"></div>
-        <div class="row ab-row"><label class="chk wk-kind"><input type="checkbox" id="wk-ab-on" checked> 어비스 <span class="muted" id="wk-ab-runs"></span></label>
+        <div class="wk-grid">
+          <label class="chk wk-kind"><input type="checkbox" id="wk-ab-on" checked> 어비스 <span class="muted" id="wk-ab-runs"></span></label>
           <select id="wk-ab-dungeon"></select><select id="wk-ab-level"></select>
-          <select id="wk-ab-mode" title="입장 창 위쪽 탭"><option value="party">함께하기</option><option value="solo">혼자하기</option></select></div>
-        <div class="row ab-row"><label class="chk wk-kind"><input type="checkbox" id="wk-rd-on" checked> 레이드 <span class="muted" id="wk-rd-runs"></span></label>
+          <select id="wk-ab-mode" title="입장 창 위쪽 탭"><option value="party">함께하기</option><option value="solo">혼자하기</option></select>
+          <label class="chk wk-kind"><input type="checkbox" id="wk-rd-on" checked> 레이드 <span class="muted" id="wk-rd-runs"></span></label>
           <select id="wk-rd-raid"></select><select id="wk-rd-level"></select>
           <select id="wk-rd-mode" title="입장 창 위쪽 탭"><option value="party">함께하기</option><option value="solo">혼자하기</option></select>
-          <span class="spacer"></span><span class="muted" id="wk-note"></span>
+        </div>
+        <div class="row"><span class="muted" id="wk-note"></span><span class="spacer"></span>
           <button class="btn" id="wk-queue" title="고른 캐릭터를 작업 큐 맨 아래에 담습니다 — 주말이 아니면 토요일까지 기다립니다 (재생을 눌러 두세요)">목표</button>
           <button class="btn btn-primary" id="wk-start" title="지금 바로 시작 — 진행 중인 작업이 있으면 뒤로 미루고 먼저 합니다">시작</button></div>
       </div>
