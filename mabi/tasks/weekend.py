@@ -128,7 +128,9 @@ def quest_state(bot: Bot, kind: str) -> Quest:
     title = gd.text(KINDS[kind][2])
     q = _from_tracker(bot, title)
     where = "추적 칸"
-    if q.open is None:
+    for _ in range(2):  # 창을 보는 사이 NPC 가 말을 걸어(끼어들기가 대화를 넘기며) 창이 닫혔으면 한 번 더
+        if q.open is not None:
+            break
         q, where = _from_window(bot, title), "이벤트 탭"
     bot.log.info(f"주말 퀘스트 '{title}' ({where}): " + (
         "확인 못 함" if q.open is None else "깸 (진행할 카드 없음)" if not q.open else

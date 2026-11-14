@@ -94,6 +94,16 @@ class QuestCheckTest(unittest.TestCase):
                 mock.patch.object(weekend, "_from_window", return_value=Quest(False)):
             self.assertIs(weekend.quest_state(bot, "raid").open, False)
 
+    def test_window_retried_once(self):
+        # 창을 보는 사이 NPC(로나 등)가 말을 걸어 창이 닫히면 한 번 더 본다
+        bot = mock.Mock()
+        with mock.patch.object(weekend, "_from_tracker", return_value=Quest(None)),                 mock.patch.object(weekend, "_from_window", side_effect=[Quest(None), Quest(False)]) as win:
+            self.assertIs(weekend.quest_state(bot, "abyss").open, False)
+        self.assertEqual(win.call_count, 2)
+        with mock.patch.object(weekend, "_from_tracker", return_value=Quest(None)),                 mock.patch.object(weekend, "_from_window", return_value=Quest(None)) as win:
+            self.assertIsNone(weekend.quest_state(bot, "abyss").open)
+        self.assertEqual(win.call_count, 2)
+
 
 class RunTest(unittest.TestCase):
     def setUp(self):
