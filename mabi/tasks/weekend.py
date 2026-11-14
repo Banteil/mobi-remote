@@ -90,14 +90,20 @@ def _card_go(items, title_y: int) -> bool:
 def _from_window(bot: Bot, title: str) -> Quest:
     """퀘스트 창(J) 이벤트 탭에서 카드를 찾는다 (2026-11-14 사용자 화면: 카드마다 제목·'N일 N시간 남음'·설명·'진행하기').
     카드에 '진행하기' 가 있으면 아직 안 깬 것. 목록 끝까지 그런 카드가 없으면(카드가 없거나 버튼이 없음) 깬 것.
-    창이나 탭을 못 열면 open=None."""
+    이벤트 탭이 아예 없어도(이벤트 퀘스트를 다 깸) 깬 것. 창을 못 열면 open=None."""
     from ..ocr import find_texts
     bot.to_main()
     bot.key(keys.of(bot, "quest"))
     tab = ui_text.wait(bot, gd.text("questwin_event_tab"), gd.region("questwin_tabs"), timeout=6)
     if not tab:
-        bot.log.warning(f"퀘스트 창 이벤트 탭을 찾지 못해 '{title}' 를 확인 못 함 → {bot.snapshot('weekend_quest').name}")
+        # 이벤트 퀘스트를 다 깨면 이벤트 탭이 통째로 없어진다 (2026-11-14 실기: 주말 두 퀘스트를 다 깬 캐릭터는 탭 줄이
+        # 지도·퀘스트·아르바이트뿐). 창은 열렸는데(아르바이트 탭 글자가 보임) 이벤트 탭만 없으면 깬 것
+        opened = ui_text.match(find_texts(bot.frame(), gd.region("questwin_tabs")), gd.text("arbeit_tab"), exact=False)
         bot.to_main()
+        if opened:
+            bot.log.info("퀘스트 창에 이벤트 탭이 없음 → 이벤트 퀘스트가 남지 않음")
+            return Quest(False)
+        bot.log.warning(f"퀘스트 창 이벤트 탭을 찾지 못해 '{title}' 를 확인 못 함 → {bot.snapshot('weekend_quest').name}")
         return Quest(None)
     bot.click(tab)
     bot.sleep(1, 1.5)

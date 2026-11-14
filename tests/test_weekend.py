@@ -75,6 +75,15 @@ class QuestCheckTest(unittest.TestCase):
         bot.state.query.return_value = []
         self.assertEqual(weekend._from_tracker(bot, "주말에는어비스"), Quest(None))
 
+    def test_no_event_tab_means_done(self):
+        # 주말 두 퀘스트를 다 깬 캐릭터: 퀘스트 창 탭 줄이 지도·퀘스트·아르바이트뿐 (2026-11-14 실기)
+        bot = mock.Mock()
+        tabs = [('지도', 1401, 1030), ('퀘스트', 1543, 1030), ('아르바이트', 1685, 1030)]
+        with mock.patch.object(weekend.ui_text, "wait", return_value=None),                 mock.patch("mabi.ocr.find_texts", return_value=tabs):
+            self.assertIs(weekend._from_window(bot, "주말에는레이드").open, False)
+        with mock.patch.object(weekend.ui_text, "wait", return_value=None),                 mock.patch("mabi.ocr.find_texts", return_value=[]):  # 창이 안 열렸으면 모른다
+            self.assertIsNone(weekend._from_window(bot, "주말에는레이드").open)
+
     def test_tracker_first_then_window(self):
         bot = mock.Mock()
         with mock.patch.object(weekend, "_from_tracker", return_value=Quest(True)), \
