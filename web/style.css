@@ -1024,16 +1024,21 @@ tr.sec .muted { font-weight: 400; letter-spacing: 0; margin-left: 4px; }
 .ch-rv-read { font-size: 12px; color: var(--fg-dim); }
 .ch-new { color: var(--ok); }
 input[type="number"].num-in { min-width: 0; width: 72px; }
-.ab-row { flex-wrap: wrap; }
+/* 캐릭터 · 장소(던전·레이드·보스) · 난이도 · 방식 고르는 칸 — 어비스·레이드 반복과 주간 숙제가 같은 폭을 써서
+   카드끼리 위아래 칸이 맞는다. 반복 카드는 윗줄에 무엇을, 아랫줄에 언제 멈출지·부활·버튼 */
+.sel-char { width: 150px; }
+.sel-place { width: 150px; }
+.sel-level { width: 124px; }
+.sel-mode { width: 100px; }
+.ab-row { flex-wrap: wrap; margin-bottom: 8px; }
 .ab-row select { min-width: 0; }
-.ab-gap { margin-left: 12px; }
+.ab-gap { margin-left: 10px; }
+.ab-lab { min-width: 3.5em; white-space: nowrap; }  /* 칸 앞 이름 — 글자 수가 달라도 뒤 칸이 위아래 같은 자리에서 시작 */
 .wk-kind { min-width: 112px; white-space: nowrap; }  /* 주간 숙제: 고르는 칸이 카드마다 같은 자리에서 시작 */
 /* 주말 어비스·레이드: 줄마다 이름 · 장소 · 난이도 · 방식 칸을 표처럼 맞춘다 (필드 보스 줄도 같은 폭) */
-.wk-grid { display: grid; grid-template-columns: minmax(112px, max-content) minmax(110px, 170px) minmax(100px, 140px) minmax(90px, 110px);
+.wk-grid { display: grid; grid-template-columns: minmax(112px, max-content) minmax(110px, 150px) minmax(100px, 124px) minmax(90px, 100px);
   gap: 8px 8px; align-items: center; justify-content: start; margin-bottom: 10px; }
 .wk-grid select { width: 100%; }
-.wk-sel-place { width: 170px; }
-.wk-sel-level { width: 140px; }
 .dl-log.ab-log { min-height: 360px; max-height: 60vh; }
 
 /* 염색 옵션 — 묶음마다 작은 제목, 설명은 title 풍선으로 */

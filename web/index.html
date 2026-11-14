@@ -420,7 +420,7 @@
         <h3 class="h3-tools dr-head">필드 보스 <small title="그 시간이 아니면 큐에서 기다렸다가, 열리면 돌던 일을 끊어도 되는 자리(던전 밖)에서 잠시 멈추고 먼저 돕니다">캐릭터마다 주 1번 · 12·18·20·22시부터 30분</small>
           <label class="chk dr-all"><input type="checkbox" id="fb-all">전체</label><span class="count" id="fb-pick-note"></span></h3>
         <div class="dr-chars" id="fb-chars"></div>
-        <div class="row"><label class="chk wk-kind">보스</label><select id="fb-boss" class="wk-sel-place"></select><select id="fb-level" class="wk-sel-level"></select>
+        <div class="row"><label class="chk wk-kind">보스</label><select id="fb-boss" class="sel-place"></select><select id="fb-level" class="sel-level"></select>
           <span class="spacer"></span>
           <button class="btn" id="fb-queue" title="고른 캐릭터를 작업 큐 맨 아래에 담습니다 — 열린 시간이 되면 진행 (재생을 눌러 두세요)">목표</button>
           <button class="btn btn-primary" id="fb-start" title="지금 바로 시작 — 열린 시간이 아니면 열릴 때까지 기다립니다">시작</button></div>
@@ -473,13 +473,14 @@
     <div class="card card-wide">
       <h3>어비스 반복 <span class="pill ab-bg" id="ab-bg"></span><span class="count" id="ab-stat"></span></h3>
       <div class="row ab-row">
-        <span class="muted">캐릭터</span><select id="ab-char"></select>
-        <span class="muted ab-gap">던전</span><select id="ab-dungeon"></select><select id="ab-difficulty"></select>
-        <select id="ab-mode" title="입장 창 위쪽 탭"><option value="party">함께하기</option><option value="solo">혼자하기</option></select>
-        <span class="muted ab-gap">멈출 때</span><input type="number" id="ab-runs" min="0" class="num-in"> 판
-        <input type="number" id="ab-minutes" min="0" class="num-in"> 분
+        <span class="muted ab-lab">캐릭터</span><select id="ab-char" class="sel-char"></select>
+        <span class="muted ab-gap ab-lab">던전</span><select id="ab-dungeon" class="sel-place"></select><select id="ab-difficulty" class="sel-level"></select>
+        <select id="ab-mode" class="sel-mode" title="입장 창 위쪽 탭"><option value="party">함께하기</option><option value="solo">혼자하기</option></select>
+      </div>
+      <div class="row">
+        <span class="muted ab-lab" title="0 = 제한 없음 · 돌던 것은 F12 로 멈춤">멈출 때</span><input type="number" id="ab-runs" min="0" class="num-in" title="0 = 제한 없음"> 판
+        <input type="number" id="ab-minutes" min="0" class="num-in" title="0 = 제한 없음"> 분
         <label class="chk ab-gap" title="부활 횟수를 다 썼거나 막혔으면 나가서 처음부터 다시 들어갑니다"><input type="checkbox" id="ab-revive"> 쓰러지면 여기서 부활</label>
-        <span class="muted">(0 = 제한 없음 · F12 로 멈춤)</span>
         <span class="spacer"></span><span id="ab-msg" class="muted"></span>
         <button class="btn btn-warn hidden" id="ab-stop">멈추기 (F12)</button>
         <button class="btn" id="ab-queue" title="지금 고른 대로 작업 큐에 담습니다 (재생을 눌러야 진행) — 캐릭터마다 차례로 돌릴 수 있습니다">목표</button>
@@ -489,11 +490,13 @@
     <div class="card card-wide">
       <h3>레이드 반복 <span class="count" id="rd-stat"></span></h3>
       <div class="row ab-row">
-        <span class="muted">캐릭터</span><select id="rd-char"></select>
-        <span class="muted ab-gap">레이드</span><select id="rd-raid"></select><select id="rd-difficulty"></select>
-        <select id="rd-mode" title="입장 창 위쪽 탭"><option value="party">함께하기</option><option value="solo">혼자하기</option></select>
-        <span class="muted ab-gap">멈출 때</span><input type="number" id="rd-runs" min="0" class="num-in"> 판
-        <input type="number" id="rd-minutes" min="0" class="num-in"> 분
+        <span class="muted ab-lab">캐릭터</span><select id="rd-char" class="sel-char"></select>
+        <span class="muted ab-gap ab-lab">레이드</span><select id="rd-raid" class="sel-place"></select><select id="rd-difficulty" class="sel-level"></select>
+        <select id="rd-mode" class="sel-mode" title="입장 창 위쪽 탭"><option value="party">함께하기</option><option value="solo">혼자하기</option></select>
+      </div>
+      <div class="row">
+        <span class="muted ab-lab" title="0 = 제한 없음 · 돌던 것은 F12 로 멈춤">멈출 때</span><input type="number" id="rd-runs" min="0" class="num-in" title="0 = 제한 없음"> 판
+        <input type="number" id="rd-minutes" min="0" class="num-in" title="0 = 제한 없음"> 분
         <label class="chk ab-gap" title="부활 횟수를 다 쓰면 나가서 출항선에서 다시 출항합니다"><input type="checkbox" id="rd-revive"> 쓰러지면 여기서 부활</label>
         <span class="spacer"></span><span id="rd-msg" class="muted"></span>
         <button class="btn btn-warn hidden" id="rd-stop">멈추기 (F12)</button>
