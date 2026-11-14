@@ -10,13 +10,14 @@ const ST_TEXT = {
   SKIP: '건너뜀', STOP: '중단', RUN: '진행 중',
 };
 const INHERIT = 'inherit';
-const dl = { st: null, settings: null, fb: null, pickedChars: null, pickedTasks: null, logN: 0 };
+const dl = { st: null, settings: null, fb: null, wk: null, pickedChars: null, pickedTasks: null, logN: 0 };
 
 /* ── 오늘 진행 표 ── */
 
 async function loadDaily() {
-  // 셋을 함께 묻는다 (필드 보스 목록은 바뀌지 않으므로 처음 한 번만)
-  [dl.st, dl.settings, dl.fb] = await Promise.all([mm.daily.state(), mm.daily.settings(), dl.fb || mm.daily.fieldBossSettings()]);
+  // 함께 묻는다 (필드 보스 목록은 바뀌지 않으므로 처음 한 번만. 주말 퀘스트는 이번 주 목록·오늘이 주말인지가 바뀌어 매번)
+  [dl.st, dl.settings, dl.fb, dl.wk] = await Promise.all([mm.daily.state(), mm.daily.settings(),
+    dl.fb || mm.daily.fieldBossSettings(), mm.daily.weekendSettings()]);
   if (!dl.pickedChars) dl.pickedChars = new Set(dl.st.chars.map((c) => c.slot));
   if (!dl.pickedTasks) dl.pickedTasks = new Set(dl.st.order);
   $('#dl-date').textContent = '게임 날짜 ' + dl.st.date + ' (오전 6시에 바뀜)';
@@ -24,6 +25,7 @@ async function loadDaily() {
   paintDrillChars();
   paintFieldBoss();
   paintPick('vg', 'vgChars');
+  paintWeekend();
   paintDailyRunning(dl.st.running);
   paintDailySettings();
 }
@@ -254,7 +256,84 @@ function fieldBossSpec() {
   return { kind: 'daily', label: '필드 보스 · ' + pick.boss, chars: chars, only: ['field_boss'], force: true, fieldBoss: pick };
 }
 
+/* 주간 숙제 — 주말 퀘스트 ('주말에는 어비스!'·'주말에는 레이드!', 토·일요일에만). 일일 숙제 카드(kind 'daily')에
+ * only=['weekend_abyss', 'weekend_raid'] (끈 쪽은 뺌)로, 고른 던전·레이드·난이도·방식은 카드의 weekend.
+ * 캐릭터마다 어비스 → 레이드 순서로 하고 다음 캐릭터로 (실행기 runner). 깼는지는 들어가기 전에 퀘스트 창으로 보므로 늘 force.
+ * 주말이 아니면 큐에서 기다렸다가 토요일에 돈다 (mabi/tasks SEASON). 목록·기본값은 파이썬이 준다
+ * (mm.daily.weekendSettings ← mabi/tasks/weekend.choices) */
+function paintWeekend() {
+  paintPick('wk', 'wkChars');
+  const w = dl.wk;
+  if (!w) return;
+  $('#wk-ab-runs').textContent = w.runs.abyss + '판';
+  $('#wk-rd-runs').textContent = w.runs.raid + '판';
+  $('#wk-note').textContent = w.notNow ? '오늘은 주말이 아님 — 담아 두면 토요일에 돕니다' : '';
+  if ($('#wk-rd-raid').options.length) return;  // 고르던 것을 덮지 않게 칸은 처음 한 번만 채운다
+  const saved = pref('weekend', {});
+  const ab = Object.assign({}, w.pick.abyss, saved.abyss), rd = Object.assign({}, w.pick.raid, saved.raid);
+  $('#wk-ab-mode').value = ab.mode === 'solo' ? 'solo' : 'party';
+  $('#wk-rd-mode').value = rd.mode === 'solo' ? 'solo' : 'party';
+  paintWeekendAbyss(ab.dungeon, ab.difficulty);
+  const raids = Object.keys(w.raids);
+  $('#wk-rd-raid').innerHTML = selectOptions(raids, raids.includes(rd.raid) ? rd.raid : raids[0]);
+  paintWeekendRaidLevels(rd.difficulty);
+  const on = saved.on || {};
+  $('#wk-ab-on').checked = on.abyss !== false;
+  $('#wk-rd-on').checked = on.raid !== false;
+  paintWeekendOn();
+}
+
+/** 고를 난이도 — want 가 목록에 없으면 설정 기본값, 그것도 없으면 맨 앞 (가장 높은 것으로 올리지 않는다 — 어비스 함께하기는 지옥4 까지 있다) */
+function weekendLevel(list, want, fallback) {
+  return list.includes(want) ? want : list.includes(fallback) ? fallback : list[0];
+}
+
+/* 어비스 던전·난이도 칸 — 방식(함께하기·혼자하기)마다 열린 난이도가 다르다 */
+function paintWeekendAbyss(want, wantLevel) {
+  const by = dl.wk.abyss[$('#wk-ab-mode').value] || {};
+  const list = Object.keys(by);
+  $('#wk-ab-dungeon').innerHTML = selectOptions(list, list.includes(want) ? want : list[0]);
+  const levels = by[$('#wk-ab-dungeon').value] || [];
+  $('#wk-ab-level').innerHTML = selectOptions(levels, weekendLevel(levels, wantLevel, dl.wk.pick.abyss.difficulty));
+}
+
+function paintWeekendRaidLevels(want) {
+  const levels = dl.wk.raids[$('#wk-rd-raid').value] || [];
+  $('#wk-rd-level').innerHTML = selectOptions(levels, weekendLevel(levels, want, dl.wk.pick.raid.difficulty));
+}
+
+/* 끈 쪽(어비스·레이드)의 고르는 칸은 흐리게 */
+function paintWeekendOn() {
+  [['ab', ['dungeon', 'level', 'mode']], ['rd', ['raid', 'level', 'mode']]].forEach(([k, ids]) => {
+    const on = $('#wk-' + k + '-on').checked;
+    ids.forEach((id) => { $('#wk-' + k + '-' + id).disabled = !on; });
+  });
+}
+
+function weekendSpec() {
+  const chars = pickedSlots('wkChars');
+  if (!chars.length) return null;
+  const on = { abyss: $('#wk-ab-on').checked, raid: $('#wk-rd-on').checked };
+  const only = [on.abyss && 'weekend_abyss', on.raid && 'weekend_raid'].filter(Boolean);
+  if (!only.length) { toast('어비스·레이드 중 하나 이상 고르세요', '', 'bad'); return null; }
+  const pick = {
+    abyss: { dungeon: $('#wk-ab-dungeon').value, difficulty: $('#wk-ab-level').value, mode: $('#wk-ab-mode').value },
+    raid: { raid: $('#wk-rd-raid').value, difficulty: $('#wk-rd-level').value, mode: $('#wk-rd-mode').value },
+  };
+  setPref('weekend', Object.assign({ on }, pick));
+  return { kind: 'daily', label: '주말 퀘스트', chars: chars, only: only, force: true, weekend: pick };
+}
+
+/* 카드 줄: '6명 · 어비스 허상의 정박지 매우 어려움2 함께하기 · 레이드 …' */
+function weekendAmount(x) {
+  const w = x.weekend || {};
+  const one = (t, k, place) => (x.only.includes('weekend_' + k) && w[k]
+    ? t + ' ' + w[k][place] + ' ' + w[k].difficulty + (MODE_NAME[w[k].mode] ? ' ' + MODE_NAME[w[k].mode] : '') : '');
+  return [(x.chars || []).length + '명', one('어비스', 'abyss', 'dungeon'), one('레이드', 'raid', 'raid')].filter(Boolean).join(' · ');
+}
+
 function dailyAmount(x) {
+  if (x.only && x.only.length && x.only.every((t) => t.startsWith('weekend_'))) return weekendAmount(x);
   if (x.only && x.only.length === 1 && ['drill', 'vanguard'].includes(x.only[0])) return (x.chars || []).length + '명';
   if (x.only && x.only.length === 1 && x.only[0] === 'field_boss') {
     return (x.chars || []).length + '명' + (x.fieldBoss ? ' · ' + x.fieldBoss.difficulty : '');
@@ -650,3 +729,10 @@ $('#fb-boss').addEventListener('change', () => paintFieldBossLevels($('#fb-level
 bindStartQueue('fb', fieldBossSpec, startHomework);
 bindPick('vg', 'vgChars');
 bindStartQueue('vg', vanguardSpec, startHomework);
+bindPick('wk', 'wkChars');
+$('#wk-ab-mode').addEventListener('change', () => paintWeekendAbyss($('#wk-ab-dungeon').value, $('#wk-ab-level').value));
+$('#wk-ab-dungeon').addEventListener('change', () => paintWeekendAbyss($('#wk-ab-dungeon').value, $('#wk-ab-level').value));
+$('#wk-rd-raid').addEventListener('change', () => paintWeekendRaidLevels($('#wk-rd-level').value));
+$('#wk-ab-on').addEventListener('change', paintWeekendOn);
+$('#wk-rd-on').addEventListener('change', paintWeekendOn);
+bindStartQueue('wk', weekendSpec, startHomework);

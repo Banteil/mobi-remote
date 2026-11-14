@@ -193,8 +193,7 @@ class Runner:
     def run(self, opts: RunOptions) -> list[tuple[str, str, str]]:
         paths = self.paths
         cfg = load_config(paths)
-        for k, v in opts.cfg.items():
-            cfg[k] = {**cfg.get(k, {}), **v}
+        cfg = _merged(cfg, opts.cfg)  # 카드가 고른 값만 덮는다 ([weekend.abyss] 처럼 칸 안의 칸도 고른 키만)
         registry = tasks.build(cfg)
         by_slot = tasks_by_slot(cfg)
         referenced = (opts.only or []) + cfg["run"]["order"] + [t for v in by_slot.values() for t in v]
@@ -398,7 +397,7 @@ class Runner:
             t0 = time.monotonic()
             try:
                 bot.check_in()  # 숙제마다 지금 상태부터 — 앞 숙제·캐릭터에서 남은 패킷 상태를 믿고 시작하지 않는다
-                bot.deadline = time.monotonic() + float(cfg["run"]["task_timeout_min"]) * 60
+                bot.deadline = time.monotonic() + tasks.timeout_min(tid, cfg) * 60
                 try:
                     summary = fn()
                 finally:

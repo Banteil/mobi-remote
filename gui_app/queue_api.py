@@ -85,7 +85,13 @@ class DailyKind(Kind):
     @staticmethod
     def detail(it) -> str:
         only = it.get("only")
-        return f"{len(it.get('chars') or [])}명 · " + (f"숙제 {len(only)}개" if only else "전체") + (" · 다시" if it.get("force") else "")
+        n = f"{len(it.get('chars') or [])}명"
+        if only and all(t.startswith("weekend_") for t in only):  # 주말 퀘스트 — 고른 어비스·레이드 (화면 weekendAmount 와 같음)
+            w = it.get("weekend") or {}
+            parts = [f"{t} {w[k].get(place)} {w[k].get('difficulty')}" for t, k, place in
+                     (("어비스", "abyss", "dungeon"), ("레이드", "raid", "raid")) if f"weekend_{k}" in only and w.get(k)]
+            return " · ".join([n, *parts])
+        return f"{n} · " + (f"숙제 {len(only)}개" if only else "전체") + (" · 다시" if it.get("force") else "")
 
     def view(self, it):
         v = super().view(it)
@@ -113,7 +119,7 @@ class DailyKind(Kind):
                           display=fit, interface_ready=bool(q.session.get("iface")),
                           restore=False,  # 되돌리기는 큐가 다 끝날 때 한 번 (_q_drained)
                           extra={"from": "queue"},
-                          cfg={"field_boss": it["fieldBoss"]} if it.get("fieldBoss") else {})
+                          cfg=card_cfg(it))
 
         def on_event(e):
             fields = {}
@@ -171,6 +177,15 @@ class DailyKind(Kind):
     def stop(self, reason):
         # 카드를 뺐으면 종료, 아니면 일시정지 (진행 기록으로 끊긴 자리부터 이어 한다)
         self.api.daily_stop(reason in ("remove", "skip"), STOP_WHY.get(reason, ""))
+
+
+# 숙제 카드 칸 → 이번 실행만 덮어쓸 설정 칸 (주간 숙제 탭에서 고른 필드 보스 · 주말 퀘스트의 어비스·레이드)
+CARD_CFG = {"fieldBoss": "field_boss", "weekend": "weekend"}
+
+
+def card_cfg(it: dict) -> dict:
+    """숙제 카드가 고른 값 → RunOptions.cfg ({설정 칸: {키: 값}})."""
+    return {sec: it[k] for k, sec in CARD_CFG.items() if it.get(k)}
 
 
 def card_character(it: dict, chars: list[dict]) -> tuple[str, dict | None]:

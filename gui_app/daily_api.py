@@ -357,6 +357,11 @@ class DailyApi:
         return field_boss.choices(userconfig.default(self.paths, "field_boss", "boss"),
                                   userconfig.default(self.paths, "field_boss", "difficulty"))
 
+    def daily_weekendSettings(self) -> dict:  # noqa: N802
+        """주말 퀘스트 칸의 어비스(방식마다 열린 난이도)·레이드 목록과 기본값 (mabi.tasks.weekend). 고른 값은 화면이 weekend 로 기억한다."""
+        from mabi.tasks import weekend
+        return weekend.choices(load_config(self.paths))
+
     def _repeat_launch(self, kind: str, v: dict, on_event=None) -> threading.Thread:
         """어비스·레이드 반복 (kind: REPEATS): 고른 장소(던전·레이드)·난이도·횟수·시간을 config.toml [kind] 에 저장하고
         mabi.tasks.<kind>.repeat 를 작업 스레드에서 시작한다 (작업 큐가 join). 진행은 'mm:<kind>'

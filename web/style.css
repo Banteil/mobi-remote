@@ -1027,6 +1027,7 @@ input[type="number"].num-in { min-width: 0; width: 72px; }
 .ab-row { flex-wrap: wrap; }
 .ab-row select { min-width: 0; }
 .ab-gap { margin-left: 12px; }
+.wk-kind { min-width: 112px; }  /* 주말 퀘스트: 어비스·레이드 두 줄의 고르는 칸을 같은 자리에서 시작 */
 .dl-log.ab-log { min-height: 360px; max-height: 60vh; }
 
 /* 염색 옵션 — 묶음마다 작은 제목, 설명은 title 풍선으로 */

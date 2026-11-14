@@ -124,7 +124,7 @@
       abyssSettings: c('daily.abyssSettings'), abyssStop: c('daily.abyssStop'),
       onAbyss: (cb) => on('mm:abyss', cb),
       raidSettings: c('daily.raidSettings'), raidStop: c('daily.raidStop'),
-      fieldBossSettings: c('daily.fieldBossSettings'),
+      fieldBossSettings: c('daily.fieldBossSettings'), weekendSettings: c('daily.weekendSettings'),
       bossSettings: c('daily.bossSettings'), saveBoss: c('daily.saveBoss'),
       onRaid: (cb) => on('mm:raid', cb),
       onEvent: (cb) => on('mm:daily', cb),
