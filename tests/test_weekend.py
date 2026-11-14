@@ -1,4 +1,4 @@
-"""주말 퀘스트 (mabi.tasks.weekend) — 주말 판정, 퀘스트 창 진행도로 판 수 정하기, 다 돌고도 남으면 더 돌기, 카드 설정 덮기."""
+"""주말 퀘스트 (mabi.tasks.weekend) — 주말 판정, 퀘스트 창 진행도로 판 수 정하기, 판 수를 채우면 깸, 카드 설정 덮기."""
 import datetime as dt
 import unittest
 from unittest import mock
@@ -116,11 +116,13 @@ class RunTest(unittest.TestCase):
 
     def _repeat(self, bot, cfg, kind, runs):
         self.runs.append((kind, runs))
-        return {"clears": runs}
+        return {"clears": runs - self.short}
+
+    short = 0
 
     def quests(self, *states):
         p = mock.patch.object(weekend, "quest_state", side_effect=list(states))
-        p.start()
+        self.quest = p.start()
         self.addCleanup(p.stop)
 
     def test_skips_when_quest_gone(self):
@@ -129,22 +131,28 @@ class RunTest(unittest.TestCase):
         self.assertEqual(self.runs, [])
 
     def test_runs_only_what_is_left(self):
-        self.quests(Quest(True, 1, 3), Quest(False))
+        self.quests(Quest(True, 1, 3))
         r = weekend.run(self.bot, CFG, "abyss")
         self.assertEqual(self.runs, [("abyss", 2)])
-        self.assertIn("퀘스트 깸", r)
-        self.assertTrue(self.bot.verified)
+        self.assertIn("클리어 2판", r)
+        self.assertTrue(self.bot.verified)  # 판 수를 채우면 깬 것 — 실행기도 다시 확인하지 않는다
 
-    def test_runs_config_count_without_progress_and_more_if_left(self):
-        self.quests(Quest(True), Quest(True), Quest(False))
+    def test_runs_config_count_without_progress(self):
+        self.quests(Quest(True))
         weekend.run(self.bot, CFG, "abyss")
-        self.assertEqual(self.runs, [("abyss", 3), ("abyss", 1)])
+        self.assertEqual(self.runs, [("abyss", 3)])
 
-    def test_fails_when_quest_stays(self):
-        self.quests(*[Quest(True)] * (weekend.EXTRA + 2))
+    def test_quest_window_only_before(self):
+        # 다 돈 뒤에는 퀘스트 창을 다시 열지 않는다 (2026-11-14 사용자)
+        self.quests(Quest(True))
+        weekend.run(self.bot, CFG, "raid")
+        self.assertEqual(self.quest.call_count, 1)
+
+    def test_fails_when_short(self):
+        self.quests(Quest(True))
+        self.short = 1
         with self.assertRaises(CannotProceed):
-            weekend.run(self.bot, CFG, "raid")
-        self.assertEqual(self.runs, [("raid", 1)] * (weekend.EXTRA + 1))
+            weekend.run(self.bot, CFG, "abyss")
 
     def test_not_weekend(self):
         with mock.patch.object(weekend, "not_now", return_value="주말 아님"):
@@ -177,7 +185,7 @@ class ConfigTest(unittest.TestCase):
     def test_registered(self):
         for t in ("weekend_abyss", "weekend_raid"):
             self.assertIn(t, tasks.TASKS)
-            self.assertIn(t, tasks.VERIFY)
+            self.assertNotIn(t, tasks.VERIFY)  # 판 수를 채우면 깬 것 (run 이 bot.verified 를 둔다)
 
     def test_default_config_has_section(self):
         import tomllib

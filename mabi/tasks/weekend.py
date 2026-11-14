@@ -7,7 +7,9 @@
 [weekend.raid] 칸을 덮어쓴다. 몇 판인지(runs)는 퀘스트가 요구하는 수 — 퀘스트 창에서 진행도를 읽으면 남은 만큼만.
 
 깼는지 (quest_state): HUD 추적 칸(CLI get_quests)에 있으면 아직 안 깬 것, 거기 없으면 퀘스트 창(J) 이벤트 탭의 카드에
-'진행하기' 가 있나. 들어가기 전에 보고 이미 깼으면 넘기고, 다 돈 뒤에도 본다 — 카드가 남아 있으면 한 판씩 더 (EXTRA 번까지).
+'진행하기' 가 있나. 들어가기 전에만 본다 — 이미 깼으면 넘기고, 진행도를 읽으면 남은 판만. 다 돈 뒤에는 다시 열지 않는다:
+반복이 결과 패킷으로 클리어를 세고 정한 판 수를 채워야 끝나므로, 그 수를 채웠으면 깬 것 (2026-11-14 사용자 —
+실기에서 어비스 3판·레이드 1판을 채운 캐릭터는 모두 퀘스트가 깨져 있었다).
 주말인지는 게임 날짜(오전 6시에 바뀜)의 요일로 본다. 주말이 아니면 작업 큐 카드는 기다렸다가 토요일에 돈다 (tasks.SEASON).
 """
 import re
@@ -27,7 +29,6 @@ KINDS = {
     "abyss": ("주말 어비스", "dungeon", "weekend_abyss_quest"),
     "raid": ("주말 레이드", "raid", "weekend_raid_quest"),
 }
-EXTRA = 2            # 정한 판 수를 다 깼는데 퀘스트가 남았으면 더 도는 판 수 (한 판씩)
 QUEST_SCROLL = 3     # 퀘스트 창 목록을 한 번에 내리는 휠 칸 수
 QUEST_SCROLLS = 8    # 최대 몇 번 내려가며 볼지
 # 카드 제목 아래로 같은 카드의 '진행하기'·진행도를 찾는 높이. 고른(펼친) 카드는 목표 줄·답례까지 보여 제목→버튼이 276,
@@ -176,19 +177,11 @@ def run(bot: Bot, cfg: dict, kind: str) -> str:
     if runs <= 0:  # 진행도는 다 찼는데 카드가 남음 (완료 창을 아직 안 넘김 등) — 한 판 돌아 본다
         runs = 1
     bot.log.info(f"{name}: {target} — 클리어 {runs}판" + (f" (진행도 {q.done}/{q.goal})" if q.done is not None else ""))
-    total = 0
-    for extra in range(EXTRA + 1):
-        total += _repeat(bot, cfg, kind, runs)["clears"]
-        q = quest_state(bot, kind)
-        if q.open is False:
-            bot.verified = True
-            return f"{target} 클리어 {total}판 — 퀘스트 깸"
-        if q.open is None:
-            return f"{target} 클리어 {total}판 (퀘스트 창을 못 봐 확인 못 함)"
-        if extra < EXTRA:
-            runs = max(1, q.left(1))
-            bot.log.warning(f"{name}: {total}판 클리어했는데 퀘스트가 남아 있음 → {runs}판 더")
-    raise CannotProceed(f"{target} {total}판 클리어했지만 퀘스트 창에 '{gd.text(KINDS[kind][2])}' 가 남아 있음")
+    clears = _repeat(bot, cfg, kind, runs)["clears"]
+    if clears < runs:  # 반복은 판 수를 채워야 끝나므로 여기 오면 이상한 것
+        raise CannotProceed(f"{target} {runs}판 중 {clears}판만 클리어")
+    bot.verified = True  # 판 수를 채움 = 퀘스트 깸 (퀘스트 창을 다시 열지 않는다)
+    return f"{target} 클리어 {clears}판"
 
 
 def run_abyss(bot: Bot, cfg: dict) -> str:
@@ -197,11 +190,6 @@ def run_abyss(bot: Bot, cfg: dict) -> str:
 
 def run_raid(bot: Bot, cfg: dict) -> str:
     return run(bot, cfg, "raid")
-
-
-def verify(kind: str):
-    """퀘스트 창에 카드가 없으면 끝 (창을 못 열었으면 끝났다고 하지 않는다)."""
-    return lambda bot, cfg: quest_state(bot, kind).open is False
 
 
 def choices(cfg: dict) -> dict:

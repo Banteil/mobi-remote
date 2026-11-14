@@ -81,8 +81,6 @@ VERIFY = {
     "drill": drill.verify,
     "field_boss": field_boss.verify,
     "vanguard": vanguard.verify,
-    "weekend_abyss": weekend.verify("abyss"),
-    "weekend_raid": weekend.verify("raid"),
 }
 
 
