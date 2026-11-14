@@ -83,6 +83,26 @@ class QueueReportFlowTest(unittest.TestCase):
         self.assertEqual([(c["label"], c["result"]) for c in self.reports[0]["cards"]], [("숙제", "stop"), ("채집", "done")])
         self.assertEqual(self.q.items, [])
 
+    def test_drop_removes_card_as_failed(self):
+        # 재료가 다 떨어지는 등 더 할 수 없는 카드는 실패로 남기고 큐에서 빼고 다음 카드로 (2026-11-15 사용자)
+        class Drop(FakeQuick):
+            def run(self, q, it):
+                q.note(it, "실패 — 재료가 부족해 더 강화할 수 없음")
+                q.set_stop("drop")
+                return False
+        self.q.kinds["enhance"] = Drop()
+        self.q.add({"kind": "enhance", "label": "각인 강화"})
+        self.q.add({"kind": "action", "label": "채집"})
+        self.q.tick()
+        self.assertTrue(wait_for(lambda: self.reports))
+        self.assertEqual(self.q.items, [])
+        self.assertEqual(self.quick.ran, ["채집"])
+        cards = self.reports[0]["cards"]
+        self.assertEqual([(c["label"], c["result"]) for c in cards], [("각인 강화", "fail"), ("채집", "done")])
+        hist = (self.dir / "history.jsonl").read_text(encoding="utf-8")
+        self.assertIn('"result": "fail"', hist)
+        self.assertIn("재료가 부족", hist)
+
     def test_skip_paused_card_resumes_rest(self):
         self.q.add({"kind": "daily", "label": "숙제"})
         self.q.add({"kind": "action", "label": "채집"})

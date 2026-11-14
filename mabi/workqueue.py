@@ -14,6 +14,7 @@
   pause   : 사람이 멈춤 (⏸·■·취소) → 일시정지
   remove  : 돌던 카드를 뺐거나 큐를 비움 (전체 중단 Ctrl+F12 도 큐를 비운다)
   skip    : 지금 카드만 중단 (Shift+F12) → 카드를 빼고 다음 카드로 이어 간다
+  drop    : 재료가 다 떨어지는 등 더 할 수 없음 → 실패로 기록하고 카드를 빼고 다음 카드로 (다시 돌려도 같다)
   skill   : 생활 스킬 레벨 부족 {what, level} → 실패 (기다려도 안 풀린다)
   yield   : 가공 완료를 기다리는 동안 아래 카드에 비켜 줌 {note} → 대기 (ready 가 다시 열리면 그 카드를 끊고 돌아온다)
 둘이 겹치면 센 쪽 (뒤로 갈수록 셈). 예: 밀리던 숙제가 STOP 으로 끝나도 '밀림' 그대로.
@@ -38,7 +39,7 @@ from .queue_report import QueueReport, loot
 
 log = logging.getLogger("mabi")
 
-STOP_RANK = {"stopped": 0, "later": 0, "yield": 0, "preempt": 1, "pause": 2, "skip": 3, "remove": 3, "skill": 4, "transfer": 4}
+STOP_RANK = {"stopped": 0, "later": 0, "yield": 0, "preempt": 1, "pause": 2, "skip": 3, "drop": 3, "remove": 3, "skill": 4, "transfer": 4}
 LIVE = ("wait", "run", "pause")  # 아직 할 일이 남은 카드
 # 사람이 멈춘 게 아닌 까닭 — 돌던 일의 로그에 '사용자 중단' 대신 쓴다 (Kind.stop 이 봇의 멈춤 요청에 싣는다)
 STOP_WHY = {"preempt": "먼저 할 카드에 밀림 (끝나면 이어서)"}
@@ -560,10 +561,12 @@ class WorkQueue:
                         self.stop = None
                     self._changed()
                     continue
-                if why == "skip":  # 이 카드만 중단 → 빼고 다음 카드로
-                    it["note"] = "중단"
-                    self._record(it, "stop")
-                    report("stop")
+                if why in ("skip", "drop"):  # 이 카드만 중단 · 더 할 수 없음 → 빼고 다음 카드로
+                    result = "fail" if why == "drop" else "stop"
+                    if why == "skip":
+                        it["note"] = "중단"
+                    self._record(it, result)
+                    report(result)
                     with self.lock:
                         self.items.remove(it)
                         self.stop = None

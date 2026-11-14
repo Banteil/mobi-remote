@@ -33,6 +33,10 @@ class CannotProceed(RuntimeError):
     """던전 미해금, 장소를 못 찾음 등 진행할 수 없는 상황. 실행기는 실패로 기록하고 다음 숙제로 넘어간다."""
 
 
+class OutOfStock(CannotProceed):
+    """재료가 다 떨어져 그 일을 더 할 수 없다. 다시 돌려도 같으므로 큐 카드는 실패로 기록하고 큐에서 뺀다."""
+
+
 class Stuck(RuntimeError):
     """점검자가 보기에 같은 자리에서 헛돌고 있다."""
 

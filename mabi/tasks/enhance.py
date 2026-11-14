@@ -6,6 +6,7 @@
   한 번 강화될 때마다 장비 갱신(equip.update)과 강화 응답(equip.carving_enhance_ok)이 같이 온다 (갱신이 먼저).
   응답 본문은 암호화돼 있어 못 읽는다 → 성공·실패는 장비 갱신의 각인 강화 단계로 본다. 실패면 그대로(강화 포인트만 오름), 성공이면 N.
   거절 응답(골드·재료 부족·최대 단계 등)이 오면 바로 멈춘다 (사용자).
+재료가 모자라면 게임이 강화를 보내지 않고 화면 위에 '재료가 부족합니다.' 를 띄운다 (2026-11-15 실기) → OutOfStock.
 연출(불 3칸) 중에 누른 Space 로는 강화되지 않는다 — 응답이 없으면 다시 누른다. 한동안 눌러도 한 번도 안 되면 멈춘다.
 골드·재료 소모량은 보지 않는다 (사용자 — 고정이 아님).
 """
@@ -15,11 +16,12 @@ import time
 from .. import gamedata as gd
 from ..bot import Bot
 from ..ocr import find_texts, nospace
-from ..exceptions import CannotProceed
+from ..exceptions import CannotProceed, OutOfStock
 
 PRESS_WAIT = 1.0   # 누른 뒤 강화 응답을 기다리는 시간 (보통 0.1초 안에 온다 — 연출 중에 눌렀으면 안 온다)
 RESULT_WAIT = 3.0  # 강화 응답 뒤 장비 갱신 (같이 온다)
 QUIET = 20         # 이만큼 눌러도 한 번도 강화되지 않으면 멈춘다 (창이 닫힘·게임이 보내기 전에 막음 등)
+SHORT_TOAST = "toast_no_material"  # '재료가 부족합니다.' (제작 버튼에서 쓰는 것과 같은 알림)
 _NEXT = re.compile(r"\+(\d+)강화하기")
 
 
@@ -49,6 +51,8 @@ def repeat(bot: Bot, on_try=None) -> dict:
         if got is None:
             if not bot.packets.ok:
                 raise CannotProceed(f"패킷이 끊겨 결과를 알 수 없음 → 멈춤 ({tries}번 강화)")
+            if bot.exists(SHORT_TOAST):
+                raise OutOfStock(f"재료가 부족해 더 강화할 수 없음 ({tries}번 강화, {bot.snapshot('enhance_short').name})")
             if time.monotonic() - last > QUIET:
                 why = "각인 강화 창이 닫힘" if next_level(bot) is None else f"{QUIET}초 동안 눌러도 강화되지 않음 (골드·재료 부족 등)"
                 raise CannotProceed(f"{why} ({tries}번 강화, {bot.snapshot('enhance_quiet').name})")

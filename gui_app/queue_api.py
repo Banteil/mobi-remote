@@ -698,14 +698,17 @@ class QueueApi:
     def _q_failed(self, q: WorkQueue, bot, e: BaseException, tag: str, label: str) -> tuple[str, str]:
         """큐 카드가 게임 조작 중 예외로 끝났다 → (상태, 요약). 가르는 규칙은 다른 일과 같은 outcome.classify.
         Bot 을 만들기도 전이면(bot None) '시작 실패' 로 로그를 남기고 ERROR. 멈춤(F12·멈추기)이면 큐를 일시정지한다
-        (▶ 로 다시). 카드 메모는 부르는 쪽이 상태를 보고 남긴다."""
+        (▶ 로 다시). 재료가 다 떨어졌으면(OutOfStock) 카드를 큐에서 뺀다. 카드 메모는 부르는 쪽이 상태를 보고 남긴다."""
         from mabi import outcome
+        from mabi.exceptions import OutOfStock
         if bot is None:
             log.exception(f"{label} 시작 실패")
             return "ERROR", str(e)
         status, summary, _ = outcome.classify(bot, tag, label, e)
         if status == "STOP":
             q.set_stop("stopped")
+        elif isinstance(e, OutOfStock):
+            q.set_stop("drop")
         return status, summary
 
     def _q_char(self, q: WorkQueue, it: dict) -> bool:

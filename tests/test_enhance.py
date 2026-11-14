@@ -4,7 +4,7 @@ import unittest
 from unittest import mock
 
 from mabi.tasks import enhance
-from mabi.exceptions import CannotProceed
+from mabi.exceptions import CannotProceed, OutOfStock
 
 
 class FakePackets:
@@ -35,12 +35,15 @@ class FakePackets:
 
 class FakeBot:
     def __init__(self, script):
-        self.packets, self.pressed = FakePackets(script), 0
+        self.packets, self.pressed, self.short_at = FakePackets(script), 0, None
         self.log = types.SimpleNamespace(info=lambda m: None)
 
     def key(self, k):
         self.pressed += 1
         self.packets.press()
+
+    def exists(self, name):  # '재료가 부족합니다.' — short_at 번째 누른 뒤부터 뜬다
+        return name == enhance.SHORT_TOAST and self.short_at is not None and self.pressed >= self.short_at
 
     def snapshot(self, tag):
         return types.SimpleNamespace(name=tag)
@@ -80,6 +83,16 @@ class RepeatTest(unittest.TestCase):
     def test_nothing_happens_stops(self):
         got, _, _ = self.run_it([None, None], quiet=True)
         self.assertIn("강화되지 않음", got)
+
+    def test_out_of_material_stops_at_once(self):
+        # 재료가 모자라면 게임이 강화를 보내지 않고 알림만 띄운다 (2026-11-15) — 20초를 기다리지 않는다
+        bot = FakeBot([14, 14, None, None])
+        bot.short_at = 3
+        with mock.patch.object(enhance, "next_level", return_value=15):
+            with self.assertRaises(OutOfStock) as e:
+                enhance.repeat(bot)
+        self.assertIn("재료가 부족", str(e.exception))
+        self.assertEqual(bot.pressed, 3)
 
     def test_no_window_no_press(self):
         got, bot, _ = self.run_it([15], target=None)
