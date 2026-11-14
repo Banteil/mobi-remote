@@ -138,11 +138,14 @@ def run(bot: Bot, cfg: dict) -> str:
     """계획한 만큼 돈 뒤 남은 은동전을 다시 본다. 도는 동안 은동전이 저절로 차서(몇 분에 1개) 한 판 더 할 만큼
     남을 수 있다 — 59개로 사냥터 1·던전 1 을 계획했는데 12분 사이 1개가 차 20개가 남아 '아직 남음' 으로 끝났다
     (2026-11-12). 그러면 남은 만큼 한 번 더 계획해 돈다 (사냥터는 오늘 한 횟수를 빼므로 던전만 더 간다)."""
-    note, left = _run_round(bot, cfg)
+    note, left = _run_round(bot, cfg)  # 한 판도 못 들어갔으면 여기서 실패로 끝난다 (한 번 더 돌지 않는다)
     unit = cfg["silver"]["unit"]
     if left is not None and left >= unit:
         bot.log.info(f"도는 동안 은동전이 차서 {left}개 남음 → 한 번 더")
-        more, left = _run_round(bot, cfg)
+        try:
+            more, left = _run_round(bot, cfg)
+        except CannotProceed as e:  # 앞에서 한 판이 있다 — 더 도는 것만 막혔으면 한 만큼으로 끝낸다 (남은 건 완료 확인이 본다)
+            more = f"진행 불가 ({e})"
         note += f" · 더: {more}"
     return note
 
@@ -175,7 +178,7 @@ def _run_round(bot: Bot, cfg: dict) -> tuple[str, int | None]:
     if not field_runs and not dungeon_runs:
         return f"은동전 {coins}개, 진행 없음", coins
 
-    notes = []
+    notes, blocked, cleared = [], [], 0
     for label, runs, once in (("사냥터", field_runs, field_once), ("던전", dungeon_runs, dungeon_once)):
         if not runs:
             continue
@@ -221,10 +224,16 @@ def _run_round(bot: Bot, cfg: dict) -> tuple[str, int | None]:
             except CannotProceed as e:  # 진행 불가 (미해금, 비용 불일치 등) → 이 종류는 그만두고 다음으로
                 bot.log.warning(f"{label} 진행 불가: {e}")
                 notes.append(f"{label} 진행 불가")
+                blocked.append(f"{label}: {e}")
                 bot.to_main()
                 break
         notes.append(f"{label} 클리어 {results.count('clear')}/{runs}")
+        cleared += results.count("clear")
 
     bot.to_main()
+    if blocked and not cleared:
+        # 한 판도 못 들어갔다 (지도에서 장소를 못 고름 등) — '남음' 이 아니라 실패. 까닭을 결과에 그대로 남긴다 (2026-11-14:
+        # 다른 창이 지역 맵 목록을 가려 세 캐릭터가 은동전을 그대로 남겼는데 '확인 결과 아직 남음' 으로만 보였다)
+        raise CannotProceed(f"은동전 {coins}개 그대로 — " + " / ".join(blocked))
     left = bot.read_counter("silver")
     return f"은동전 {coins} → {left}, " + ", ".join(notes), left
