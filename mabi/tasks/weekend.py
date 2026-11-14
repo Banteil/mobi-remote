@@ -6,8 +6,8 @@
 어느 던전·레이드를 어떤 난이도·방식(혼자하기·함께하기)으로 돌지는 주간 숙제 탭에서 고른다 → 카드가 [weekend.abyss] ·
 [weekend.raid] 칸을 덮어쓴다. 몇 판인지(runs)는 퀘스트가 요구하는 수 — 퀘스트 창에서 진행도를 읽으면 남은 만큼만.
 
-깼는지는 퀘스트 창(J)에 그 퀘스트 카드가 남아 있나로 본다 (quest_state). 들어가기 전에 보고 이미 깼으면 넘기고,
-다 돈 뒤에도 본다 — 다 돌았는데 카드가 남아 있으면 한 판씩 더 (EXTRA 번까지).
+깼는지 (quest_state): HUD 추적 칸(CLI get_quests)에 있으면 아직 안 깬 것, 거기 없으면 퀘스트 창(J) 이벤트 탭의 카드에
+'진행하기' 가 있나. 들어가기 전에 보고 이미 깼으면 넘기고, 다 돈 뒤에도 본다 — 카드가 남아 있으면 한 판씩 더 (EXTRA 번까지).
 주말인지는 게임 날짜(오전 6시에 바뀜)의 요일로 본다. 주말이 아니면 작업 큐 카드는 기다렸다가 토요일에 돈다 (tasks.SEASON).
 """
 import re
@@ -17,7 +17,7 @@ from typing import NamedTuple
 
 from .. import gamedata as gd, keys
 from ..bot import Bot
-from ..exceptions import CannotProceed, StepTimeout
+from ..exceptions import CannotProceed
 from ..profile import RESET_HOUR
 from . import abyss, raid, ui_text
 from .steps import list_views
@@ -30,7 +30,9 @@ KINDS = {
 EXTRA = 2            # 정한 판 수를 다 깼는데 퀘스트가 남았으면 더 도는 판 수 (한 판씩)
 QUEST_SCROLL = 3     # 퀘스트 창 목록을 한 번에 내리는 휠 칸 수
 QUEST_SCROLLS = 8    # 최대 몇 번 내려가며 볼지
-CARD_H = 260         # 퀘스트 카드 제목 아래로 진행도 글자를 찾는 높이
+# 카드 제목 아래로 같은 카드의 '진행하기'·진행도를 찾는 높이. 고른(펼친) 카드는 목표 줄·답례까지 보여 제목→버튼이 276,
+# 접힌 카드는 188 (2026-11-14 화면). 다음 카드의 버튼은 이보다 아래라 섞이지 않는다
+CARD_H = 400
 PROGRESS = re.compile(r"(\d+)\s*/\s*(\d+)")
 
 
@@ -65,32 +67,67 @@ def _progress(items, title_y: int) -> tuple[int, int] | tuple[None, None]:
     return None, None
 
 
-def quest_state(bot: Bot, kind: str) -> Quest:
-    """퀘스트 창(J) 퀘스트 탭에서 이 종류의 주말 퀘스트 카드를 찾는다. 목록을 맨 위부터 끝까지 내려 본다.
-    카드가 있으면 아직 안 깬 것 (진행도도 읽어 본다), 끝까지 없으면 깼거나 받은 적 없는 것. 창을 못 열면 open=None."""
-    title = gd.text(KINDS[kind][2])
+def _from_tracker(bot: Bot, title: str) -> Quest:
+    """HUD 퀘스트 추적 칸(CLI get_quests)에 이 퀘스트가 있으면 아직 안 깬 것 — 목표 줄에 'n/m' 이 있으면 진행도도.
+    없다고 깬 것은 아니다 (창이 열렸거나 이동·로딩 중엔 추적 칸이 통째로 비고, 추적을 뺄 수도 있다) → 그땐 open=None."""
+    from .. import richtext
+    qs = bot.state.query("get_quests") if bot.state.available() else None
+    for row in qs or []:
+        if isinstance(row, dict) and ui_text.norm(title) in ui_text.norm(richtext.strip(row.get("QuestTitle", ""))):
+            for o in row.get("Objectives") or []:
+                if isinstance(o, dict) and (m := PROGRESS.search(richtext.strip(o.get("Description", "")))):
+                    return Quest(True, int(m.group(1)), int(m.group(2)))
+            return Quest(True)
+    return Quest(None)
+
+
+def _card_go(items, title_y: int) -> bool:
+    """제목 아래 같은 카드 안에 '진행하기' 버튼 글자가 있나."""
+    go = ui_text.norm(gd.text("questwin_go"))
+    return any(0 < y - title_y < CARD_H and ui_text.norm(t) == go for t, _, y in items)
+
+
+def _from_window(bot: Bot, title: str) -> Quest:
+    """퀘스트 창(J) 이벤트 탭에서 카드를 찾는다 (2026-11-14 사용자 화면: 카드마다 제목·'N일 N시간 남음'·설명·'진행하기').
+    카드에 '진행하기' 가 있으면 아직 안 깬 것. 목록 끝까지 그런 카드가 없으면(카드가 없거나 버튼이 없음) 깬 것.
+    창이나 탭을 못 열면 open=None."""
+    from ..ocr import find_texts
     bot.to_main()
     bot.key(keys.of(bot, "quest"))
-    try:
-        bot.click(bot.ui["questwin_tab_main"], timeout=10)
-    except StepTimeout:
-        bot.log.warning(f"퀘스트 창을 열지 못해 '{title}' 를 확인 못 함 → {bot.snapshot('weekend_quest').name}")
+    tab = ui_text.wait(bot, gd.text("questwin_event_tab"), gd.region("questwin_tabs"), timeout=6)
+    if not tab:
+        bot.log.warning(f"퀘스트 창 이벤트 탭을 찾지 못해 '{title}' 를 확인 못 함 → {bot.snapshot('weekend_quest').name}")
         bot.to_main()
         return Quest(None)
+    bot.click(tab)
     bot.sleep(1, 1.5)
-    from ..ocr import find_texts
     area = gd.region("questwin_list")
     found = Quest(False)
     for _ in list_views(bot, area, tuple(bot.cfg["tribute"]["list_scroll_at"]), QUEST_SCROLL, QUEST_SCROLLS):
         items = find_texts(bot.frame(), area)
         hit = ui_text.match(items, title, exact=False)
-        if hit:
+        if not hit:
+            continue
+        if _card_go(items, hit[2]):
             found = Quest(True, *_progress(items, hit[2]))
             break
+        if hit[2] < area[1] + area[3] - CARD_H:  # 카드가 다 보이는데 '진행하기' 가 없다 (아래로 잘렸으면 더 내려서 본다)
+            break
     bot.to_main()
-    bot.log.info(f"퀘스트 창: '{title}' " + ("없음 (깼거나 받은 적 없음)" if not found.open else
-                 "있음" + (f" — 진행도 {found.done}/{found.goal}" if found.done is not None else " (진행도는 못 읽음)")))
     return found
+
+
+def quest_state(bot: Bot, kind: str) -> Quest:
+    """이 종류의 주말 퀘스트를 아직 안 깼나 — HUD 추적 칸(CLI)에 있으면 그것으로 (창을 안 열어도 된다), 아니면 퀘스트 창 이벤트 탭."""
+    title = gd.text(KINDS[kind][2])
+    q = _from_tracker(bot, title)
+    where = "추적 칸"
+    if q.open is None:
+        q, where = _from_window(bot, title), "이벤트 탭"
+    bot.log.info(f"주말 퀘스트 '{title}' ({where}): " + (
+        "확인 못 함" if q.open is None else "깸 (진행할 카드 없음)" if not q.open else
+        "아직 안 깸" + (f" — 진행도 {q.done}/{q.goal}" if q.done is not None else "")))
+    return q
 
 
 # ---- 반복

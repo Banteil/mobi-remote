@@ -47,8 +47,43 @@ class ProgressTest(unittest.TestCase):
         self.assertEqual(Quest(True).left(3), 3)
 
     def test_ignores_far_or_odd_numbers(self):
-        self.assertEqual(weekend._progress([("0/5", 1500, 700)], 300), (None, None))
+        self.assertEqual(weekend._progress([("0/5", 1500, 750)], 300), (None, None))
         self.assertEqual(weekend._progress([("5/3", 1500, 330)], 300), (None, None))
+
+
+# 2026-11-14 이벤트 탭 화면을 OCR 한 그대로 (위 카드는 고른 카드라 목표 줄·답례까지 펼쳐져 있다)
+EVENT_TAB = [('주말에는 레이드!', 1425, 193), ('이1일 10시간 남음', 1413, 228), ('* 매주 토요일~일요일 진행 가능', 1389, 304),
+             ('• 레이드클리어', 1335, 347), ('답례', 1269, 412), ('진행하기', 1756, 469), ('주말에는 어비스!', 1427, 587),
+             ('1일 10시간 남음', 1413, 623), ('* 매주 토요일~일요일 진행 가능', 1388, 698), ('진행하기', 1757, 775)]
+
+
+class QuestCheckTest(unittest.TestCase):
+    def test_card_button_belongs_to_its_card(self):
+        self.assertTrue(weekend._card_go(EVENT_TAB, 193))   # 펼친 카드: 제목 → 버튼 276
+        self.assertTrue(weekend._card_go(EVENT_TAB, 587))   # 접힌 카드: 188
+        without = [i for i in EVENT_TAB if i[2] != 775]     # 어비스 카드에 버튼이 없으면 = 깸
+        self.assertFalse(weekend._card_go(without, 587))
+        self.assertEqual(weekend._progress(EVENT_TAB, 193), (None, None))  # '토요일~일요일' 을 진행도로 읽지 않는다
+
+    def test_tracker_gives_progress(self):
+        bot = mock.Mock()
+        bot.state.query.return_value = [
+            {"QuestTitle": "[주간 목표] 모험가 길드의 정기 의뢰 (3)", "Objectives": []},
+            {"QuestTitle": "<color=#fff>주말에는 어비스!</color>", "Objectives": [{"Description": "어비스 클리어 1/3"}]}]
+        self.assertEqual(weekend._from_tracker(bot, "주말에는어비스"), Quest(True, 1, 3))
+        self.assertEqual(weekend._from_tracker(bot, "주말에는레이드"), Quest(None))  # 추적 칸에 없다고 깬 것은 아니다
+        bot.state.query.return_value = []
+        self.assertEqual(weekend._from_tracker(bot, "주말에는어비스"), Quest(None))
+
+    def test_tracker_first_then_window(self):
+        bot = mock.Mock()
+        with mock.patch.object(weekend, "_from_tracker", return_value=Quest(True)), \
+                mock.patch.object(weekend, "_from_window") as win:
+            self.assertTrue(weekend.quest_state(bot, "abyss").open)
+        win.assert_not_called()
+        with mock.patch.object(weekend, "_from_tracker", return_value=Quest(None)), \
+                mock.patch.object(weekend, "_from_window", return_value=Quest(False)):
+            self.assertIs(weekend.quest_state(bot, "raid").open, False)
 
 
 class RunTest(unittest.TestCase):
